@@ -11,7 +11,7 @@
     "preview": "bun run build && vite preview",
     "typecheck": "npm run cf-typegen && react-router typegen && tsc -b",
     "typegen": "wrangler types && react-router typegen",
-    "auth:generate": "@better-auth/cli generate --config auth.config.ts",
+    "auth:generate": "bunx --bun @better-auth/cli generate --config auth.config.ts",
     "db:studio": "drizzle-kit studio",
     "db:generate": "drizzle-kit generate",
     "db:migrate:local": "wrangler d1 migrations apply react-router-test-db --local",

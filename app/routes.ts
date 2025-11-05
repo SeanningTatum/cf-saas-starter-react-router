@@ -20,8 +20,8 @@ export default [
 
   // Admin Routes
   ...prefix("admin", [
-    layout("routes/admin/admin-layout.tsx", [
-      route("/", "routes/admin/admin-index.tsx"),
+    layout("routes/admin/_layout.tsx", [
+      route("/", "routes/admin/_index.tsx"),
       route("/users", "routes/admin/users.tsx"),
       route("/kitchen-sink", "routes/admin/kitchen-sink.tsx"),
     ]),

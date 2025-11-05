@@ -3,12 +3,7 @@ import { createTRPCRouter, protectedProcedure, publicProcedure } from ".";
 import { z } from "zod/v4";
 import { eq } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
-
-const exampleRouter = createTRPCRouter({
-  hello: publicProcedure.query(() => {
-    return "Hello World";
-  }),
-});
+import { adminRouter } from "./routes/admin";
 
 const userRouter = createTRPCRouter({
   getUsers: publicProcedure.query(async ({ ctx }) => {
@@ -43,8 +38,8 @@ const userRouter = createTRPCRouter({
 });
 
 export const appRouter = createTRPCRouter({
-  example: exampleRouter,
   user: userRouter,
+  admin: adminRouter,
 });
 
 export type AppRouter = typeof appRouter;

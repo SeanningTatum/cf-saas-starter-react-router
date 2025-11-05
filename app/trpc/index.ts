@@ -146,6 +146,19 @@ export const protectedProcedure = t.procedure
   });
 
 /**
+ * Admin middleware to ensure user has admin role
+ */
+export const adminProcedure = protectedProcedure.use(({ ctx, next }) => {
+  if (ctx.auth.user.role !== "admin") {
+    throw new TRPCError({
+      code: "FORBIDDEN",
+      message: "Admin access required",
+    });
+  }
+  return next();
+});
+
+/**
  * 4. SERVER-SIDE CALLER
  *
  * Create a server-side caller that can be used in loaders/actions
