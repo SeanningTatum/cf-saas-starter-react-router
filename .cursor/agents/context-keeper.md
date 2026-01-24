@@ -62,6 +62,54 @@ Document each feature with:
 Keep a brief log of significant changes (most recent first, limit to 10-15 entries).
 ```
 
+## Using Mermaid Diagrams
+
+Use Mermaid charts to visualize complex relationships and flows. Common diagram types:
+
+### Architecture/Flow Diagrams
+```mermaid
+flowchart TD
+    Client[Client] --> Router[React Router]
+    Router --> Loader[Server Loader]
+    Loader --> tRPC[tRPC Route]
+    tRPC --> Repo[Repository]
+    Repo --> DB[(Database)]
+```
+
+### Sequence Diagrams
+```mermaid
+sequenceDiagram
+    participant U as User
+    participant C as Client
+    participant S as Server
+    U->>C: Click action
+    C->>S: API request
+    S-->>C: Response
+    C-->>U: Update UI
+```
+
+### Entity Relationships
+```mermaid
+erDiagram
+    USER ||--o{ ORDER : places
+    ORDER ||--|{ LINE_ITEM : contains
+```
+
+### State Diagrams
+```mermaid
+stateDiagram-v2
+    [*] --> Idle
+    Idle --> Loading: fetch
+    Loading --> Success: data
+    Loading --> Error: fail
+```
+
+When to use Mermaid diagrams:
+- **Architecture sections**: Show data flow between layers
+- **Feature documentation**: Illustrate complex user flows
+- **Database sections**: Show table relationships
+- **Authentication**: Visualize auth flows and protected route hierarchies
+
 ## Guidelines
 
 - Keep entries concise but informative
@@ -70,6 +118,8 @@ Keep a brief log of significant changes (most recent first, limit to 10-15 entri
 - Remove outdated information when updating
 - Use relative file paths when referencing code
 - Group related features together
+- Use Mermaid diagrams for complex flows, relationships, and architecture
+- Prefer diagrams over lengthy prose when visualizing helps comprehension
 
 ## Output
 

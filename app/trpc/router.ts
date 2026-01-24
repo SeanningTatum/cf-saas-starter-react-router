@@ -4,6 +4,7 @@ import { z } from "zod/v4";
 import { eq } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { adminRouter } from "./routes/admin";
+import { analyticsRouter } from "./routes/analytics";
 
 const userRouter = createTRPCRouter({
   getUsers: publicProcedure.query(async ({ ctx }) => {
@@ -40,6 +41,7 @@ const userRouter = createTRPCRouter({
 export const appRouter = createTRPCRouter({
   user: userRouter,
   admin: adminRouter,
+  analytics: analyticsRouter,
 });
 
 export type AppRouter = typeof appRouter;

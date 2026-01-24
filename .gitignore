@@ -12,10 +12,6 @@
 .wrangler
 .dev.vars*
 worker-configuration.d.ts
-wrangler.jsonc
-
-# Cursor
-.cursor/mcp.json
 
 !.dev.vars.example
 !.env.example

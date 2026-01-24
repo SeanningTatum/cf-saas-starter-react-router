@@ -21,7 +21,8 @@ PR Validation:
 - [ ] 2. context.md updated (if feature/architecture change)
 - [ ] 3. Testing plan exists
 - [ ] 4. Migrations use db-migration skill (if applicable)
-- [ ] 5. Ready for create-pull-request skill
+- [ ] 5. Analytics considered (if schema/feature change)
+- [ ] 6. Ready for create-pull-request skill
 ```
 
 ---
@@ -161,7 +162,48 @@ ls -la drizzle/*.sql | tail -5
 
 ---
 
-## Step 6: Final Validation Report
+## Step 6: Check Analytics Considerations
+
+**Required when:** Adding database schema changes, new features with user data, or modifying existing data models.
+
+### Identify Analytics Opportunities
+
+When schema or features are added, check if analytics should be implemented:
+
+1. **Timestamp fields** (`createdAt`, `updatedAt`) → Time-series growth charts
+2. **Enum/status fields** (`role`, `status`, `type`) → Distribution charts
+3. **Boolean fields** (`emailVerified`, `isActive`, `banned`) → Conversion/rate metrics
+4. **User-facing features** → Usage tracking dashboards
+
+### Verification Process
+
+```bash
+# Check if schema was modified
+git diff main...HEAD --name-only | grep -E "(schema\.ts|db/)"
+
+# Check if analytics files exist or were updated
+git diff main...HEAD --name-only | grep -E "(analytics|dashboard)"
+```
+
+### When Analytics Should Be Added
+
+**Prompt user if:**
+- Schema adds new tables/fields with trackable data but no analytics routes exist
+- New user-facing feature added without usage metrics
+- Data model changes that affect existing analytics
+
+**Prompt:** "Schema/feature changes detected. Consider using the `data-analytics` subagent to create growth dashboards and tracking for the new data."
+
+### When Analytics Are NOT Required
+
+- Internal refactoring without data model changes
+- Bug fixes
+- Documentation updates
+- UI-only changes without new data collection
+
+---
+
+## Step 7: Final Validation Report
 
 Generate a summary:
 
@@ -181,6 +223,9 @@ Generate a summary:
 - [✅/❌] Migration naming convention
 - [✅/❌] No data-deleting migrations
 
+### Analytics
+- [✅/❌/N/A] Analytics considered for new data
+
 ### Ready for PR
 - [✅/❌] All checks passed
 ```
@@ -196,6 +241,7 @@ If checks fail, address the issues first:
 2. Update context.md
 3. Generate testing plan with tester subagent
 4. Generate migrations with db-migration skill
+5. Create analytics dashboards with data-analytics subagent
 
 ---
 
@@ -206,3 +252,4 @@ If checks fail, address the issues first:
 | Generate migration | `db-migration` |
 | Create pull request | `create-pull-request` |
 | Generate testing plan | `tester` subagent |
+| Create analytics dashboards | `data-analytics` subagent |

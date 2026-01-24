@@ -1,0 +1,31 @@
+{
+  "mcpServers": {
+    "playwright": {
+      "command": "npx",
+      "args": [
+        "@playwright/mcp@latest"
+      ]
+    },
+    "shadcn": {
+      "command": "npx",
+      "args": [
+        "shadcn@latest",
+        "mcp"
+      ]
+    },
+    "github": {
+      "url": "https://api.githubcopilot.com/mcp/",
+      "headers": {
+        "Authorization": "Bearer YOUR_GITHUB_PAT_TOKEN_HERE"
+      }
+    },
+    "Linear": {
+      "url": "https://mcp.linear.app/sse",
+      "headers": {}
+    },
+    "Figma Desktop": {
+      "url": "http://127.0.0.1:3845/mcp",
+      "headers": {}
+    }
+  }
+}

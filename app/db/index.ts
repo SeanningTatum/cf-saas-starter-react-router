@@ -3,7 +3,7 @@ import * as schema from "./schema";
 
 export async function getDb(database: D1Database) {
   try {
-    return drizzleD1(database, { schema, logger: true });
+    return drizzleD1(database, { schema, logger: false });
   } catch (err) {
     throw new Error("Database not available");
   }

@@ -20,7 +20,11 @@ function sanitizeResourceName(name: string): string {
     .replace(/[^a-z0-9-]/g, ""); // Remove non-alphanumeric chars except dashes
 }
 
-function executeCommand(command: string, silent = false) {
+function executeCommand(
+  command: string,
+  silent = false,
+  env?: Record<string, string>
+) {
   if (!silent) {
     console.log(`\x1b[33m${command}\x1b[0m`);
   }
@@ -28,6 +32,7 @@ function executeCommand(command: string, silent = false) {
     return execSync(command, {
       encoding: "utf-8",
       stdio: silent ? "pipe" : "inherit",
+      env: env ? { ...process.env, ...env } : undefined,
     });
   } catch (error: any) {
     return { error: true, message: error.stdout || error.stderr };
@@ -212,23 +217,38 @@ async function promptForAccountId(
   }
 }
 
-async function createDatabase(dbName: string): Promise<string> {
+async function createDatabase(
+  dbName: string,
+  accountId?: string
+): Promise<string> {
   const dbSpinner = spinner();
   dbSpinner.start(`Creating D1 database: ${dbName}...`);
 
+  const env = accountId ? { CLOUDFLARE_ACCOUNT_ID: accountId } : undefined;
   const creationOutput = executeCommand(
     `bunx wrangler d1 create ${dbName}`,
-    true
+    true,
+    env
   );
 
   if (creationOutput === undefined || typeof creationOutput !== "string") {
+    // Log the creation error for debugging
+    if (
+      creationOutput &&
+      typeof creationOutput === "object" &&
+      "message" in creationOutput
+    ) {
+      console.log(`\x1b[33mCreate error: ${creationOutput.message}\x1b[0m`);
+    }
+
     dbSpinner.stop(
       `\x1b[33m⚠ Database creation failed, maybe it already exists. Fetching info...\x1b[0m`
     );
 
     const dbInfoOutput = executeCommand(
       `bunx wrangler d1 info ${dbName}`,
-      true
+      true,
+      env
     );
 
     if (dbInfoOutput && typeof dbInfoOutput === "string") {
@@ -240,6 +260,15 @@ async function createDatabase(dbName: string): Promise<string> {
         dbSpinner.stop(`\x1b[32m✓ Found database ID: ${databaseID}\x1b[0m`);
         return databaseID;
       }
+    }
+
+    // Log the info error for debugging
+    if (
+      dbInfoOutput &&
+      typeof dbInfoOutput === "object" &&
+      "message" in dbInfoOutput
+    ) {
+      console.log(`\x1b[31mInfo error: ${dbInfoOutput.message}\x1b[0m`);
     }
 
     dbSpinner.stop(`\x1b[31m✗ Failed to create or find database\x1b[0m`);
@@ -264,13 +293,18 @@ async function createDatabase(dbName: string): Promise<string> {
   process.exit(1);
 }
 
-async function createBucket(bucketName: string): Promise<void> {
+async function createBucket(
+  bucketName: string,
+  accountId?: string
+): Promise<void> {
   const bucketSpinner = spinner();
   bucketSpinner.start(`Creating R2 bucket: ${bucketName}...`);
 
+  const env = accountId ? { CLOUDFLARE_ACCOUNT_ID: accountId } : undefined;
   const result = executeCommand(
     `wrangler r2 bucket create ${bucketName}`,
-    true
+    true,
+    env
   );
 
   if (result && typeof result === "object" && result.error) {
@@ -285,13 +319,18 @@ async function createBucket(bucketName: string): Promise<void> {
   }
 }
 
-async function createKVNamespace(kvName: string): Promise<void> {
+async function createKVNamespace(
+  kvName: string,
+  accountId?: string
+): Promise<void> {
   const kvSpinner = spinner();
   kvSpinner.start(`Creating KV namespace: ${kvName}...`);
 
+  const env = accountId ? { CLOUDFLARE_ACCOUNT_ID: accountId } : undefined;
   const kvOutput = executeCommand(
     `wrangler kv namespace create ${kvName}`,
-    true
+    true,
+    env
   );
 
   if (kvOutput === undefined || typeof kvOutput !== "string") {
@@ -343,8 +382,8 @@ function createEnvFile(betterAuthSecret: string) {
   console.log("\x1b[32m✓ Created .env file\x1b[0m");
 }
 
-async function runDatabaseMigrations(dbName: string) {
-  console.log("\n\x1b[36m📦 Running database migrations...\x1b[0m");
+async function runDatabaseMigrations(dbName: string, accountId?: string) {
+  const env = accountId ? { CLOUDFLARE_ACCOUNT_ID: accountId } : undefined;
 
   const generateSpinner = spinner();
   generateSpinner.start("Generating migration...");
@@ -353,52 +392,21 @@ async function runDatabaseMigrations(dbName: string) {
 
   const localSpinner = spinner();
   localSpinner.start("Applying local migrations...");
-  executeCommand(`bunx wrangler d1 migrations apply "${dbName}" --local`, true);
+  executeCommand(
+    `bunx wrangler d1 migrations apply "${dbName}" --local`,
+    true,
+    env
+  );
   localSpinner.stop("\x1b[32m✓ Local migrations applied\x1b[0m");
 
   const remoteSpinner = spinner();
   remoteSpinner.start("Applying remote migrations...");
   executeCommand(
     `bunx wrangler d1 migrations apply "${dbName}" --remote`,
-    true
+    true,
+    env
   );
   remoteSpinner.stop("\x1b[32m✓ Remote migrations applied\x1b[0m");
-}
-
-async function uploadSecret(secretName: string, secretValue: string) {
-  if (!secretValue || secretValue === "") {
-    console.log(`\x1b[33m⚠ Skipping ${secretName} (empty value)\x1b[0m`);
-    return;
-  }
-
-  const secretSpinner = spinner();
-  secretSpinner.start(`Uploading ${secretName}...`);
-
-  try {
-    const tempFile = path.join(__dirname, "..", `.temp-${secretName}`);
-    fs.writeFileSync(tempFile, secretValue);
-
-    try {
-      const command =
-        process.platform === "win32"
-          ? `type "${tempFile}" | wrangler secret put ${secretName}`
-          : `cat "${tempFile}" | wrangler secret put ${secretName}`;
-
-      const result = executeCommand(command, true);
-
-      if (result && typeof result === "object" && result.error) {
-        secretSpinner.stop(`\x1b[31m✗ Failed to upload ${secretName}\x1b[0m`);
-      } else {
-        secretSpinner.stop(`\x1b[32m✓ ${secretName} uploaded\x1b[0m`);
-      }
-    } finally {
-      if (fs.existsSync(tempFile)) {
-        fs.unlinkSync(tempFile);
-      }
-    }
-  } catch (error) {
-    secretSpinner.stop(`\x1b[31m✗ Failed to upload ${secretName}\x1b[0m`);
-  }
 }
 
 // Main setup function
@@ -421,6 +429,20 @@ async function main() {
     process.exit(1);
   }
   console.log("\x1b[32m✓ Authenticated with Cloudflare\x1b[0m");
+
+  // Check for multiple accounts and prompt for selection if needed
+  const accounts = extractAccountDetails(whoamiOutput);
+  let accountId: string | undefined;
+
+  if (accounts.length > 1) {
+    console.log(
+      `\n\x1b[33m⚠ Multiple Cloudflare accounts detected (${accounts.length} accounts)\x1b[0m`
+    );
+    accountId = await promptForAccountId(accounts);
+    console.log(`\x1b[32m✓ Using account: ${accountId}\x1b[0m`);
+  } else if (accounts.length === 1 && accounts[0]?.id) {
+    accountId = accounts[0].id;
+  }
 
   // Step 1: Get project name
   console.log("\n\x1b[36m📝 Step 1: Project Configuration\x1b[0m");
@@ -454,20 +476,14 @@ async function main() {
 
   let dbId: string;
   try {
-    dbId = await createDatabase(dbName);
+    dbId = await createDatabase(dbName, accountId);
   } catch (error) {
     console.error("\x1b[31mError creating database:", error, "\x1b[0m");
-    const accountIds = extractAccountDetails(whoamiOutput);
-    const accountId = await promptForAccountId(accountIds);
-    console.log(
-      `\x1b[33mPlease set: export CLOUDFLARE_ACCOUNT_ID=${accountId}\x1b[0m`
-    );
-    console.log("\x1b[33mThen run this setup script again.\x1b[0m");
     cancel("Operation cancelled.");
     process.exit(1);
   }
 
-  await createBucket(bucketName);
+  await createBucket(bucketName, accountId);
 
   // Optionally create KV namespace
   const wantKV = await confirm({
@@ -476,7 +492,7 @@ async function main() {
   });
 
   if (wantKV) {
-    await createKVNamespace(kvName);
+    await createKVNamespace(kvName, accountId);
   }
 
   // Step 3: Set up authentication
@@ -502,97 +518,47 @@ async function main() {
   };
   replaceHandlebarsInFile(packageJsonPath, replacements);
 
-  // Step 5: Run database migrations
-  await runDatabaseMigrations(dbName);
-
-  // Step 6: Optionally deploy secrets
-  console.log("\n\x1b[36m🚀 Step 5: Deploy to Production (Optional)\x1b[0m");
-  const shouldDeploySecrets = await confirm({
-    message: "Deploy secrets to Cloudflare Workers now?",
-    initialValue: false,
-  });
-
-  let secretsDeployed = false;
-  if (shouldDeploySecrets) {
-    console.log("\n\x1b[36mDeploying secrets...\x1b[0m");
-    await uploadSecret("BETTER_AUTH_SECRET", betterAuthSecret);
-    secretsDeployed = true;
+  // Step 5: Install dependencies
+  console.log("\n\x1b[36m📦 Step 5: Installing Dependencies\x1b[0m");
+  const installSpinner = spinner();
+  installSpinner.start("Running bun install...");
+  const installResult = executeCommand("bun install", true);
+  if (installResult && typeof installResult === "object" && installResult.error) {
+    installSpinner.stop("\x1b[31m✗ Failed to install dependencies\x1b[0m");
+    console.error(`\x1b[31m${installResult.message}\x1b[0m`);
   } else {
-    console.log(
-      "\x1b[33m⚠ Skipped secret deployment. Run 'wrangler secret put' later to manage secrets.\x1b[0m"
-    );
+    installSpinner.stop("\x1b[32m✓ Dependencies installed\x1b[0m");
   }
 
-  // Step 7: Optionally build and deploy the worker
-  if (secretsDeployed) {
+  // Step 6: Run database migrations
+  console.log("\n\x1b[36m🗄️  Step 6: Database Migrations\x1b[0m");
+  await runDatabaseMigrations(dbName, accountId);
+
+  // Step 7: Deploy to Cloudflare
+  console.log("\n\x1b[36m🚀 Step 7: Deploy to Cloudflare\x1b[0m");
+  const deploySpinner = spinner();
+  deploySpinner.start("Building and deploying to Cloudflare Workers...");
+  const deployResult = executeCommand("bun run deploy", true, accountId ? { CLOUDFLARE_ACCOUNT_ID: accountId } : undefined);
+
+  if (deployResult && typeof deployResult === "object" && deployResult.error) {
+    deploySpinner.stop("\x1b[31m✗ Deployment failed\x1b[0m");
+    console.error(`\x1b[31m${deployResult.message}\x1b[0m`);
     console.log(
-      "\n\x1b[36m🚀 Step 6: Build and Deploy Worker (Optional)\x1b[0m"
+      "\x1b[33mYou can deploy manually later with: bun run deploy\x1b[0m"
     );
-
-    const shouldDeploy = await confirm({
-      message: "Build and deploy the worker to Cloudflare now?",
-      initialValue: false,
-    });
-
-    if (shouldDeploy) {
-      // Build the application
-      const buildSpinner = spinner();
-      buildSpinner.start("Building application...");
-      const buildResult = executeCommand("bun run deploy", true);
-
-      if (buildResult && typeof buildResult === "object" && buildResult.error) {
-        buildSpinner.stop("\x1b[31m✗ Build failed\x1b[0m");
-        console.error(`\x1b[31m${buildResult.message}\x1b[0m`);
-        console.log(
-          "\x1b[33mYou can build and deploy manually later with: bun run deploy\x1b[0m"
-        );
-      } else {
-        buildSpinner.stop("\x1b[32m✓ Build completed\x1b[0m");
-
-        // Deploy to Cloudflare
-        const deploySpinner = spinner();
-        deploySpinner.start("Deploying to Cloudflare Workers...");
-        const deployResult = executeCommand("bun run deploy", true);
-
-        if (
-          deployResult &&
-          typeof deployResult === "object" &&
-          deployResult.error
-        ) {
-          deploySpinner.stop("\x1b[31m✗ Deployment failed\x1b[0m");
-          console.error(`\x1b[31m${deployResult.message}\x1b[0m`);
-        } else {
-          deploySpinner.stop("\x1b[32m✓ Deployed successfully! 🎉\x1b[0m");
-          console.log(
-            "\n\x1b[36mYour application is now live on Cloudflare!\x1b[0m"
-          );
-        }
-      }
-    } else {
-      console.log(
-        "\x1b[33m⚠ Skipped deployment. You can deploy later with: bun run deploy\x1b[0m"
-      );
-    }
+  } else {
+    deploySpinner.stop("\x1b[32m✓ Deployed successfully! 🎉\x1b[0m");
   }
 
   // Final instructions
   console.log("\n\x1b[36m✅ Setup Complete!\x1b[0m\n");
   console.log("\x1b[32mNext steps:\x1b[0m");
-
-  if (!secretsDeployed) {
-    console.log("  1. For local development:");
-    console.log("     \x1b[33mbun run dev\x1b[0m\n");
-    console.log("  2. Before deploying to production:");
-    console.log(
-      "     • Deploy secrets: \x1b[33mwrangler secret put BETTER_AUTH_SECRET\x1b[0m"
-    );
-    console.log("     • Run: \x1b[33mbun run deploy\x1b[0m\n");
-  } else {
-    console.log("  1. For local development:");
-    console.log("     \x1b[33mbun run dev\x1b[0m\n");
-    console.log("  2. Configure your production domain:");
-    console.log("     • Configure R2 CORS policy for your domain\n");
-  }
+  console.log("  1. For local development:");
+  console.log("     \x1b[33mbun run dev\x1b[0m\n");
+  console.log("  2. Before deploying to production:");
+  console.log(
+    "     • Deploy secrets: \x1b[33mwrangler secret put BETTER_AUTH_SECRET\x1b[0m"
+  );
 
   outro("✨ Happy building! 🎉");
 }
