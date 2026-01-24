@@ -1,0 +1,19 @@
+---
+globs: e2e/**/*,e2e/*
+alwaysApply: false
+---
+- Write comprehensive tests that verify:
+  - UI components render correctly
+  - User interactions work as expected
+  - Form submissions and validations
+  - Navigation and routing behavior
+  - Error states and edge cases
+- Use descriptive test names that clearly indicate what is being tested
+- Group related tests using `test.describe()` blocks
+- Use `test.beforeEach()` for common setup (e.g., navigation to base URL)
+- **ALWAYS prefer locating elements by id or data-testid attributes to avoid duplication errors**
+  - Use `getByTestId()` for elements with `data-testid` attributes
+  - Use `locator('#element-id')` for elements with `id` attributes
+  - Avoid `getByLabel()` and `getByText()` as labels and text can be duplicated
+  - Only use semantic selectors (e.g., `getByRole`) when ids are not available
+- Use `expect()` assertions to verify expected behavior

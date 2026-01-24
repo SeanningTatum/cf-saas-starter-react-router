@@ -1,0 +1,17 @@
+---
+alwaysApply: true
+---
+
+## Framework & Runtime
+- **This project uses React Router with Cloudflare Workers**
+  - React Router handles routing and server-side rendering
+  - Cloudflare Workers is the deployment runtime
+  - Server loaders run on Cloudflare Workers edge runtime
+  - Use Cloudflare-specific APIs when needed (e.g., `env`, `ctx.cloudflare`)
+
+## Package Manager
+- **ALWAYS use `bun` for all package management and script execution**
+  - Use `bun install` instead of `npm install` or `yarn install`
+  - Use `bun run <script>` instead of `npm run <script>` or `yarn <script>`
+  - Use `bunx` instead of `npx` for running packages
+  - Use `bun` directly for executing TypeScript/JavaScript files

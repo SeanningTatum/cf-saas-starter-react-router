@@ -1,0 +1,126 @@
+---
+alwaysApply: true
+---
+
+## Architecture Overview
+This project uses a layered architecture with the Repository pattern for data access and tRPC for type-safe API communication.
+
+**Data Flow:**
+1. **Client Components** → tRPC Client Hooks → tRPC Routes → Repositories → Database
+2. **Server Loaders** → tRPC Server Caller → Repositories → Database
+
+## Repository Pattern (Data Access Layer)
+
+### File Location and Structure
+- **ALWAYS place repositories in `app/repositories/`** (e.g., `user.ts`, `terms.ts`, `bucket.ts`)
+- **ALWAYS define a `Database` type alias:** `type Database = Context["db"];`
+- **ALWAYS define TypeScript interfaces for inputs**
+- **ALWAYS export pure functions** with signature: `async function name(db: Database, input: InputInterface)`
+- **NEVER import tRPC or request/response objects in repositories**
+- **NEVER access context or session directly** - pass data as input parameters
+
+### Error Handling
+- **ALWAYS wrap database operations in try-catch blocks**
+- **ALWAYS throw custom error types from `@/models/errors`:**
+  - `NotFoundError` - record not found
+  - `UpdateError` - update/insert operations fail
+  - `DeletionError` - delete operations fail
+  - `ValidationError` - business logic validation fails
+
+## tRPC Routes (API Layer)
+
+### File Location and Structure
+- **ALWAYS place tRPC routes in `app/trpc/routes/`** (e.g., `admin.ts`, `terms.ts`)
+- **ALWAYS import repository functions:** `import * as userRepository from "@/repositories/user";`
+- **ALWAYS register routes in `app/trpc/router.ts`**
+
+### Route Types
+- `.query()` for read operations (GET-like)
+- `.mutation()` for write operations (POST/PUT/DELETE-like)
+- Use `publicProcedure`, `protectedProcedure`, or `adminProcedure`
+
+### Input Validation
+- **ALWAYS validate inputs using Zod schemas**
+- Common validators: `z.string()`, `z.number()`, `z.boolean()`, `z.array()`, `z.enum()`, `z.date()`
+- Use `.optional()`, `.default(value)`, `.min()`, `.max()` as needed
+
+### Calling Repositories
+- **ALWAYS pass `ctx.db` as first argument**
+- **ALWAYS extract user data from `ctx.auth.user` when needed**
+- **Let repository errors bubble up** - only throw `TRPCError` for tRPC-specific validation
+
+## Server-Side Data Fetching (Loaders)
+
+**ALWAYS use `context.trpc` to call tRPC routes server-side:**
+
+```typescript
+export async function loader({ request, context }: Route.LoaderArgs) {
+  const session = await context.auth.api.getSession({
+    headers: request.headers,
+  });
+  
+  if (!session) {
+    return redirect("/login");
+  }
+  
+  // Call tRPC routes through context.trpc
+  const hasAccepted = await context.trpc.terms.hasAcceptedTerms();
+  
+  return { user: session.user, hasAccepted };
+}
+```
+
+**Best Practices:**
+- Check authentication first with `context.auth.api.getSession()`
+- Redirect unauthenticated users appropriately
+- Use `Promise.all()` for parallel data fetching
+- AVOID importing repositories directly - prefer `context.trpc`
+
+## Client-Side Data Fetching (React Components)
+
+**Import tRPC client:** `import { api } from "@/trpc/client";`
+
+**Queries (Read Operations):**
+
+```typescript
+const { data, isLoading, error } = api.terms.getTermsAcceptance.useQuery();
+```
+
+**Mutations (Write Operations):**
+
+```typescript
+const acceptTermsMutation = api.terms.acceptTerms.useMutation({
+  onSuccess: () => navigate("/dashboard"),
+  onError: (error) => console.error("Failed:", error),
+});
+
+// Call the mutation
+await acceptTermsMutation.mutateAsync({ termsVersion: "1.0.0" });
+```
+
+**Handling UI States:**
+
+```typescript
+<Button
+  onClick={handleSubmit}
+  disabled={mutation.isPending}
+>
+  {mutation.isPending ? "Saving..." : "Save"}
+</Button>
+
+{error && <div className="text-red-600">{error.message}</div>}
+```
+
+**Callbacks:**
+- `onSuccess` - mutation succeeds
+- `onError` - mutation fails
+- `onSettled` - after success or error
+- Use `mutate()` for fire-and-forget or `mutateAsync()` for awaiting
+
+## Key Principles
+
+1. **Separation of Concerns:** Repositories handle database operations, tRPC routes handle API validation, Components handle UI
+2. **Type Safety:** Use TypeScript interfaces for inputs, Zod for runtime validation, tRPC for end-to-end type safety
+3. **Error Handling:** Use custom error classes in repositories, let errors bubble up through tRPC, display user-friendly messages in UI
+4. **Authentication:** Use appropriate procedure types, extract user data from `ctx.auth.user`, check session in loaders
+5. **Consistency:** Always follow Repository → tRPC Route → Client Hook pattern

@@ -1,0 +1,213 @@
+---
+description: Anything related to authentication
+alwaysApply: false
+---
+# Better Auth Rules for Landfall Project
+
+## Better Auth Overview
+- This project uses **Better Auth** (`better-auth` v1.3.34+) for authentication
+- Better Auth is configured with Drizzle ORM adapter for SQLite (Cloudflare D1)
+- Uses email/password authentication with admin plugin enabled
+- Supports Google OAuth social authentication
+- Base path for auth API: `/api/auth`
+
+## Server-Side Auth Setup
+
+### Creating Auth Instance
+- **ALWAYS** use `createAuth()` from `@/auth/server` to create auth instances
+- Auth instances must be created per-request (not cached globally)
+- Required parameters:
+  - `database`: D1Database instance from Cloudflare context
+  - `options`: Object containing:
+    - `secret`: BETTER_AUTH_SECRET from environment variables
+    - `googleClientId`: GOOGLE_CLIENT_ID from environment variables
+    - `googleClientSecret`: GOOGLE_CLIENT_SECRET from environment variables
+- Example pattern:
+```typescript
+import { createAuth } from "@/auth/server";
+
+const auth = await createAuth(context.cloudflare.env.DATABASE, {
+  secret: context.cloudflare.env.BETTER_AUTH_SECRET,
+  googleClientId: context.cloudflare.env.GOOGLE_CLIENT_ID,
+  googleClientSecret: context.cloudflare.env.GOOGLE_CLIENT_SECRET,
+});
+```
+
+### Auth Route Handler
+- Auth routes are handled at `/api/auth` via `app/routes/api/auth.$.ts`
+- Both `loader` and `action` should call `auth.handler(request)`
+- The handler automatically routes to appropriate Better Auth endpoints
+
+### Session Retrieval
+- Use `auth.api.getSession({ headers })` to get current session
+- Returns `{ session, user }` or `null` if not authenticated
+- Always pass request headers for proper session resolution
+- Example:
+```typescript
+const sessionData = await auth.api.getSession({
+  headers: opts.headers,
+});
+```
+
+## Client-Side Auth
+
+### Auth Client Setup
+- **ALWAYS** use `authClient` from `@/auth/client` for client-side operations
+- Client is pre-configured with:
+  - Base path: `/api/auth`
+  - Admin plugin enabled
+- Import pattern:
+```typescript
+import { authClient } from "@/auth/client";
+```
+
+### Client-Side Auth Operations
+- Use `authClient.signIn.email()` for email/password login
+- Use `authClient.signUp.email()` for email/password signup
+- Use `authClient.signOut()` for logout
+- Use `authClient.useSession()` hook for React components
+- Use `authClient.getSession()` for one-time session checks
+
+## tRPC Integration
+
+### Context Setup
+- Auth is integrated into tRPC context via `createTRPCContext`
+- Context includes:
+  - `authApi`: The Better Auth API instance
+  - `auth`: Session data (`{ session, user }` or `null`)
+- Access pattern:
+```typescript
+const { auth, authApi } = ctx;
+```
+
+### Protected Procedures
+- Use `protectedProcedure` for authenticated-only endpoints
+- Guarantees `ctx.auth.user` and `ctx.auth.session` are non-null
+- Throws `UNAUTHORIZED` error if user is not authenticated
+- Example:
+```typescript
+export const myProtectedQuery = protectedProcedure.query(({ ctx }) => {
+  // ctx.auth.user and ctx.auth.session are guaranteed to exist
+  return ctx.auth.user;
+});
+```
+
+### Admin Procedures
+- Use `adminProcedure` for admin-only endpoints
+- Extends `protectedProcedure` and checks `user.role === "admin"`
+- Throws `FORBIDDEN` error if user is not admin
+- Example:
+```typescript
+export const adminQuery = adminProcedure.query(({ ctx }) => {
+  // User is guaranteed to be admin
+  return ctx.auth.user;
+});
+```
+
+## Database Schema
+
+### Drizzle Adapter Configuration
+- Better Auth uses Drizzle adapter with SQLite provider
+- Schema is imported from `@/db/schema`
+- Database connection uses `getDb()` helper from `@/db`
+- Adapter configuration:
+```typescript
+database: drizzleAdapter(db, {
+  provider: "sqlite",
+  schema,
+})
+```
+
+## Authentication Features
+
+### Enabled Features
+- Email/password authentication (`emailAndPassword.enabled: true`)
+- Email OTP for password reset (`emailOTP` plugin)
+- Google OAuth social authentication
+- Admin plugin for admin functionality
+- Session management (automatic via Better Auth)
+
+### Social Providers
+- **Google OAuth**: Configured via `socialProviders.google`
+  - Requires `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` environment variables
+  - Users can sign in with their Google account
+  - To set up Google OAuth:
+    1. Create a project in Google Cloud Console
+    2. Enable Google+ API
+    3. Create OAuth 2.0 credentials
+    4. Set authorized redirect URIs to: `{YOUR_DOMAIN}/api/auth/callback/google`
+    5. Add the client ID and secret to your environment variables
+
+### User Model
+- User model includes standard fields (id, email, etc.)
+- Admin role is stored in `user.role` field
+- Role values: `"admin"` or default user role
+
+## Best Practices
+
+### Security
+- **NEVER** expose `BETTER_AUTH_SECRET` in client-side code
+- **ALWAYS** validate authentication server-side
+- **NEVER** trust client-side auth state alone
+- Use `protectedProcedure` or `adminProcedure` for sensitive operations
+
+### Performance
+- Create auth instances per-request (not globally cached)
+- Use `auth.api.getSession()` efficiently (it's optimized)
+- Consider caching session data in context when used multiple times
+
+### Error Handling
+- Better Auth throws appropriate HTTP errors
+- Handle `UNAUTHORIZED` (401) for unauthenticated requests
+- Handle `FORBIDDEN` (403) for unauthorized role access
+- Use tRPC error codes: `UNAUTHORIZED` and `FORBIDDEN`
+
+### Type Safety
+- Use `Auth` type from `@/auth/server` for auth instance types
+- Use `Context` type from `@/trpc/index` for tRPC context
+- Session data is typed: `{ session: Session, user: User } | null`
+
+## Common Patterns
+
+### Checking Auth in Loaders/Actions
+```typescript
+const auth = await createAuth(env.DATABASE, env.BETTER_AUTH_SECRET);
+const session = await auth.api.getSession({ headers: request.headers });
+
+if (!session) {
+  // Handle unauthenticated
+  throw redirect("/login");
+}
+
+// Use session.user and session.session
+```
+
+### Client-Side Auth State
+```typescript
+import { authClient } from "@/auth/client";
+
+const { data: session } = authClient.useSession();
+
+if (session) {
+  // User is authenticated
+  const user = session.user;
+}
+```
+
+### Sign In Flow
+```typescript
+await authClient.signIn.email({
+  email: "user@example.com",
+  password: "password",
+});
+```
+
+### Sign Up Flow
+```typescript
+await authClient.signUp.email({
+  email: "user@example.com",
+  password: "password",
+  name: "User Name",
+});
+```
+

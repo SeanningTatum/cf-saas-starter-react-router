@@ -1,0 +1,60 @@
+---
+description: Constants organization - place all configurable constants in app/lib/constants/
+alwaysApply: true
+---
+
+# Constants Organization
+
+**ALWAYS place constants in `app/lib/constants/`** to keep configurable values centralized and easy to maintain.
+
+## File Structure
+
+```
+app/lib/constants/
+  index.ts        # Re-exports all constants
+  pricing.ts      # Pricing-related constants
+  limits.ts       # Rate limits, size limits, etc.
+  messages.ts     # User-facing messages, error text
+  config.ts       # App configuration values
+```
+
+## When to Use Constants Files
+
+Create constants in `app/lib/constants/` when:
+- Values are used in multiple places
+- Values might need to be changed/configured later
+- Values represent business logic (pricing, limits, timeouts)
+- Values are user-facing messages or labels
+
+## Examples
+
+```typescript
+// ❌ BAD - hardcoded values scattered in code
+const MAX_FILE_SIZE = 10 * 1024 * 1024;
+const TIMEOUT_MS = 30000;
+
+// ✅ GOOD - import from constants
+import { MAX_FILE_SIZE, TIMEOUT_MS } from "@/lib/constants";
+```
+
+```typescript
+// app/lib/constants/limits.ts
+export const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+export const MAX_UPLOAD_COUNT = 5;
+export const REQUEST_TIMEOUT_MS = 30000;
+```
+
+```typescript
+// app/lib/constants/index.ts
+export * from "./limits";
+export * from "./pricing";
+export * from "./messages";
+```
+
+## Import Pattern
+
+Always use the `@/lib/constants` alias:
+
+```typescript
+import { PRICE_AMOUNT, MAX_RETRIES } from "@/lib/constants";
+```

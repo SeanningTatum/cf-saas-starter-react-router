@@ -1,0 +1,67 @@
+---
+globs: app/routes/**/*,app/components/**/*
+alwaysApply: false
+---
+## Frontend Testing and Browser Automation
+- **ALWAYS use Playwright MCP tools when working on frontend-related tasks**
+  - When testing UI components, user interactions, or browser behavior, use the Playwright MCP tools (mcp_playwright_browser_*)
+  - Use Playwright MCP for:
+    - Verifying form submissions
+    - Checking UI rendering and interactions
+    - Validating navigation and routing
+    - Testing responsive design
+    - Debugging frontend issues
+  - Prefer Playwright MCP browser tools over manual testing or other browser automation tools
+  - Use `mcp_playwright_browser_snapshot` to capture page state for analysis
+  - Use `mcp_playwright_browser_navigate` to navigate to pages
+  - Use `mcp_playwright_browser_click`, `mcp_playwright_browser_type`, `mcp_playwright_browser_fill_form` for interactions
+
+## Writing Playwright Tests
+- **ALWAYS write Playwright tests to verify functionality when implementing frontend features**
+  - Create test files in the `e2e/` directory following the naming pattern `*.spec.ts`
+  - Use `@playwright/test` for test framework
+  - Write comprehensive tests that verify:
+    - UI components render correctly
+    - User interactions work as expected
+    - Form submissions and validations
+    - Navigation and routing behavior
+    - Error states and edge cases
+  - Use descriptive test names that clearly indicate what is being tested
+  - Group related tests using `test.describe()` blocks
+  - Use `test.beforeEach()` for common setup (e.g., navigation to base URL)
+  - **ALWAYS prefer locating elements by id or data-testid attributes to avoid duplication errors**
+    - Use `getByTestId()` for elements with `data-testid` attributes
+    - Use `locator('#element-id')` for elements with `id` attributes
+    - Avoid `getByLabel()` and `getByText()` as labels and text can be duplicated
+    - Only use semantic selectors (e.g., `getByRole`) when ids are not available
+  - Use `expect()` assertions to verify expected behavior
+  - Run tests with `bun run test:e2e` or `bunx playwright test`
+
+## Component Creation and Styling
+- **NEVER use ambiguous hex color values in components unless absolutely necessary**
+  - Prefer updating `globals.css` to add custom colors that align with ShadCN conventions
+  - Use CSS custom properties (CSS variables) defined in `globals.css` for consistent theming
+  - If a custom color cannot be added to `globals.css`, default to Tailwind's built-in color names
+  - Examples of acceptable Tailwind colors: `bg-blue-500`, `text-gray-900`, `border-slate-200`
+  - Avoid inline hex values like `#FF5733` or `rgb(255, 87, 51)` unless there's no alternative
+  - When adding colors to `globals.css`, follow ShadCN's CSS variable naming conventions (e.g., `--primary`, `--secondary`, `--muted`)
+- **ALWAYS use the `cn()` utility for conditional class names**
+  - Import `cn` from `@/lib/utils`
+  - Use it to merge Tailwind classes conditionally instead of manual string concatenation
+  - Example: `className={cn("base-class", condition && "active-class")}` instead of `className={"base-class " + (condition ? "active-class" : "")}`
+  - This handles Tailwind class conflicts correctly using `tailwind-merge`
+
+## Form Creation
+- **ALWAYS use ShadCN and React Hook Form when creating forms**
+  - Use ShadCN's Form component (`app/components/ui/form.tsx`) for all form implementations
+  - Use React Hook Form (`useForm` hook) for form state management and validation
+  - Combine ShadCN form components with React Hook Form's `Controller` or form field registration
+  - Follow the pattern established in existing forms (e.g., login, signup forms)
+  - Use Zod for schema validation in combination with React Hook Form
+  - Never create forms without these libraries - they ensure consistency and better UX
+
+## General Guidelines
+- When in doubt about frontend behavior, use Playwright MCP to verify
+- Always prefer `bun` over other package managers or runtime environments
+- For any bash/terminal commands involving Node.js packages or scripts, use `bun`
+

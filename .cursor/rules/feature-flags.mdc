@@ -1,0 +1,267 @@
+---
+description: Anything related to feature flags or PostHog
+alwaysApply: false
+---
+# Feature Flags with PostHog
+
+## Overview
+- This project uses **PostHog** for feature flag management
+- Feature flags are evaluated **server-side** in loaders for performance and security
+- Flag values are passed to components via loader data
+- PostHog client is configured for both server-side (Node SDK) and client-side (React SDK)
+
+## File Structure
+
+### Core PostHog Files
+- `app/posthog/feature-flags.ts` - Flag key constants and TypeScript types
+- `app/posthog/server.ts` - Server-side PostHog client and flag evaluation
+- `app/posthog/provider.tsx` - Client-side PostHog provider and hooks
+- `app/posthog/index.ts` - Re-exports for convenient imports
+
+## Defining Feature Flags
+
+### Step 1: Add Flag Key to Constants
+**ALWAYS** define new flags in `app/posthog/feature-flags.ts`:
+
+```typescript
+export const FEATURE_FLAGS = {
+  /** Enable document upload modal before conversation */
+  DOCUMENT_UPLOAD: "feature-document-upload",
+  /** Enable progress stepper UI during conversation */
+  PROGRESS_STEPPER: "CON-141-Progress-Stepper",
+  // Add new flags here with JSDoc comments
+  MY_NEW_FLAG: "feature-my-new-flag",
+} as const;
+```
+
+### Step 2: Add to FeatureFlags Interface
+Add the corresponding property to the `FeatureFlags` interface:
+
+```typescript
+export interface FeatureFlags {
+  documentUploadEnabled: boolean;
+  progressStepperEnabled: boolean;
+  // Add new flag property
+  myNewFlagEnabled: boolean;
+}
+```
+
+### Step 3: Set Default Value
+Add default value to `DEFAULT_FEATURE_FLAGS`:
+
+```typescript
+export const DEFAULT_FEATURE_FLAGS: FeatureFlags = {
+  documentUploadEnabled: false,
+  progressStepperEnabled: false,
+  // New flags default to false (disabled)
+  myNewFlagEnabled: false,
+};
+```
+
+## Server-Side Flag Evaluation
+
+### In Loaders
+**ALWAYS** evaluate feature flags server-side in route loaders using `context.posthog`:
+
+```typescript
+import { getFeatureFlag } from "@/posthog/server";
+import { FEATURE_FLAGS } from "@/posthog/feature-flags";
+
+export async function loader({ request, context }: Route.LoaderArgs) {
+  const session = await context.auth.api.getSession({
+    headers: request.headers,
+  });
+
+  // Use context.posthog - it's already set up in workers/app.ts
+  const myFeatureEnabled = session?.user
+    ? await getFeatureFlag(context.posthog, session.user.id, FEATURE_FLAGS.MY_NEW_FLAG, false)
+    : false;
+
+  return {
+    myFeatureEnabled,
+    // ...other data
+  };
+}
+```
+
+### Key Points
+- **ALWAYS** use `context.posthog` - it's already initialized in `workers/app.ts` and passed to all loaders
+- **NEVER** call `createPostHogClient()` in loaders - the client is already available via context
+- **ALWAYS** pass `session.user.id` as the `distinctId` for user-specific targeting
+- **ALWAYS** provide a default value (typically `false`) for when PostHog is unavailable
+- **NEVER** evaluate flags client-side for security-sensitive features
+
+## Using Flags in Components
+
+### Access Flag Values from Loader Data
+```typescript
+import { useLoaderData } from "react-router";
+
+export default function MyPage() {
+  const { myFeatureEnabled } = useLoaderData<typeof loader>();
+  
+  return (
+    <div>
+      {myFeatureEnabled && (
+        <NewFeatureComponent />
+      )}
+      
+      {/* Or conditionally render different content */}
+      {myFeatureEnabled ? (
+        <NewExperience />
+      ) : (
+        <OldExperience />
+      )}
+    </div>
+  );
+}
+```
+
+### Using Flags for Initial State
+```typescript
+export default function MyPage() {
+  const { documentUploadEnabled } = useLoaderData<typeof loader>();
+  
+  // Use flag to set initial state
+  const [showModal, setShowModal] = useState(documentUploadEnabled);
+  
+  // ...
+}
+```
+
+## Server-Side Functions
+
+### `getFeatureFlag(client, distinctId, flagKey, defaultValue)`
+Evaluates a feature flag for a user:
+```typescript
+const isEnabled = await getFeatureFlag(
+  context.posthog,   // PostHog client from context (can be null)
+  user.id,           // User's distinct ID
+  FEATURE_FLAGS.MY_FLAG,  // Flag key constant
+  false              // Default value if evaluation fails
+);
+```
+
+### `captureEvent(client, distinctId, event, properties)`
+Captures server-side analytics events:
+```typescript
+captureEvent(context.posthog, user.id, 'feature_used', { 
+  featureName: 'document-upload' 
+});
+```
+
+### `createPostHogClient(apiKey)` (Internal use only)
+Creates a PostHog client - **only used in `workers/app.ts`** to initialize `context.posthog`.
+**Do NOT call this in loaders** - use `context.posthog` instead.
+
+## Client-Side Analytics
+
+### Using the Analytics Hook
+For tracking events in components:
+```typescript
+import { useAnalytics } from "@/posthog";
+
+function MyComponent() {
+  const { trackEvent } = useAnalytics();
+  
+  const handleClick = () => {
+    trackEvent('button_clicked', { buttonName: 'signup' });
+  };
+  
+  return <button onClick={handleClick}>Sign Up</button>;
+}
+```
+
+## PostHog Provider Setup
+
+The `PHProvider` wraps the app in `root.tsx` and handles:
+- PostHog initialization with API key from server
+- User identification (automatically identifies logged-in users)
+- Session recording configuration
+
+```typescript
+// In root.tsx
+<PHProvider apiKey={posthogApiKey} user={user}>
+  {children}
+</PHProvider>
+```
+
+## Best Practices
+
+### Naming Conventions
+- Flag keys in PostHog: `feature-{feature-name}` or `{TICKET-ID}-{Feature-Name}`
+- TypeScript constants: `SCREAMING_SNAKE_CASE`
+- Interface properties: `camelCaseEnabled`
+
+### Security
+- **NEVER** evaluate sensitive flags client-side only
+- **ALWAYS** use server-side evaluation for access control
+- **ALWAYS** default flags to `false` (disabled) for new features
+
+### Performance
+- Evaluate all needed flags in a single loader (batch if possible)
+- Use flag values from loader data, not re-fetching in components
+- PostHog client is configured with immediate flush for Cloudflare Workers
+
+### Testing
+- Default flags to `false` ensures features are off until explicitly enabled
+- Use PostHog's feature flag overrides for testing specific users
+- Test both enabled and disabled states in E2E tests
+
+### Cleanup
+- Remove flag checks after feature is fully rolled out
+- Update `FEATURE_FLAGS`, `FeatureFlags` interface, and `DEFAULT_FEATURE_FLAGS`
+- Search codebase for all usages before removing
+
+## Environment Variables
+
+Required environment variable:
+- `POSTHOG_CLIENT_KEY` - Your PostHog project API key (used for both server and client)
+
+Configure in `wrangler.jsonc`:
+```jsonc
+{
+  "vars": {
+    "POSTHOG_CLIENT_KEY": "phc_..."
+  }
+}
+```
+
+## Common Patterns
+
+### Multiple Flags in One Loader
+```typescript
+export async function loader({ request, context }: Route.LoaderArgs) {
+  const session = await context.auth.api.getSession({
+    headers: request.headers,
+  });
+
+  const userId = session?.user?.id;
+
+  // Evaluate multiple flags in parallel using context.posthog
+  const [featureA, featureB] = await Promise.all([
+    getFeatureFlag(context.posthog, userId ?? '', FEATURE_FLAGS.FEATURE_A, false),
+    getFeatureFlag(context.posthog, userId ?? '', FEATURE_FLAGS.FEATURE_B, false),
+  ]);
+
+  return {
+    flags: {
+      featureAEnabled: featureA,
+      featureBEnabled: featureB,
+    },
+  };
+}
+```
+
+### Passing Flags to Child Components
+```typescript
+export default function ParentPage() {
+  const { flags } = useLoaderData<typeof loader>();
+  
+  return (
+    <ChildComponent 
+      showNewFeature={flags.featureAEnabled} 
+    />
+  );
+}
+```

@@ -1,0 +1,43 @@
+---
+description: Creating pull request descriptions
+globs:
+alwaysApply: false
+---
+
+# Pull Request Description Guidelines
+
+When creating a pull request description, **always follow the template** at `.github/pull_request_template.md`.
+
+## Template Structure
+
+Fill out each section:
+
+1. **Pull Request Type** - Choose one: `feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`, `chore`, `revert`, `rfc`
+
+2. **Purpose** - Clear, concise explanation of what this PR does and why
+
+3. **Linear Tickets** - Link relevant Linear tickets (format: `- LAN-XXX`)
+
+4. **Breaking Changes** - List any breaking changes, or state "None" if there aren't any
+
+5. **Test Cases** - Provide checkbox items for reviewers to verify functionality
+
+6. **Notes** - Any additional context, implementation details, or concerns
+
+7. **Attachments** - Screenshots or screen recordings showing the changes (especially for UI changes)
+
+8. **Self Checklist** - Verify all items before submitting:
+   - Tests added/updated and passing
+   - Documentation updated
+   - `bun run build` succeeds
+   - Feature flag created if needed
+   - Code reviewed against conventions
+   - Database migration does NOT delete data
+
+## Best Practices
+
+- Keep the **Purpose** focused and scannable
+- Write **Test Cases** that are actionable and specific
+- Always include **screenshots** for UI changes
+- Be explicit about **Breaking Changes** - don't leave it blank
+- Reference the actual code changes when describing implementation details

@@ -51,6 +51,16 @@ wrangler secret put BETTER_AUTH_SECRET
 
 The authentication API is available at `/api/auth/*`.
 
+### MCP Server Setup (Optional)
+
+This project includes optional Model Context Protocol (MCP) server integrations for enhanced AI capabilities in Cursor. See [`.cursor/MCP_SETUP.md`](.cursor/MCP_SETUP.md) for detailed setup instructions.
+
+**Quick setup:**
+```bash
+cp .cursor/mcp.template.json .cursor/mcp.json
+# Edit .cursor/mcp.json and add your API keys
+```
+
 ## Previewing the Production Build
 
 Preview the production build locally:

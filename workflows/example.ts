@@ -38,6 +38,10 @@ export class ExampleWorkflow extends WorkflowEntrypoint<
 
     console.log("Workflow finished", event.payload);
 
+    this.env.AI.run("@cf/meta/llama-4-scout-17b-16e-instruct", {
+      prompt: "What is the meaning of life?",
+    });
+
     return {
       success: true,
       message: "Workflow finished successfully",

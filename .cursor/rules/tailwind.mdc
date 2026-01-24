@@ -1,0 +1,173 @@
+---
+description: Anything related to Tailwind CSS styling, colors, or theming
+alwaysApply: false
+---
+# Tailwind CSS & Color Variables Rules
+
+## Core Principle
+**ALWAYS prefer CSS variables over hardcoded colors.** This ensures consistency, maintainability, and proper dark mode support.
+
+## Available CSS Variables
+
+### Semantic Colors (Use These First)
+These are defined in `app/app.css` and automatically switch for dark mode:
+
+| Variable | Usage | Tailwind Class |
+|----------|-------|----------------|
+| `--background` | Page backgrounds | `bg-background` |
+| `--foreground` | Primary text | `text-foreground` |
+| `--card` | Card backgrounds | `bg-card` |
+| `--card-foreground` | Card text | `text-card-foreground` |
+| `--primary` | Primary buttons, links | `bg-primary`, `text-primary` |
+| `--primary-foreground` | Text on primary | `text-primary-foreground` |
+| `--secondary` | Secondary actions | `bg-secondary`, `text-secondary` |
+| `--secondary-foreground` | Text on secondary | `text-secondary-foreground` |
+| `--muted` | Muted backgrounds | `bg-muted` |
+| `--muted-foreground` | Muted text | `text-muted-foreground` |
+| `--accent` | Accent highlights | `bg-accent`, `text-accent` |
+| `--accent-foreground` | Text on accent | `text-accent-foreground` |
+| `--destructive` | Error/danger states | `bg-destructive`, `text-destructive` |
+| `--border` | Borders | `border-border` |
+| `--input` | Input backgrounds | `bg-input` |
+| `--ring` | Focus rings | `ring-ring` |
+
+### Text Hierarchy Variables
+| Variable | Usage | Tailwind Class |
+|----------|-------|----------------|
+| `--text-heading` | Headings, titles | `text-text-heading` |
+| `--text-body` | Body text | `text-text-body` |
+| `--text-body-subtle` | Secondary text | `text-text-body-subtle` |
+
+### Brand Colors (Full Palette)
+For brand-specific styling, use the brand scale:
+- `bg-brand-50` through `bg-brand-950`
+- `text-brand-50` through `text-brand-950`
+- `border-brand-50` through `border-brand-950`
+
+### Sidebar Variables
+For sidebar-specific styling:
+- `--sidebar`, `--sidebar-foreground`
+- `--sidebar-primary`, `--sidebar-primary-foreground`
+- `--sidebar-accent`, `--sidebar-accent-foreground`
+- `--sidebar-border`, `--sidebar-ring`
+
+### Chart Colors
+For data visualization:
+- `--chart-1` through `--chart-5`
+
+## Decision Flow
+
+### When Styling a Component:
+
+1. **First, check if a semantic variable exists:**
+   ```tsx
+   // ✅ CORRECT - Uses semantic variable
+   <div className="bg-background text-foreground">
+   
+   // ❌ WRONG - Hardcoded color
+   <div className="bg-[#F9FAFB] text-[#1a1a1a]">
+   ```
+
+2. **If no semantic variable fits, check if a brand color works:**
+   ```tsx
+   // ✅ CORRECT - Uses brand palette
+   <div className="bg-brand-100 text-brand-900">
+   
+   // ❌ WRONG - Arbitrary color
+   <div className="bg-[#e0e7ff]">
+   ```
+
+3. **If a new color is truly needed, ADD IT TO `app/app.css` first:**
+   ```css
+   /* In :root section of app/app.css */
+   --success: oklch(0.72 0.19 142.5);
+   --success-foreground: oklch(1.0 0 0);
+   ```
+   
+   Then register it in the `@theme inline` block:
+   ```css
+   @theme inline {
+     --color-success: var(--success);
+     --color-success-foreground: var(--success-foreground);
+   }
+   ```
+   
+   Then use it:
+   ```tsx
+   <div className="bg-success text-success-foreground">
+   ```
+
+4. **For dark mode support, also add to `.dark` section:**
+   ```css
+   .dark {
+     --success: oklch(0.65 0.17 140.2);
+     --success-foreground: oklch(1.0 0 0);
+   }
+   ```
+
+## Forbidden Patterns
+
+### ❌ Never Use Hardcoded Colors in Classes
+```tsx
+// BAD - Hardcoded hex
+<div className="bg-[#003362]">
+
+// BAD - Hardcoded rgb
+<div className="text-[rgb(100,100,100)]">
+
+// BAD - Hardcoded oklch in className
+<div className="bg-[oklch(0.5_0.1_250)]">
+```
+
+### ❌ Never Use Tailwind's Default Palette for Semantic UI
+```tsx
+// BAD - Using Tailwind defaults instead of semantic vars
+<button className="bg-blue-600 text-white">
+
+// GOOD - Using semantic vars
+<button className="bg-primary text-primary-foreground">
+```
+
+### ✅ Exception: Tailwind Grays for Layout
+Using Tailwind's gray scale is acceptable for subtle layout purposes:
+```tsx
+// OK - Using gray for subtle borders/dividers
+<div className="border-gray-200 dark:border-gray-800">
+```
+
+## Quick Reference: Common Replacements
+
+| Instead of... | Use... |
+|---------------|--------|
+| `bg-white` | `bg-background` or `bg-card` |
+| `text-gray-900` | `text-foreground` or `text-text-heading` |
+| `text-gray-600` | `text-muted-foreground` or `text-text-body` |
+| `text-gray-400` | `text-text-body-subtle` |
+| `bg-blue-600` | `bg-primary` |
+| `bg-blue-100` | `bg-brand-100` |
+| `border-gray-200` | `border-border` |
+| `bg-gray-100` | `bg-muted` |
+| `bg-red-500` | `bg-destructive` |
+
+## Adding New CSS Variables
+
+When you need a color that doesn't exist:
+
+1. **Name it semantically** (by purpose, not by color):
+   - ✅ `--success`, `--warning`, `--info`
+   - ❌ `--green`, `--yellow`, `--blue-light`
+
+2. **Use OKLCH color format** for consistency with existing variables:
+   ```css
+   --success: oklch(0.72 0.19 142.5);
+   ```
+
+3. **Always define both light and dark variants** in their respective sections
+
+4. **Register in `@theme inline`** to make it available as a Tailwind class
+
+## File Reference
+- **CSS Variables Location:** `app/app.css`
+- **Light mode variables:** `:root { ... }`
+- **Dark mode variables:** `.dark { ... }`
+- **Tailwind theme mapping:** `@theme inline { ... }`

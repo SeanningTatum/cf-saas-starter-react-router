@@ -11,7 +11,6 @@ import { createAuth, type Auth } from "@/auth/server";
 import { initTRPC, TRPCError } from "@trpc/server";
 import superjson from "superjson";
 import { z, ZodError } from "zod/v4";
-import type { ExampleWorkflowRequestPayload } from "workflows/example";
 
 /**
  * 1. CONTEXT
