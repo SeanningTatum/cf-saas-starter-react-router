@@ -8,11 +8,13 @@ description: Set up and maintain project documentation structure with docs/ and 
 Sets up and maintains a structured documentation system with two complementary layers:
 - **`docs/`** - Human-readable documentation (features, releases, meetings, plans, research, testing)
 - **`.cursor/context/`** - Agent-optimized context files for AI assistance
+- **Admin Panel Viewer** - Browse and read all docs at `/admin/docs` with syntax highlighting and mermaid diagram support
 
 ## When to Use
 
 - **Setup**: Creating a new project or adding documentation infrastructure
 - **Maintenance**: Adding feature docs, release notes, testing plans, meeting notes, or research
+- **Browsing**: View all documentation in the admin panel at `/admin/docs`
 
 ---
 
@@ -341,3 +343,52 @@ The `context.md` file should be a **compressed index** (80%+ reduction):
 - Points to detailed docs rather than embedding them
 - Uses pipe-delimited format for indices
 - Brief overviews only (3-5 lines per feature)
+
+---
+
+## Admin Panel Documentation Viewer
+
+All documentation is viewable in the admin panel at `/admin/docs`.
+
+### Features
+
+- **Category tabs**: Architecture, Meetings, Ideas, Plans, Features, Releases, Testing, Research
+- **Search**: Filter documents within each category
+- **Table of Contents**: Auto-generated from headings with scroll tracking
+- **Syntax highlighting**: Code blocks with language detection and copy button
+- **Mermaid diagrams**: Interactive diagrams with pan/zoom fullscreen viewer
+- **Admonitions**: Support for :::note, :::tip, :::warning, etc.
+
+### Key Files
+
+| File | Description |
+|------|-------------|
+| `app/routes/admin/docs.tsx` | Main docs viewer route |
+| `app/components/markdown-renderer.tsx` | Markdown rendering with syntax highlighting |
+| `app/components/ui/scroll-area.tsx` | Scrollable sidebar component |
+| `app/components/ui/empty.tsx` | Empty state component |
+
+### How It Works
+
+The docs viewer uses Vite's `import.meta.glob` to load all `.md` files from `docs/` at build time:
+
+```typescript
+const markdownFiles = import.meta.glob("/docs/**/*.md", {
+  query: "?raw",
+  import: "default",
+  eager: true,
+}) as Record<string, string>;
+```
+
+The architecture document from `.cursor/context/high-level-architecture.md` is also included in the Architecture tab.
+
+### Image Handling for Testing Plans
+
+For testing plans with screenshots, images must be copied to `public/` to be served:
+
+```bash
+mkdir -p public/docs/testing/{feature}/screenshots
+cp docs/testing/{feature}/screenshots/*.png public/docs/testing/{feature}/screenshots/
+```
+
+The markdown renderer resolves relative image paths based on the document's location.
