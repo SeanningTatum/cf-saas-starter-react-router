@@ -1,6 +1,7 @@
 import { Button } from "@/components/ui/button"
 import { Separator } from "@/components/ui/separator"
 import { SidebarTrigger } from "@/components/ui/sidebar"
+import { ThemeToggle } from "@/components/theme-toggle"
 
 interface Props {
   title: string;
@@ -17,6 +18,7 @@ export function SiteHeader(props: Props) {
         />
         <h1 className="text-base font-medium">{props.title}</h1>
         <div className="ml-auto flex items-center gap-2">
+          <ThemeToggle />
           <Button variant="ghost" asChild size="sm" className="hidden sm:flex">
             <a
               href="https://github.com/shadcn-ui/ui/tree/main/apps/v4/app/(examples)/dashboard"

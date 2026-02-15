@@ -1,0 +1,33 @@
+{
+  "company_name": "Acme Inc.",
+  "app_name": "CloudFlare SaaS Starter",
+  "app_name_short": "CF",
+  "nav": {
+    "home": "Home",
+    "users": "Users",
+    "docs": "Docs",
+    "kitchen_sink": "Kitchen Sink",
+    "settings": "Settings",
+    "get_help": "Get Help",
+    "search": "Search"
+  },
+  "buttons": {
+    "submit": "Submit",
+    "cancel": "Cancel",
+    "save": "Save",
+    "delete": "Delete",
+    "edit": "Edit",
+    "close": "Close",
+    "sign_out": "Sign Out"
+  },
+  "errors": {
+    "not_found": "The requested page could not be found.",
+    "unexpected": "An unexpected error occurred.",
+    "unauthorized": "Unauthorized",
+    "oops": "Oops!",
+    "error": "Error",
+    "404": "404"
+  },
+  "loading": "Loading...",
+  "loading_protected_data": "Loading protected data..."
+}

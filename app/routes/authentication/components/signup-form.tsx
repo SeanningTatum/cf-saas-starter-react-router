@@ -23,6 +23,7 @@ import { zodResolver } from "@hookform/resolvers/zod"
 import { useForm } from "react-hook-form"
 import { z } from "zod"
 import { useState } from "react"
+import { useTranslation } from "react-i18next"
 
 interface SignupFormProps extends React.ComponentProps<"div"> { }
 
@@ -41,6 +42,7 @@ const signupSchema = z
 export function SignupForm({ className, ...props }: SignupFormProps) {
   const navigate = useNavigate()
   const [authError, setAuthError] = useState<string>()
+  const { t } = useTranslation("auth")
 
   const form = useForm<z.infer<typeof signupSchema>>({
     resolver: zodResolver(signupSchema),
@@ -63,13 +65,13 @@ export function SignupForm({ className, ...props }: SignupFormProps) {
       })
 
       if (result.error) {
-        setAuthError(result.error.message || "Failed to create account")
+        setAuthError(result.error.message || t("signup.error_failed"))
         return
       }
 
-      navigate("/")
+      navigate("/dashboard")
     } catch (err) {
-      setAuthError(err instanceof Error ? err.message : "Failed to create account")
+      setAuthError(err instanceof Error ? err.message : t("signup.error_failed"))
     }
   }
 
@@ -77,9 +79,9 @@ export function SignupForm({ className, ...props }: SignupFormProps) {
     <div className={cn("flex flex-col gap-6", className)} {...props}>
       <Card>
         <CardHeader>
-          <CardTitle>Create an account</CardTitle>
+          <CardTitle>{t("signup.title")}</CardTitle>
           <CardDescription>
-            Enter your information below to create your account
+            {t("signup.description")}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -90,10 +92,10 @@ export function SignupForm({ className, ...props }: SignupFormProps) {
                 name="name"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Name</FormLabel>
+                    <FormLabel>{t("signup.name_label")}</FormLabel>
                     <FormControl>
                       <Input
-                        placeholder="John Doe"
+                        placeholder={t("signup.name_placeholder")}
                         {...field}
                         disabled={form.formState.isSubmitting}
                       />
@@ -107,11 +109,11 @@ export function SignupForm({ className, ...props }: SignupFormProps) {
                 name="email"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Email</FormLabel>
+                    <FormLabel>{t("signup.email_label")}</FormLabel>
                     <FormControl>
                       <Input
                         type="email"
-                        placeholder="m@example.com"
+                        placeholder={t("signup.email_placeholder")}
                         {...field}
                         disabled={form.formState.isSubmitting}
                       />
@@ -125,7 +127,7 @@ export function SignupForm({ className, ...props }: SignupFormProps) {
                 name="password"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Password</FormLabel>
+                    <FormLabel>{t("signup.password_label")}</FormLabel>
                     <FormControl>
                       <Input
                         type="password"
@@ -134,7 +136,7 @@ export function SignupForm({ className, ...props }: SignupFormProps) {
                       />
                     </FormControl>
                     <FormDescription>
-                      Must be at least 8 characters
+                      {t("signup.password_hint")}
                     </FormDescription>
                     <FormMessage />
                   </FormItem>
@@ -145,7 +147,7 @@ export function SignupForm({ className, ...props }: SignupFormProps) {
                 name="confirmPassword"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Confirm Password</FormLabel>
+                    <FormLabel>{t("signup.confirm_password_label")}</FormLabel>
                     <FormControl>
                       <Input
                         type="password"
@@ -168,12 +170,12 @@ export function SignupForm({ className, ...props }: SignupFormProps) {
                   className="w-full"
                   disabled={form.formState.isSubmitting}
                 >
-                  {form.formState.isSubmitting ? "Creating account..." : "Sign up"}
+                  {form.formState.isSubmitting ? t("signup.submitting") : t("signup.submit")}
                 </Button>
                 <p className="text-center text-sm text-muted-foreground">
-                  Already have an account?{" "}
+                  {t("signup.has_account")}{" "}
                   <Link to="/login" className="underline underline-offset-4">
-                    Login
+                    {t("signup.login_link")}
                   </Link>
                 </p>
               </div>
@@ -184,4 +186,3 @@ export function SignupForm({ className, ...props }: SignupFormProps) {
     </div>
   )
 }
-

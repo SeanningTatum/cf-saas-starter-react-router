@@ -9,6 +9,9 @@ import {
 } from "@/components/analytics";
 import { Users, ShieldCheck, UserX, Shield } from "lucide-react";
 import type { Route } from "./+types/_index";
+import { useTranslation } from "react-i18next";
+
+export const handle = { i18n: ["admin"] };
 
 export const loader = async ({ context }: Route.LoaderArgs) => {
   const endDate = new Date();
@@ -27,13 +30,15 @@ export const loader = async ({ context }: Route.LoaderArgs) => {
 };
 
 export default function AdminHome({ loaderData }: Route.ComponentProps) {
-  // Handle loading state during client navigation
+  const { t } = useTranslation("admin");
+  const { t: tc } = useTranslation("common");
+
   if (!loaderData) {
     return (
       <div>
-        <SiteHeader title="Dashboard" />
+        <SiteHeader title={t("dashboard.title")} />
         <div className="flex items-center justify-center p-12">
-          <div className="text-muted-foreground">Loading...</div>
+          <div className="text-muted-foreground">{tc("loading")}</div>
         </div>
       </div>
     );
@@ -42,22 +47,21 @@ export default function AdminHome({ loaderData }: Route.ComponentProps) {
   const { stats, growthData, roleDistribution, verificationDistribution } =
     loaderData;
 
-  // Generate insights based on the data
   const insights: Insight[] = [];
 
   if (stats.verificationRate >= 80) {
     insights.push({
-      text: `${stats.verificationRate}% email verification rate - excellent user engagement`,
+      text: t("insights.verification_excellent", { rate: stats.verificationRate }),
       type: "positive",
     });
   } else if (stats.verificationRate >= 50) {
     insights.push({
-      text: `${stats.verificationRate}% email verification rate - room for improvement`,
+      text: t("insights.verification_moderate", { rate: stats.verificationRate }),
       type: "neutral",
     });
   } else {
     insights.push({
-      text: `${stats.verificationRate}% email verification rate - consider improving onboarding flow`,
+      text: t("insights.verification_low", { rate: stats.verificationRate }),
       type: "negative",
     });
   }
@@ -67,19 +71,19 @@ export default function AdminHome({ loaderData }: Route.ComponentProps) {
       (stats.bannedUsers / stats.totalUsers) * 100
     );
     insights.push({
-      text: `${stats.bannedUsers} banned user${stats.bannedUsers > 1 ? "s" : ""} (${bannedPercent}% of total)`,
+      text: t("insights.banned_users", { count: stats.bannedUsers, percent: bannedPercent }),
       type: bannedPercent > 5 ? "negative" : "neutral",
     });
   } else {
     insights.push({
-      text: "No banned users - healthy community",
+      text: t("insights.no_banned"),
       type: "positive",
     });
   }
 
   if (stats.adminUsers > 0) {
     insights.push({
-      text: `${stats.adminUsers} admin${stats.adminUsers > 1 ? "s" : ""} managing the platform`,
+      text: t("insights.admins_managing", { count: stats.adminUsers }),
       type: "neutral",
     });
   }
@@ -87,14 +91,14 @@ export default function AdminHome({ loaderData }: Route.ComponentProps) {
   if (growthData.length > 0) {
     const recentSignups = growthData.slice(-7).reduce((sum, d) => sum + d.count, 0);
     insights.push({
-      text: `${recentSignups} new user${recentSignups !== 1 ? "s" : ""} in the last 7 days`,
+      text: t("insights.recent_signups", { count: recentSignups }),
       type: recentSignups > 0 ? "positive" : "neutral",
     });
   }
 
   return (
     <div>
-      <SiteHeader title="Dashboard" />
+      <SiteHeader title={t("dashboard.title")} />
       <div className="flex flex-1 flex-col">
         <div className="@container/main flex flex-1 flex-col gap-2">
           <div className="flex flex-col gap-4 py-4 md:gap-6 md:py-6">
@@ -102,28 +106,28 @@ export default function AdminHome({ loaderData }: Route.ComponentProps) {
             <div className="px-4 lg:px-6">
               <StatCardGrid columns={4}>
                 <StatCard
-                  label="Total Users"
+                  label={t("dashboard.total_users")}
                   value={stats.totalUsers}
                   icon={Users}
-                  description="All registered accounts"
+                  description={t("dashboard.total_users_description")}
                 />
                 <StatCard
-                  label="Verified Users"
+                  label={t("dashboard.verified_users")}
                   value={stats.verifiedUsers}
                   icon={ShieldCheck}
-                  description={`${stats.verificationRate}% verification rate`}
+                  description={t("dashboard.verified_users_description", { rate: stats.verificationRate })}
                 />
                 <StatCard
-                  label="Admins"
+                  label={t("dashboard.admins")}
                   value={stats.adminUsers}
                   icon={Shield}
-                  description="Platform administrators"
+                  description={t("dashboard.admins_description")}
                 />
                 <StatCard
-                  label="Banned Users"
+                  label={t("dashboard.banned_users")}
                   value={stats.bannedUsers}
                   icon={UserX}
-                  description="Restricted accounts"
+                  description={t("dashboard.banned_users_description")}
                 />
               </StatCardGrid>
             </div>
@@ -132,17 +136,17 @@ export default function AdminHome({ loaderData }: Route.ComponentProps) {
             <div className="px-4 lg:px-6">
               <div className="grid gap-4 lg:grid-cols-2 lg:gap-6">
                 <TimeSeriesChart
-                  title="User Growth"
-                  description="New signups over time"
+                  title={t("charts.user_growth")}
+                  description={t("charts.user_growth_description")}
                   data={growthData}
                   dataKey="count"
-                  dataLabel="New Users"
+                  dataLabel={t("charts.new_users")}
                   type="area"
                   showTimeRangeSelector
                 />
                 <DistributionChart
-                  title="User Roles"
-                  description="Distribution by role"
+                  title={t("charts.user_roles")}
+                  description={t("charts.user_roles_description")}
                   data={roleDistribution}
                   type="donut"
                 />
@@ -153,15 +157,15 @@ export default function AdminHome({ loaderData }: Route.ComponentProps) {
             <div className="px-4 lg:px-6">
               <div className="grid gap-4 lg:grid-cols-2 lg:gap-6">
                 <DistributionChart
-                  title="Email Verification"
-                  description="Verified vs unverified users"
+                  title={t("charts.email_verification")}
+                  description={t("charts.email_verification_description")}
                   data={verificationDistribution}
                   type="donut"
                   colors={["var(--chart-2)", "var(--chart-4)"]}
                 />
                 <InsightsCard
-                  title="Platform Insights"
-                  description="Key observations about your user base"
+                  title={t("insights.title")}
+                  description={t("insights.description")}
                   insights={insights}
                 />
               </div>

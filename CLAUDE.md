@@ -124,3 +124,43 @@ When integrating external services: create client instances once in `workers/app
 - Forms: always use ShadCN Form + React Hook Form + Zod
 - After mutations, always invalidate relevant tRPC queries via `api.useUtils()`
 - Icons: `@tabler/icons-react` and `lucide-react`
+
+## i18n (Internationalization)
+
+**Library**: remix-i18next + i18next + react-i18next
+**URL strategy**: `/:lng/` prefix (e.g., `/en/admin`), root routes serve default locale
+
+### Key Files
+- `app/i18n/i18n.ts` — Shared config (supportedLngs, namespaces, fallbackLng)
+- `app/i18n/i18n.server.ts` — Server-side `RemixI18Next` instance
+- `app/i18n/i18n.client.ts` — Client-side i18next init
+- `app/i18n/i18n.d.ts` — Type augmentation for translation key autocomplete
+- `app/locales/en/*.json` — Translation files by namespace
+- `app/components/language-switcher.tsx` — Locale switcher UI
+- `app/lib/zod-i18n.ts` — Zod error map using i18n
+- `app/lib/date-utils.ts` — date-fns locale helper
+
+### Usage in Components
+```typescript
+import { useTranslation } from "react-i18next";
+const { t } = useTranslation("namespace");
+return <h1>{t("section.key")}</h1>;
+```
+
+### Usage in Loaders/Meta
+```typescript
+import { i18nServer } from "@/i18n/i18n.server";
+const t = await i18nServer.getFixedT(request, "namespace");
+```
+
+### Translation Key Conventions
+- Namespaces: `common`, `auth`, `admin`, `home`, `validation`
+- Keys: dot-notation with snake_case (e.g., `dashboard.total_users`)
+- Interpolation: `"Hello, {{name}}"` → `t("greeting", { name })`
+
+### Adding a New Language
+1. Create `app/locales/{lng}/*.json` files
+2. Add locale to `supportedLngs` in `app/i18n/i18n.ts`
+3. Add label in `app/components/language-switcher.tsx`
+4. Add date-fns mapping in `app/lib/date-utils.ts`
+5. Test with `/:lng/` prefix routes

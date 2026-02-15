@@ -31,120 +31,124 @@ import {
   SidebarMenuItem,
 } from "@/components/ui/sidebar"
 import { Link } from "react-router"
-
-const data = {
-  user: {
-    name: "shadcn",
-    email: "m@example.com",
-    avatar: "/avatars/shadcn.jpg",
-  },
-  navMain: [
-    {
-      title: "Home",
-      url: "/admin/",
-      icon: IconDashboard,
-    },
-    {
-      title: "Users",
-      url: "/admin/users",
-      icon: IconUsers,
-    },
-    {
-      title: "Docs",
-      url: "/admin/docs",
-      icon: IconFileDescription,
-    },
-    {
-      title: "Kitchen Sink",
-      url: "/admin/kitchen-sink",
-      icon: IconSettings,
-    },
-  ],
-  navClouds: [
-    {
-      title: "Capture",
-      icon: IconCamera,
-      isActive: true,
-      url: "#",
-      items: [
-        {
-          title: "Active Proposals",
-          url: "#",
-        },
-        {
-          title: "Archived",
-          url: "#",
-        },
-      ],
-    },
-    {
-      title: "Proposal",
-      icon: IconFileDescription,
-      url: "#",
-      items: [
-        {
-          title: "Active Proposals",
-          url: "#",
-        },
-        {
-          title: "Archived",
-          url: "#",
-        },
-      ],
-    },
-    {
-      title: "Prompts",
-      icon: IconFileAi,
-      url: "#",
-      items: [
-        {
-          title: "Active Proposals",
-          url: "#",
-        },
-        {
-          title: "Archived",
-          url: "#",
-        },
-      ],
-    },
-  ],
-  navSecondary: [
-    {
-      title: "Settings",
-      url: "#",
-      icon: IconSettings,
-    },
-    {
-      title: "Get Help",
-      url: "#",
-      icon: IconHelp,
-    },
-    {
-      title: "Search",
-      url: "#",
-      icon: IconSearch,
-    },
-  ],
-  documents: [
-    {
-      name: "Data Library",
-      url: "#",
-      icon: IconDatabase,
-    },
-    {
-      name: "Reports",
-      url: "#",
-      icon: IconReport,
-    },
-    {
-      name: "Word Assistant",
-      url: "#",
-      icon: IconFileWord,
-    },
-  ],
-}
+import { useTranslation } from "react-i18next"
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
+  const { t } = useTranslation("common")
+  const { t: ta } = useTranslation("admin")
+
+  const data = {
+    user: {
+      name: "shadcn",
+      email: "m@example.com",
+      avatar: "/avatars/shadcn.jpg",
+    },
+    navMain: [
+      {
+        title: t("nav.home"),
+        url: "/admin/",
+        icon: IconDashboard,
+      },
+      {
+        title: t("nav.users"),
+        url: "/admin/users",
+        icon: IconUsers,
+      },
+      {
+        title: t("nav.docs"),
+        url: "/admin/docs",
+        icon: IconFileDescription,
+      },
+      {
+        title: t("nav.kitchen_sink"),
+        url: "/admin/kitchen-sink",
+        icon: IconSettings,
+      },
+    ],
+    navClouds: [
+      {
+        title: ta("sidebar.capture"),
+        icon: IconCamera,
+        isActive: true,
+        url: "#",
+        items: [
+          {
+            title: ta("sidebar.active_proposals"),
+            url: "#",
+          },
+          {
+            title: ta("sidebar.archived"),
+            url: "#",
+          },
+        ],
+      },
+      {
+        title: ta("sidebar.proposal"),
+        icon: IconFileDescription,
+        url: "#",
+        items: [
+          {
+            title: ta("sidebar.active_proposals"),
+            url: "#",
+          },
+          {
+            title: ta("sidebar.archived"),
+            url: "#",
+          },
+        ],
+      },
+      {
+        title: ta("sidebar.prompts"),
+        icon: IconFileAi,
+        url: "#",
+        items: [
+          {
+            title: ta("sidebar.active_proposals"),
+            url: "#",
+          },
+          {
+            title: ta("sidebar.archived"),
+            url: "#",
+          },
+        ],
+      },
+    ],
+    navSecondary: [
+      {
+        title: t("nav.settings"),
+        url: "#",
+        icon: IconSettings,
+      },
+      {
+        title: t("nav.get_help"),
+        url: "#",
+        icon: IconHelp,
+      },
+      {
+        title: t("nav.search"),
+        url: "#",
+        icon: IconSearch,
+      },
+    ],
+    documents: [
+      {
+        name: ta("sidebar.data_library"),
+        url: "#",
+        icon: IconDatabase,
+      },
+      {
+        name: ta("sidebar.reports"),
+        url: "#",
+        icon: IconReport,
+      },
+      {
+        name: ta("sidebar.word_assistant"),
+        url: "#",
+        icon: IconFileWord,
+      },
+    ],
+  }
+
   return (
     <Sidebar collapsible="offcanvas" {...props}>
       <SidebarHeader>
@@ -156,7 +160,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             >
               <Link to="/admin/">
                 <IconInnerShadowTop className="size-5!" />
-                <span className="text-base font-semibold">Acme Inc.</span>
+                <span className="text-base font-semibold">{t("company_name")}</span>
               </Link>
             </SidebarMenuButton>
           </SidebarMenuItem>

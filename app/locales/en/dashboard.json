@@ -1,0 +1,19 @@
+{
+  "title": "Dashboard",
+  "welcome": "Welcome back, {{name}}!",
+  "subtitle": "Here's an overview of your workspace.",
+  "cards": {
+    "getting_started": {
+      "title": "Getting Started",
+      "description": "Set up your account and explore the platform."
+    },
+    "recent_activity": {
+      "title": "Recent Activity",
+      "description": "Your latest actions and updates will appear here."
+    },
+    "quick_actions": {
+      "title": "Quick Actions",
+      "description": "Shortcuts to common tasks and features."
+    }
+  }
+}

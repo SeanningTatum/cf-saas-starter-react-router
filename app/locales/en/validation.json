@@ -1,0 +1,19 @@
+{
+  "email": {
+    "invalid": "Invalid email address"
+  },
+  "password": {
+    "required": "Password is required",
+    "min": "Password must be at least {{min}} characters",
+    "mismatch": "Passwords do not match"
+  },
+  "name": {
+    "required": "Name is required"
+  },
+  "string": {
+    "min": "Must be at least {{min}} characters",
+    "max": "Must be at most {{max}} characters"
+  },
+  "required": "This field is required",
+  "invalid_type": "Invalid input"
+}

@@ -47,6 +47,24 @@ const mutation = api.router.create.useMutation({
   - Add invalidation or cache updates for ALL of them in `onSuccess`
   - Verify UI updates without page refresh
 
+## Internationalization (i18n)
+- **ALWAYS use `useTranslation()` for user-facing strings**
+  - Import from `react-i18next`
+  - Never hardcode English strings in JSX
+- **Add translation keys to `app/locales/en/{namespace}.json`**
+  - Use semantic dot-notation: `section.key_name`
+  - Choose the correct namespace: `common`, `auth`, `admin`, `home`, `validation`
+- **Export `handle` with i18n namespaces on every route file**
+  ```typescript
+  export const handle = { i18n: ["admin"] };
+  ```
+- **Use `i18nServer.getFixedT()` for meta tags in loaders**
+  ```typescript
+  const t = await i18nServer.getFixedT(request, "home");
+  ```
+- **Zod validation uses the custom error map** from `app/lib/zod-i18n.ts`
+- **tRPC errors should return translation keys** when the error message will be displayed to users
+
 ## Writing Playwright Tests for Frontend Features
 - **ALWAYS write Playwright tests to verify functionality when implementing frontend features**
   - Create test files in `e2e/` directory following `*.spec.ts` pattern

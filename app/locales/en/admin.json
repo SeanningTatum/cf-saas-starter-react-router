@@ -1,0 +1,46 @@
+{
+  "dashboard": {
+    "title": "Dashboard",
+    "total_users": "Total Users",
+    "total_users_description": "All registered accounts",
+    "verified_users": "Verified Users",
+    "verified_users_description": "{{rate}}% verification rate",
+    "admins": "Admins",
+    "admins_description": "Platform administrators",
+    "banned_users": "Banned Users",
+    "banned_users_description": "Restricted accounts"
+  },
+  "charts": {
+    "user_growth": "User Growth",
+    "user_growth_description": "New signups over time",
+    "new_users": "New Users",
+    "user_roles": "User Roles",
+    "user_roles_description": "Distribution by role",
+    "email_verification": "Email Verification",
+    "email_verification_description": "Verified vs unverified users"
+  },
+  "insights": {
+    "title": "Platform Insights",
+    "description": "Key observations about your user base",
+    "verification_excellent": "{{rate}}% email verification rate - excellent user engagement",
+    "verification_moderate": "{{rate}}% email verification rate - room for improvement",
+    "verification_low": "{{rate}}% email verification rate - consider improving onboarding flow",
+    "banned_users": "{{count}} banned user(s) ({{percent}}% of total)",
+    "no_banned": "No banned users - healthy community",
+    "admins_managing": "{{count}} admin(s) managing the platform",
+    "recent_signups": "{{count}} new user(s) in the last 7 days"
+  },
+  "users": {
+    "title": "Users"
+  },
+  "sidebar": {
+    "capture": "Capture",
+    "proposal": "Proposal",
+    "prompts": "Prompts",
+    "active_proposals": "Active Proposals",
+    "archived": "Archived",
+    "data_library": "Data Library",
+    "reports": "Reports",
+    "word_assistant": "Word Assistant"
+  }
+}

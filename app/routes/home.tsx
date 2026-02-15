@@ -6,6 +6,9 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { Link } from "react-router";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { useTranslation } from "react-i18next";
+
+export const handle = { i18n: ["home"] };
 
 export function meta({ loaderData }: Route.MetaArgs) {
   return [
@@ -21,46 +24,48 @@ export async function loader({ context }: Route.LoaderArgs) {
 }
 
 export default function Home({ loaderData }: Route.ComponentProps) {
+  const { t } = useTranslation("home");
+
   return (
     <main className="container min-h-screen py-16 mx-auto">
       <div className="flex flex-col items-center justify-center gap-8">
         {/* Hero Section */}
         <div className="flex flex-col items-center gap-4 text-center">
           <h1 className="text-5xl font-extrabold tracking-tight sm:text-[5rem]">
-            Create{" "}
+            {t("hero.create")}{" "}
             <span className="bg-linear-to-r from-orange-500 to-yellow-500 bg-clip-text text-transparent">
-              Cloudflare
+              {t("hero.cloudflare")}
             </span>{" "}
-            SaaS
+            {t("hero.saas")}
           </h1>
           <p className="max-w-2xl text-lg text-muted-foreground">
-            Full-stack TypeScript starter with{" "}
-            <span className="font-semibold text-foreground">Cloudflare Workers</span>,{" "}
-            <span className="font-semibold text-foreground">React Router</span>,{" "}
-            <span className="font-semibold text-foreground">tRPC</span>,{" "}
-            <span className="font-semibold text-foreground">Better Auth</span>, and{" "}
-            <span className="font-semibold text-foreground">Drizzle ORM</span>
+            {t("hero.description")}{" "}
+            <span className="font-semibold text-foreground">{t("hero.workers")}</span>,{" "}
+            <span className="font-semibold text-foreground">{t("hero.react_router")}</span>,{" "}
+            <span className="font-semibold text-foreground">{t("hero.trpc")}</span>,{" "}
+            <span className="font-semibold text-foreground">{t("hero.better_auth")}</span>, {t("hero.and")}{" "}
+            <span className="font-semibold text-foreground">{t("hero.drizzle")}</span>
           </p>
         </div>
 
         {/* Authentication Pages Showcase */}
         <div className="w-full max-w-4xl">
-          <h2 className="mb-6 text-center text-2xl font-bold">Authentication Showcase</h2>
+          <h2 className="mb-6 text-center text-2xl font-bold">{t("auth_showcase.title")}</h2>
           <div className="grid gap-6 md:grid-cols-2">
             <Link to="/login" className="transition-transform hover:scale-105">
               <Card className="h-full cursor-pointer border-2 hover:border-primary/50">
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
                     <span className="text-2xl">🔐</span>
-                    Login Page
+                    {t("auth_showcase.login_title")}
                   </CardTitle>
                   <CardDescription>
-                    Experience our authentication system
+                    {t("auth_showcase.login_description")}
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
                   <p className="text-sm text-muted-foreground">
-                    Try out the login form with Better Auth integration, including email/password authentication and session management.
+                    {t("auth_showcase.login_detail")}
                   </p>
                 </CardContent>
               </Card>
@@ -71,15 +76,15 @@ export default function Home({ loaderData }: Route.ComponentProps) {
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
                     <span className="text-2xl">✨</span>
-                    Sign Up Page
+                    {t("auth_showcase.signup_title")}
                   </CardTitle>
                   <CardDescription>
-                    Create a new account easily
+                    {t("auth_showcase.signup_description")}
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
                   <p className="text-sm text-muted-foreground">
-                    Check out our registration flow with form validation, password requirements, and seamless user creation.
+                    {t("auth_showcase.signup_detail")}
                   </p>
                 </CardContent>
               </Card>
@@ -92,7 +97,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 
         {/* User List */}
         <div className="w-full max-w-2xl">
-          <h2 className="mb-4 text-2xl font-bold">Registered Users</h2>
+          <h2 className="mb-4 text-2xl font-bold">{t("user_list.title")}</h2>
           <Suspense
             fallback={
               <div className="flex w-full flex-col gap-4">
@@ -113,6 +118,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 function AuthShowcase() {
   const session = authClient.useSession();
   const utils = api.useUtils();
+  const { t } = useTranslation("home");
 
   async function createRandomUser() {
     await authClient.signUp.email({
@@ -136,7 +142,7 @@ function AuthShowcase() {
         {session.data?.user ? (
           <>
             <p className="mb-2 text-lg">
-              Signed in as{" "}
+              {t("auth_showcase.signed_in_as")}{" "}
               <span className="font-semibold text-primary">
                 {session.data.user.name || session.data.user.email}
               </span>
@@ -147,18 +153,18 @@ function AuthShowcase() {
           </>
         ) : (
           <p className="text-lg text-muted-foreground">
-            You are not signed in
+            {t("auth_showcase.not_signed_in")}
           </p>
         )}
       </div>
       <div className="flex gap-2">
         {!session.data?.user ? (
           <Button onClick={createRandomUser} size="lg">
-            Sign Up (Demo)
+            {t("auth_showcase.sign_up_demo")}
           </Button>
         ) : (
           <Button onClick={signout} variant="outline" size="lg">
-            Sign Out
+            {t("auth_showcase.sign_out")}
           </Button>
         )}
       </div>
@@ -175,6 +181,8 @@ function UserList() {
       retry: false,
       enabled: !!session.data?.user,
     });
+  const { t } = useTranslation("home");
+  const { t: tc } = useTranslation("common");
 
   if (isLoading) {
     return (
@@ -192,7 +200,7 @@ function UserList() {
         <UserCardSkeleton pulse={false} />
         <UserCardSkeleton pulse={false} />
         <div className="absolute inset-0 flex flex-col items-center justify-center rounded-lg bg-black/10">
-          <p className="text-2xl font-bold text-white">No users yet</p>
+          <p className="text-2xl font-bold text-white">{t("user_list.no_users")}</p>
         </div>
       </div>
     );
@@ -209,25 +217,25 @@ function UserList() {
       {/* Protected Users Section */}
       <div className="mt-8">
         <h3 className="mb-3 flex items-center gap-2 text-lg font-semibold">
-          Protected Query Result
+          {t("user_list.protected_query")}
           <span className="rounded-full bg-yellow-500/10 px-2 py-0.5 text-xs font-medium text-yellow-600 dark:text-yellow-500">
-            Auth Required
+            {t("user_list.auth_required")}
           </span>
         </h3>
         {isLoadingProtected ? (
           <div className="rounded-lg border bg-muted/50 p-4">
-            <p className="text-sm text-muted-foreground">Loading protected data...</p>
+            <p className="text-sm text-muted-foreground">{tc("loading_protected_data")}</p>
           </div>
         ) : usersProtected ? (
           <div className="rounded-lg border bg-green-500/10 p-4">
             <p className="text-sm font-medium text-green-600 dark:text-green-500">
-              ✓ Successfully fetched {usersProtected.length} users from protected endpoint
+              ✓ {t("user_list.protected_success", { count: usersProtected.length })}
             </p>
           </div>
         ) : (
           <div className="rounded-lg border bg-red-500/10 p-4">
             <p className="text-sm font-medium text-red-600 dark:text-red-500">
-              ✗ Unauthorized - Sign in to access protected data
+              ✗ {t("user_list.protected_unauthorized")}
             </p>
           </div>
         )}
@@ -239,9 +247,9 @@ function UserList() {
 function UserCard(props: { user: { id: string; name: string | null; email: string } }) {
   const session = authClient.useSession();
   const utils = api.useUtils();
+  const { t } = useTranslation("home");
   const deleteUserMutation = api.user.deleteUser.useMutation({
     onSuccess: () => {
-      // Invalidate and refetch user queries after deletion
       void utils.user.getUsers.invalidate();
       void utils.user.getUsersProtected.invalidate();
     },
@@ -255,7 +263,7 @@ function UserCard(props: { user: { id: string; name: string | null; email: strin
     <div className="flex items-center justify-between rounded-lg border bg-card p-4 shadow-sm">
       <div>
         <h3 className="font-semibold text-primary">
-          {props.user.name || "Anonymous User"}
+          {props.user.name || t("user_list.anonymous_user")}
         </h3>
         <p className="mt-1 text-sm text-muted-foreground">{props.user.email}</p>
       </div>
@@ -268,7 +276,7 @@ function UserCard(props: { user: { id: string; name: string | null; email: strin
             onClick={handleDelete}
             disabled={deleteUserMutation.isPending}
           >
-            {deleteUserMutation.isPending ? "Deleting..." : "Delete"}
+            {deleteUserMutation.isPending ? t("user_list.deleting") : t("user_list.delete")}
           </Button>
         )}
       </div>

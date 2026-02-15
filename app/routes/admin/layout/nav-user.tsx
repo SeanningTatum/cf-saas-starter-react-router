@@ -5,6 +5,8 @@ import {
   IconNotification,
   IconUserCircle,
 } from "@tabler/icons-react"
+import { Moon, Sun, Monitor } from "lucide-react"
+import { useTheme } from "next-themes"
 
 import {
   Avatar,
@@ -18,6 +20,9 @@ import {
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import {
@@ -37,6 +42,7 @@ export function NavUser({
   }
 }) {
   const { isMobile } = useSidebar()
+  const { setTheme } = useTheme()
 
   return (
     <SidebarMenu>
@@ -95,6 +101,28 @@ export function NavUser({
                 Notifications
               </DropdownMenuItem>
             </DropdownMenuGroup>
+            <DropdownMenuSeparator />
+            <DropdownMenuSub>
+              <DropdownMenuSubTrigger>
+                <Sun className="h-4 w-4 rotate-0 scale-100 dark:-rotate-90 dark:scale-0" />
+                <Moon className="absolute h-4 w-4 rotate-90 scale-0 dark:rotate-0 dark:scale-100" />
+                Theme
+              </DropdownMenuSubTrigger>
+              <DropdownMenuSubContent>
+                <DropdownMenuItem onClick={() => setTheme("light")}>
+                  <Sun className="h-4 w-4" />
+                  Light
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setTheme("dark")}>
+                  <Moon className="h-4 w-4" />
+                  Dark
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setTheme("system")}>
+                  <Monitor className="h-4 w-4" />
+                  System
+                </DropdownMenuItem>
+              </DropdownMenuSubContent>
+            </DropdownMenuSub>
             <DropdownMenuSeparator />
             <DropdownMenuItem>
               <IconLogout />

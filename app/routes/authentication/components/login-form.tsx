@@ -22,6 +22,7 @@ import { zodResolver } from "@hookform/resolvers/zod"
 import { useForm } from "react-hook-form"
 import { z } from "zod"
 import { useState } from "react"
+import { useTranslation } from "react-i18next"
 
 interface LoginFormProps extends React.ComponentProps<"div"> { }
 
@@ -33,6 +34,7 @@ const loginSchema = z.object({
 export function LoginForm({ className, ...props }: LoginFormProps) {
   const navigate = useNavigate()
   const [authError, setAuthError] = useState<string>()
+  const { t } = useTranslation("auth")
 
   const form = useForm<z.infer<typeof loginSchema>>({
     resolver: zodResolver(loginSchema),
@@ -52,13 +54,13 @@ export function LoginForm({ className, ...props }: LoginFormProps) {
       })
 
       if (result.error) {
-        setAuthError(result.error.message || "Invalid email or password")
+        setAuthError(result.error.message || t("login.error_invalid"))
         return
       }
 
-      navigate("/")
+      navigate("/dashboard")
     } catch (err) {
-      setAuthError(err instanceof Error ? err.message : "Failed to login")
+      setAuthError(err instanceof Error ? err.message : t("login.error_failed"))
     }
   }
 
@@ -66,9 +68,9 @@ export function LoginForm({ className, ...props }: LoginFormProps) {
     <div className={cn("flex flex-col gap-6", className)} {...props}>
       <Card>
         <CardHeader>
-          <CardTitle>Login to your account</CardTitle>
+          <CardTitle>{t("login.title")}</CardTitle>
           <CardDescription>
-            Enter your email below to login to your account
+            {t("login.description")}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -79,11 +81,11 @@ export function LoginForm({ className, ...props }: LoginFormProps) {
                 name="email"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Email</FormLabel>
+                    <FormLabel>{t("login.email_label")}</FormLabel>
                     <FormControl>
                       <Input
                         type="email"
-                        placeholder="m@example.com"
+                        placeholder={t("login.email_placeholder")}
                         {...field}
                         disabled={form.formState.isSubmitting}
                       />
@@ -98,12 +100,12 @@ export function LoginForm({ className, ...props }: LoginFormProps) {
                 render={({ field }) => (
                   <FormItem>
                     <div className="flex items-center">
-                      <FormLabel>Password</FormLabel>
+                      <FormLabel>{t("login.password_label")}</FormLabel>
                       <a
                         href="#"
                         className="ml-auto inline-block text-sm underline-offset-4 hover:underline"
                       >
-                        Forgot your password?
+                        {t("login.forgot_password")}
                       </a>
                     </div>
                     <FormControl>
@@ -128,12 +130,12 @@ export function LoginForm({ className, ...props }: LoginFormProps) {
                   className="w-full"
                   disabled={form.formState.isSubmitting}
                 >
-                  {form.formState.isSubmitting ? "Logging in..." : "Login"}
+                  {form.formState.isSubmitting ? t("login.submitting") : t("login.submit")}
                 </Button>
                 <p className="text-center text-sm text-muted-foreground">
-                  Don&apos;t have an account?{" "}
+                  {t("login.no_account")}{" "}
                   <Link to="/sign-up" className="underline underline-offset-4">
-                    Sign up
+                    {t("login.sign_up_link")}
                   </Link>
                 </p>
               </div>

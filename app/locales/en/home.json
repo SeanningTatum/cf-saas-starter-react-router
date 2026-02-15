@@ -1,0 +1,42 @@
+{
+  "meta": {
+    "title": "Cloudflare SaaS Starter",
+    "description": "Full-stack SaaS starter with Cloudflare, React Router, tRPC, and Better Auth"
+  },
+  "hero": {
+    "create": "Create",
+    "cloudflare": "Cloudflare",
+    "saas": "SaaS",
+    "description": "Full-stack TypeScript starter with",
+    "workers": "Cloudflare Workers",
+    "react_router": "React Router",
+    "trpc": "tRPC",
+    "better_auth": "Better Auth",
+    "drizzle": "Drizzle ORM",
+    "and": "and"
+  },
+  "auth_showcase": {
+    "title": "Authentication Showcase",
+    "login_title": "Login Page",
+    "login_description": "Experience our authentication system",
+    "login_detail": "Try out the login form with Better Auth integration, including email/password authentication and session management.",
+    "signup_title": "Sign Up Page",
+    "signup_description": "Create a new account easily",
+    "signup_detail": "Check out our registration flow with form validation, password requirements, and seamless user creation.",
+    "signed_in_as": "Signed in as",
+    "not_signed_in": "You are not signed in",
+    "sign_up_demo": "Sign Up (Demo)",
+    "sign_out": "Sign Out"
+  },
+  "user_list": {
+    "title": "Registered Users",
+    "no_users": "No users yet",
+    "anonymous_user": "Anonymous User",
+    "delete": "Delete",
+    "deleting": "Deleting...",
+    "protected_query": "Protected Query Result",
+    "auth_required": "Auth Required",
+    "protected_success": "Successfully fetched {{count}} users from protected endpoint",
+    "protected_unauthorized": "Unauthorized - Sign in to access protected data"
+  }
+}
