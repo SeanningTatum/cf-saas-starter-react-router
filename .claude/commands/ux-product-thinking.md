@@ -1,3 +1,9 @@
+---
+description: Structured UX/UI design approach aligning interface decisions with product goals and competitive research
+argument-hint: <feature or design request>
+allowed-tools: Read, Write, Edit, Glob, Grep, Bash, WebSearch, WebFetch, Task
+---
+
 # UX Product Thinking
 
 A structured approach to UI/UX design that aligns interface decisions with product goals. Uses WebSearch for competitive research, market research reports for ICP analysis, image generation for UI concepts, and produces mermaid diagrams for visualization.

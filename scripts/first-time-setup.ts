@@ -530,12 +530,46 @@ async function main() {
     installSpinner.stop("\x1b[32m✓ Dependencies installed\x1b[0m");
   }
 
-  // Step 6: Run database migrations
-  console.log("\n\x1b[36m🗄️  Step 6: Database Migrations\x1b[0m");
+  // Step 6: Generate Cloudflare types
+  console.log("\n\x1b[36m🔧 Step 6: Generating Cloudflare Types\x1b[0m");
+  const typegenSpinner = spinner();
+  typegenSpinner.start("Running cf-typegen...");
+  const typegenResult = executeCommand("bun run cf-typegen", true);
+  if (typegenResult && typeof typegenResult === "object" && typegenResult.error) {
+    typegenSpinner.stop("\x1b[31m✗ Failed to generate types\x1b[0m");
+    console.error(`\x1b[31m${typegenResult.message}\x1b[0m`);
+    console.log(
+      "\x1b[33mYou can generate types manually later with: bun run cf-typegen\x1b[0m"
+    );
+  } else {
+    typegenSpinner.stop("\x1b[32m✓ Cloudflare types generated\x1b[0m");
+  }
+
+  // Step 7: Run database migrations
+  console.log("\n\x1b[36m🗄️  Step 7: Database Migrations\x1b[0m");
   await runDatabaseMigrations(dbName, accountId);
 
-  // Step 7: Deploy to Cloudflare
-  console.log("\n\x1b[36m🚀 Step 7: Deploy to Cloudflare\x1b[0m");
+  // Step 8: Upload secrets
+  console.log("\n\x1b[36m🔑 Step 8: Uploading Secrets\x1b[0m");
+  const secretSpinner = spinner();
+  secretSpinner.start("Uploading BETTER_AUTH_SECRET...");
+  const secretResult = executeCommand(
+    `echo "${betterAuthSecret}" | wrangler secret put BETTER_AUTH_SECRET`,
+    true,
+    accountId ? { CLOUDFLARE_ACCOUNT_ID: accountId } : undefined
+  );
+  if (secretResult && typeof secretResult === "object" && secretResult.error) {
+    secretSpinner.stop("\x1b[31m✗ Failed to upload secret\x1b[0m");
+    console.error(`\x1b[31m${secretResult.message}\x1b[0m`);
+    console.log(
+      "\x1b[33mYou can upload it manually later with: wrangler secret put BETTER_AUTH_SECRET\x1b[0m"
+    );
+  } else {
+    secretSpinner.stop("\x1b[32m✓ BETTER_AUTH_SECRET uploaded\x1b[0m");
+  }
+
+  // Step 9: Deploy to Cloudflare
+  console.log("\n\x1b[36m🚀 Step 9: Deploy to Cloudflare\x1b[0m");
   const deploySpinner = spinner();
   deploySpinner.start("Building and deploying to Cloudflare Workers...");
   const deployResult = executeCommand("bun run deploy", true, accountId ? { CLOUDFLARE_ACCOUNT_ID: accountId } : undefined);
@@ -555,10 +589,6 @@ async function main() {
   console.log("\x1b[32mNext steps:\x1b[0m");
   console.log("  1. For local development:");
   console.log("     \x1b[33mbun run dev\x1b[0m\n");
-  console.log("  2. Before deploying to production:");
-  console.log(
-    "     • Deploy secrets: \x1b[33mwrangler secret put BETTER_AUTH_SECRET\x1b[0m"
-  );
 
   outro("✨ Happy building! 🎉");
 }

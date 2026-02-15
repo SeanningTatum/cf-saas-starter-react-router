@@ -1,3 +1,9 @@
+---
+description: Creates GitHub PRs with descriptions following the team's template structure
+argument-hint: [PR context or branch description]
+allowed-tools: Read, Write, Edit, Glob, Grep, Bash
+---
+
 # Create Pull Request
 
 Create GitHub PRs with descriptions following the team's template structure.

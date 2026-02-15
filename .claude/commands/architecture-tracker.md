@@ -1,3 +1,9 @@
+---
+description: Maintains the living high-level architecture document with route maps, feature flows, and changelog
+argument-hint: <feature or change to document>
+allowed-tools: Read, Write, Edit, Glob, Grep, Bash, Task
+---
+
 # Architecture Tracker
 
 Maintain the project's living high-level architecture document at `.cursor/context/high-level-architecture.md`.

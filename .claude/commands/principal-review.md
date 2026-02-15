@@ -1,3 +1,9 @@
+---
+description: Senior/principal engineer review verifying implementation matches plan and follows best practices
+argument-hint: <feature name or file paths to review>
+allowed-tools: Read, Glob, Grep, Bash
+---
+
 # Principal Review
 
 Act as a senior/principal engineer to verify that the implementation matches the feature or plan and is implemented in the best way. This review requires deep reasoning for principal-engineer-level judgment.

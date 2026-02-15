@@ -1,3 +1,9 @@
+---
+description: Creates and manages feature flags in PostHog with proper naming conventions and rollout patterns
+argument-hint: <feature flag name and description>
+allowed-tools: Read, Write, Edit, Glob, Grep, Bash
+---
+
 # Create Feature Flag in PostHog
 
 Create and manage feature flags in PostHog. Use when creating a feature flag, adding a flag, setting up A/B testing, enabling a feature for a percentage of users, or managing rollouts.

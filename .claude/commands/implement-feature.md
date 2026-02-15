@@ -1,3 +1,9 @@
+---
+description: Executes feature implementations by delegating to specialized tasks based on requirements
+argument-hint: <feature to implement>
+allowed-tools: Read, Write, Edit, Glob, Grep, Bash, Task, WebSearch, WebFetch
+---
+
 # Implement Feature
 
 Execute feature implementations by automatically delegating to specialized tasks based on what the feature requires.

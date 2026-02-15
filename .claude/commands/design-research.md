@@ -1,3 +1,9 @@
+---
+description: Researches and documents modern creative website designs for style specifications and inspiration
+argument-hint: <design direction or research topic>
+allowed-tools: Read, Write, Edit, Glob, Grep, WebSearch, WebFetch
+---
+
 # Design Research
 
 Research and document modern creative website designs using WebSearch and WebFetch tools. Extracts comprehensive style specifications from award-winning sites, agency portfolios, and design showcases.

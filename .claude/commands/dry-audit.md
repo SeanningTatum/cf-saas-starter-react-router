@@ -1,3 +1,9 @@
+---
+description: Audits the codebase for DRY violations and enforces folder structure conventions
+argument-hint: [target area or "full" for complete audit]
+allowed-tools: Read, Glob, Grep, Bash, Edit, Write
+---
+
 # DRY Audit & Folder Structure Enforcer
 
 Audits the codebase for DRY violations and enforces folder structure conventions. Identifies duplicated schemas, repeated UI patterns, redundant repository logic, and inconsistent organization.

@@ -1,3 +1,9 @@
+---
+description: Creates structured implementation plans with task assignments and PR validation steps
+argument-hint: <feature or task to plan>
+allowed-tools: Read, Write, Edit, Glob, Grep, Bash, Task
+---
+
 # Plan with Subagents
 
 Create structured implementation plans that assign appropriate tasks to each step and include PR validation.

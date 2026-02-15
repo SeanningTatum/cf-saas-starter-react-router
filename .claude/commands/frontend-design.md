@@ -1,3 +1,9 @@
+---
+description: Creates distinctive, production-grade frontend interfaces with bold aesthetics and high design quality
+argument-hint: <component, page, or interface to design>
+allowed-tools: Read, Write, Edit, Glob, Grep, Bash
+---
+
 # Frontend Design
 
 Create distinctive, production-grade frontend interfaces with high design quality. Generates creative, polished code that avoids generic AI aesthetics.

@@ -1,3 +1,9 @@
+---
+description: Guidance for implementing multi-tenant organizations, teams, and RBAC using Better Auth
+argument-hint: <organization feature or task>
+allowed-tools: Read, Write, Edit, Glob, Grep, Bash
+---
+
 # Organization Best Practices
 
 This skill provides guidance and enforcement rules for implementing multi-tenant organizations, teams, and role-based access control using Better Auth's organization plugin.

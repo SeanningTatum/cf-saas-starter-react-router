@@ -1,6 +1,5 @@
-
 ---
-description: Scaffolds and maintains a structured docs/ directory with architecture context files, naming conventions, and templates for features, plans, research, testing, releases, reviews, guides, and design specs.
+description: Scaffolds and maintains a structured docs/ directory with architecture context files and templates
 argument-hint: [setup | add <type> for <name> | audit]
 allowed-tools: Read, Write, Edit, Glob, Grep, Bash
 ---

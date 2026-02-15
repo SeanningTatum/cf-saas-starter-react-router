@@ -1,3 +1,9 @@
+---
+description: Transforms discovery insights into an actionable UX Brief with JTBD, ICP, and success metrics
+argument-hint: <strategy request or project name>
+allowed-tools: Read, Write, Edit, Glob, Grep
+---
+
 # UX Strategist
 
 The UX Strategist transforms raw discovery insights into a concrete, actionable UX Brief. This skill synthesizes findings into buildable scope by identifying the primary job-to-be-done (JTBD), core user persona (ICP), constraints, and success metrics. The output is a strategic contract between research and design teams.

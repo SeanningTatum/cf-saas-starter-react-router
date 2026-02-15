@@ -1,3 +1,9 @@
+---
+description: Generates Drizzle ORM migrations for schema changes with proper naming conventions
+argument-hint: <migration description, e.g. "add user preferences table">
+allowed-tools: Read, Write, Edit, Glob, Grep, Bash
+---
+
 # Database Migration Generator
 
 Generate Drizzle ORM migrations for schema changes.

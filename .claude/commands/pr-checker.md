@@ -1,3 +1,9 @@
+---
+description: Validates that changes follow project standards before creating a pull request
+argument-hint: [PR context or "check" for current branch]
+allowed-tools: Read, Glob, Grep, Bash
+---
+
 # PR Checker
 
 Validate that changes follow project standards before creating a pull request.

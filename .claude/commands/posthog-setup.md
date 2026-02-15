@@ -1,3 +1,9 @@
+---
+description: Sets up PostHog analytics and feature flags in Cloudflare Workers + React Router projects
+argument-hint: <setup request, e.g. "initial setup" or "add tracking">
+allowed-tools: Read, Write, Edit, Glob, Grep, Bash
+---
+
 # PostHog Setup for Cloudflare Workers + React Router
 
 Set up PostHog analytics and feature flags in Cloudflare Workers + React Router projects.

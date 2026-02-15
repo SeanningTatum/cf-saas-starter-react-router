@@ -1,3 +1,9 @@
+---
+description: Orchestrates documentation, analytics, and test sync with latest codebase changes
+argument-hint: [feature name or "all" for full sync]
+allowed-tools: Read, Write, Edit, Glob, Grep, Bash, Task
+---
+
 # Sync Changes
 
 Orchestrates multiple tasks to ensure documentation, analytics, and tests stay in sync with the latest codebase changes.
