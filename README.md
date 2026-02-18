@@ -101,15 +101,20 @@ This project uses [Claude Code plugins](https://github.com/SeanningTatum/claude-
 **Install the plugins:**
 ```bash
 # Add the marketplace
-/plugins marketplace add SeanningTatum/claude-plugins
+/plugin marketplace add SeanningTatum/claude-plugins
 
 # Install plugins
-/plugins install cf-saas-stack
-/plugins install dev-workflows
+/plugin install cf-saas-stack
+/plugin install dev-workflows
+
+# Recommended: Cloudflare official skills (Workers, Durable Objects, Agents SDK, Wrangler, etc.)
+/plugin marketplace add cloudflare/skills
+/plugin install cloudflare
 ```
 
 - **cf-saas-stack** — Project rules (auth, database, i18n, routes, error handling, etc.) and commands (feature implementation, DB migrations, PR creation, etc.)
 - **dev-workflows** — Development workflow agents (testing, logging, architecture tracking, design validation, etc.)
+- **cloudflare** — Official Cloudflare platform skills for Workers, Durable Objects, Agents SDK, MCP servers, Wrangler, and web performance
 
 ---
 
