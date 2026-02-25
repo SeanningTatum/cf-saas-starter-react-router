@@ -566,16 +566,87 @@ async function main() {
     initialValue: false,
   });
 
+  let secretsDeployed = false;
   if (shouldDeploySecrets) {
     console.log("\n\x1b[36mDeploying secrets...\x1b[0m");
     await uploadSecret("BETTER_AUTH_SECRET", betterAuthSecret, selectedAccountId);
+    secretsDeployed = true;
+  } else {
+    console.log(
+      "\x1b[33m⚠ Skipped secret deployment. Run 'wrangler secret put' later to manage secrets.\x1b[0m"
+    );
+  }
+
+  // Step 7: Optionally build and deploy the worker
+  if (secretsDeployed) {
+    console.log(
+      "\n\x1b[36m🚀 Step 6: Build and Deploy Worker (Optional)\x1b[0m"
+    );
+
+    const shouldDeploy = await confirm({
+      message: "Build and deploy the worker to Cloudflare now?",
+      initialValue: false,
+    });
+
+    if (shouldDeploy) {
+      // Build the application
+      const buildSpinner = spinner();
+      buildSpinner.start("Building application...");
+      const buildResult = executeCommand("bun run deploy", true);
+
+      if (buildResult && typeof buildResult === "object" && buildResult.error) {
+        buildSpinner.stop("\x1b[31m✗ Build failed\x1b[0m");
+        console.error(`\x1b[31m${buildResult.message}\x1b[0m`);
+        console.log(
+          "\x1b[33mYou can build and deploy manually later with: bun run deploy\x1b[0m"
+        );
+      } else {
+        buildSpinner.stop("\x1b[32m✓ Build completed\x1b[0m");
+
+        // Deploy to Cloudflare
+        const deploySpinner = spinner();
+        deploySpinner.start("Deploying to Cloudflare Workers...");
+        const deployResult = executeCommand("bun run deploy", true);
+
+        if (
+          deployResult &&
+          typeof deployResult === "object" &&
+          deployResult.error
+        ) {
+          deploySpinner.stop("\x1b[31m✗ Deployment failed\x1b[0m");
+          console.error(`\x1b[31m${deployResult.message}\x1b[0m`);
+        } else {
+          deploySpinner.stop("\x1b[32m✓ Deployed successfully! 🎉\x1b[0m");
+          console.log(
+            "\n\x1b[36mYour application is now live on Cloudflare!\x1b[0m"
+          );
+        }
+      }
+    } else {
+      console.log(
+        "\x1b[33m⚠ Skipped deployment. You can deploy later with: bun run deploy\x1b[0m"
+      );
+    }
   }
 
   // Final instructions
   console.log("\n\x1b[36m✅ Setup Complete!\x1b[0m\n");
   console.log("\x1b[32mNext steps:\x1b[0m");
-  console.log("  1. For local development:");
-  console.log("     \x1b[33mbun run dev\x1b[0m\n");
+
+  if (!secretsDeployed) {
+    console.log("  1. For local development:");
+    console.log("     \x1b[33mbun run dev\x1b[0m\n");
+    console.log("  2. Before deploying to production:");
+    console.log(
+      "     • Deploy secrets: \x1b[33mwrangler secret put BETTER_AUTH_SECRET\x1b[0m"
+    );
+    console.log("     • Run: \x1b[33mbun run deploy\x1b[0m\n");
+  } else {
+    console.log("  1. For local development:");
+    console.log("     \x1b[33mbun run dev\x1b[0m\n");
+    console.log("  2. Configure your production domain:");
+    console.log("     • Configure R2 CORS policy for your domain\n");
+  }
 
   outro("✨ Happy building! 🎉");
 }
