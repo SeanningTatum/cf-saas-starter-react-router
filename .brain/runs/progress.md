@@ -21,6 +21,15 @@
 
 ---
 
+## 2026-05-07 — Harness hardening pass
+- branch: `feat/effect-ts`
+- in-progress feature: harness itself (no feat-id; meta)
+- run note: none
+- changes: type-locked `tagToTRPC` (AppError + assertNever), `harness-check.sh` brain dead-link check + wired into `init.sh --baseline`, added `.github/workflows/ci.yml` (baseline + build + e2e + non-negotiables grep), `99-verify-done.md` flipped e2e default-on, `HARNESS.md` Verification table updated, `add-tagged-error.md` recipe updated for AppError union requirement
+- next: commit + push to exercise CI on first PR
+
+---
+
 ## 2026-05-07 — Harness upgrade (5-subsystem alignment)
 - branch: `feat/effect-ts`
 - in-progress feature: harness itself (no feat-id; meta)

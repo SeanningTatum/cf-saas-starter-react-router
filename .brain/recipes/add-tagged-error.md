@@ -13,15 +13,18 @@ export class RateLimitError extends Data.TaggedError("RateLimitError")<{
 }> {}
 ```
 
-Add to the domain union if one exists:
+**Add to the domain union AND `AppError`** ([`app/models/errors/index.ts`](../../app/models/errors/index.ts)). The union feeds `appErrorToTRPC` exhaustiveness check — if you skip this, TypeScript will not flag a missing `tagToTRPC` case.
 
 ```ts
+// app/models/errors/<domain>.ts
 export type ApiError = ... | RateLimitError;
+
+// app/models/errors/index.ts (already re-exports domain unions into AppError)
 ```
 
 ### 2. Map to tRPC → [`app/lib/effect-trpc.ts`](../../app/lib/effect-trpc.ts)
 
-Add a `case` inside `toTRPC()`:
+Add a `case` inside `appErrorToTRPC()`:
 
 ```ts
 case "RateLimitError":
@@ -31,7 +34,7 @@ case "RateLimitError":
   });
 ```
 
-> If you skip this, the error falls through to `INTERNAL_SERVER_ERROR` and the client sees nothing useful.
+> The `default: return assertNever(e)` branch makes a missing case a **compile-time error**, not a silent 500 (since 2026-05-07 hardening pass). Run `bun run typecheck` to confirm exhaustiveness.
 
 ### 3. Test mapping → [`app/lib/__tests__/effect-trpc.test.ts`](../../app/lib/__tests__/effect-trpc.test.ts)
 
@@ -66,6 +69,6 @@ it.effect("maps RateLimitError to TOO_MANY_REQUESTS", () =>
 ## Anti-patterns
 
 - ❌ `throw new Error("rate limit")` — untagged, unmappable
-- ❌ Adding error class without `tagToTRPC` entry — silent 500s
+- ❌ Adding error class without registering in `AppError` union — defeats compile-time exhaustiveness, falls through to silent 500
 - ❌ Generic message in `tagToTRPC` — include the domain context (entity, identifier)
 - ❌ Putting domain-specific fields outside the `<{ ... }>` shape — they won't survive serialization

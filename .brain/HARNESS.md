@@ -59,12 +59,15 @@ Externalises "am I done?" so the agent does not declare victory on a half-built 
 
 | Tool | Purpose |
 |------|---------|
-| [`recipes/99-verify-done.md`](recipes/99-verify-done.md) | The full checklist: typecheck → test → e2e (if cross-component) → build (if CF-touching) → manual smoke (if UI) → brain coherence |
+| [`recipes/99-verify-done.md`](recipes/99-verify-done.md) | Full checklist: typecheck → test → **e2e (default ON)** → build (if CF-touching) → manual smoke (if UI) → harness-check → brain coherence |
 | [`/verify-done`](../.claude/commands/verify-done.md) slash command | Same checklist, runnable mid-conversation |
-| [`init.sh --baseline`](../init.sh) | Captures pre-change baseline (typecheck + test) so post-change failures aren't blamed on you |
-| [`.claude/hooks/brain-reminder.sh`](../.claude/hooks/brain-reminder.sh) | Pre-commit hook listing brain docs the staged paths likely affect (deterministic, no LLM) |
+| [`init.sh --baseline`](../init.sh) | Captures pre-change baseline (typecheck + test + harness-check) so post-change failures aren't blamed on you |
+| [`scripts/harness-check.sh`](../scripts/harness-check.sh) | Deterministic harness invariant checker (11 checks: feature-list state, brain link integrity, sub-agent frontmatter, sync rule). Run by `init.sh` + CI. |
+| [`.github/workflows/ci.yml`](../.github/workflows/ci.yml) | CI gate mirroring `init.sh` baseline + `build` + `e2e` + non-negotiables grep sweep on every PR |
+| [`.claude/hooks/brain-reminder.sh`](../.claude/hooks/brain-reminder.sh) | Pre-commit hook listing brain docs the staged paths likely affect (deterministic, no LLM, never blocks — CI is the gate) |
+| [`app/lib/effect-trpc.ts`](../app/lib/effect-trpc.ts) `appErrorToTRPC` | Compile-time exhaustiveness on tagged-error → HTTP code via `assertNever`. New tagged error w/o case = TS error. |
 
-**Verification rule**: green typecheck + green tests is *necessary, not sufficient*. UI changes need a browser walk. CF-binding changes need `bun run build`. Cross-component changes need e2e. Skipping is the single biggest source of premature "done."
+**Verification rule**: green typecheck + green tests is *necessary, not sufficient*. UI changes need a browser walk. CF-binding changes need `bun run build`. E2E is default-on (opt-out only with run-note justification — see `99-verify-done.md` §2). Skipping is the single biggest source of premature "done."
 
 ---
 

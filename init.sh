@@ -41,9 +41,17 @@ echo "$TEST_OUT" | tail -10
 [ $TEST_RC -ne 0 ] && echo "FAIL: test (rc=$TEST_RC)" || echo "OK: test"
 echo ""
 
+echo "--- Harness invariants ---"
+HARNESS_OUT=$(./scripts/harness-check.sh 2>&1)
+HARNESS_RC=$?
+echo "$HARNESS_OUT" | tail -8
+[ $HARNESS_RC -ne 0 ] && echo "FAIL: harness-check (rc=$HARNESS_RC)" || echo "OK: harness-check"
+echo ""
+
 echo "=== Baseline summary ==="
-echo "typecheck: $([ $TC_RC -eq 0 ] && echo PASS || echo FAIL)"
-echo "test:      $([ $TEST_RC -eq 0 ] && echo PASS || echo FAIL)"
+echo "typecheck:     $([ $TC_RC -eq 0 ] && echo PASS || echo FAIL)"
+echo "test:          $([ $TEST_RC -eq 0 ] && echo PASS || echo FAIL)"
+echo "harness-check: $([ $HARNESS_RC -eq 0 ] && echo PASS || echo FAIL)"
 echo ""
 echo "Brain entry points:"
 echo "  - CLAUDE.md (read first)"
@@ -53,7 +61,7 @@ echo "  - .brain/features/feature_list.json (feature state)"
 echo "  - .brain/runs/progress.md (rolling session log)"
 echo ""
 
-if [ $TC_RC -ne 0 ] || [ $TEST_RC -ne 0 ]; then
+if [ $TC_RC -ne 0 ] || [ $TEST_RC -ne 0 ] || [ $HARNESS_RC -ne 0 ]; then
   echo "Pre-existing failures detected. Record them in your run note before changing anything."
   exit 1
 fi

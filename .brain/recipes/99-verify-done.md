@@ -15,15 +15,21 @@ bun run test
 
 Both must be green **on the post-change tree**, not from memory of an earlier run.
 
-## 2. End-to-end (if cross-component)
-
-If your change touched any of: route + procedure + repository + UI / auth / forms / migration:
+## 2. End-to-end (default ON)
 
 ```bash
 bun run test:e2e
 ```
 
-E2E is the only layer that catches real wiring breakage. Skipping it is the single biggest source of premature "done."
+**Default: run.** E2E is the only layer that catches real wiring breakage. Skipping is the single biggest source of premature "done."
+
+**Opt-out only when** the diff is purely:
+- a tagged-error definition + `tagToTRPC` case (no procedure/repo touched)
+- a brain doc / `.md` / comment-only change
+- a unit-test-only change with no source touched
+- an isolated helper in `app/lib/` with no consumer wiring change
+
+If you opt out, append a one-line justification to your run note (`runs/<date>-<slug>.md`) under "Skipped checks". No silent skips.
 
 ## 3. Build (if cloudflare-touching)
 
@@ -85,9 +91,10 @@ If you opened one, append a final entry: what shipped, what is left, what surpri
 
 - [ ] `typecheck` green
 - [ ] `test` green
-- [ ] `test:e2e` green (or N/A documented in run note)
+- [ ] `test:e2e` green (default — opt-out only with run-note justification per §2)
 - [ ] `build` green (if CF-touching)
 - [ ] Manual smoke walked (if UI)
+- [ ] `./scripts/harness-check.sh` green (feature-list invariants, brain link integrity, sub-agent frontmatter)
 - [ ] Every diffed path → owning brain doc updated
 - [ ] No five-non-negotiables grep hits
 - [ ] Feature memo + `CHANGELOG.md` updated if applicable

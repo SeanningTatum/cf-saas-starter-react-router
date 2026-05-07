@@ -115,6 +115,31 @@ else
   fail "missing recipes:$MISSING_RECIPES"
 fi
 
+# 11. Brain internal markdown links resolve (relative .md/.sh/.json/.ts paths only)
+DEAD_LINKS=""
+while IFS= read -r src; do
+  # Extract markdown links of form [...](relative-path) — skip http(s), mailto, fragments-only
+  while IFS= read -r target; do
+    [ -z "$target" ] && continue
+    # Strip fragment / line-anchor
+    clean=${target%%#*}
+    [ -z "$clean" ] && continue
+    # Resolve relative to source file's directory
+    src_dir=$(dirname "$src")
+    abs="$src_dir/$clean"
+    # Normalize ./ and ../
+    norm=$(cd "$src_dir" 2>/dev/null && cd "$(dirname "$clean")" 2>/dev/null && pwd)/$(basename "$clean")
+    # Fall back to literal join if cd failed
+    [ -e "$abs" ] || [ -e "$norm" ] || DEAD_LINKS="$DEAD_LINKS\n  $src → $clean"
+  done < <(grep -oE '\]\([^)]+\.(md|sh|json|ts|tsx|jsonc)[^)]*\)' "$src" | sed -E 's/^\]\(([^)]+)\)$/\1/' | grep -vE '^https?://|^mailto:')
+done < <(find .brain -name "*.md" -type f)
+
+if [ -z "$DEAD_LINKS" ]; then
+  ok "no dead internal links in .brain/"
+else
+  fail "dead internal links found:$(printf "$DEAD_LINKS")"
+fi
+
 echo ""
 echo "=== Summary ==="
 echo "passed: $PASS_COUNT"
