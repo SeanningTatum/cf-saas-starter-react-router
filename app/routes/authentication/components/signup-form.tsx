@@ -19,33 +19,21 @@ import {
 import { Input } from "@/components/ui/input"
 import { Link, useNavigate } from "react-router"
 import { authClient } from "@/auth/client"
-import { zodResolver } from "@hookform/resolvers/zod"
+import { effectResolver } from "@/lib/effect-form"
 import { useForm } from "react-hook-form"
-import { z } from "zod"
+import { SignupSchema, type SignupInput } from "@/lib/schemas/auth"
 import { useState } from "react"
 import { useTranslation } from "react-i18next"
 
 interface SignupFormProps extends React.ComponentProps<"div"> { }
-
-const signupSchema = z
-  .object({
-    name: z.string().min(1, "Name is required"),
-    email: z.string().email("Invalid email address"),
-    password: z.string().min(8, "Password must be at least 8 characters"),
-    confirmPassword: z.string(),
-  })
-  .refine((data) => data.password === data.confirmPassword, {
-    message: "Passwords do not match",
-    path: ["confirmPassword"],
-  })
 
 export function SignupForm({ className, ...props }: SignupFormProps) {
   const navigate = useNavigate()
   const [authError, setAuthError] = useState<string>()
   const { t } = useTranslation("auth")
 
-  const form = useForm<z.infer<typeof signupSchema>>({
-    resolver: zodResolver(signupSchema),
+  const form = useForm<SignupInput>({
+    resolver: effectResolver(SignupSchema),
     defaultValues: {
       name: "",
       email: "",
@@ -54,7 +42,7 @@ export function SignupForm({ className, ...props }: SignupFormProps) {
     },
   })
 
-  async function onSubmit(data: z.infer<typeof signupSchema>) {
+  async function onSubmit(data: SignupInput) {
     setAuthError(undefined)
 
     try {

@@ -1,0 +1,54 @@
+{
+  "$schema": "Machine-readable feature state tracker. Source of truth for status; per-feature MD docs are source of truth for design/runtime.",
+  "updated": "2026-05-07",
+  "policy": {
+    "one_in_progress_at_a_time": true,
+    "definition_of_done": "implementation complete + verify-done passed + feature MD updated + brain coherent"
+  },
+  "features": [
+    {
+      "id": "feat-001",
+      "name": "Authentication",
+      "slug": "authentication",
+      "doc": ".brain/features/authentication.md",
+      "description": "Email/password auth with role-based access (user/admin) and ban system, Better Auth + D1 + Drizzle.",
+      "dependencies": [],
+      "status": "shipped",
+      "evidence": "shipped 2026-05-07; tests: app/repositories/__tests__/user.test.ts; e2e gap noted",
+      "owners": ["sean"]
+    },
+    {
+      "id": "feat-002",
+      "name": "Admin Dashboard",
+      "slug": "admin-dashboard",
+      "doc": ".brain/features/admin-dashboard.md",
+      "description": "Admin-only area at /admin/* for user management and analytics; data-side gating via adminProcedure.",
+      "dependencies": ["feat-001"],
+      "status": "shipped",
+      "evidence": "shipped 2026-05-07; known gap: layout has no loader auth gate (data-side only)",
+      "owners": ["sean"]
+    },
+    {
+      "id": "feat-003",
+      "name": "File Upload",
+      "slug": "file-upload",
+      "doc": ".brain/features/file-upload.md",
+      "description": "Server-side multipart upload to Cloudflare R2 via /api/upload-file using BucketRepository.",
+      "dependencies": [],
+      "status": "shipped",
+      "evidence": "shipped 2026-05-07; tests: app/repositories/__tests__/bucket.test.ts",
+      "owners": ["sean"]
+    },
+    {
+      "id": "feat-004",
+      "name": "Analytics",
+      "slug": "analytics",
+      "doc": ".brain/features/analytics.md",
+      "description": "Read-only admin analytics at /admin: user growth, role + verification distribution, recent signups.",
+      "dependencies": ["feat-001", "feat-002"],
+      "status": "shipped",
+      "evidence": "shipped 2026-05-07; AnalyticsRepository runs queries with Effect.all unbounded concurrency",
+      "owners": ["sean"]
+    }
+  ]
+}

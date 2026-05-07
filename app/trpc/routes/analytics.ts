@@ -1,38 +1,64 @@
-import { z } from "zod/v4";
+import { Effect, Schema } from "effect";
 import { adminProcedure, createTRPCRouter } from "..";
-import * as analyticsRepository from "@/repositories/analytics";
+import { runProcedure } from "@/lib/effect-trpc";
+import { AnalyticsRepository } from "@/repositories/analytics";
+import {
+  DateRangeInput,
+  GetRecentSignupsCountInput,
+} from "@/lib/schemas/analytics";
 
 export const analyticsRouter = createTRPCRouter({
   getUserGrowth: adminProcedure
-    .input(
-      z.object({
-        startDate: z.date(),
-        endDate: z.date(),
-      })
-    )
+    .input(Schema.standardSchemaV1(DateRangeInput))
     .query(({ ctx, input }) =>
-      analyticsRepository.getUserGrowth(ctx.db, input)
+      runProcedure(
+        ctx.runtime,
+        Effect.gen(function* () {
+          const repo = yield* AnalyticsRepository;
+          return yield* repo.getUserGrowth(input);
+        })
+      )
     ),
 
   getUserStats: adminProcedure.query(({ ctx }) =>
-    analyticsRepository.getUserStats(ctx.db)
+    runProcedure(
+      ctx.runtime,
+      Effect.gen(function* () {
+        const repo = yield* AnalyticsRepository;
+        return yield* repo.getUserStats;
+      })
+    )
   ),
 
   getRoleDistribution: adminProcedure.query(({ ctx }) =>
-    analyticsRepository.getRoleDistribution(ctx.db)
+    runProcedure(
+      ctx.runtime,
+      Effect.gen(function* () {
+        const repo = yield* AnalyticsRepository;
+        return yield* repo.getRoleDistribution;
+      })
+    )
   ),
 
   getVerificationDistribution: adminProcedure.query(({ ctx }) =>
-    analyticsRepository.getVerificationDistribution(ctx.db)
+    runProcedure(
+      ctx.runtime,
+      Effect.gen(function* () {
+        const repo = yield* AnalyticsRepository;
+        return yield* repo.getVerificationDistribution;
+      })
+    )
   ),
 
   getRecentSignupsCount: adminProcedure
-    .input(
-      z.object({
-        days: z.number().int().min(1).max(365).default(7),
-      })
-    )
+    .input(Schema.standardSchemaV1(GetRecentSignupsCountInput))
     .query(({ ctx, input }) =>
-      analyticsRepository.getRecentSignupsCount(ctx.db, input)
+      runProcedure(
+        ctx.runtime,
+        Effect.gen(function* () {
+          const repo = yield* AnalyticsRepository;
+          return yield* repo.getRecentSignupsCount(input);
+        })
+      )
     ),
 });

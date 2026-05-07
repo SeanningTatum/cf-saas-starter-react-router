@@ -18,33 +18,28 @@ import {
 import { Input } from "@/components/ui/input"
 import { Link, useNavigate } from "react-router"
 import { authClient } from "@/auth/client"
-import { zodResolver } from "@hookform/resolvers/zod"
+import { effectResolver } from "@/lib/effect-form"
 import { useForm } from "react-hook-form"
-import { z } from "zod"
+import { LoginSchema, type LoginInput } from "@/lib/schemas/auth"
 import { useState } from "react"
 import { useTranslation } from "react-i18next"
 
 interface LoginFormProps extends React.ComponentProps<"div"> { }
-
-const loginSchema = z.object({
-  email: z.string().email("Invalid email address"),
-  password: z.string().min(1, "Password is required"),
-})
 
 export function LoginForm({ className, ...props }: LoginFormProps) {
   const navigate = useNavigate()
   const [authError, setAuthError] = useState<string>()
   const { t } = useTranslation("auth")
 
-  const form = useForm<z.infer<typeof loginSchema>>({
-    resolver: zodResolver(loginSchema),
+  const form = useForm<LoginInput>({
+    resolver: effectResolver(LoginSchema),
     defaultValues: {
       email: "",
       password: "",
     },
   })
 
-  async function onSubmit(data: z.infer<typeof loginSchema>) {
+  async function onSubmit(data: LoginInput) {
     setAuthError(undefined)
 
     try {

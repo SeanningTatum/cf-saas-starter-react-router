@@ -36,7 +36,6 @@ export default [
     layout("routes/admin/_layout.tsx", [
       route("/", "routes/admin/_index.tsx"),
       route("/users", "routes/admin/users.tsx"),
-      route("/docs/:category?/:doc?", "routes/admin/docs.tsx"),
       route("/kitchen-sink", "routes/admin/kitchen-sink.tsx"),
     ]),
   ]),

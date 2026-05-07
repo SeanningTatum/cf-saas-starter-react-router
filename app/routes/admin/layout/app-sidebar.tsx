@@ -55,11 +55,6 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         icon: IconUsers,
       },
       {
-        title: t("nav.docs"),
-        url: "/admin/docs",
-        icon: IconFileDescription,
-      },
-      {
         title: t("nav.kitchen_sink"),
         url: "/admin/kitchen-sink",
         icon: IconSettings,
