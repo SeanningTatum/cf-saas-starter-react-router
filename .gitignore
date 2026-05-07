@@ -31,4 +31,4 @@ worker-configuration.d.ts
 
 # Editor agent caches
 .cursor/
-
+wrangler.jsonc
