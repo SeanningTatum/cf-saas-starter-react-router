@@ -86,26 +86,29 @@ Read [`CLAUDE.md`](CLAUDE.md) once. It points to everything else.
 
 ### For agents
 
-You're working in a codebase with strict conventions. Skipping the brain will cost rework. Every non-trivial task has three phases:
+You're working in a codebase with strict conventions. Skipping the brain will cost rework. Every non-trivial task has three phases — each gated by a slash command.
 
-**1. Init — [`.brain/recipes/00-before-task.md`](.brain/recipes/00-before-task.md)**
-- Read [`CLAUDE.md`](CLAUDE.md) — entry point, five non-negotiables
-- Open the relevant `.brain/<folder>/index.md` and read every file its triggers match
-- For multi-session or >30min work: copy [`.brain/runs/_TEMPLATE.md`](.brain/runs/_TEMPLATE.md) → `.brain/runs/<date>-<slug>.md`
-- Capture a `bun run typecheck` + `bun run test` baseline so you can tell "pre-existing" from "I broke it"
+**1. Init — [`/start-task`](.claude/commands/start-task.md)** (or [`.brain/recipes/00-before-task.md`](.brain/recipes/00-before-task.md))
+- Runs `./init.sh --baseline` to capture pre-change typecheck + test state
+- Reads the brain (matching `.brain/<folder>/index.md` + triggered files)
+- Frames task: intent, domain, scope, affected feature(s)
+- Validates scope policy via `jq` on [`feature_list.json`](.brain/features/feature_list.json) — refuses if >1 feature in progress
+- Opens run note (`.brain/runs/<date>-<slug>.md`) for >30min work
+- Appends entry to [`.brain/runs/progress.md`](.brain/runs/progress.md)
 
 **2. Work — pick the runbook**
 - Adding code → matching recipe in [`.brain/recipes/index.md`](.brain/recipes/index.md)
 - Refactor / bugfix → the layer's rule file in [`.brain/rules/index.md`](.brain/rules/index.md)
 - Feature work → existing memo in [`.brain/features/<slug>.md`](.brain/features/index.md), plus past attempts in [`.brain/runs/`](.brain/runs/)
 
-**3. Verify — [`.brain/recipes/99-verify-done.md`](.brain/recipes/99-verify-done.md) (or `/verify-done`)**
+**3. Verify — [`/verify-done`](.claude/commands/verify-done.md)** (or [`.brain/recipes/99-verify-done.md`](.brain/recipes/99-verify-done.md))
 - typecheck + test + e2e (if cross-component) + build (if CF-touching) + manual UI smoke (if UI)
 - Brain coherence: every diffed path → owning brain doc updated
 - Five non-negotiables grep-clean
 - Close the run note if you opened one
 
-The `/verify-done` slash command (in [`.claude/commands/verify-done.md`](.claude/commands/verify-done.md)) runs this automatically — invoke it before telling the user a task is done.
+**Shipping a feature — [`/ship-feature`](.claude/commands/ship-feature.md)**
+- Runs `/verify-done`, flips `feature_list.json` status to `"shipped"`, updates per-feature MD changelog, closes run note, runs `/harness-check`. Refuses on red.
 
 **The five non-negotiables** (also in [`.brain/codebase/effect-ts.md`](.brain/codebase/effect-ts.md)):
 
@@ -117,19 +120,61 @@ The `/verify-done` slash command (in [`.claude/commands/verify-done.md`](.claude
 
 ---
 
+## Harness — the system around the agent
+
+This repo follows the [walkinglabs 5-subsystem harness framework](https://github.com/walkinglabs/learn-harness-engineering/tree/main/skills/harness-creator). The harness is everything that keeps coding agents reliable across sessions: instructions, state, verification, scope, and lifecycle.
+
+Single explainer: [`.brain/HARNESS.md`](.brain/HARNESS.md). The 5 subsystems mapped to actual files:
+
+| Subsystem | Artifacts |
+|-----------|-----------|
+| **Instructions** | [`CLAUDE.md`](CLAUDE.md) / [`AGENTS.md`](AGENTS.md), [`.brain/`](.brain/) (rules, recipes, features) |
+| **State** | [`.brain/features/feature_list.json`](.brain/features/feature_list.json) (machine-readable status), [`.brain/runs/progress.md`](.brain/runs/progress.md) (rolling cursor), per-task `.brain/runs/<date>-<slug>.md` |
+| **Verification** | [`.brain/recipes/99-verify-done.md`](.brain/recipes/99-verify-done.md), [`/verify-done`](.claude/commands/verify-done.md), [`scripts/harness-check.sh`](scripts/harness-check.sh) |
+| **Scope** | One in-progress feature at a time (enforced by [`feature_list.json`](.brain/features/feature_list.json) + [`harness-check.sh`](scripts/harness-check.sh)); ≤2 features per diff |
+| **Lifecycle** | [`init.sh`](init.sh), [`.claude/hooks/session-start.sh`](.claude/hooks/session-start.sh) (SessionStart hook), [`.claude/hooks/brain-reminder.sh`](.claude/hooks/brain-reminder.sh) (PreToolUse hook) |
+
+### Slash commands (deterministic gates)
+
+| Command | What it does |
+|---------|--------------|
+| [`/start-task`](.claude/commands/start-task.md) | Kickoff: `init.sh --baseline` + brain read + framing + run note + progress entry. Refuses if scope policy violated. |
+| [`/verify-done`](.claude/commands/verify-done.md) | Full verification: typecheck/test/e2e/build/UI/brain coherence/non-negotiables. |
+| [`/ship-feature`](.claude/commands/ship-feature.md) | Close out: `/verify-done` + flip `feature_list.json` + update feature MD + close run note + `/harness-check`. |
+| [`/harness-check`](.claude/commands/harness-check.md) | 10 deterministic invariants via [`scripts/harness-check.sh`](scripts/harness-check.sh) (no LLM, exits non-zero on drift). |
+
+The two scripts (`init.sh` + `scripts/harness-check.sh`) are pure shell — run them yourself anytime to verify state without invoking Claude.
+
+### Project-local sub-agents ([`.claude/agents/`](.claude/agents/))
+
+Five subagents wrap specific harness pieces. The main thread delegates to these so it doesn't have to re-load harness rules every turn.
+
+| Agent | Use when |
+|-------|----------|
+| [`brain-navigator`](.claude/agents/brain-navigator.md) | Before writing code — get the reading list for a task |
+| [`recipe-runner`](.claude/agents/recipe-runner.md) | Adding code that matches one of the 8 `add-*` recipes |
+| [`effect-ts-enforcer`](.claude/agents/effect-ts-enforcer.md) | After writing — review diff against the 5 non-negotiables |
+| [`verify-done-runner`](.claude/agents/verify-done-runner.md) | Before declaring done — runs the full verification checklist |
+| [`feature-tracker`](.claude/agents/feature-tracker.md) | Status changes (start / ship / block / scope a feature) |
+
+See [`.claude/agents/README.md`](.claude/agents/README.md) for invocation flow + complementary plugin agents.
+
+---
+
 ## The `.brain/` directory
 
 Retrieval-over-recall. Each subdirectory has an `index.md` that signals "read me when X". Don't open files at random — start at the index.
 
 ```
 .brain/
+├── HARNESS.md                 The harness, explained — single overview of the 5 subsystems
 ├── high-level-architecture/   System layers, data flow, security, integrations
 ├── codebase/                  Effect TS programming model, helpers, tests, i18n, tRPC API
 ├── rules/                     7 layer-aligned rules (frontend / cloudflare / repository /
 │                               services / routes / library / errors)
 ├── recipes/                   Paste-able runbooks (00-before-task / 99-verify-done bookends + add-*)
-├── runs/                      Per-task continuity log (multi-session / post-compaction recovery)
-├── features/                  Per-feature memory — purpose, persistence, dependencies
+├── runs/                      progress.md (rolling cursor) + per-task <date>-<slug>.md work logs
+├── features/                  Per-feature memory + feature_list.json (machine-readable status)
 ├── transcripts/               Meeting notes / decision logs (the "why")
 ├── emails/                    Stakeholder correspondence
 └── CHANGELOG.md               Architectural + brain shifts (not a code changelog)
@@ -235,15 +280,16 @@ app/
 ├── runtime.ts        ManagedRuntime composition (services + repos)
 ├── root.tsx          Root layout
 └── entry.{client,server}.tsx
-.brain/               Agent-readable docs (see above)
+.brain/               Agent-readable docs (see above) — includes HARNESS.md
 .githooks/            Git hooks (pre-commit gate)
-.claude/              Claude Code config — settings + hooks
+.claude/              Claude Code config — settings, hooks, agents/, commands/
 drizzle/              SQL migrations
 e2e/                  Playwright tests
 public/               Static assets
-scripts/              Setup / teardown / seed scripts
+scripts/              Setup / teardown / seed + harness-check.sh
 workers/app.ts        Cloudflare Workers entrypoint
 workflows/            Cloudflare Workflow definitions
+init.sh               Harness bootstrap — install + migrate + typecheck + test
 ```
 
 ---
@@ -251,6 +297,11 @@ workflows/            Cloudflare Workflow definitions
 ## Commands
 
 ```bash
+./init.sh                     # Harness bootstrap — install + migrate + typecheck + test
+./init.sh --baseline          # Baseline only (typecheck + test) — used by /start-task
+./init.sh --quick             # Skip install + migrate (assume already done)
+./scripts/harness-check.sh    # 10 deterministic harness invariants (also: /harness-check)
+
 bun run dev                   # Dev server (auto-runs local DB migrations) → :5173
 bun run build                 # Production build
 bun run deploy                # Build + deploy to Cloudflare Workers
