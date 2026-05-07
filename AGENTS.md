@@ -12,22 +12,48 @@ SaaS starter on **Cloudflare Workers + React Router v7 + tRPC + D1/Drizzle + Bet
 
 For every non-trivial task, run the recipe bookends:
 
-1. **Start:** [`.brain/recipes/00-before-task.md`](.brain/recipes/00-before-task.md) — frame task, read the brain, capture baseline, optionally open a run note.
+1. **Start:** [`/start-task`](.claude/commands/start-task.md) (or [`.brain/recipes/00-before-task.md`](.brain/recipes/00-before-task.md)) — runs baseline, reads the brain, frames task, opens run note, writes progress entry.
 2. **Work:** the matching recipe / rule / feature doc.
-3. **End:** [`.brain/recipes/99-verify-done.md`](.brain/recipes/99-verify-done.md) (or run the `/verify-done` slash command) before declaring done.
+3. **End:** [`/verify-done`](.claude/commands/verify-done.md) (or [`.brain/recipes/99-verify-done.md`](.brain/recipes/99-verify-done.md)) before declaring done.
 
 For trivial edits (typo, comment, one-line change), bookends are optional — but never skip the verify step on user-visible work.
+
+## Slash commands (deterministic gates)
+
+| Command | Purpose |
+|---------|---------|
+| [`/start-task`](.claude/commands/start-task.md) | Kickoff — `init.sh --baseline` + brain read + framing + run note + progress entry. Refuses if scope policy violated. |
+| [`/verify-done`](.claude/commands/verify-done.md) | Full verification — typecheck/test/e2e/build/UI/brain coherence/non-negotiables. |
+| [`/ship-feature`](.claude/commands/ship-feature.md) | Close out — verify-done + flip `feature_list.json` + update feature MD + close run note + harness-check. |
+| [`/harness-check`](.claude/commands/harness-check.md) | Validate 10 harness invariants via [`scripts/harness-check.sh`](scripts/harness-check.sh) (deterministic, no LLM, exits non-zero on drift). |
+
+## Harness — what holds this together
+
+This repo follows the [5-subsystem harness framework](.brain/HARNESS.md). The five concerns:
+
+1. **Instructions** — this file + `.brain/` (rules, recipes, features)
+2. **State** — [`.brain/features/feature_list.json`](.brain/features/feature_list.json) (machine-readable status), [`.brain/runs/progress.md`](.brain/runs/progress.md) (rolling cursor), per-task `.brain/runs/<date>-<slug>.md`
+3. **Verification** — [`.brain/recipes/99-verify-done.md`](.brain/recipes/99-verify-done.md) + `/verify-done`
+4. **Scope** — see "Scope policy" below
+5. **Lifecycle** — [`init.sh`](init.sh) at repo root + SessionStart hook in `.claude/`
+
+## Scope policy
+
+- **One in-progress feature at a time.** Source of truth: `status: "in-progress"` row in [`.brain/features/feature_list.json`](.brain/features/feature_list.json). If you must start a second, mark the first `blocked` with reason in `evidence`.
+- **Definition of done** for any feature/task: implementation complete + `/verify-done` passes + per-feature `.brain/features/<slug>.md` updated + `feature_list.json` status flipped + run note closed.
+- **Scope creep guardrail**: if you touch >2 features in one diff, stop and split. Cross-feature refactor is a separate task with its own run note.
 
 ## Brain layout
 
 ```
 .brain/
+├── HARNESS.md                 The harness, explained — read once
 ├── high-level-architecture/   System layers, data flow, security, integrations, user journeys
 ├── codebase/                  Programming model, helpers, tests, i18n, tRPC API surface
 ├── rules/                     Layer-aligned conventions (frontend / cloudflare / repository / services / routes / library / errors)
-├── features/                  Per-feature memory — one MD per feature (template included)
+├── features/                  Per-feature memory — one MD per feature + feature_list.json (machine-readable status)
 ├── recipes/                   Step-by-step runbooks (00-before-task, 99-verify-done, add-*)
-├── runs/                      Per-task work logs — session continuity across compactions / handoffs
+├── runs/                      progress.md (rolling cursor) + per-task <date>-<slug>.md work logs
 ├── transcripts/               Meeting notes, decision logs
 ├── emails/                    Archived stakeholder correspondence
 └── CHANGELOG.md               High-level project + brain change log
@@ -76,6 +102,8 @@ Direct pointers (each rule is the canonical "do / don't" for one layer):
 ## Commands
 
 ```bash
+./init.sh                 # Harness bootstrap — install + migrate + typecheck + test (run start of session)
+./init.sh --baseline      # Baseline only (typecheck + test) — used by 00-before-task.md
 bun run dev               # Dev server (auto-runs local DB migrations) → http://localhost:5173
 bun run build             # Production build
 bun run deploy            # Build + deploy to Cloudflare Workers

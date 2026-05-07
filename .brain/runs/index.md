@@ -4,6 +4,8 @@ Per-task work logs. **Not** a changelog (`.brain/CHANGELOG.md` is). **Not** feat
 
 A run note records *the state of an in-progress or recently-finished task* so the next agent session — or the same session after compaction — can recover without re-diagnosing.
 
+> **Two layers**: [`progress.md`](progress.md) is the rolling cursor (read at session start to recover "where am I"). Per-task `<date>-<slug>.md` files hold deep state for tasks >30min or multi-session.
+
 ## When to open a run note
 
 - Task expected to span >30 min or multiple sessions
