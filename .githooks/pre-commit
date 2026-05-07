@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+# Pre-commit gate. No-dep, cross-machine via core.hooksPath = .githooks.
+# Skips with: SKIP_HOOKS=1 git commit ...
+
+set -e
+
+if [ "${SKIP_HOOKS:-0}" = "1" ]; then
+  echo "⏭  pre-commit skipped (SKIP_HOOKS=1)"
+  exit 0
+fi
+
+# Only typecheck + test if any TS/TSX/JS staged. Skip for docs/config-only commits.
+STAGED_CODE=$(git diff --cached --name-only --diff-filter=ACMR | grep -E '\.(ts|tsx|js|jsx)$' || true)
+
+if [ -z "$STAGED_CODE" ]; then
+  echo "✓ pre-commit: no code changes — skipping typecheck/test"
+  exit 0
+fi
+
+echo "▶ pre-commit: typecheck"
+bun run typecheck
+
+echo "▶ pre-commit: tests (unit only)"
+bun run test
+
+echo "✓ pre-commit clean"

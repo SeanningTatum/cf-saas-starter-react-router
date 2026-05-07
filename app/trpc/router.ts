@@ -1,41 +1,74 @@
-import { user } from "@/db/schema";
+import { Effect, Schema } from "effect";
 import { createTRPCRouter, protectedProcedure, publicProcedure } from ".";
-import { z } from "zod/v4";
-import { eq } from "drizzle-orm";
-import { TRPCError } from "@trpc/server";
+import { runProcedure } from "@/lib/effect-trpc";
+import { UserRepository } from "@/repositories/user";
+import { Workflows } from "@/services/workflows";
+import {
+  CreateWorkflowInput,
+  DeleteUserSelfCheckInput,
+} from "@/lib/schemas/user";
+import { ValidationError } from "@/models/errors/repository";
 import { adminRouter } from "./routes/admin";
 import { analyticsRouter } from "./routes/analytics";
 
 const userRouter = createTRPCRouter({
-  getUsers: publicProcedure.query(async ({ ctx }) => {
-    return await ctx.db.query.user.findMany();
-  }),
-  getUsersProtected: protectedProcedure.query(async ({ ctx }) => {
-    return await ctx.db.query.user.findMany();
-  }),
-  deleteUser: protectedProcedure
-    .input(z.string())
-    .mutation(async ({ ctx, input }) => {
-      if (ctx.auth.user?.id === input) {
-        throw new TRPCError({
-          code: "FORBIDDEN",
-          message: "Cannot delete self",
-        });
-      }
-      return ctx.db.delete(user).where(eq(user.id, input));
-    }),
-  createWorkflow: protectedProcedure
-    .input(
-      z.object({
-        email: z.string(),
-        metadata: z.record(z.string(), z.any()),
+  getUsers: publicProcedure.query(({ ctx }) =>
+    runProcedure(
+      ctx.runtime,
+      Effect.gen(function* () {
+        const repo = yield* UserRepository;
+        const res = yield* repo.getUsers({ page: 0, limit: 100 });
+        return res.users;
       })
     )
-    .mutation(async ({ ctx, input }) => {
-      return await ctx.workflows.ExampleWorkflow.create({
-        params: input,
-      });
-    }),
+  ),
+
+  getUsersProtected: protectedProcedure.query(({ ctx }) =>
+    runProcedure(
+      ctx.runtime,
+      Effect.gen(function* () {
+        const repo = yield* UserRepository;
+        const res = yield* repo.getUsers({ page: 0, limit: 100 });
+        return res.users;
+      })
+    )
+  ),
+
+  deleteUser: protectedProcedure
+    .input(Schema.standardSchemaV1(DeleteUserSelfCheckInput))
+    .mutation(({ ctx, input }) =>
+      runProcedure(
+        ctx.runtime,
+        Effect.gen(function* () {
+          if (ctx.auth.user?.id === input) {
+            return yield* Effect.fail(
+              new ValidationError({
+                entity: "user",
+                message: "Cannot delete self",
+                field: "userId",
+              })
+            );
+          }
+          const repo = yield* UserRepository;
+          return yield* repo.deleteUser({
+            userId: input,
+            currentUserId: ctx.auth.user.id,
+          });
+        })
+      )
+    ),
+
+  createWorkflow: protectedProcedure
+    .input(Schema.standardSchemaV1(CreateWorkflowInput))
+    .mutation(({ ctx, input }) =>
+      runProcedure(
+        ctx.runtime,
+        Effect.gen(function* () {
+          const wf = yield* Workflows;
+          return yield* wf.triggerExample(input);
+        })
+      )
+    ),
 });
 
 export const appRouter = createTRPCRouter({

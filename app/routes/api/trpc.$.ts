@@ -14,7 +14,7 @@ const handler = async (req: Request, context: AppLoadContext) => {
     createContext: () =>
       createTRPCContext({
         headers: req.headers,
-        cfContext: context.cloudflare.env,
+        runtime: context.runtime,
       }),
     onError({ error, path }) {
       console.error(`>>> tRPC Error on '${path}'`, error);

@@ -12,8 +12,12 @@ export const drizzleConfig = {
   plugins: [admin()],
 } satisfies BetterAuthOptions;
 
-export async function createAuth(database: D1Database, secret: string) {
-  const db = await getDb(database);
+export function createAuth(
+  database: D1Database,
+  secret: string,
+  baseURL?: string
+) {
+  const db = getDb(database);
 
   return betterAuth({
     database: drizzleAdapter(db, {
@@ -21,8 +25,9 @@ export async function createAuth(database: D1Database, secret: string) {
       schema,
     }),
     secret,
+    baseURL,
     ...drizzleConfig,
   });
 }
 
-export type Auth = Awaited<ReturnType<typeof createAuth>>;
+export type Auth = ReturnType<typeof createAuth>;

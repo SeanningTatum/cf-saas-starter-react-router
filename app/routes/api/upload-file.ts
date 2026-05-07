@@ -1,28 +1,41 @@
-import { uploadToR2 } from "@/repositories/bucket";
+import { Effect } from "effect";
+import { BucketRepository } from "@/repositories/bucket";
+import { ValidationError } from "@/models/errors/repository";
+import { runProcedure } from "@/lib/effect-trpc";
 import type { Route } from "./+types/upload-file";
 
 export async function action({ request, context }: Route.ActionArgs) {
-  const bucket = context.cloudflare.env.BUCKET;
-
-  if (!bucket) {
-    throw new Response("R2 bucket not configured", { status: 500 });
-  }
-
   const formData = await request.formData();
   const file = formData.get("file");
 
-  if (!file || !(file instanceof File)) {
-    throw new Response("No file provided", { status: 400 });
-  }
+  const program = Effect.gen(function* () {
+    if (!file || !(file instanceof File)) {
+      return yield* Effect.fail(
+        new ValidationError({
+          entity: "file",
+          field: "file",
+          message: "No file provided",
+        })
+      );
+    }
+    const repo = yield* BucketRepository;
+    const key = yield* repo.upload(file);
+    return { success: true as const, key };
+  }).pipe(
+    Effect.tapErrorCause((cause) => Effect.logError("Upload failed", cause))
+  );
 
   try {
-    const key = await uploadToR2(bucket, file);
-    return { success: true, key };
-  } catch (error) {
-    console.error("Upload failed:", error);
-    throw new Response(
-      error instanceof Error ? error.message : "Upload failed",
-      { status: 500 }
-    );
+    return await runProcedure(context.runtime, program);
+  } catch (err) {
+    const status =
+      err && typeof err === "object" && "code" in err && err.code === "BAD_REQUEST"
+        ? 400
+        : 500;
+    const message =
+      err && typeof err === "object" && "message" in err
+        ? String((err as { message: unknown }).message)
+        : "Upload failed";
+    throw new Response(message, { status });
   }
 }

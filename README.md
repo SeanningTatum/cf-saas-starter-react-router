@@ -1,459 +1,409 @@
-# Welcome to React Router!
+# cf-saas-starter-react-router
 
-A modern, production-ready template for building full-stack React applications using React Router.
+> **An agent-first SaaS starter.** Cloudflare Workers + React Router v7 + tRPC + D1 + Drizzle + Better Auth + Effect TS + ShadCN. Built so AI coding agents (Claude Code, Cursor, Codex) can one-shot real features by following retrieval-based docs, paste-able recipes, and pre-commit guardrails.
 
-## Features
-
-- 🚀 Server-side rendering
-- ⚡️ Hot Module Replacement (HMR)
-- 📦 Asset bundling and optimization
-- 🔄 Data loading and mutations
-- 🔒 TypeScript by default
-- 🎉 TailwindCSS for styling
-- 🔐 Better Auth integration
-- 🗄️ Drizzle ORM with D1 Database
-- 📡 tRPC API
-- 📖 [React Router docs](https://reactrouter.com/)
+If you're a human, scroll to [Quick Start](#quick-start). If you're an agent, scroll to [How To Work In This Repo](#how-to-work-in-this-repo) — it tells you which docs to open before writing code.
 
 ---
 
-## Getting Started
+## What's in the box
 
-### First-Time Setup (Recommended)
+**Stack**
+- **Runtime:** Cloudflare Workers (no Node), React Router v7 SSR
+- **Server logic:** tRPC v11 procedures wrapped in Effect TS
+- **Persistence:** D1 (SQLite) via Drizzle ORM 0.45, R2 for files
+- **Auth:** Better Auth 1.4 with Drizzle adapter + admin plugin (RBAC)
+- **Validation:** Effect Schema everywhere — no Zod
+- **Errors:** `Data.TaggedError` mapped to tRPC codes via `tagToTRPC`
+- **UI:** ShadCN/Radix + Tailwind v4 (oklch), next-themes, react-hook-form + Effect resolver
+- **i18n:** remix-i18next + i18next, route-level namespaces, fully typed
+- **Testing:** Vitest 3 (unit) + Playwright 1.58 (e2e) + `@effect/vitest`
+- **Background:** Cloudflare Workflows (`ExampleWorkflow`)
 
-The easiest way to get started is using our automated setup script. This interactive wizard will configure your entire Cloudflare infrastructure in minutes.
+**Agent harness**
+- `.brain/` — retrieval-first docs (rules, architecture, features, recipes, runs)
+- `.brain/recipes/` — paste-able runbooks bookended by `00-before-task.md` (init) and `99-verify-done.md` (termination check)
+- `.brain/runs/` — per-task continuity log so multi-session work survives compaction
+- `.githooks/pre-commit` — typecheck + tests block broken commits (no-dep, auto-installs)
+- `.claude/hooks/brain-reminder.sh` — staged-path → relevant-doc reminder before commit
+- `.claude/commands/verify-done.md` — `/verify-done` slash command runs the full termination checklist
+- `CLAUDE.md` / `AGENTS.md` — kept byte-identical, both are the agent entry point
+
+---
+
+## Quick Start
+
+### Prerequisites
+
+```bash
+# Bun (package manager + runtime)
+curl -fsSL https://bun.sh/install | bash
+
+# Cloudflare CLI
+bun add -g wrangler
+wrangler login
+```
+
+### Option A — Automated setup (recommended)
 
 ```bash
 bun run scripts/first-time-setup.ts
 ```
 
-**What the setup script does:**
+The wizard creates your D1 database, R2 bucket, optional KV namespace, generates a `BETTER_AUTH_SECRET`, writes `wrangler.jsonc` + `.env`, runs migrations, and deploys. ~3 min end-to-end.
 
-1. **Verifies Wrangler Authentication** - Checks you're logged into Cloudflare CLI
-2. **Handles Multiple Accounts** - Prompts you to select an account if you have multiple
-3. **Creates Cloudflare Resources:**
-   - D1 Database (`{project-name}-db`)
-   - R2 Bucket (`{project-name}-bucket`)
-   - KV Namespace (optional)
-4. **Generates Secure Secrets** - Creates `BETTER_AUTH_SECRET` automatically
-5. **Creates Configuration Files:**
-   - `wrangler.jsonc` with your resource IDs
-   - `.env` with authentication secrets
-6. **Installs Dependencies** - Runs `bun install`
-7. **Runs Database Migrations** - Applies schema to local and remote databases
-8. **Deploys to Cloudflare** - Your app is live immediately!
+### Option B — Manual
 
-**Prerequisites:**
 ```bash
-# Install Wrangler CLI and login
-bun add -g wrangler
-wrangler login
+bun install                 # also runs cf-typegen + git hooks install
+bun run db:migrate:local    # apply migrations to local D1
+bun run dev                 # http://localhost:5173
 ```
 
-### Manual Installation
+### First-time agent setup
 
-If you prefer manual setup:
-
-```bash
-bun install
-```
-
-### Development
-
-Start the development server with HMR:
+If you want AI agents to work effectively in this repo, install the recommended Claude Code plugins:
 
 ```bash
-bun run dev
-```
-
-Your application will be available at `http://localhost:5173`.
-
-### Authentication Setup
-
-This project uses [Better Auth](https://better-auth.com/) for authentication. The authentication secret is stored in `.env` for local development.
-
-For production deployment, set the secret using Wrangler:
-
-```bash
-# Generate a new secret
-openssl rand -base64 32
-
-# Set the secret in Cloudflare
-wrangler secret put BETTER_AUTH_SECRET
-```
-
-The authentication API is available at `/api/auth/*`.
-
-### MCP Server Setup (Optional)
-
-This project includes optional Model Context Protocol (MCP) server integrations for enhanced AI capabilities in Cursor. See [`.cursor/MCP_SETUP.md`](.cursor/MCP_SETUP.md) for detailed setup instructions.
-
-**Quick setup:**
-```bash
-cp .cursor/mcp.template.json .cursor/mcp.json
-# Edit .cursor/mcp.json and add your API keys
-```
-
-### Claude Code Setup (Optional)
-
-This project uses [Claude Code plugins](https://github.com/SeanningTatum/claude-plugins) for AI-assisted development with project-specific rules, commands, and agents.
-
-**Install the plugins:**
-```bash
-# Add the marketplace
 /plugin marketplace add SeanningTatum/claude-plugins
-
-# Install plugins
 /plugin install cf-saas-stack
 /plugin install dev-workflows
 
-# Recommended: Cloudflare official skills (Workers, Durable Objects, Agents SDK, Wrangler, etc.)
+# Cloudflare official skills (Workers, Durable Objects, Agents SDK, Wrangler, perf)
 /plugin marketplace add cloudflare/skills
 /plugin install cloudflare
 ```
 
-- **cf-saas-stack** — Project rules (auth, database, i18n, routes, error handling, etc.) and commands (feature implementation, DB migrations, PR creation, etc.)
-- **dev-workflows** — Development workflow agents (testing, logging, architecture tracking, design validation, etc.)
-- **cloudflare** — Official Cloudflare platform skills for Workers, Durable Objects, Agents SDK, MCP servers, Wrangler, and web performance
+The repo works without these — they add reusable agents/commands that complement the project-local harness.
 
 ---
 
-## UI/UX Team Guide: Kitchen Sink
+## How To Work In This Repo
 
-The Kitchen Sink is a comprehensive showcase of all available UI components in this project. It's designed to help UI/UX team members explore, test, and understand the design system.
+### For humans
 
-### Accessing the Kitchen Sink
+Read [`CLAUDE.md`](CLAUDE.md) once. It points to everything else.
 
-1. Start the development server: `bun run dev`
-2. Navigate to: `http://localhost:5173/admin/kitchen-sink`
+### For agents
 
-### Available Component Categories
+You're working in a codebase with strict conventions. Skipping the brain will cost rework. Every non-trivial task has three phases:
 
-#### Layout Components
-| Component | Description | Use Case |
-|-----------|-------------|----------|
-| **Accordion** | Collapsible content sections | FAQs, settings panels |
-| **Collapsible** | Simple show/hide content | Expandable sections |
-| **AspectRatio** | Maintains aspect ratio for content | Images, videos, embeds |
-| **Empty State** | Placeholder for empty data | No results, empty lists |
+**1. Init — [`.brain/recipes/00-before-task.md`](.brain/recipes/00-before-task.md)**
+- Read [`CLAUDE.md`](CLAUDE.md) — entry point, five non-negotiables
+- Open the relevant `.brain/<folder>/index.md` and read every file its triggers match
+- For multi-session or >30min work: copy [`.brain/runs/_TEMPLATE.md`](.brain/runs/_TEMPLATE.md) → `.brain/runs/<date>-<slug>.md`
+- Capture a `bun run typecheck` + `bun run test` baseline so you can tell "pre-existing" from "I broke it"
 
-#### Form Components
-| Component | Description | Use Case |
-|-----------|-------------|----------|
-| **Button** | Primary action buttons | Submit, cancel, actions |
-| **ButtonGroup** | Grouped action buttons | Toolbars, segmented controls |
-| **Input** | Text input field | Forms, search |
-| **InputGroup** | Input with addons | Email with icon, currency |
-| **InputOTP** | One-time password input | Verification codes |
-| **Textarea** | Multi-line text input | Comments, descriptions |
-| **Select** | Dropdown selection | Single choice from list |
-| **NativeSelect** | Native HTML select | Simple dropdowns |
-| **Checkbox** | Boolean selection | Toggles, multi-select |
-| **RadioGroup** | Single selection from options | Exclusive choices |
-| **Switch** | Toggle switch | On/off settings |
-| **Slider** | Range selection | Volume, price range |
-| **Toggle** | Icon toggle button | Formatting buttons |
-| **ToggleGroup** | Grouped toggle buttons | Text formatting toolbar |
+**2. Work — pick the runbook**
+- Adding code → matching recipe in [`.brain/recipes/index.md`](.brain/recipes/index.md)
+- Refactor / bugfix → the layer's rule file in [`.brain/rules/index.md`](.brain/rules/index.md)
+- Feature work → existing memo in [`.brain/features/<slug>.md`](.brain/features/index.md), plus past attempts in [`.brain/runs/`](.brain/runs/)
 
-#### Feedback Components
-| Component | Description | Use Case |
-|-----------|-------------|----------|
-| **Alert** | Inline notification | Warnings, info messages |
-| **Progress** | Progress indicator | Loading, upload progress |
-| **Skeleton** | Loading placeholder | Content loading states |
-| **Spinner** | Loading spinner | Async operations |
-| **Toast** | Temporary notification | Success/error messages |
+**3. Verify — [`.brain/recipes/99-verify-done.md`](.brain/recipes/99-verify-done.md) (or `/verify-done`)**
+- typecheck + test + e2e (if cross-component) + build (if CF-touching) + manual UI smoke (if UI)
+- Brain coherence: every diffed path → owning brain doc updated
+- Five non-negotiables grep-clean
+- Close the run note if you opened one
 
-#### Data Display
-| Component | Description | Use Case |
-|-----------|-------------|----------|
-| **Avatar** | User profile image | User representation |
-| **Badge** | Status indicator | Tags, counts, status |
-| **Separator** | Visual divider | Section separation |
+The `/verify-done` slash command (in [`.claude/commands/verify-done.md`](.claude/commands/verify-done.md)) runs this automatically — invoke it before telling the user a task is done.
 
-#### Overlays & Navigation
-| Component | Description | Use Case |
-|-----------|-------------|----------|
-| **Dialog** | Modal window | Forms, confirmations |
-| **Drawer** | Slide-in panel | Mobile menus, details |
-| **Sheet** | Side panel | Settings, filters |
-| **AlertDialog** | Confirmation dialog | Destructive actions |
-| **Popover** | Floating content | Rich tooltips |
-| **Tooltip** | Simple hover info | Icon explanations |
-| **HoverCard** | Preview on hover | User profiles |
-| **ContextMenu** | Right-click menu | Actions menu |
-| **DropdownMenu** | Click dropdown | User menu, actions |
-| **Menubar** | Application menu | File, Edit, View menus |
-| **Breadcrumb** | Navigation path | Page hierarchy |
-| **Pagination** | Page navigation | Lists, tables |
-| **Tabs** | Tabbed content | Organized sections |
-| **Table** | Data table | Data display |
-| **Calendar** | Date picker | Date selection |
-| **Carousel** | Sliding content | Image galleries |
-| **Command** | Command palette | Search, shortcuts |
-| **ScrollArea** | Custom scrollbar | Scrollable containers |
+**The five non-negotiables** (also in [`.brain/codebase/effect-ts.md`](.brain/codebase/effect-ts.md)):
 
-### Using the Kitchen Sink for Design Review
-
-1. **Component Discovery**: Browse all available components to understand what's already built
-2. **Consistency Check**: Ensure your designs use existing components before requesting new ones
-3. **State Testing**: Interact with components to see hover, focus, and active states
-4. **Responsive Testing**: Resize the browser to see how components adapt
-5. **Dark Mode**: Toggle dark mode to verify component appearance (if implemented)
+1. **Effect TS by default.** No `throw`. No `try/catch` outside `Effect.tryPromise`.
+2. **Effect Schema for validation.** No Zod.
+3. **Tagged errors only.** All in `app/models/errors/`. Map every one in `app/lib/effect-trpc.ts`.
+4. **Unit test every helper, repository, and service.** See [`.brain/codebase/testing.md`](.brain/codebase/testing.md).
+5. **Cloudflare Workers, not Node.** Bindings via the `CloudflareEnv` Tag. Never `process.env`.
 
 ---
 
-## Cursor Click-to-Edit Tutorial
+## The `.brain/` directory
 
-Cursor IDE has a powerful feature that allows you to click on any element in your running application and jump directly to its source code. This is incredibly useful for UI/UX designers and developers working together.
+Retrieval-over-recall. Each subdirectory has an `index.md` that signals "read me when X". Don't open files at random — start at the index.
 
-### How to Use Click-to-Edit
+```
+.brain/
+├── high-level-architecture/   System layers, data flow, security, integrations
+├── codebase/                  Effect TS programming model, helpers, tests, i18n, tRPC API
+├── rules/                     7 layer-aligned rules (frontend / cloudflare / repository /
+│                               services / routes / library / errors)
+├── recipes/                   Paste-able runbooks (00-before-task / 99-verify-done bookends + add-*)
+├── runs/                      Per-task continuity log (multi-session / post-compaction recovery)
+├── features/                  Per-feature memory — purpose, persistence, dependencies
+├── transcripts/               Meeting notes / decision logs (the "why")
+├── emails/                    Stakeholder correspondence
+└── CHANGELOG.md               Architectural + brain shifts (not a code changelog)
+```
 
-#### Step 1: Start the Development Server
+### When to read what
+
+| Task | Open |
+|------|------|
+| Adding any code | [`recipes/index.md`](.brain/recipes/index.md) → pick a recipe |
+| Editing UI / forms / Tailwind | [`rules/frontend.md`](.brain/rules/frontend.md) |
+| Editing a repository | [`rules/repository.md`](.brain/rules/repository.md) |
+| Editing a service | [`rules/services.md`](.brain/rules/services.md) |
+| Editing a tRPC route or page loader | [`rules/routes.md`](.brain/rules/routes.md) |
+| Editing wrangler / bindings / Workflows | [`rules/cloudflare.md`](.brain/rules/cloudflare.md) |
+| Adding a tagged error | [`rules/errors.md`](.brain/rules/errors.md) + [`recipes/add-tagged-error.md`](.brain/recipes/add-tagged-error.md) |
+| Helpers / Effect Schema / tests | [`rules/library.md`](.brain/rules/library.md) |
+| Designing a feature | [`features/index.md`](.brain/features/index.md) → `_TEMPLATE.md` → existing examples |
+| Tracing a constraint with no obvious "why" | [`transcripts/`](.brain/transcripts/) and [`emails/`](.brain/emails/) |
+
+---
+
+## Recipes — paste-able runbooks
+
+Each recipe is a deterministic checklist with code snippets, brain-doc updates, and a "definition of done". Designed for one-shot agent execution.
+
+| Recipe | When |
+|--------|------|
+| [`00-before-task.md`](.brain/recipes/00-before-task.md) | **Bookend.** Run at the start of every non-trivial task |
+| [`99-verify-done.md`](.brain/recipes/99-verify-done.md) | **Bookend.** Run before declaring a task done. Also `/verify-done` |
+| [`add-trpc-endpoint.md`](.brain/recipes/add-trpc-endpoint.md) | New tRPC procedure (query/mutation) |
+| [`add-db-table.md`](.brain/recipes/add-db-table.md) | New D1 table + Drizzle schema + repository |
+| [`add-tagged-error.md`](.brain/recipes/add-tagged-error.md) | New domain error + `tagToTRPC` mapping |
+| [`add-cf-binding.md`](.brain/recipes/add-cf-binding.md) | New Cloudflare binding (KV, DO, Queue, Vectorize, etc.) |
+| [`add-service.md`](.brain/recipes/add-service.md) | New Effect service (external client, lifecycle-bearing) |
+| [`add-route.md`](.brain/recipes/add-route.md) | New React Router page (loader / action / UI / i18n) |
+| [`add-feature.md`](.brain/recipes/add-feature.md) | End-to-end feature combining the above |
+
+[`recipes/index.md`](.brain/recipes/index.md) also has decision trees (e.g. "tRPC vs Workflow vs Queue?", "D1 vs R2 vs KV?") to disambiguate before you start.
+
+---
+
+## Guardrails
+
+These run automatically — you do not need to remember them.
+
+### Pre-commit gate ([`.githooks/pre-commit`](.githooks/pre-commit))
+
+Triggered on `git commit`. Skips entirely if no `.ts/.tsx/.js/.jsx` files are staged. Otherwise:
+
 ```bash
-bun run dev
+bun run typecheck     # cf-typegen + react-router typegen + tsc -b
+bun run test          # vitest run (123+ unit tests)
 ```
 
-#### Step 2: Open in Cursor's Browser
-Instead of using Chrome/Safari, use Cursor's built-in browser:
-1. In Cursor, open the Command Palette (`Cmd+Shift+P` on Mac, `Ctrl+Shift+P` on Windows/Linux)
-2. Type "Simple Browser: Open" and select it
-3. Enter `http://localhost:5173`
+Auto-installed via `postinstall` (sets `core.hooksPath = .githooks`). Re-install manually with `bun run hooks:install`. Bypass for an emergency commit:
 
-#### Step 3: Enable Click-to-Source
-1. In the Simple Browser panel, look for the inspection/click icon in the toolbar
-2. Click it to enable "click to source" mode
-3. Now click on any UI element in your app
-
-#### Step 4: Jump to Component Code
-When you click on an element:
-- Cursor will automatically open the file containing that component
-- Your cursor will be positioned at the exact line where that element is defined
-- You can immediately start editing!
-
-### Practical Examples for UI/UX Team
-
-#### Example 1: Changing Button Text
-1. Navigate to the Kitchen Sink page
-2. Enable click-to-source mode
-3. Click on any "Default" button
-4. Cursor opens `kitchen-sink.tsx` at the button definition
-5. Change `<Button>Default</Button>` to `<Button>Primary Action</Button>`
-6. Save - see the change instantly with HMR!
-
-#### Example 2: Modifying Component Styles
-1. Click on a Card component
-2. Cursor opens the card in `kitchen-sink.tsx`
-3. Add or modify Tailwind classes directly
-4. Example: Add `className="shadow-lg"` to increase shadow
-
-#### Example 3: Finding Reusable Components
-1. Click on an element you want to reuse
-2. Look at the import statement at the top of the file
-3. Example: `import { Button } from "@/components/ui/button"`
-4. Navigate to that file to see all available variants and props
-
-### Tips for UI/UX Collaboration
-
-1. **Point and Discuss**: During screen shares, use click-to-source to show exactly which component you're discussing
-
-2. **Quick Prototyping**: UI designers can click elements and make small tweaks to test ideas
-
-3. **Component Discovery**: Click on elements you like to find their source and reuse them
-
-4. **Style Debugging**: If something looks wrong, click it to find where the styles are defined
-
-5. **Variant Exploration**: After clicking a component, check its source file for available `variant` props
-
-### Common Component Customizations
-
-#### Button Variants
-```tsx
-<Button variant="default">Default</Button>
-<Button variant="secondary">Secondary</Button>
-<Button variant="outline">Outline</Button>
-<Button variant="ghost">Ghost</Button>
-<Button variant="destructive">Destructive</Button>
-```
-
-#### Badge Variants
-```tsx
-<Badge>Default</Badge>
-<Badge variant="secondary">Secondary</Badge>
-<Badge variant="outline">Outline</Badge>
-<Badge variant="destructive">Destructive</Badge>
-```
-
-#### Alert Variants
-```tsx
-<Alert>Default info alert</Alert>
-<Alert variant="destructive">Error alert</Alert>
-```
-
-### Working with the Design System
-
-All UI components are located in `app/components/ui/`. Each file exports a component that follows these patterns:
-
-- **Consistent API**: Components use similar prop patterns (`variant`, `size`, etc.)
-- **Tailwind Styling**: All styles use Tailwind CSS classes
-- **Radix Primitives**: Many components are built on accessible Radix UI primitives
-- **shadcn/ui Based**: Components follow the shadcn/ui design system
-
-To add new components:
 ```bash
-bunx shadcn@latest add [component-name]
+SKIP_HOOKS=1 git commit -m "..."
+```
+
+### Brain reminder ([`.claude/hooks/brain-reminder.sh`](.claude/hooks/brain-reminder.sh))
+
+Fires from Claude Code's `PreToolUse` hook on `git commit*`. Looks at staged paths and prints which `.brain/` docs likely need updating. Cheap shell script — no LLM call, never blocks.
+
+Example output:
+
+```
+🧠 Brain-update reminder (commit not blocked):
+  • app/db/schema.ts → .brain/high-level-architecture/data-models.md + .brain/codebase/api.md
+  • app/repositories/ → .brain/rules/repository.md
+```
+
+### CLAUDE.md ↔ AGENTS.md sync
+
+Both files are byte-identical by design — `CLAUDE.md` for Claude Code, `AGENTS.md` for AGENTS-spec tools (Codex, Aider). When you edit one, mirror to the other:
+
+```bash
+cp CLAUDE.md AGENTS.md
+```
+
+(There's no CI check yet — that's tracked.)
+
+---
+
+## Project layout
+
+```
+app/
+├── auth/             Better Auth server config + client
+├── components/       UI — shadcn primitives in ui/, feature components alongside
+├── db/               Drizzle schema + connection
+├── hooks/            React hooks
+├── i18n/             SSR + client i18next setup, types
+├── lib/              Helpers — schemas/, logger, effect-trpc, effect-utils
+├── locales/en/       Translation JSON files (one per namespace)
+├── models/errors/    Tagged error classes
+├── repositories/     Drizzle-backed Effect.Service repositories
+├── routes/           React Router v7 file-based routes
+├── services/         Effect Tag/Layer services (Database, Bucket, AuthApi, etc.)
+├── trpc/             tRPC router + procedures + middleware
+├── routes.ts         Route config
+├── runtime.ts        ManagedRuntime composition (services + repos)
+├── root.tsx          Root layout
+└── entry.{client,server}.tsx
+.brain/               Agent-readable docs (see above)
+.githooks/            Git hooks (pre-commit gate)
+.claude/              Claude Code config — settings + hooks
+drizzle/              SQL migrations
+e2e/                  Playwright tests
+public/               Static assets
+scripts/              Setup / teardown / seed scripts
+workers/app.ts        Cloudflare Workers entrypoint
+workflows/            Cloudflare Workflow definitions
 ```
 
 ---
 
-## Drizzle Studio: Database Management
+## Commands
 
-Drizzle Studio is a visual database management tool that lets you view, edit, and manage your database directly. This is useful for development tasks like promoting users to admin.
+```bash
+bun run dev                   # Dev server (auto-runs local DB migrations) → :5173
+bun run build                 # Production build
+bun run deploy                # Build + deploy to Cloudflare Workers
+bun run preview               # Build + serve via wrangler
 
-### Starting Drizzle Studio
+bun run typecheck             # cf-typegen + react-router typegen + tsc -b
+bun run test                  # Vitest (one-shot)
+bun run test:watch            # Vitest watch
+bun run test:e2e              # Playwright
+bun run test:e2e:ui           # Playwright UI mode
+bun run test:e2e:report       # Open last Playwright report
+
+bun run db:generate           # Generate Drizzle migration from schema
+bun run db:migrate:local      # Apply migrations to local D1
+bun run db:migrate:remote     # Apply migrations to remote D1
+bun run db:studio             # Drizzle Studio (visual DB editor)
+
+bun run cf-typegen            # Regenerate worker-configuration.d.ts
+bun run hooks:install         # Re-install pre-commit gate
+bun run setup                 # First-time wizard
+bun run teardown              # Tear down Cloudflare resources
+```
+
+---
+
+## Authentication
+
+[Better Auth](https://better-auth.com/) 1.4 with the Drizzle adapter and `admin()` plugin for RBAC.
+
+- Auth handler: `/api/auth/*` ([`app/routes/api/auth.$.ts`](app/routes/api/auth.$.ts))
+- Server config: [`app/auth/server.ts`](app/auth/server.ts)
+- Client: [`app/auth/client.ts`](app/auth/client.ts) (uses `adminClient()` plugin)
+- Session reading in loaders: `context.auth.api.getSession({ headers: request.headers })`
+- Session reading in Effects: yield the `Session` Tag from [`app/services/session.ts`](app/services/session.ts)
+
+**RBAC — admin role enforcement is two-layered:**
+
+- **Page-level** — admin route loaders redirect non-admins (see [`app/routes/admin/_layout.tsx`](app/routes/admin/_layout.tsx))
+- **Procedure-level** — `adminProcedure` middleware in [`app/trpc/index.ts`](app/trpc/index.ts) rejects non-admins server-side
+
+Never trust the page guard alone — UI hiding doesn't equal authorization.
+
+**Set the production secret:**
+
+```bash
+openssl rand -base64 32
+wrangler secret put BETTER_AUTH_SECRET
+```
+
+**Promote a user to admin** — Drizzle Studio:
 
 ```bash
 bun run db:studio
+# Open user table → edit `role` cell → change "user" → "admin" → save
 ```
 
-This will start Drizzle Studio and open it in your browser (typically at `https://local.drizzle.studio`).
-
-### Tutorial: Promoting a User to Admin
-
-Follow these steps to upgrade a user account to admin role:
-
-#### Step 1: Start Drizzle Studio
-```bash
-bun run db:studio
-```
-
-#### Step 2: Navigate to the User Table
-1. In the left sidebar, click on the **user** table
-2. You'll see a list of all registered users
-
-#### Step 3: Find the User
-1. Look through the table to find the user you want to promote
-2. You can identify users by their `email` or `name` columns
-3. Use the search/filter if you have many users
-
-#### Step 4: Edit the User's Role
-1. Click on the row of the user you want to edit
-2. Find the `role` column (it will show `user` for regular users)
-3. Click on the cell to edit it
-4. Change the value from `user` to `admin`
-5. Press Enter or click away to confirm
-
-#### Step 5: Save Changes
-1. Click the **Save Changes** button (or press `Cmd+S` / `Ctrl+S`)
-2. The change is immediately applied to your local database
-
-### User Table Schema Reference
-
-| Column | Type | Description |
-|--------|------|-------------|
-| `id` | text | Unique user identifier (primary key) |
-| `name` | text | User's display name |
-| `email` | text | User's email address (unique) |
-| `emailVerified` | boolean | Whether email has been verified |
-| `image` | text | Profile image URL |
-| `role` | text | User role: `user` or `admin` |
-| `banned` | boolean | Whether user is banned |
-| `banReason` | text | Reason for ban (if banned) |
-| `banExpires` | timestamp | When ban expires (if temporary) |
-| `createdAt` | timestamp | Account creation date |
-| `updatedAt` | timestamp | Last update date |
-
-### Common Database Tasks
-
-#### View All Admins
-1. Open the `user` table
-2. Click the filter icon
-3. Add filter: `role` equals `admin`
-
-#### Ban a User
-1. Find the user in the `user` table
-2. Set `banned` to `true` (or `1`)
-3. Optionally set `banReason` to explain why
-4. Optionally set `banExpires` for a temporary ban
-5. Save changes
-
-#### Delete a User
-1. Find the user in the `user` table
-2. Click the row to select it
-3. Click the delete button (trash icon)
-4. Confirm the deletion
-
-> **Note:** Deleting a user will cascade delete their sessions and accounts due to foreign key constraints.
-
-### Working with Remote Database
-
-By default, Drizzle Studio connects to your local D1 database. To work with your production database:
-
-1. First, ensure you have the remote database ID in your `wrangler.jsonc`
-2. Use Wrangler to interact with remote data:
+Or remote:
 
 ```bash
-# Execute SQL on remote database
-bunx wrangler d1 execute YOUR_DB_NAME --remote --command "SELECT * FROM user WHERE role = 'admin'"
-
-# Update a user to admin on remote
-bunx wrangler d1 execute YOUR_DB_NAME --remote --command "UPDATE user SET role = 'admin' WHERE email = 'user@example.com'"
+bunx wrangler d1 execute YOUR_DB_NAME --remote \
+  --command "UPDATE user SET role = 'admin' WHERE email = 'user@example.com'"
 ```
 
-### Alternative: Seed Script for Test Admin
-
-For development, you can also use the seed script to create a test admin:
+Or seed a test admin locally:
 
 ```bash
 bun run scripts/seed-test-admin.ts
 ```
 
-This creates a pre-configured admin account for testing purposes.
+---
+
+## Database
+
+D1 (SQLite) accessed through Drizzle. Schema lives in [`app/db/schema.ts`](app/db/schema.ts) — single file at current scale.
+
+**Workflow for schema changes:**
+
+```bash
+# 1. Edit app/db/schema.ts
+# 2. Generate migration
+bun run db:generate
+# 3. Review SQL in drizzle/<NNNN>_<name>.sql
+# 4. Apply locally
+bun run db:migrate:local
+# 5. After PR merge, apply to prod
+bun run db:migrate:remote
+```
+
+> Use SQL defaults for timestamps (`unixepoch('subsecond') * 1000`), not JS-side `new Date()`. See [`recipes/add-db-table.md`](.brain/recipes/add-db-table.md).
 
 ---
 
-## Previewing the Production Build
+## UI / Design system
 
-Preview the production build locally:
+ShadCN primitives in [`app/components/ui/`](app/components/ui/). Compose into feature components elsewhere. Tailwind v4 with oklch CSS variables in [`app/app.css`](app/app.css).
 
-```bash
-bun run preview
-```
-
-## Building for Production
-
-Create a production build:
+Add a shadcn component:
 
 ```bash
-bun run build
+bunx shadcn@latest add <component-name>
 ```
+
+**Forms — always Effect Schema + `effectResolver`** (no Zod resolver):
+
+```ts
+import { effectResolver } from "@hookform/resolvers/effect-ts";
+import { LoginSchema, type LoginInput } from "@/lib/schemas/auth";
+
+const form = useForm<LoginInput>({
+  resolver: effectResolver(LoginSchema),
+});
+```
+
+**Dark mode** is wired via `next-themes` (`attribute="class"`, `defaultTheme="system"`).
+
+**i18n** — every route declares its namespaces and uses the matching `useTranslation()`:
+
+```ts
+export const handle = { i18n: ["dashboard", "common"] };
+// Inside the component:
+const { t } = useTranslation("dashboard");
+```
+
+Strings live in [`app/locales/en/<namespace>.json`](app/locales/en/). Types in [`app/i18n/i18n.d.ts`](app/i18n/i18n.d.ts).
+
+---
 
 ## Deployment
 
-Deployment is done using the Wrangler CLI.
-
-To build and deploy directly to production:
-
 ```bash
-bun run deploy
+bun run deploy                    # Build + deploy to production
+bunx wrangler versions upload     # Deploy a preview URL
+bunx wrangler versions deploy     # Promote a preview to production
 ```
 
-To deploy a preview URL:
-
-```bash
-bunx wrangler versions upload
-```
-
-You can then promote a version to production after verification or roll it out progressively.
-
-```bash
-bunx wrangler versions deploy
-```
-
-## Styling
-
-This template comes with [Tailwind CSS](https://tailwindcss.com/) already configured for a simple default starting experience. You can use whatever CSS framework you prefer.
+Observability is enabled in [`wrangler.jsonc`](wrangler.jsonc) (logs, 100% head sampling). Smart placement is on.
 
 ---
 
-Built with ❤️ using React Router.
+## Editor integrations
+
+- **VS Code / Cursor** — uses the local TypeScript server. The `typescript-lsp` Claude plugin (auto-enabled in `.claude/settings.json`) gives agents diagnostics inline.
+- **MCP servers** — optional. If you want richer tool access (Tavily search, Playwright control, etc.), set them up via Claude Code's `/plugin` system instead of repo-local config.
+
+---
+
+## Contributing
+
+1. Branch off `main`
+2. Read the relevant `.brain/recipes/` runbook before starting
+3. Pre-commit gate runs typecheck + tests automatically
+4. Update the `.brain/` doc that owns your change (the brain-reminder hook will tell you which)
+5. Append a one-line entry to [`.brain/CHANGELOG.md`](.brain/CHANGELOG.md)
+6. Open the PR
+
+When in doubt: read first, code second.

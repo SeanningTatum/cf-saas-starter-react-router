@@ -22,4 +22,13 @@ worker-configuration.d.ts
 /playwright-report/
 /playwright/.cache/
 /e2e/**/*.png
-wrangler.jsonc
+
+# Claude Code (per-machine config + secrets)
+.claude/settings.local.json
+.claude/.credentials*
+.claude/state/
+.claude/cache/
+
+# Editor agent caches
+.cursor/
+

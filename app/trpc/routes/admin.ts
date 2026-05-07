@@ -1,196 +1,185 @@
-import { z } from "zod/v4";
+import { Effect, Schema } from "effect";
 import { adminProcedure, createTRPCRouter } from "..";
-import { TRPCError } from "@trpc/server";
-import * as userRepository from "@/repositories/user";
+import { runProcedure } from "@/lib/effect-trpc";
+import { UserRepository } from "@/repositories/user";
+import { ValidationError } from "@/models/errors/repository";
+import {
+  GetUsersInput,
+  GetUserInput,
+  UpdateUserInput,
+  BanUserInput,
+  UnbanUserInput,
+  DeleteUserInput,
+  BulkBanUsersInput,
+  BulkDeleteUsersInput,
+  BulkUpdateUserRolesInput,
+} from "@/lib/schemas/user";
 
 export const adminRouter = createTRPCRouter({
   getUsers: adminProcedure
-    .input(
-      z.object({
-        page: z.number().int().min(0).default(0),
-        limit: z.number().int().min(1).max(100).default(10),
-        search: z.string().optional(),
-        role: z.enum(["user", "admin"]).optional(),
-        status: z.enum(["verified", "unverified", "banned"]).optional(),
-      })
-    )
-    .query(async ({ ctx, input }) => {
-      return await userRepository.getUsers(ctx.db, input);
-    }),
+    .input(Schema.standardSchemaV1(GetUsersInput))
+    .query(({ ctx, input }) =>
+      runProcedure(
+        ctx.runtime,
+        Effect.gen(function* () {
+          const repo = yield* UserRepository;
+          return yield* repo.getUsers(input);
+        })
+      )
+    ),
 
   getUser: adminProcedure
-    .input(
-      z.object({
-        userId: z.string(),
-      })
-    )
-    .query(async ({ ctx, input }) => {
-      return await userRepository.getUser(ctx.db, input);
-    }),
+    .input(Schema.standardSchemaV1(GetUserInput))
+    .query(({ ctx, input }) =>
+      runProcedure(
+        ctx.runtime,
+        Effect.gen(function* () {
+          const repo = yield* UserRepository;
+          return yield* repo.getUser(input);
+        })
+      )
+    ),
+
   updateUser: adminProcedure
-    .input(
-      z.object({
-        userId: z.string(),
-        data: z.object({
-          name: z.string().optional(),
-          email: z.string().email().optional(),
-          role: z.enum(["user", "admin"]).optional(),
-          banned: z.boolean().optional(),
-          banReason: z.string().optional(),
-          banExpires: z.date().optional(),
-          verified: z.boolean().optional(),
-        }),
-      })
-    )
-    .mutation(async ({ ctx, input }) => {
-      return await userRepository.updateUser(ctx.db, {
-        userId: input.userId,
-        currentUserId: ctx.auth.user.id,
-        data: input.data,
-      });
-    }),
+    .input(Schema.standardSchemaV1(UpdateUserInput))
+    .mutation(({ ctx, input }) =>
+      runProcedure(
+        ctx.runtime,
+        Effect.gen(function* () {
+          const repo = yield* UserRepository;
+          return yield* repo.updateUser({
+            ...input,
+            currentUserId: ctx.auth.user.id,
+          });
+        })
+      )
+    ),
 
   banUser: adminProcedure
-    .input(
-      z.object({
-        userId: z.string(),
-        reason: z.string().optional(),
-        expiresAt: z.date().optional(),
-      })
-    )
-    .mutation(async ({ ctx, input }) => {
-      return await userRepository.banUser(ctx.db, {
-        userId: input.userId,
-        currentUserId: ctx.auth.user.id,
-        reason: input.reason,
-        expiresAt: input.expiresAt,
-      });
-    }),
+    .input(Schema.standardSchemaV1(BanUserInput))
+    .mutation(({ ctx, input }) =>
+      runProcedure(
+        ctx.runtime,
+        Effect.gen(function* () {
+          const repo = yield* UserRepository;
+          return yield* repo.banUser({
+            ...input,
+            currentUserId: ctx.auth.user.id,
+          });
+        })
+      )
+    ),
 
   unbanUser: adminProcedure
-    .input(
-      z.object({
-        userId: z.string(),
-      })
-    )
-    .mutation(async ({ ctx, input }) => {
-      return await userRepository.unbanUser(ctx.db, input);
-    }),
+    .input(Schema.standardSchemaV1(UnbanUserInput))
+    .mutation(({ ctx, input }) =>
+      runProcedure(
+        ctx.runtime,
+        Effect.gen(function* () {
+          const repo = yield* UserRepository;
+          return yield* repo.unbanUser(input);
+        })
+      )
+    ),
+
   deleteUser: adminProcedure
-    .input(
-      z.object({
-        userId: z.string(),
-      })
-    )
-    .mutation(async ({ ctx, input }) => {
-      return await userRepository.deleteUser(ctx.db, {
-        userId: input.userId,
-        currentUserId: ctx.auth.user.id,
-      });
-    }),
+    .input(Schema.standardSchemaV1(DeleteUserInput))
+    .mutation(({ ctx, input }) =>
+      runProcedure(
+        ctx.runtime,
+        Effect.gen(function* () {
+          const repo = yield* UserRepository;
+          return yield* repo.deleteUser({
+            ...input,
+            currentUserId: ctx.auth.user.id,
+          });
+        })
+      )
+    ),
+
   bulkBanUsers: adminProcedure
-    .input(
-      z.object({
-        userIds: z.array(z.string()).min(1),
-        reason: z.string().optional(),
-        expiresAt: z.date().optional(),
-      })
-    )
-    .mutation(async ({ ctx, input }) => {
-      // Filter out protected users (admins and self)
-      const { validUserIds, skippedCount } =
-        await userRepository.filterProtectedUsers(
-          ctx.db,
-          input.userIds,
-          ctx.auth.user.id
-        );
-
-      if (validUserIds.length === 0) {
-        throw new TRPCError({
-          code: "BAD_REQUEST",
-          message: "No valid users to ban (all selected users are protected)",
-        });
-      }
-
-      const affectedCount = await userRepository.bulkBanUsers(ctx.db, {
-        userIds: validUserIds,
-        reason: input.reason,
-        expiresAt: input.expiresAt,
-      });
-
-      return {
-        success: true,
-        affectedCount,
-        skippedCount,
-      };
-    }),
+    .input(Schema.standardSchemaV1(BulkBanUsersInput))
+    .mutation(({ ctx, input }) =>
+      runProcedure(
+        ctx.runtime,
+        Effect.gen(function* () {
+          const repo = yield* UserRepository;
+          const { validUserIds, skippedCount } = yield* repo.filterProtectedUsers(
+            { userIds: input.userIds, currentUserId: ctx.auth.user.id }
+          );
+          if (validUserIds.length === 0) {
+            return yield* Effect.fail(
+              new ValidationError({
+                entity: "user",
+                field: "userIds",
+                message: "No valid users to ban (all selected users are protected)",
+              })
+            );
+          }
+          const affectedCount = yield* repo.bulkBanUsers({
+            userIds: validUserIds,
+            reason: input.reason,
+            expiresAt: input.expiresAt,
+          });
+          return { success: true, affectedCount, skippedCount } as const;
+        })
+      )
+    ),
 
   bulkDeleteUsers: adminProcedure
-    .input(
-      z.object({
-        userIds: z.array(z.string()).min(1),
-      })
-    )
-    .mutation(async ({ ctx, input }) => {
-      // Filter out protected users (admins and self)
-      const { validUserIds, skippedCount } =
-        await userRepository.filterProtectedUsers(
-          ctx.db,
-          input.userIds,
-          ctx.auth.user.id
-        );
+    .input(Schema.standardSchemaV1(BulkDeleteUsersInput))
+    .mutation(({ ctx, input }) =>
+      runProcedure(
+        ctx.runtime,
+        Effect.gen(function* () {
+          const repo = yield* UserRepository;
+          const { validUserIds, skippedCount } = yield* repo.filterProtectedUsers(
+            { userIds: input.userIds, currentUserId: ctx.auth.user.id }
+          );
+          if (validUserIds.length === 0) {
+            return yield* Effect.fail(
+              new ValidationError({
+                entity: "user",
+                field: "userIds",
+                message:
+                  "No valid users to delete (all selected users are protected)",
+              })
+            );
+          }
+          const affectedCount = yield* repo.bulkDeleteUsers({
+            userIds: validUserIds,
+          });
+          return { success: true, affectedCount, skippedCount } as const;
+        })
+      )
+    ),
 
-      if (validUserIds.length === 0) {
-        throw new TRPCError({
-          code: "BAD_REQUEST",
-          message:
-            "No valid users to delete (all selected users are protected)",
-        });
-      }
-
-      const affectedCount = await userRepository.bulkDeleteUsers(ctx.db, {
-        userIds: validUserIds,
-      });
-
-      return {
-        success: true,
-        affectedCount,
-        skippedCount,
-      };
-    }),
   bulkUpdateUserRoles: adminProcedure
-    .input(
-      z.object({
-        userIds: z.array(z.string()).min(1),
-        role: z.enum(["user", "admin"]),
-      })
-    )
-    .mutation(async ({ ctx, input }) => {
-      // Filter out protected users (admins and self)
-      const { validUserIds, skippedCount } =
-        await userRepository.filterProtectedUsers(
-          ctx.db,
-          input.userIds,
-          ctx.auth.user.id
-        );
-
-      if (validUserIds.length === 0) {
-        throw new TRPCError({
-          code: "BAD_REQUEST",
-          message:
-            "No valid users to update (all selected users are protected)",
-        });
-      }
-
-      const affectedCount = await userRepository.bulkUpdateUserRoles(ctx.db, {
-        userIds: validUserIds,
-        role: input.role,
-      });
-
-      return {
-        success: true,
-        affectedCount,
-        skippedCount,
-      };
-    }),
+    .input(Schema.standardSchemaV1(BulkUpdateUserRolesInput))
+    .mutation(({ ctx, input }) =>
+      runProcedure(
+        ctx.runtime,
+        Effect.gen(function* () {
+          const repo = yield* UserRepository;
+          const { validUserIds, skippedCount } = yield* repo.filterProtectedUsers(
+            { userIds: input.userIds, currentUserId: ctx.auth.user.id }
+          );
+          if (validUserIds.length === 0) {
+            return yield* Effect.fail(
+              new ValidationError({
+                entity: "user",
+                field: "userIds",
+                message:
+                  "No valid users to update (all selected users are protected)",
+              })
+            );
+          }
+          const affectedCount = yield* repo.bulkUpdateUserRoles({
+            userIds: validUserIds,
+            role: input.role,
+          });
+          return { success: true, affectedCount, skippedCount } as const;
+        })
+      )
+    ),
 });

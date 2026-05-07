@@ -10,9 +10,30 @@
     "typescript-lsp@claude-plugins-official": true,
     "github@claude-plugins-official": true,
     "auth-skills@better-auth-agent-skills": true,
-    "superpowers@claude-plugins-official": true,
-    "claude-md-management@claude-plugins-official": true,
-    "cf-saas-stack@SeanningTatum/claude-plugins": true,
-    "dev-workflows@SeanningTatum/claude-plugins": true
+    "claude-md-management@claude-plugins-official": true
+  },
+  "permissions": {
+    "deny": [
+      "Bash(rm -rf:*)", "Bash(rm -fr:*)",
+      "Bash(git push --force:*)", "Bash(git push -f:*)",
+      "Bash(git reset --hard:*)",
+      "Bash(git clean -fd:*)", "Bash(git clean -fdx:*)"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "if": "Bash(git commit*)",
+            "timeout": 5,
+            "statusMessage": "Checking which .brain/ docs to update",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/brain-reminder.sh\" 2>&1 || true"
+          }
+        ]
+      }
+    ]
   }
 }

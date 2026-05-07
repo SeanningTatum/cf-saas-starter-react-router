@@ -1,9 +1,9 @@
-/**
- * Centralized error exports for the application
- */
-
-// Generic repository errors for all repositories
 export * from "./repository";
-
-// Bucket errors (specific to R2 bucket operations)
 export * from "./bucket";
+export * from "./workflow";
+
+import type { RepositoryError } from "./repository";
+import type { BucketError } from "./bucket";
+import type { WorkflowError } from "./workflow";
+
+export type AppError = RepositoryError | BucketError | WorkflowError;

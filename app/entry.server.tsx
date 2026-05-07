@@ -7,6 +7,7 @@ import { I18nextProvider, initReactI18next } from "react-i18next";
 import { i18nServer } from "./i18n/i18n.server";
 import { supportedLngs, fallbackLng, defaultNS } from "./i18n";
 import resourcesToBackend from "i18next-resources-to-backend";
+import { loggers } from "@/lib/logger";
 
 export default async function handleRequest(
   request: Request,
@@ -46,7 +47,10 @@ export default async function handleRequest(
       onError(error: unknown) {
         responseStatusCode = 500;
         if (shellRendered) {
-          console.error(error);
+          loggers.server.error(
+            { err: error instanceof Error ? error.message : String(error) },
+            "SSR render error"
+          );
         }
       },
     }

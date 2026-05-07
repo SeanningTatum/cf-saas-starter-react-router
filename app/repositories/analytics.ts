@@ -1,152 +1,174 @@
+import { Effect } from "effect";
 import { sql, count, eq, gte, lte, and } from "drizzle-orm";
-import type { Context } from "@/trpc";
 import { user } from "@/db/schema";
+import { Database } from "@/services/database";
+import { QueryError } from "@/models/errors/repository";
+import type {
+  DateRangeInput,
+  GetRecentSignupsCountInput,
+} from "@/lib/schemas/analytics";
 
-type Database = Context["db"];
+export class AnalyticsRepository extends Effect.Service<AnalyticsRepository>()(
+  "app/AnalyticsRepository",
+  {
+    effect: Effect.gen(function* () {
+      const { db } = yield* Database;
 
-export interface DateRangeInput {
-  startDate: Date;
-  endDate: Date;
-}
+      const getUserGrowth = (input: DateRangeInput) =>
+        Effect.tryPromise({
+          try: () =>
+            db
+              .select({
+                date: sql<string>`date(${user.createdAt} / 1000, 'unixepoch')`,
+                count: count(),
+              })
+              .from(user)
+              .where(
+                and(
+                  gte(user.createdAt, input.startDate),
+                  lte(user.createdAt, input.endDate)
+                )
+              )
+              .groupBy(sql`date(${user.createdAt} / 1000, 'unixepoch')`)
+              .orderBy(sql`date(${user.createdAt} / 1000, 'unixepoch')`),
+          catch: (cause) =>
+            new QueryError({ entity: "user_growth", cause }),
+        });
 
-/**
- * Get user growth data grouped by day
- */
-export async function getUserGrowth(db: Database, input: DateRangeInput) {
-  try {
-    return await db
-      .select({
-        date: sql<string>`date(${user.createdAt} / 1000, 'unixepoch')`,
-        count: count(),
-      })
-      .from(user)
-      .where(
-        and(
-          gte(user.createdAt, input.startDate),
-          lte(user.createdAt, input.endDate)
-        )
-      )
-      .groupBy(sql`date(${user.createdAt} / 1000, 'unixepoch')`)
-      .orderBy(sql`date(${user.createdAt} / 1000, 'unixepoch')`);
-  } catch (error) {
-    console.error("Failed to get user growth:", error);
-    return [];
+      const getUserStats = Effect.gen(function* () {
+        const [totalResult, verifiedResult, bannedResult, adminResult] =
+          yield* Effect.all(
+            [
+              Effect.tryPromise({
+                try: () => db.select({ count: count() }).from(user),
+                catch: (cause) =>
+                  new QueryError({ entity: "user_stats", cause }),
+              }),
+              Effect.tryPromise({
+                try: () =>
+                  db
+                    .select({ count: count() })
+                    .from(user)
+                    .where(eq(user.emailVerified, true)),
+                catch: (cause) =>
+                  new QueryError({ entity: "user_stats", cause }),
+              }),
+              Effect.tryPromise({
+                try: () =>
+                  db
+                    .select({ count: count() })
+                    .from(user)
+                    .where(eq(user.banned, true)),
+                catch: (cause) =>
+                  new QueryError({ entity: "user_stats", cause }),
+              }),
+              Effect.tryPromise({
+                try: () =>
+                  db
+                    .select({ count: count() })
+                    .from(user)
+                    .where(eq(user.role, "admin")),
+                catch: (cause) =>
+                  new QueryError({ entity: "user_stats", cause }),
+              }),
+            ],
+            { concurrency: "unbounded" }
+          );
+
+        const totalUsers = totalResult[0]?.count ?? 0;
+        const verifiedUsers = verifiedResult[0]?.count ?? 0;
+        const bannedUsers = bannedResult[0]?.count ?? 0;
+        const adminUsers = adminResult[0]?.count ?? 0;
+        const verificationRate =
+          totalUsers > 0 ? Math.round((verifiedUsers / totalUsers) * 100) : 0;
+
+        return {
+          totalUsers,
+          verifiedUsers,
+          bannedUsers,
+          adminUsers,
+          verificationRate,
+        };
+      });
+
+      const getRoleDistribution = Effect.gen(function* () {
+        const results = yield* Effect.tryPromise({
+          try: () =>
+            db
+              .select({
+                name: user.role,
+                value: count(),
+              })
+              .from(user)
+              .groupBy(user.role),
+          catch: (cause) =>
+            new QueryError({ entity: "role_distribution", cause }),
+        });
+        return results.map((r) => ({
+          name: r.name.charAt(0).toUpperCase() + r.name.slice(1),
+          value: r.value,
+        }));
+      });
+
+      const getVerificationDistribution = Effect.gen(function* () {
+        const [verifiedResult, unverifiedResult] = yield* Effect.all(
+          [
+            Effect.tryPromise({
+              try: () =>
+                db
+                  .select({ count: count() })
+                  .from(user)
+                  .where(eq(user.emailVerified, true)),
+              catch: (cause) =>
+                new QueryError({
+                  entity: "verification_distribution",
+                  cause,
+                }),
+            }),
+            Effect.tryPromise({
+              try: () =>
+                db
+                  .select({ count: count() })
+                  .from(user)
+                  .where(eq(user.emailVerified, false)),
+              catch: (cause) =>
+                new QueryError({
+                  entity: "verification_distribution",
+                  cause,
+                }),
+            }),
+          ],
+          { concurrency: "unbounded" }
+        );
+        return [
+          { name: "Verified", value: verifiedResult[0]?.count ?? 0 },
+          { name: "Unverified", value: unverifiedResult[0]?.count ?? 0 },
+        ];
+      });
+
+      const getRecentSignupsCount = (input: GetRecentSignupsCountInput) =>
+        Effect.gen(function* () {
+          const startDate = new Date();
+          startDate.setDate(startDate.getDate() - input.days);
+          const result = yield* Effect.tryPromise({
+            try: () =>
+              db
+                .select({ count: count() })
+                .from(user)
+                .where(gte(user.createdAt, startDate)),
+            catch: (cause) =>
+              new QueryError({ entity: "recent_signups", cause }),
+          });
+          return result[0]?.count ?? 0;
+        });
+
+      return {
+        getUserGrowth,
+        getUserStats,
+        getRoleDistribution,
+        getVerificationDistribution,
+        getRecentSignupsCount,
+      } as const;
+    }),
   }
-}
-
-/**
- * Get summary statistics for users
- */
-export async function getUserStats(db: Database) {
-  try {
-    const [totalResult] = await db.select({ count: count() }).from(user);
-    const [verifiedResult] = await db
-      .select({ count: count() })
-      .from(user)
-      .where(eq(user.emailVerified, true));
-    const [bannedResult] = await db
-      .select({ count: count() })
-      .from(user)
-      .where(eq(user.banned, true));
-    const [adminResult] = await db
-      .select({ count: count() })
-      .from(user)
-      .where(eq(user.role, "admin"));
-
-    const totalUsers = totalResult?.count ?? 0;
-    const verifiedUsers = verifiedResult?.count ?? 0;
-    const bannedUsers = bannedResult?.count ?? 0;
-    const adminUsers = adminResult?.count ?? 0;
-
-    const verificationRate =
-      totalUsers > 0 ? Math.round((verifiedUsers / totalUsers) * 100) : 0;
-
-    return {
-      totalUsers,
-      verifiedUsers,
-      bannedUsers,
-      adminUsers,
-      verificationRate,
-    };
-  } catch (error) {
-    console.error("Failed to get user stats:", error);
-    return {
-      totalUsers: 0,
-      verifiedUsers: 0,
-      bannedUsers: 0,
-      adminUsers: 0,
-      verificationRate: 0,
-    };
-  }
-}
-
-/**
- * Get user distribution by role
- */
-export async function getRoleDistribution(db: Database) {
-  try {
-    const results = await db
-      .select({
-        name: user.role,
-        value: count(),
-      })
-      .from(user)
-      .groupBy(user.role);
-
-    // Capitalize role names for display
-    return results.map((r) => ({
-      name: r.name.charAt(0).toUpperCase() + r.name.slice(1),
-      value: r.value,
-    }));
-  } catch (error) {
-    console.error("Failed to get role distribution:", error);
-    return [];
-  }
-}
-
-/**
- * Get user distribution by verification status
- */
-export async function getVerificationDistribution(db: Database) {
-  try {
-    const [verifiedResult] = await db
-      .select({ count: count() })
-      .from(user)
-      .where(eq(user.emailVerified, true));
-    const [unverifiedResult] = await db
-      .select({ count: count() })
-      .from(user)
-      .where(eq(user.emailVerified, false));
-
-    return [
-      { name: "Verified", value: verifiedResult?.count ?? 0 },
-      { name: "Unverified", value: unverifiedResult?.count ?? 0 },
-    ];
-  } catch (error) {
-    console.error("Failed to get verification distribution:", error);
-    return [];
-  }
-}
-
-/**
- * Get recent signups count for a given period
- */
-export async function getRecentSignupsCount(
-  db: Database,
-  input: { days: number }
-) {
-  try {
-    const startDate = new Date();
-    startDate.setDate(startDate.getDate() - input.days);
-
-    const [result] = await db
-      .select({ count: count() })
-      .from(user)
-      .where(gte(user.createdAt, startDate));
-
-    return result?.count ?? 0;
-  } catch (error) {
-    console.error("Failed to get recent signups:", error);
-    return 0;
-  }
-}
+) {}
