@@ -35,10 +35,8 @@ export function FileUpload({
 
   // Handle fetcher state changes
   useEffect(() => {
-    if (fetcher.data) {
-      if (fetcher.data.success) {
-        onUploadSuccess?.(fetcher.data.key);
-      }
+    if (fetcher.data && "success" in fetcher.data && fetcher.data.success) {
+      onUploadSuccess?.(fetcher.data.key);
     }
     // Handle errors from Response.error
     if (fetcher.state === "idle" && !fetcher.data && selectedFile) {
@@ -111,7 +109,8 @@ export function FileUpload({
   };
 
   const isUploading = fetcher.state === "submitting" || fetcher.state === "loading";
-  const uploadedKey = fetcher.data?.key;
+  const uploadedKey =
+    fetcher.data && "key" in fetcher.data ? fetcher.data.key : undefined;
 
   return (
     <div className={cn("w-full", className)}>

@@ -65,16 +65,14 @@ export function SignupForm({ className, ...props }: SignupFormProps) {
 
   return (
     <div className={cn("flex flex-col gap-6", className)} {...props}>
-      <Card>
-        <CardHeader>
-          <CardTitle>{t("signup.title")}</CardTitle>
-          <CardDescription>
-            {t("signup.description")}
-          </CardDescription>
+      <Card data-testid="signup-card" className="border-border/80 shadow-sm">
+        <CardHeader className="gap-2">
+          <CardTitle className="text-xl">{t("signup.title")}</CardTitle>
+          <CardDescription>{t("signup.description")}</CardDescription>
         </CardHeader>
         <CardContent>
           <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6" data-testid="signup-form">
               <FormField
                 control={form.control}
                 name="name"
@@ -83,7 +81,9 @@ export function SignupForm({ className, ...props }: SignupFormProps) {
                     <FormLabel>{t("signup.name_label")}</FormLabel>
                     <FormControl>
                       <Input
+                        autoComplete="name"
                         placeholder={t("signup.name_placeholder")}
+                        data-testid="signup-name"
                         {...field}
                         disabled={form.formState.isSubmitting}
                       />
@@ -101,7 +101,9 @@ export function SignupForm({ className, ...props }: SignupFormProps) {
                     <FormControl>
                       <Input
                         type="email"
+                        autoComplete="email"
                         placeholder={t("signup.email_placeholder")}
+                        data-testid="signup-email"
                         {...field}
                         disabled={form.formState.isSubmitting}
                       />
@@ -119,13 +121,13 @@ export function SignupForm({ className, ...props }: SignupFormProps) {
                     <FormControl>
                       <Input
                         type="password"
+                        autoComplete="new-password"
+                        data-testid="signup-password"
                         {...field}
                         disabled={form.formState.isSubmitting}
                       />
                     </FormControl>
-                    <FormDescription>
-                      {t("signup.password_hint")}
-                    </FormDescription>
+                    <FormDescription>{t("signup.password_hint")}</FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -139,6 +141,8 @@ export function SignupForm({ className, ...props }: SignupFormProps) {
                     <FormControl>
                       <Input
                         type="password"
+                        autoComplete="new-password"
+                        data-testid="signup-confirm-password"
                         {...field}
                         disabled={form.formState.isSubmitting}
                       />
@@ -148,7 +152,11 @@ export function SignupForm({ className, ...props }: SignupFormProps) {
                 )}
               />
               {authError && (
-                <div className="text-sm text-red-600 text-center">
+                <div
+                  role="alert"
+                  data-testid="signup-error"
+                  className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+                >
                   {authError}
                 </div>
               )}
@@ -156,6 +164,7 @@ export function SignupForm({ className, ...props }: SignupFormProps) {
                 <Button
                   type="submit"
                   className="w-full"
+                  data-testid="signup-submit"
                   disabled={form.formState.isSubmitting}
                 >
                   {form.formState.isSubmitting ? t("signup.submitting") : t("signup.submit")}

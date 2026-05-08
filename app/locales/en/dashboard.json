@@ -1,19 +1,48 @@
 {
   "title": "Dashboard",
-  "welcome": "Welcome back, {{name}}!",
-  "subtitle": "Here's an overview of your workspace.",
-  "cards": {
-    "getting_started": {
-      "title": "Getting Started",
-      "description": "Set up your account and explore the platform."
-    },
-    "recent_activity": {
-      "title": "Recent Activity",
-      "description": "Your latest actions and updates will appear here."
-    },
-    "quick_actions": {
-      "title": "Quick Actions",
-      "description": "Shortcuts to common tasks and features."
+  "eyebrow": "You're in",
+  "welcome": "Welcome, {{name}}",
+  "subtitle": "This is the post-auth landing page of the boilerplate. Below is a tour of what's wired and where to look in the code.",
+  "actions": {
+    "open_admin": "Admin",
+    "docs": "Docs"
+  },
+  "explore": {
+    "title": "Explore",
+    "count": "4 surfaces",
+    "cards": {
+      "auth": {
+        "title": "User management",
+        "description": "Promote / demote / ban users from the admin surface. Backed by Better Auth + a typed UserRepository.",
+        "cta": "Open users",
+        "admin_only": "Admin only"
+      },
+      "admin": {
+        "title": "Admin dashboard",
+        "description": "Role-gated /admin layout with analytics charts and the user table. Gated by adminProcedure on the data side.",
+        "cta": "Open admin",
+        "admin_only": "Admin only"
+      },
+      "upload": {
+        "title": "File upload",
+        "description": "Multipart POST to /api/upload-file lands in R2 via a Workers binding and a typed BucketRepository.",
+        "cta": "Open kitchen sink",
+        "admin_only": "Admin only"
+      },
+      "effect": {
+        "title": "Effect TS in the wild",
+        "description": "Tagged errors, Effect.Service repos, and Effect.Schema validation — all surfaced through tRPC procedures.",
+        "cta": "Open kitchen sink",
+        "admin_only": "Admin only"
+      }
     }
+  },
+  "account": {
+    "title": "Your session",
+    "description": "Better Auth issued the cookie that's letting you read this page right now.",
+    "role_admin": "Admin",
+    "role_user": "User",
+    "session_active": "Session active",
+    "source": "View source"
   }
 }

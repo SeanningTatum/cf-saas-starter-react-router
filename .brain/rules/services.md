@@ -4,6 +4,8 @@ Effect Tags + Layers wrapping external clients (DB, R2, Better Auth, Workflows, 
 
 > Programming model basics: see [`../codebase/effect-ts.md`](../codebase/effect-ts.md).
 
+> Better Auth API reference (plugins, providers, session, hooks, organization/team APIs): https://better-auth.com/llms.txt. Prefer `context7` MCP. Catalog + fetch guidance: [`../codebase/llms-txt.md`](../codebase/llms-txt.md).
+
 ## Pattern: services as Effect Tags
 
 External clients are exposed as Effect Service Tags. Repositories `yield*` the Tag — they never instantiate clients.
@@ -223,6 +225,46 @@ export default {
 } satisfies ExportedHandler<Env>;
 ```
 
+## Logging — Effect logger vs imperative `loggers.X`
+
+Both write to the **same sink** ([`emitLog`](../../app/lib/log-format.ts) → JSON in prod, pretty in dev). [`LoggerLive`](../../app/services/logger.ts) replaces Effect's default `Logger` with a custom logger that calls `emitLog` directly. So `Effect.logInfo(...)` and `loggers.trpc.info(...)` end up at the same place — they are **not parallel logging systems**.
+
+Pick by context, not by capability:
+
+| Context | Use | Why |
+|---------|-----|-----|
+| Inside `Effect.gen` / `Effect.pipe` (procedures, repos, services, workflows) | `Effect.logInfo("event").pipe(Effect.annotateLogs({ ...fields }))` | Composes with `Effect.tap` / `tapErrorTag`, picks up fiber annotations + spans, level filtered by `MinLogLevelLive`, cause chain on errors. |
+| Outside Effect (tRPC middleware fn, plain JS modules, React components) | `loggers.<layer>.info({ ...fields }, "event")` | No Effect context to thread through — direct call is correct. |
+
+### Effect-side rules
+
+- **First arg = event name (string).** Use dot-namespaced verbs: `users.bulk_banned`, `widget.created`, `payment.refund_failed`.
+- **Structured fields via `Effect.annotateLogs({ ... })`** — never as the first arg of `Effect.logInfo`. Putting `{ key: val }` as the message arg JSON-stringifies it into the message string and you lose queryability.
+- **`layer: "trpc"`** is auto-added by [`runProcedure`](../../app/lib/effect-trpc.ts) (`Effect.annotateLogs({ layer: "trpc" })`). Don't repeat it. For Effect calls outside `runProcedure` (e.g. workflow handlers, route loaders that call `runtime.runPromise`), add `layer` yourself or wrap with a similar helper.
+- **Errors:** `Effect.tapErrorCause((cause) => Effect.logError("op.failed", Cause.pretty(cause)))` at the boundary. Repos / domain code don't log — they `Effect.fail(new TaggedError(...))` and let the boundary decide.
+- **Don't mix.** Inside an `Effect.gen`, never reach for `loggers.trpc` imperatively — the Effect logger is right there and gets fiber/scope context for free.
+
+### Anti-pattern
+
+```typescript
+// WRONG — fields end up in message string, not annotations
+Effect.logInfo({ actor, targets, count }, "users.bulk_banned")
+
+// RIGHT
+Effect.logInfo("users.bulk_banned").pipe(
+  Effect.annotateLogs({ actor, targets, count })
+)
+```
+
+## `Effect.promise` vs `Effect.tryPromise`
+
+| Constructor | When to use | Failure handling |
+|-------------|-------------|------------------|
+| `Effect.promise(fn)` | Promise that **cannot reject** (e.g. `Promise.resolve(x)`, an in-memory `setTimeout` wrapper). | Throws are **defects** — unrecoverable, bypass `catchAll`/`catchTags`. |
+| `Effect.tryPromise({ try, catch })` | Any promise from an external client (Better Auth, fetch, drizzle, R2, third-party SDKs). | Throws map to a typed tagged error you can handle. |
+
+If unsure, default to `Effect.tryPromise` — being unable to recover is the dangerous case. **The only `Effect.promise` call in this repo today** ([`app/trpc/index.ts`](../../app/trpc/index.ts) `createTRPCContext`) is a known violation and should be migrated to `Effect.tryPromise` → `ExternalServiceError`.
+
 ## Anti-patterns
 
 - Repo importing a client SDK directly — yield the Service Tag
@@ -230,3 +272,4 @@ export default {
 - Hardcoding API keys in code (use `wrangler secret put`)
 - Reading `process.env` anywhere — use `CloudflareEnv` Tag or `context.cloudflare.env`
 - Forgetting `runtime.dispose()` in the worker's `finally` — leaks runtime state
+- **`Effect.promise` for fallible work** — see table above. Use `Effect.tryPromise` so failures become typed tagged errors instead of defects.

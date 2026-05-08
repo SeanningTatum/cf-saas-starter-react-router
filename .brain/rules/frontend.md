@@ -3,6 +3,7 @@
 UI components, forms, modals, styling. **Source-of-truth files**: `app/components/**`, `app/routes/**/*.tsx`, `app/app.css`.
 
 > Programming model basics: see [`../codebase/effect-ts.md`](../codebase/effect-ts.md).
+> Public marketing surface (home, login/sign-up, dashboard entry) has its own visual language: see [`../codebase/design-system.md`](../codebase/design-system.md).
 
 ## Forms
 

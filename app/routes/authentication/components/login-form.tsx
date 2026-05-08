@@ -61,16 +61,14 @@ export function LoginForm({ className, ...props }: LoginFormProps) {
 
   return (
     <div className={cn("flex flex-col gap-6", className)} {...props}>
-      <Card>
-        <CardHeader>
-          <CardTitle>{t("login.title")}</CardTitle>
-          <CardDescription>
-            {t("login.description")}
-          </CardDescription>
+      <Card data-testid="login-card" className="border-border/80 shadow-sm">
+        <CardHeader className="gap-2">
+          <CardTitle className="text-xl">{t("login.title")}</CardTitle>
+          <CardDescription>{t("login.description")}</CardDescription>
         </CardHeader>
         <CardContent>
           <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6" data-testid="login-form">
               <FormField
                 control={form.control}
                 name="email"
@@ -80,7 +78,9 @@ export function LoginForm({ className, ...props }: LoginFormProps) {
                     <FormControl>
                       <Input
                         type="email"
+                        autoComplete="email"
                         placeholder={t("login.email_placeholder")}
+                        data-testid="login-email"
                         {...field}
                         disabled={form.formState.isSubmitting}
                       />
@@ -106,6 +106,8 @@ export function LoginForm({ className, ...props }: LoginFormProps) {
                     <FormControl>
                       <Input
                         type="password"
+                        autoComplete="current-password"
+                        data-testid="login-password"
                         {...field}
                         disabled={form.formState.isSubmitting}
                       />
@@ -115,7 +117,11 @@ export function LoginForm({ className, ...props }: LoginFormProps) {
                 )}
               />
               {authError && (
-                <div className="text-sm text-red-600 text-center">
+                <div
+                  role="alert"
+                  data-testid="login-error"
+                  className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+                >
                   {authError}
                 </div>
               )}
@@ -123,6 +129,7 @@ export function LoginForm({ className, ...props }: LoginFormProps) {
                 <Button
                   type="submit"
                   className="w-full"
+                  data-testid="login-submit"
                   disabled={form.formState.isSubmitting}
                 >
                   {form.formState.isSubmitting ? t("login.submitting") : t("login.submit")}

@@ -97,7 +97,21 @@ Helpers:
 
 ## Using errors in tRPC procedures
 
-Almost never directly — `tagToTRPC` handles canonical errors automatically. Only emit a `Data.TaggedError` from inside `Effect.gen` for procedure-specific pre-conditions:
+`tagToTRPC` handles canonical mapping automatically — for **simple CRUD procedures** (single repo call after a pre-condition check) you do nothing.
+
+For **complex procedures** (multi-step, third-party side effects, bulk ops, transient failures, domain-specific recovery), transform errors at the procedure layer **before** `runProcedure` falls back to `tagToTRPC`. Patterns + when-to-apply table is in [`routes.md` "Procedure-level error transformation"](routes.md#procedure-level-error-transformation). Common shapes:
+
+| Need | Operator |
+|------|----------|
+| Re-map one tag with richer message | `Effect.catchTag("Tag", e => Effect.fail(new BetterTag(...)))` |
+| Re-map several at once | `Effect.catchTags({ A: ..., B: ... })` |
+| Retry transient infra failure | `Effect.retry({ times, schedule })` |
+| Structured success/audit log | `Effect.tap` |
+| Log specific failure shape | `Effect.tapErrorTag` |
+| Bulk fail-tolerance | `Effect.partition` |
+| SLA timeout | `Effect.timeout` |
+
+Direct `Effect.fail(new SomeTaggedError(...))` inside an `Effect.gen` is still the right tool for **procedure-specific pre-conditions** (auth-self-check, business invariants). Example:
 
 ```typescript
 .mutation(({ ctx, input }) =>

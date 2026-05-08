@@ -1,321 +1,424 @@
-import { Suspense } from "react";
-import { api } from "@/trpc/client";
 import type { Route } from "./+types/home";
-import { authClient } from "@/auth/client";
-import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
 import { Link, redirect } from "react-router";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useTranslation } from "react-i18next";
+import {
+  IconBrandGithub,
+  IconShieldLock,
+  IconLayoutDashboard,
+  IconCloudUpload,
+  IconChartBar,
+  IconLanguage,
+  IconAtom,
+  IconArrowRight,
+  IconBook,
+  IconBrain,
+  IconChecklist,
+  IconRoute,
+} from "@tabler/icons-react";
+
+import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { StackBadge } from "@/components/stack-badge";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { LanguageSwitcher } from "@/components/language-switcher";
 
 export const handle = { i18n: ["home"] };
 
-export function meta({ loaderData }: Route.MetaArgs) {
+const STACK = [
+  "Workers",
+  "React Router",
+  "tRPC",
+  "Better Auth",
+  "Drizzle",
+  "Effect TS",
+] as const;
+
+export function meta(_: Route.MetaArgs) {
   return [
     { title: "Cloudflare SaaS Starter" },
-    { name: "description", content: "Full-stack SaaS starter with Cloudflare, React Router, tRPC, and Better Auth" },
+    {
+      name: "description",
+      content:
+        "Production-ready full-stack TypeScript starter — Cloudflare Workers, React Router v7, tRPC, Better Auth, Drizzle, and Effect TS.",
+    },
   ];
 }
 
 export async function loader({ request, context }: Route.LoaderArgs) {
-  const session = await context.auth.api.getSession({
-    headers: request.headers,
-  });
+  const session = await context.auth.api.getSession({ headers: request.headers });
   if (session) return redirect("/dashboard");
-  return {
-    message: "Cloudflare SaaS Starter",
-  };
+  return null;
 }
 
-export default function Home({ loaderData }: Route.ComponentProps) {
+export default function Home() {
   const { t } = useTranslation("home");
 
   return (
-    <main className="container min-h-screen py-16 mx-auto relative">
-      <div className="absolute top-4 right-4">
-        <ThemeToggle />
-      </div>
-      <div className="flex flex-col items-center justify-center gap-8">
-        {/* Hero Section */}
-        <div className="flex flex-col items-center gap-4 text-center">
-          <h1 className="text-5xl font-extrabold tracking-tight sm:text-[5rem]">
-            {t("hero.create")}{" "}
-            <span className="bg-linear-to-r from-orange-500 to-yellow-500 bg-clip-text text-transparent">
-              {t("hero.cloudflare")}
-            </span>{" "}
-            {t("hero.saas")}
-          </h1>
-          <p className="max-w-2xl text-lg text-muted-foreground">
-            {t("hero.description")}{" "}
-            <span className="font-semibold text-foreground">{t("hero.workers")}</span>,{" "}
-            <span className="font-semibold text-foreground">{t("hero.react_router")}</span>,{" "}
-            <span className="font-semibold text-foreground">{t("hero.trpc")}</span>,{" "}
-            <span className="font-semibold text-foreground">{t("hero.better_auth")}</span>, {t("hero.and")}{" "}
-            <span className="font-semibold text-foreground">{t("hero.drizzle")}</span>
-          </p>
-        </div>
+    <div className="min-h-svh bg-background">
+      <TopBar />
 
-        {/* Authentication Pages Showcase */}
-        <div className="w-full max-w-4xl">
-          <h2 className="mb-6 text-center text-2xl font-bold">{t("auth_showcase.title")}</h2>
-          <div className="grid gap-6 md:grid-cols-2">
-            <Link to="/login" className="transition-transform hover:scale-105">
-              <Card className="h-full cursor-pointer border-2 hover:border-primary/50">
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <span className="text-2xl">🔐</span>
-                    {t("auth_showcase.login_title")}
-                  </CardTitle>
-                  <CardDescription>
-                    {t("auth_showcase.login_description")}
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-sm text-muted-foreground">
-                    {t("auth_showcase.login_detail")}
-                  </p>
-                </CardContent>
-              </Card>
-            </Link>
-
-            <Link to="/sign-up" className="transition-transform hover:scale-105">
-              <Card className="h-full cursor-pointer border-2 hover:border-primary/50">
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <span className="text-2xl">✨</span>
-                    {t("auth_showcase.signup_title")}
-                  </CardTitle>
-                  <CardDescription>
-                    {t("auth_showcase.signup_description")}
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-sm text-muted-foreground">
-                    {t("auth_showcase.signup_detail")}
-                  </p>
-                </CardContent>
-              </Card>
-            </Link>
-          </div>
-        </div>
-
-        {/* Auth Showcase */}
-        <AuthShowcase />
-
-        {/* User List */}
-        <div className="w-full max-w-2xl">
-          <h2 className="mb-4 text-2xl font-bold">{t("user_list.title")}</h2>
-          <Suspense
-            fallback={
-              <div className="flex w-full flex-col gap-4">
-                <UserCardSkeleton />
-                <UserCardSkeleton />
-                <UserCardSkeleton />
-              </div>
-            }
-          >
-            <UserList />
-          </Suspense>
-        </div>
-      </div>
-    </main>
-  );
-}
-
-function AuthShowcase() {
-  const session = authClient.useSession();
-  const utils = api.useUtils();
-  const { t } = useTranslation("home");
-
-  async function createRandomUser() {
-    await authClient.signUp.email({
-      email: "test" + Math.random() + "@example.com",
-      password: "password",
-      name: "Test User " + Math.random(),
-    });
-    await utils.user.getUsers.invalidate();
-    await utils.user.getUsersProtected.invalidate();
-  }
-
-  async function signout() {
-    await authClient.signOut();
-    void utils.user.getUsers.invalidate();
-    void utils.user.getUsersProtected.reset();
-  }
-
-  return (
-    <div className="flex flex-col items-center gap-4 rounded-lg border bg-card p-8 shadow-sm">
-      <div className="text-center">
-        {session.data?.user ? (
-          <>
-            <p className="mb-2 text-lg">
-              {t("auth_showcase.signed_in_as")}{" "}
-              <span className="font-semibold text-primary">
-                {session.data.user.name || session.data.user.email}
-              </span>
-            </p>
-            <p className="text-sm text-muted-foreground">
-              {session.data.user.email}
-            </p>
-          </>
-        ) : (
-          <p className="text-lg text-muted-foreground">
-            {t("auth_showcase.not_signed_in")}
-          </p>
-        )}
-      </div>
-      <div className="flex gap-2">
-        {!session.data?.user ? (
-          <Button onClick={createRandomUser} size="lg">
-            {t("auth_showcase.sign_up_demo")}
-          </Button>
-        ) : (
-          <Button onClick={signout} variant="outline" size="lg">
-            {t("auth_showcase.sign_out")}
-          </Button>
-        )}
-      </div>
-    </div>
-  );
-}
-
-
-function UserList() {
-  const session = authClient.useSession();
-  const { data: users, isLoading } = api.user.getUsers.useQuery();
-  const { data: usersProtected, isLoading: isLoadingProtected } =
-    api.user.getUsersProtected.useQuery(undefined, {
-      retry: false,
-      enabled: !!session.data?.user,
-    });
-  const { t } = useTranslation("home");
-  const { t: tc } = useTranslation("common");
-
-  if (isLoading) {
-    return (
-      <div className="flex w-full flex-col gap-4">
-        <UserCardSkeleton />
-        <UserCardSkeleton />
-      </div>
-    );
-  }
-
-  if (!users || users.length === 0) {
-    return (
-      <div className="relative flex w-full flex-col gap-4">
-        <UserCardSkeleton pulse={false} />
-        <UserCardSkeleton pulse={false} />
-        <UserCardSkeleton pulse={false} />
-        <div className="absolute inset-0 flex flex-col items-center justify-center rounded-lg bg-black/10">
-          <p className="text-2xl font-bold text-white">{t("user_list.no_users")}</p>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="space-y-4">
-      <div className="flex w-full flex-col gap-3">
-        {users.map((user) => (
-          <UserCard key={user.id} user={user} />
-        ))}
-      </div>
-
-      {/* Protected Users Section */}
-      <div className="mt-8">
-        <h3 className="mb-3 flex items-center gap-2 text-lg font-semibold">
-          {t("user_list.protected_query")}
-          <span className="rounded-full bg-yellow-500/10 px-2 py-0.5 text-xs font-medium text-yellow-600 dark:text-yellow-500">
-            {t("user_list.auth_required")}
+      <main className="mx-auto max-w-6xl px-6 pb-24">
+        {/* Hero */}
+        <section className="flex flex-col items-start gap-8 pt-20 pb-16 md:items-center md:text-center">
+          <span className="inline-flex items-center gap-2 rounded-full border border-border bg-card px-3 py-1 font-mono text-[11px] uppercase tracking-wider text-muted-foreground">
+            <span className="size-1.5 rounded-full bg-primary" />
+            {t("hero.eyebrow")}
           </span>
-        </h3>
-        {isLoadingProtected ? (
-          <div className="rounded-lg border bg-muted/50 p-4">
-            <p className="text-sm text-muted-foreground">{tc("loading_protected_data")}</p>
+
+          <h1 className="text-balance text-4xl font-semibold tracking-tight sm:text-5xl md:text-6xl">
+            {t("hero.title_lead")}{" "}
+            <span className="text-primary">{t("hero.title_accent")}</span>
+            {t("hero.title_trail")}
+          </h1>
+
+          <p className="max-w-2xl text-balance text-base text-muted-foreground sm:text-lg">
+            {t("hero.description")}
+          </p>
+
+          <div className="flex flex-wrap items-center gap-3">
+            <Button asChild size="lg" data-testid="hero-sign-up">
+              <Link to="/sign-up">
+                {t("hero.cta_primary")}
+                <IconArrowRight className="ml-1 size-4" />
+              </Link>
+            </Button>
+            <Button asChild size="lg" variant="outline" data-testid="hero-sign-in">
+              <Link to="/login">{t("hero.cta_secondary")}</Link>
+            </Button>
           </div>
-        ) : usersProtected ? (
-          <div className="rounded-lg border bg-green-500/10 p-4">
-            <p className="text-sm font-medium text-green-600 dark:text-green-500">
-              ✓ {t("user_list.protected_success", { count: usersProtected.length })}
+
+          <div className="mt-2 flex flex-wrap items-center gap-2 md:justify-center">
+            {STACK.map((label) => (
+              <StackBadge key={label}>{label}</StackBadge>
+            ))}
+          </div>
+        </section>
+
+        {/* What's wired */}
+        <section className="border-t border-border pt-16">
+          <div className="mb-8 flex flex-col gap-2">
+            <h2 className="text-xl font-semibold tracking-tight sm:text-2xl">
+              {t("wired.title")}
+            </h2>
+            <p className="max-w-2xl text-sm text-muted-foreground">
+              {t("wired.subtitle")}
             </p>
           </div>
-        ) : (
-          <div className="rounded-lg border bg-red-500/10 p-4">
-            <p className="text-sm font-medium text-red-600 dark:text-red-500">
-              ✗ {t("user_list.protected_unauthorized")}
+
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            <FeatureCard
+              icon={<IconShieldLock className="size-5" />}
+              title={t("wired.cards.auth.title")}
+              description={t("wired.cards.auth.description")}
+              badges={["Better Auth", "D1"]}
+              to="/login"
+              cta={t("wired.cards.auth.cta")}
+              testId="card-auth"
+            />
+            <FeatureCard
+              icon={<IconLayoutDashboard className="size-5" />}
+              title={t("wired.cards.admin.title")}
+              description={t("wired.cards.admin.description")}
+              badges={["tRPC", "Drizzle"]}
+              to="/admin"
+              cta={t("wired.cards.admin.cta")}
+              testId="card-admin"
+            />
+            <FeatureCard
+              icon={<IconCloudUpload className="size-5" />}
+              title={t("wired.cards.upload.title")}
+              description={t("wired.cards.upload.description")}
+              badges={["R2", "Workers"]}
+              to="/dashboard"
+              cta={t("wired.cards.upload.cta")}
+              testId="card-upload"
+            />
+            <FeatureCard
+              icon={<IconChartBar className="size-5" />}
+              title={t("wired.cards.analytics.title")}
+              description={t("wired.cards.analytics.description")}
+              badges={["tRPC", "Drizzle"]}
+              to="/admin"
+              cta={t("wired.cards.analytics.cta")}
+              testId="card-analytics"
+            />
+            <FeatureCard
+              icon={<IconAtom className="size-5" />}
+              title={t("wired.cards.effect.title")}
+              description={t("wired.cards.effect.description")}
+              badges={["Effect TS", "Schema"]}
+              to="/admin/kitchen-sink"
+              cta={t("wired.cards.effect.cta")}
+              testId="card-effect"
+            />
+            <FeatureCard
+              icon={<IconLanguage className="size-5" />}
+              title={t("wired.cards.i18n.title")}
+              description={t("wired.cards.i18n.description")}
+              badges={["remix-i18next"]}
+              to="/dashboard"
+              cta={t("wired.cards.i18n.cta")}
+              testId="card-i18n"
+            />
+          </div>
+        </section>
+
+        {/* Harness */}
+        <section className="mt-20 border-t border-border pt-16">
+          <div className="mb-8 flex flex-col gap-3">
+            <span className="inline-flex w-fit items-center gap-2 rounded-full border border-border bg-card px-2.5 py-1 font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+              <span className="size-1.5 rounded-full bg-primary" />
+              {t("harness.eyebrow")}
+            </span>
+            <h2 className="text-xl font-semibold tracking-tight sm:text-2xl">
+              {t("harness.title")}
+            </h2>
+            <p className="max-w-2xl text-sm text-muted-foreground">
+              {t("harness.subtitle")}
             </p>
           </div>
-        )}
-      </div>
+
+          <div className="grid gap-4 md:grid-cols-3">
+            <HarnessPillar
+              icon={<IconBrain className="size-5" />}
+              title={t("harness.pillars.brain.title")}
+              description={t("harness.pillars.brain.description")}
+              path=".brain/"
+            />
+            <HarnessPillar
+              icon={<IconRoute className="size-5" />}
+              title={t("harness.pillars.recipes.title")}
+              description={t("harness.pillars.recipes.description")}
+              path=".brain/recipes/"
+            />
+            <HarnessPillar
+              icon={<IconChecklist className="size-5" />}
+              title={t("harness.pillars.gates.title")}
+              description={t("harness.pillars.gates.description")}
+              path="/verify-done"
+            />
+          </div>
+
+          <div className="mt-6 overflow-hidden rounded-md border border-border bg-card">
+            <div className="border-b border-border bg-muted/40 px-4 py-2">
+              <span className="font-mono text-[11px] uppercase tracking-wider text-muted-foreground">
+                {t("harness.commands_label")}
+              </span>
+            </div>
+            <pre className="overflow-x-auto px-4 py-4 font-mono text-sm leading-relaxed text-foreground">
+              <code>{`# kickoff a task — runs baseline, reads brain, opens run note
+/start-task "add billing endpoint"
+
+# verify before declaring done — typecheck, test, e2e, brain coherence
+/verify-done
+
+# close out a feature — flips feature_list.json + harness-check
+/ship-feature`}</code>
+            </pre>
+          </div>
+        </section>
+
+        {/* Quickstart */}
+        <section className="mt-20 border-t border-border pt-16">
+          <div className="grid gap-10 lg:grid-cols-[1fr_auto] lg:items-end">
+            <div className="flex flex-col gap-3">
+              <h2 className="text-xl font-semibold tracking-tight sm:text-2xl">
+                {t("quickstart.title")}
+              </h2>
+              <p className="max-w-xl text-sm text-muted-foreground">
+                {t("quickstart.subtitle")}
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button asChild variant="outline" data-testid="quickstart-github">
+                <a
+                  href="https://github.com/"
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  <IconBrandGithub className="size-4" />
+                  {t("quickstart.repo")}
+                </a>
+              </Button>
+              <Button asChild variant="outline" data-testid="quickstart-docs">
+                <a href="/admin/kitchen-sink">
+                  <IconBook className="size-4" />
+                  {t("quickstart.docs")}
+                </a>
+              </Button>
+            </div>
+          </div>
+
+          <div className="mt-8 overflow-hidden rounded-md border border-border bg-card">
+            <div className="border-b border-border bg-muted/40 px-4 py-2">
+              <span className="font-mono text-[11px] uppercase tracking-wider text-muted-foreground">
+                {t("quickstart.terminal")}
+              </span>
+            </div>
+            <pre className="overflow-x-auto px-4 py-4 font-mono text-sm leading-relaxed text-foreground">
+              <code>{`# 1. install
+bun install
+
+# 2. apply local D1 migrations
+bun run db:migrate:local
+
+# 3. run dev server
+bun run dev`}</code>
+            </pre>
+          </div>
+        </section>
+      </main>
+
+      <Footer />
     </div>
   );
 }
 
-function UserCard(props: { user: { id: string; name: string | null; email: string } }) {
-  const session = authClient.useSession();
-  const utils = api.useUtils();
+function TopBar() {
   const { t } = useTranslation("home");
-  const deleteUserMutation = api.user.deleteUser.useMutation({
-    onSuccess: () => {
-      void utils.user.getUsers.invalidate();
-      void utils.user.getUsersProtected.invalidate();
-    },
-  });
-
-  const handleDelete = async () => {
-    await deleteUserMutation.mutateAsync(props.user.id);
-  };
 
   return (
-    <div className="flex items-center justify-between rounded-lg border bg-card p-4 shadow-sm">
-      <div>
-        <h3 className="font-semibold text-primary">
-          {props.user.name || t("user_list.anonymous_user")}
-        </h3>
-        <p className="mt-1 text-sm text-muted-foreground">{props.user.email}</p>
-      </div>
-      <div className="flex items-center gap-2">
-        <div className="size-10 rounded-full bg-linear-to-br from-orange-500 to-yellow-500" />
-        {session.data?.user && (
+    <header className="border-b border-border">
+      <div className="mx-auto flex h-14 max-w-6xl items-center justify-between px-6">
+        <Link
+          to="/"
+          className="flex items-center gap-2 font-medium"
+          data-testid="brand-link"
+        >
+          <span className="flex size-6 items-center justify-center rounded-md bg-primary text-primary-foreground font-mono text-[10px] font-bold">
+            CF
+          </span>
+          <span className="text-sm">{t("brand")}</span>
+        </Link>
+        <div className="flex items-center gap-1">
           <Button
-            variant="destructive"
+            asChild
+            variant="ghost"
             size="sm"
-            onClick={handleDelete}
-            disabled={deleteUserMutation.isPending}
+            className="hidden sm:inline-flex"
           >
-            {deleteUserMutation.isPending ? t("user_list.deleting") : t("user_list.delete")}
+            <a
+              href="https://github.com/"
+              target="_blank"
+              rel="noreferrer"
+              data-testid="topbar-github"
+            >
+              <IconBrandGithub className="size-4" />
+              GitHub
+            </a>
           </Button>
-        )}
+          <Button asChild variant="ghost" size="sm" data-testid="topbar-sign-in">
+            <Link to="/login">{t("topbar.sign_in")}</Link>
+          </Button>
+          <Button asChild size="sm" data-testid="topbar-sign-up">
+            <Link to="/sign-up">{t("topbar.sign_up")}</Link>
+          </Button>
+          <LanguageSwitcher compact />
+          <ThemeToggle />
+        </div>
       </div>
-    </div>
+    </header>
   );
 }
 
-function UserCardSkeleton(props: { pulse?: boolean }) {
-  const { pulse = true } = props;
+interface FeatureCardProps {
+  icon: React.ReactNode;
+  title: string;
+  description: string;
+  badges: string[];
+  to: string;
+  cta: string;
+  testId: string;
+}
+
+function FeatureCard({
+  icon,
+  title,
+  description,
+  badges,
+  to,
+  cta,
+  testId,
+}: FeatureCardProps) {
   return (
-    <div className="flex items-center justify-between rounded-lg border bg-card p-4 shadow-sm">
-      <div className="flex-1">
-        <div
-          className={cn(
-            "mb-2 h-5 w-32 rounded bg-primary/20",
-            pulse && "animate-pulse"
-          )}
-        />
-        <div
-          className={cn(
-            "h-4 w-48 rounded bg-muted",
-            pulse && "animate-pulse"
-          )}
-        />
+    <Link to={to} data-testid={testId} className="group">
+      <Card className="h-full gap-4 transition-shadow hover:shadow-md">
+        <CardHeader className="gap-3">
+          <div className="flex items-center justify-between">
+            <span className="flex size-9 items-center justify-center rounded-md border border-border bg-muted/40 text-foreground">
+              {icon}
+            </span>
+            <div className="flex flex-wrap justify-end gap-1.5">
+              {badges.map((b) => (
+                <StackBadge key={b}>{b}</StackBadge>
+              ))}
+            </div>
+          </div>
+          <div className="space-y-1.5">
+            <CardTitle className="text-base">{title}</CardTitle>
+            <CardDescription className="leading-relaxed">
+              {description}
+            </CardDescription>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <span className="inline-flex items-center gap-1 text-sm font-medium text-primary">
+            {cta}
+            <IconArrowRight className="size-3.5 transition-transform group-hover:translate-x-0.5" />
+          </span>
+        </CardContent>
+      </Card>
+    </Link>
+  );
+}
+
+interface HarnessPillarProps {
+  icon: React.ReactNode;
+  title: string;
+  description: string;
+  path: string;
+}
+
+function HarnessPillar({ icon, title, description, path }: HarnessPillarProps) {
+  return (
+    <Card className="h-full">
+      <CardHeader className="gap-3">
+        <span className="flex size-9 items-center justify-center rounded-md border border-border bg-muted/40 text-foreground">
+          {icon}
+        </span>
+        <div className="space-y-1.5">
+          <CardTitle className="text-base">{title}</CardTitle>
+          <CardDescription className="leading-relaxed">
+            {description}
+          </CardDescription>
+        </div>
+      </CardHeader>
+      <CardContent>
+        <span className="font-mono text-[11px] uppercase tracking-wider text-muted-foreground">
+          {path}
+        </span>
+      </CardContent>
+    </Card>
+  );
+}
+
+function Footer() {
+  const { t } = useTranslation("home");
+
+  return (
+    <footer className="border-t border-border">
+      <div className="mx-auto flex max-w-6xl flex-col gap-2 px-6 py-8 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
+        <p>{t("footer.tagline")}</p>
+        <p className="font-mono text-xs uppercase tracking-wider">
+          {STACK.join(" · ")}
+        </p>
       </div>
-      <div
-        className={cn(
-          "size-10 rounded-full bg-muted",
-          pulse && "animate-pulse"
-        )}
-      />
-    </div>
+    </footer>
   );
 }

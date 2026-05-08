@@ -4,6 +4,8 @@ Cloudflare Workers runtime, bindings, environment variables. **Source-of-truth f
 
 > Programming model basics: see [`../codebase/effect-ts.md`](../codebase/effect-ts.md).
 
+> Cloudflare API reference (Workers runtime, bindings, Wrangler, D1, R2, Workflows, Workers AI, KV, DO): https://developers.cloudflare.com/llms.txt. Prefer `context7` MCP. Catalog + fetch guidance: [`../codebase/llms-txt.md`](../codebase/llms-txt.md).
+
 ## Runtime
 
 This project runs on **Cloudflare Workers, not Node.js**. No `process`, no `fs`, no native modules. Edge runtime only.

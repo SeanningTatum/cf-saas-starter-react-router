@@ -1,0 +1,19 @@
+{
+  "email": {
+    "invalid": "邮箱地址无效"
+  },
+  "password": {
+    "required": "请输入密码",
+    "min": "密码至少需要 {{min}} 个字符",
+    "mismatch": "两次输入的密码不一致"
+  },
+  "name": {
+    "required": "请输入姓名"
+  },
+  "string": {
+    "min": "至少需要 {{min}} 个字符",
+    "max": "最多只能有 {{max}} 个字符"
+  },
+  "required": "此项必填",
+  "invalid_type": "输入无效"
+}

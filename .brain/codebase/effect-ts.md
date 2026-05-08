@@ -2,6 +2,8 @@
 
 **This codebase is built on [Effect TS](https://effect.website).** All new code MUST use Effect.
 
+> Need the Effect API reference (Layer composition, Schema, Match, Stream, etc.)? Fetch https://effect.website/llms.txt — preferably via `context7` MCP. See [`llms-txt.md`](llms-txt.md) for catalog + fetch guidance.
+
 ## Non-negotiables
 
 1. **Effect TS is the default programming model.** Repositories, helpers, tRPC handlers return `Effect<A, E, R>`. No `throw` in app code. No `try/catch` outside `Effect.tryPromise`.
@@ -168,6 +170,9 @@ The runtime is built per request in [`workers/app.ts`](../../workers/app.ts) and
 - Don't access `ctx` or session inside a repository — accept everything as input.
 - Don't put validation in the repository layer — Schema lives at procedure boundary.
 - Don't write a helper without a `*.test.ts` in a sibling `__tests__/` directory.
+- Don't use `Effect.promise` for fallible promises (Better Auth, fetch, drizzle, third-party SDKs). It turns throws into **defects** that bypass `catchAll`/`catchTags`. Use `Effect.tryPromise({ try, catch })` mapped to a tagged error. See [`../rules/services.md`](../rules/services.md).
+- Don't duck-type `TRPCError.code` after `runProcedure` to derive an HTTP status. Non-tRPC HTTP handlers should call `runtime.runPromise` directly and build the `Response` inside the Effect via `Effect.catchTags`. See [`../rules/routes.md`](../rules/routes.md) "HTTP boundary routes".
+- Don't use `?.` on `ctx.auth.user` after `protectedProcedure` / `adminProcedure` — middleware guarantees non-null.
 
 ## Reference Docs
 

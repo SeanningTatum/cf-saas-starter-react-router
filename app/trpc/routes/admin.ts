@@ -2,7 +2,6 @@ import { Effect, Schema } from "effect";
 import { adminProcedure, createTRPCRouter } from "..";
 import { runProcedure } from "@/lib/effect-trpc";
 import { UserRepository } from "@/repositories/user";
-import { ValidationError } from "@/models/errors/repository";
 import {
   GetUsersInput,
   GetUserInput,
@@ -104,17 +103,12 @@ export const adminRouter = createTRPCRouter({
         ctx.runtime,
         Effect.gen(function* () {
           const repo = yield* UserRepository;
-          const { validUserIds, skippedCount } = yield* repo.filterProtectedUsers(
-            { userIds: input.userIds, currentUserId: ctx.auth.user.id }
-          );
+          const { validUserIds, skippedCount } = yield* repo.filterProtectedUsers({
+            userIds: input.userIds,
+            currentUserId: ctx.auth.user.id,
+          });
           if (validUserIds.length === 0) {
-            return yield* Effect.fail(
-              new ValidationError({
-                entity: "user",
-                field: "userIds",
-                message: "No valid users to ban (all selected users are protected)",
-              })
-            );
+            return { success: true, affectedCount: 0, skippedCount } as const;
           }
           const affectedCount = yield* repo.bulkBanUsers({
             userIds: validUserIds,
@@ -122,7 +116,18 @@ export const adminRouter = createTRPCRouter({
             expiresAt: input.expiresAt,
           });
           return { success: true, affectedCount, skippedCount } as const;
-        })
+        }).pipe(
+          Effect.tap((result) =>
+            Effect.logInfo("users.bulk_banned").pipe(
+              Effect.annotateLogs({
+                actor: ctx.auth.user.id,
+                targets: input.userIds,
+                affectedCount: result.affectedCount,
+                skippedCount: result.skippedCount,
+              })
+            )
+          )
+        )
       )
     ),
 
@@ -133,24 +138,29 @@ export const adminRouter = createTRPCRouter({
         ctx.runtime,
         Effect.gen(function* () {
           const repo = yield* UserRepository;
-          const { validUserIds, skippedCount } = yield* repo.filterProtectedUsers(
-            { userIds: input.userIds, currentUserId: ctx.auth.user.id }
-          );
+          const { validUserIds, skippedCount } = yield* repo.filterProtectedUsers({
+            userIds: input.userIds,
+            currentUserId: ctx.auth.user.id,
+          });
           if (validUserIds.length === 0) {
-            return yield* Effect.fail(
-              new ValidationError({
-                entity: "user",
-                field: "userIds",
-                message:
-                  "No valid users to delete (all selected users are protected)",
-              })
-            );
+            return { success: true, affectedCount: 0, skippedCount } as const;
           }
           const affectedCount = yield* repo.bulkDeleteUsers({
             userIds: validUserIds,
           });
           return { success: true, affectedCount, skippedCount } as const;
-        })
+        }).pipe(
+          Effect.tap((result) =>
+            Effect.logInfo("users.bulk_deleted").pipe(
+              Effect.annotateLogs({
+                actor: ctx.auth.user.id,
+                targets: input.userIds,
+                affectedCount: result.affectedCount,
+                skippedCount: result.skippedCount,
+              })
+            )
+          )
+        )
       )
     ),
 
@@ -161,25 +171,31 @@ export const adminRouter = createTRPCRouter({
         ctx.runtime,
         Effect.gen(function* () {
           const repo = yield* UserRepository;
-          const { validUserIds, skippedCount } = yield* repo.filterProtectedUsers(
-            { userIds: input.userIds, currentUserId: ctx.auth.user.id }
-          );
+          const { validUserIds, skippedCount } = yield* repo.filterProtectedUsers({
+            userIds: input.userIds,
+            currentUserId: ctx.auth.user.id,
+          });
           if (validUserIds.length === 0) {
-            return yield* Effect.fail(
-              new ValidationError({
-                entity: "user",
-                field: "userIds",
-                message:
-                  "No valid users to update (all selected users are protected)",
-              })
-            );
+            return { success: true, affectedCount: 0, skippedCount } as const;
           }
           const affectedCount = yield* repo.bulkUpdateUserRoles({
             userIds: validUserIds,
             role: input.role,
           });
           return { success: true, affectedCount, skippedCount } as const;
-        })
+        }).pipe(
+          Effect.tap((result) =>
+            Effect.logInfo("users.bulk_role_updated").pipe(
+              Effect.annotateLogs({
+                actor: ctx.auth.user.id,
+                targets: input.userIds,
+                role: input.role,
+                affectedCount: result.affectedCount,
+                skippedCount: result.skippedCount,
+              })
+            )
+          )
+        )
       )
     ),
 });

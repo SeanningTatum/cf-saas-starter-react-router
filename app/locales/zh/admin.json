@@ -1,0 +1,46 @@
+{
+  "dashboard": {
+    "title": "仪表盘",
+    "total_users": "用户总数",
+    "total_users_description": "所有已注册账号",
+    "verified_users": "已验证用户",
+    "verified_users_description": "验证率 {{rate}}%",
+    "admins": "管理员",
+    "admins_description": "平台管理员",
+    "banned_users": "已封禁用户",
+    "banned_users_description": "受限账号"
+  },
+  "charts": {
+    "user_growth": "用户增长",
+    "user_growth_description": "新增注册用户的时间趋势",
+    "new_users": "新用户",
+    "user_roles": "用户角色",
+    "user_roles_description": "按角色分布",
+    "email_verification": "邮箱验证",
+    "email_verification_description": "已验证 vs 未验证用户"
+  },
+  "insights": {
+    "title": "平台洞察",
+    "description": "关于你用户群的关键观察",
+    "verification_excellent": "邮箱验证率 {{rate}}% —— 用户参与度优秀",
+    "verification_moderate": "邮箱验证率 {{rate}}% —— 仍有提升空间",
+    "verification_low": "邮箱验证率 {{rate}}% —— 建议优化引导流程",
+    "banned_users": "{{count}} 位已封禁用户(占 {{percent}}%)",
+    "no_banned": "无封禁用户 —— 社区状态良好",
+    "admins_managing": "{{count}} 位管理员在管理平台",
+    "recent_signups": "过去 7 天有 {{count}} 位新用户"
+  },
+  "users": {
+    "title": "用户"
+  },
+  "sidebar": {
+    "capture": "采集",
+    "proposal": "提案",
+    "prompts": "Prompt",
+    "active_proposals": "进行中提案",
+    "archived": "归档",
+    "data_library": "数据库",
+    "reports": "报告",
+    "word_assistant": "写作助手"
+  }
+}

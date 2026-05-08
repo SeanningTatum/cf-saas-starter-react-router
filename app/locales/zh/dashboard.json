@@ -1,0 +1,48 @@
+{
+  "title": "仪表盘",
+  "eyebrow": "登录成功",
+  "welcome": "欢迎,{{name}}",
+  "subtitle": "这是登录后的着陆页。下面是一份导览,告诉你什么已经接好,以及代码在哪。",
+  "actions": {
+    "open_admin": "管理后台",
+    "docs": "文档"
+  },
+  "explore": {
+    "title": "探索",
+    "count": "4 个界面",
+    "cards": {
+      "auth": {
+        "title": "用户管理",
+        "description": "在管理后台中提升 / 降级 / 封禁用户。背后是 Better Auth + 类型化的 UserRepository。",
+        "cta": "打开用户列表",
+        "admin_only": "仅管理员"
+      },
+      "admin": {
+        "title": "管理后台",
+        "description": "受角色保护的 /admin 布局,带分析图表和用户表格。数据层通过 adminProcedure 校验。",
+        "cta": "打开管理后台",
+        "admin_only": "仅管理员"
+      },
+      "upload": {
+        "title": "文件上传",
+        "description": "向 /api/upload-file 发送 multipart 请求,通过 Workers 绑定和类型化的 BucketRepository 落到 R2。",
+        "cta": "打开示例集",
+        "admin_only": "仅管理员"
+      },
+      "effect": {
+        "title": "Effect TS 实战",
+        "description": "标记错误、Effect.Service 仓储、Effect.Schema 校验 —— 全部通过 tRPC 接口暴露。",
+        "cta": "打开示例集",
+        "admin_only": "仅管理员"
+      }
+    }
+  },
+  "account": {
+    "title": "你的会话",
+    "description": "你能看到这个页面,是因为 Better Auth 给你下发了一个 cookie。",
+    "role_admin": "管理员",
+    "role_user": "用户",
+    "session_active": "会话活跃",
+    "source": "查看源码"
+  }
+}

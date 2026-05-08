@@ -23,6 +23,17 @@ worker-configuration.d.ts
 /playwright/.cache/
 /e2e/**/*.png
 
+# Manual Playwright MCP screenshots (transient, not checked in)
+/.playwright-mcp/
+/*-light.png
+/*-dark.png
+/*-user.png
+/*-v2.png
+/home-*.png
+/login-*.png
+/signup-*.png
+/dashboard-*.png
+
 # Claude Code (per-machine config + secrets)
 .claude/settings.local.json
 .claude/.credentials*

@@ -1,42 +1,86 @@
 {
   "meta": {
     "title": "Cloudflare SaaS Starter",
-    "description": "Full-stack SaaS starter with Cloudflare, React Router, tRPC, and Better Auth"
+    "description": "Production-ready full-stack TypeScript starter for Cloudflare Workers — React Router v7, tRPC, Better Auth, Drizzle, Effect TS, and an agent harness so AI coding tools don't drift."
+  },
+  "brand": "Cloudflare SaaS Starter",
+  "topbar": {
+    "sign_in": "Sign in",
+    "sign_up": "Sign up"
   },
   "hero": {
-    "create": "Create",
-    "cloudflare": "Cloudflare",
-    "saas": "SaaS",
-    "description": "Full-stack TypeScript starter with",
-    "workers": "Cloudflare Workers",
-    "react_router": "React Router",
-    "trpc": "tRPC",
-    "better_auth": "Better Auth",
-    "drizzle": "Drizzle ORM",
-    "and": "and"
+    "eyebrow": "Boilerplate · v2",
+    "title_lead": "A serious starting point for your next ",
+    "title_accent": "Cloudflare",
+    "title_trail": " SaaS.",
+    "description": "Auth, admin dashboard, file upload to R2, analytics, dark mode, i18n — all wired with Effect TS, tRPC, and Drizzle. Fork it, rip out what you don't need, and ship.",
+    "cta_primary": "Create account",
+    "cta_secondary": "Sign in"
   },
-  "auth_showcase": {
-    "title": "Authentication Showcase",
-    "login_title": "Login Page",
-    "login_description": "Experience our authentication system",
-    "login_detail": "Try out the login form with Better Auth integration, including email/password authentication and session management.",
-    "signup_title": "Sign Up Page",
-    "signup_description": "Create a new account easily",
-    "signup_detail": "Check out our registration flow with form validation, password requirements, and seamless user creation.",
-    "signed_in_as": "Signed in as",
-    "not_signed_in": "You are not signed in",
-    "sign_up_demo": "Sign Up (Demo)",
-    "sign_out": "Sign Out"
+  "wired": {
+    "title": "What's already wired",
+    "subtitle": "Each card links into a route or surface in this repo. Nothing here is a stub — these features are live and tested.",
+    "cards": {
+      "auth": {
+        "title": "Email + password auth",
+        "description": "Better Auth with role-based access (user / admin) and a ban system, persisted in D1 via Drizzle.",
+        "cta": "Try sign-in"
+      },
+      "admin": {
+        "title": "Admin dashboard",
+        "description": "Role-gated /admin route with user management, ban controls, and analytics — gated through tRPC adminProcedure.",
+        "cta": "Open admin"
+      },
+      "upload": {
+        "title": "File upload to R2",
+        "description": "Server-side multipart upload through /api/upload-file, hitting Cloudflare R2 via a typed BucketRepository.",
+        "cta": "See upload"
+      },
+      "analytics": {
+        "title": "Read-only analytics",
+        "description": "User growth, role + verification distribution, recent signups — all queried with parallel Effect.all in a repository.",
+        "cta": "See analytics"
+      },
+      "effect": {
+        "title": "Effect TS programming model",
+        "description": "Tagged errors, Effect.Service repositories, Effect.Schema validation. No Zod, no try/catch, fully typed errors mapped to tRPC.",
+        "cta": "Browse kitchen sink"
+      },
+      "i18n": {
+        "title": "i18n out of the box",
+        "description": "remix-i18next wired into loaders + client. Add a locale by dropping a JSON file under app/locales/<lng>.",
+        "cta": "Toggle language"
+      }
+    }
   },
-  "user_list": {
-    "title": "Registered Users",
-    "no_users": "No users yet",
-    "anonymous_user": "Anonymous User",
-    "delete": "Delete",
-    "deleting": "Deleting...",
-    "protected_query": "Protected Query Result",
-    "auth_required": "Auth Required",
-    "protected_success": "Successfully fetched {{count}} users from protected endpoint",
-    "protected_unauthorized": "Unauthorized - Sign in to access protected data"
+  "harness": {
+    "eyebrow": "What's different in v2",
+    "title": "An agent harness, not just a stack",
+    "subtitle": "v2 ships with the scaffolding around the LLM — instructions, state, verification, scope, and lifecycle — so coding agents (Claude Code, Cursor, Codex) stay coherent across sessions instead of regressing every time the context window fills.",
+    "commands_label": "deterministic gates",
+    "pillars": {
+      "brain": {
+        "title": "Brain",
+        "description": "Layered docs the agent reads before touching code. High-level architecture, codebase patterns, 7 layer-aligned rules, per-feature memory, and run notes."
+      },
+      "recipes": {
+        "title": "Recipes",
+        "description": "Step-by-step runbooks for the common moves — add a tRPC endpoint, a DB table, a tagged error, a CF binding. Bookended by 00-before-task and 99-verify-done."
+      },
+      "gates": {
+        "title": "Verification gates",
+        "description": "Slash commands that run typecheck, tests, e2e, brain coherence, and harness invariants. The agent can't claim done until every gate is green."
+      }
+    }
+  },
+  "quickstart": {
+    "title": "Quickstart",
+    "subtitle": "Three commands and you have a working dev server, a local D1, and the marketing site you're looking at right now.",
+    "repo": "View repo",
+    "docs": "Browse code samples",
+    "terminal": "your terminal"
+  },
+  "footer": {
+    "tagline": "MIT — fork it, ship it."
   }
 }

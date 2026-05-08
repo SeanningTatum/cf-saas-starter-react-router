@@ -1,0 +1,86 @@
+{
+  "meta": {
+    "title": "Cloudflare SaaS 起步包",
+    "description": "面向 Cloudflare Workers 的全栈 TypeScript 起步项目 —— React Router v7、tRPC、Better Auth、Drizzle、Effect TS,以及一套让 AI 编程助手保持一致性的 agent harness。"
+  },
+  "brand": "Cloudflare SaaS 起步包",
+  "topbar": {
+    "sign_in": "登录",
+    "sign_up": "注册"
+  },
+  "hero": {
+    "eyebrow": "起步包 · v2",
+    "title_lead": "认真打造你的下一个 ",
+    "title_accent": "Cloudflare",
+    "title_trail": " SaaS。",
+    "description": "认证、管理后台、R2 文件上传、分析、深色模式、国际化 —— 全部基于 Effect TS、tRPC 和 Drizzle 接好。Fork 下来,删掉不要的部分,直接发布。",
+    "cta_primary": "创建账号",
+    "cta_secondary": "登录"
+  },
+  "wired": {
+    "title": "已经接好的功能",
+    "subtitle": "每张卡都指向仓库中的真实路由或界面。这里没有占位 —— 都是已上线、已测试的功能。",
+    "cards": {
+      "auth": {
+        "title": "邮箱 + 密码认证",
+        "description": "Better Auth,带角色控制(用户 / 管理员)和封禁系统,数据存储于 D1,通过 Drizzle 访问。",
+        "cta": "试试登录"
+      },
+      "admin": {
+        "title": "管理后台",
+        "description": "受角色保护的 /admin 路由 —— 用户管理、封禁控制、分析,通过 tRPC adminProcedure 校验。",
+        "cta": "打开管理后台"
+      },
+      "upload": {
+        "title": "上传到 R2",
+        "description": "服务端通过 /api/upload-file 上传到 Cloudflare R2,使用类型化的 BucketRepository。",
+        "cta": "查看上传"
+      },
+      "analytics": {
+        "title": "只读分析面板",
+        "description": "用户增长、角色 + 验证状态分布、最近注册 —— 全部通过 Effect.all 在仓储层并发查询。",
+        "cta": "查看分析"
+      },
+      "effect": {
+        "title": "Effect TS 编程模型",
+        "description": "标记错误、Effect.Service 仓储、Effect.Schema 校验。无 Zod、无 try/catch,所有错误类型化映射到 tRPC。",
+        "cta": "浏览示例集"
+      },
+      "i18n": {
+        "title": "开箱即用的国际化",
+        "description": "remix-i18next 已接入 loader 和客户端。要新增语言,在 app/locales/<lng> 下放一份 JSON 即可。",
+        "cta": "切换语言"
+      }
+    }
+  },
+  "harness": {
+    "eyebrow": "v2 的关键升级",
+    "title": "不只是技术栈,还有一套 agent harness",
+    "subtitle": "v2 把 LLM 周围的脚手架(指令、状态、验证、范围、生命周期)一起打包,让编程助手(Claude Code、Cursor、Codex)在长会话里保持一致,而不是上下文一满就开始走样。",
+    "commands_label": "确定性检查门",
+    "pillars": {
+      "brain": {
+        "title": "Brain",
+        "description": "智能助手在动代码前要读的分层文档:高层架构、代码模式、7 条分层规则、每个功能的记忆、运行日志。"
+      },
+      "recipes": {
+        "title": "Recipes",
+        "description": "常见动作的步骤手册 —— 加 tRPC 接口、加数据表、加标记错误、加 CF 绑定。前后由 00-before-task 和 99-verify-done 包夹。"
+      },
+      "gates": {
+        "title": "验证门",
+        "description": "斜杠命令一键跑类型检查、单测、e2e、brain 一致性、harness 不变量。所有门没绿,就不能宣告完成。"
+      }
+    }
+  },
+  "quickstart": {
+    "title": "快速上手",
+    "subtitle": "三条命令,你就有一个开发服务器、一个本地 D1,以及你正在看的这个营销页面。",
+    "repo": "查看仓库",
+    "docs": "浏览代码示例",
+    "terminal": "你的终端"
+  },
+  "footer": {
+    "tagline": "MIT 许可 —— Fork 一份,直接发布。"
+  }
+}

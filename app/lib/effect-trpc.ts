@@ -133,4 +133,8 @@ export const runProcedure = <A, E, R extends AppServices = AppServices>(
 ): Promise<A> =>
   (
     runtime as ManagedRuntime.ManagedRuntime<AppServices, never>
-  ).runPromise(tagToTRPC(effect) as Effect.Effect<A, TRPCError, AppServices>);
+  ).runPromise(
+    tagToTRPC(effect).pipe(
+      Effect.annotateLogs({ layer: "trpc" })
+    ) as Effect.Effect<A, TRPCError, AppServices>
+  );
