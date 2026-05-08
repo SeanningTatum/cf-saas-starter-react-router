@@ -73,8 +73,6 @@ This repo follows the [5-subsystem harness framework](.brain/HARNESS.md). The fi
 | Emails | [`.brain/emails/index.md`](.brain/emails/index.md) | Same — for stakeholder-driven constraints |
 | Changelog | [`.brain/CHANGELOG.md`](.brain/CHANGELOG.md) | Recent architectural or brain shifts |
 
-> Reusable Claude Code agents / skills / commands are provided by the shared plugins (`cf-saas-stack`, `dev-workflows`) — not stored in `.brain/`. See `README.md` for plugin install steps.
-
 ## Rules — 7 layers
 
 Direct pointers (each rule is the canonical "do / don't" for one layer):

@@ -73,22 +73,6 @@ bun run db:migrate:local    # apply migrations to local D1
 bun run dev                 # http://localhost:5173
 ```
 
-### First-time agent setup
-
-If you want AI agents to work effectively in this repo, install the recommended Claude Code plugins:
-
-```bash
-/plugin marketplace add SeanningTatum/claude-plugins
-/plugin install cf-saas-stack
-/plugin install dev-workflows
-
-# Cloudflare official skills (Workers, Durable Objects, Agents SDK, Wrangler, perf)
-/plugin marketplace add cloudflare/skills
-/plugin install cloudflare
-```
-
-The repo works without these — they add reusable agents/commands that complement the project-local harness.
-
 ---
 
 ## How To Work In This Repo
