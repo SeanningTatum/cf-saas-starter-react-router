@@ -96,7 +96,7 @@ Bootstrap, handoff, recovery.
 | Mid-task checkpoint | Append entry to [`runs/progress.md`](runs/progress.md) |
 | Task done | `/verify-done` ([`commands/verify-done.md`](../.claude/commands/verify-done.md)) — full checklist |
 | Ship a feature | `/ship-feature` ([`commands/ship-feature.md`](../.claude/commands/ship-feature.md)) — verify-done + flip `feature_list.json` + update feature MD + close run note + harness-check |
-| Validate harness | `/harness-check` ([`commands/harness-check.md`](../.claude/commands/harness-check.md)) — runs [`scripts/harness-check.sh`](../scripts/harness-check.sh) (10 deterministic invariants) |
+| Validate harness | `/harness-check` ([`commands/harness-check.md`](../.claude/commands/harness-check.md)) — runs [`scripts/harness-check.sh`](../scripts/harness-check.sh) (11 deterministic invariants) |
 | Pre-commit | [`brain-reminder.sh`](../.claude/hooks/brain-reminder.sh) hook lists brain files to update |
 | Architectural shift | Append to [`CHANGELOG.md`](CHANGELOG.md) |
 
@@ -106,7 +106,7 @@ Bootstrap, handoff, recovery.
 /start-task    → kickoff (baseline + brain read + framing + run note + progress entry)
 /verify-done   → full verification checklist
 /ship-feature  → close out an in-progress feature
-/harness-check → validate 10 harness invariants (json schema, sync, sub-agents, files, deps)
+/harness-check → validate 11 harness invariants (json schema, sync, sub-agents, files, deps, dead-links)
 ```
 
 `/harness-check` is the single deterministic gate — runs in seconds, no LLM, exits non-zero on any drift.

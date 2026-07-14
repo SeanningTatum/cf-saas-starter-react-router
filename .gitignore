@@ -42,3 +42,6 @@ worker-configuration.d.ts
 
 # Editor agent caches
 .cursor/
+
+# feature-verifier throwaway Playwright scripts (see .claude/agents/feature-verifier.md)
+tmp/

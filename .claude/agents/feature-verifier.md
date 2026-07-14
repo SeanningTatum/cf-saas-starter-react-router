@@ -32,24 +32,26 @@ If the caller gave a slug but no explicit steps, read `.brain/features/<slug>/<s
 2. **Ensure the app is up**: check `http://localhost:5173` responds (`curl -sf`). If not, start it in the background (`bun run dev`) and poll until the login page serves.
 3. **Ensure the browser binary exists**: `node_modules/.bin/playwright install chromium` (uses the project-pinned Playwright — avoids a global-cache revision mismatch; no-op if already installed).
 4. **Ensure the test admin exists** (credentials + setup in [`.brain/rules/library.md`](../../.brain/rules/library.md) "Test admin credentials"). The script signs in via the UI — do not insert users directly (Better Auth requires API creation).
-5. **Author a throwaway Playwright script** (see skeleton below). Write it to a temp path (e.g. `$(mktemp -d)/verify-<slug>.ts`) — NOT under `e2e/` and NOT named `*.spec.ts`, so it is never committed or picked up by `bun run test:e2e`. The script:
+5. **Author a throwaway Playwright script** (see skeleton below). Write it to a **project-internal** temp path — `tmp/verify-<slug>.ts` at the repo root (gitignored) — NOT `$(mktemp -d)` (a `/tmp/...` path can't resolve `@playwright/test`: Node/Bun resolves bare imports from the script file's directory upward, and `/tmp` has no `node_modules`). Keep it out of `e2e/` and never name it `*.spec.ts`, so `bun run test:e2e` never picks it up. Bun walks up from `tmp/` → repo root → resolves the pinned `@playwright/test`. The script:
    - launches the **bundled** `chromium` headless with a clean profile — `chromium.launch({ args: ["--disable-extensions"] })`. **Never** set `channel: "chrome"` or use a persistent `user-data-dir`: that loads the developer's real browser + extensions, which inject DOM (e.g. a password manager writing `caret-color: transparent` onto inputs) and produce phantom hydration mismatches that are NOT app bugs. Match the committed `playwright.config.ts` (default `devices["Desktop Chrome"]`, extension-free).
    - separates console output into **`jsErrors`** (uncaught exceptions via `pageerror` + React/hydration warnings + any `console` error that is NOT a network resource load) and **`networkErrors`** (a `console` error matching `Failed to load resource … status of <n>`, or a response with status ≥ 400), tagging each network entry with the step id during which it fired,
    - walks the golden path, then the one error path,
    - **runs the error path in a fresh `browser.newContext()`** (no cookies) — the golden path leaves the context authenticated, and `/login` + `/sign-up` loaders redirect an authenticated session to `/dashboard`, so reusing it would time out,
    - `await page.screenshot({ path: ".brain/features/<slug>/screenshots/NN-<step>.png" })` at each asserted state (number steps `01`, `02`, …; error steps `E1`, …),
    - prints a single JSON line to stdout: `{ "steps": [...], "jsErrors": [...], "networkErrors": [{step, status, url}] }`.
-6. **Run it via the CLI, from the project directory**: `bun run <script>`. Run from the repo root so it uses the project's pinned `@playwright/test` from local `node_modules` (a global `bunx playwright` cache can want a different browser revision). Capture stdout + exit code.
+6. **Run it via the CLI, from the repo root**: `bun run tmp/verify-<slug>.ts`. Because the script lives under the project, Bun resolves the pinned `@playwright/test` from the repo's `node_modules` (a global `bunx playwright` cache can want a different browser revision). Capture stdout + exit code.
 7. **Write the doc** from the template: per-step table (step → expected → observed → screenshot → ✅/❌), console findings (from `jsErrors` / `networkErrors`), and a single verdict line.
-8. **Clean up**: delete the temp script (keep the screenshots — they are the evidence). Leave the dev server as you found it (if you started it, stop it).
+8. **Clean up**: delete the temp script (`rm tmp/verify-<slug>.ts`; keep the screenshots — they are the evidence). Leave the dev server as you found it (if you started it, stop it).
 
 ### Script skeleton (adapt per feature)
 
 ```ts
 import { chromium, type Page } from "@playwright/test";
+import { mkdirSync } from "node:fs";
 
 const SLUG = "<slug>";
 const DIR = `.brain/features/${SLUG}/screenshots`;
+mkdirSync(DIR, { recursive: true }); // first-ever verification: folder may not exist yet
 const NET = /Failed to load resource.*status of (\d+)/;
 
 const jsErrors: string[] = [];
