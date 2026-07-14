@@ -1,6 +1,6 @@
-# CLAUDE.md — Brain Pointer
+# AGENTS.md — Brain Pointer
 
-> Same content lives in [`AGENTS.md`](AGENTS.md). Both files are entry points for any AI agent (Claude Code, Cursor, Codex, Aider). All real content lives under [`.brain/`](.brain/). **Keep both files in sync** when editing.
+> This is the single source of truth. `CLAUDE.md` is a symlink to this file, so Claude Code, Cursor, Codex, Aider all read the same content. **Edit `AGENTS.md` only** — never replace the symlink with a real file. All real content lives under [`.brain/`](.brain/).
 
 ## Overview
 
@@ -53,7 +53,7 @@ This repo follows the [5-subsystem harness framework](.brain/HARNESS.md). The fi
 ├── rules/                     Layer-aligned conventions (frontend / cloudflare / repository / services / routes / library / errors)
 ├── features/                  Per-feature memory — one folder per feature (<slug>/<slug>.md + verifications/ + screenshots/ + runs/) + feature_list.json
 ├── recipes/                   Step-by-step runbooks (00-before-task, 99-verify-done, add-*)
-├── runs/                      progress.md (rolling cursor) + cross-cutting <date>-<slug>.md logs (feature-specific runs live under features/<slug>/runs/)
+├── runs/                      progress.md (rolling cursor) + cross-cutting <date>-<slug>.md work logs (feature-specific runs live under features/<slug>/runs/)
 ├── transcripts/               Meeting notes, decision logs
 ├── emails/                    Archived stakeholder correspondence
 └── CHANGELOG.md               High-level project + brain change log
@@ -69,7 +69,7 @@ This repo follows the [5-subsystem harness framework](.brain/HARNESS.md). The fi
 | Features | [`.brain/features/index.md`](.brain/features/index.md) | Modifying or extending an existing feature; before scoping a new one |
 | **Recipes** | [`.brain/recipes/index.md`](.brain/recipes/index.md) | **Adding code.** Step-by-step runbooks: 00-before-task / 99-verify-done bookends + tRPC endpoint, DB table, CF binding, tagged error, route, service, feature. Read this before writing. |
 | Runs | [`.brain/runs/index.md`](.brain/runs/index.md) | Multi-session task or recovery after compaction — past attempts, baselines, what failed and why |
-| Verifications | [`.brain/features/index.md`](.brain/features/index.md) | Verifying a user-visible feature — spawn `feature-verifier` (Playwright CLI); verdict doc + screenshots land in `features/<slug>/verifications/` + `screenshots/` (replaces per-feature e2e specs) |
+| Verifications | [`.brain/features/index.md`](.brain/features/index.md) | Verifying a user-visible feature — spawn `feature-verifier` for a browser walk; verdict doc + screenshots land in `features/<slug>/verifications/` + `screenshots/` (replaces per-feature e2e specs) |
 | Transcripts | [`.brain/transcripts/index.md`](.brain/transcripts/index.md) | A constraint or decision in code lacks visible "why" |
 | Emails | [`.brain/emails/index.md`](.brain/emails/index.md) | Same — for stakeholder-driven constraints |
 | Changelog | [`.brain/CHANGELOG.md`](.brain/CHANGELOG.md) | Recent architectural or brain shifts |
@@ -140,6 +140,6 @@ bun run db:studio         # Drizzle Studio
 | Architectural shift | append to `CHANGELOG.md` |
 | Stakeholder decision | drop file in `transcripts/` or `emails/`, link from `CHANGELOG.md` |
 
-## Sync rule
+## One file, two names
 
-When you edit `CLAUDE.md`, mirror to `AGENTS.md` (or vice versa). They are intentionally duplicated to satisfy both Claude Code (`CLAUDE.md`) and AGENTS-spec tools (Codex, Aider, …) at repo root without symlinks.
+`CLAUDE.md` is a symlink → `AGENTS.md`. Edit `AGENTS.md` only. No mirroring needed — both names resolve to the same file. If you ever see `CLAUDE.md` as a real (non-symlink) file, re-create the symlink: `ln -sf AGENTS.md CLAUDE.md`.
