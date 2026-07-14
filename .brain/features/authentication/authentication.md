@@ -13,7 +13,7 @@ Email/password authentication with role-based access control (`user` / `admin`) 
 
 ## How It Works
 
-Better Auth is built **per request** in [`workers/app.ts`](../../workers/app.ts):
+Better Auth is built **per request** in [`workers/app.ts`](../../../workers/app.ts):
 
 ```typescript
 const auth = createAuth(env.DATABASE, env.BETTER_AUTH_SECRET, new URL(request.url).origin);
@@ -27,12 +27,12 @@ const { api } = yield* AuthApi;
 const session = yield* Effect.promise(() => api.getSession({ headers }));
 ```
 
-[`createTRPCContext`](../../app/trpc/index.ts) calls `api.getSession` once per request and exposes `ctx.auth = { session, user } | null`. `protectedProcedure` and `adminProcedure` enforce non-null and role respectively, throwing `TRPCError` directly (control-flow, not domain error).
+[`createTRPCContext`](../../../app/trpc/index.ts) calls `api.getSession` once per request and exposes `ctx.auth = { session, user } | null`. `protectedProcedure` and `adminProcedure` enforce non-null and role respectively, throwing `TRPCError` directly (control-flow, not domain error).
 
 Form components (`signup-form.tsx`, `login-form.tsx`) call `authClient.signUp.email` / `authClient.signIn.email` from the browser; on success they `navigate("/dashboard")`.
 
 ### Persistence details
-- D1 tables (Better Auth's drizzle schema): `user`, `session`, `account`, `verification` — see [`app/db/schema.ts`](../../app/db/schema.ts)
+- D1 tables (Better Auth's drizzle schema): `user`, `session`, `account`, `verification` — see [`app/db/schema.ts`](../../../app/db/schema.ts)
 - `user.role`: `"user" | "admin"`, default `"user"`
 - `user.banned`, `banReason`, `banExpires` (timestamp_ms, null = permanent)
 - Session token in httpOnly cookie; `session.ipAddress`, `session.userAgent` captured for audit
@@ -40,25 +40,25 @@ Form components (`signup-form.tsx`, `login-form.tsx`) call `authClient.signUp.em
 
 ### Testability
 - `app/lib/schemas/auth.ts` (`SignupSchema`, `LoginSchema`, `Email`, `Password`, `NonEmptyString`) covered by `app/lib/schemas/__tests__/auth.test.ts`
-- Better Auth itself is exercised end-to-end via Playwright with `admin@test.local` / `TestAdmin123!` (see [`../rules/library.md`](../rules/library.md))
+- Better Auth itself is exercised end-to-end via Playwright with `admin@test.local` / `TestAdmin123!` (see [`../rules/library.md`](../../rules/library.md))
 - No unit test for `createAuth` itself — relies on Better Auth's own tests
 
 ## Key Files
 
 | File | Role |
 |------|------|
-| [`app/auth/server.ts`](../../app/auth/server.ts) | `createAuth(database, secret, baseURL?)` factory |
-| [`app/auth/client.ts`](../../app/auth/client.ts) | `authClient` (`signUp`, `signIn`, `signOut`, `useSession`) |
-| [`app/services/auth.ts`](../../app/services/auth.ts) | `AuthApi` Effect Tag + `AuthApiLive` Layer |
-| [`app/services/session.ts`](../../app/services/session.ts) | `Session` Tag (per-request, ad-hoc) |
-| [`app/trpc/index.ts`](../../app/trpc/index.ts) | `createTRPCContext`, `publicProcedure`, `protectedProcedure`, `adminProcedure` |
-| [`app/lib/schemas/auth.ts`](../../app/lib/schemas/auth.ts) | `LoginSchema`, `SignupSchema`, `Email`, `Password` |
-| [`app/routes/authentication/login.tsx`](../../app/routes/authentication/login.tsx) | Login page |
-| [`app/routes/authentication/sign-up.tsx`](../../app/routes/authentication/sign-up.tsx) | Sign-up page |
-| [`app/routes/authentication/components/login-form.tsx`](../../app/routes/authentication/components/login-form.tsx) | Login form (RHF + `effectResolver(LoginSchema)`) |
-| [`app/routes/authentication/components/signup-form.tsx`](../../app/routes/authentication/components/signup-form.tsx) | Sign-up form |
-| [`app/routes/api/auth.$.ts`](../../app/routes/api/auth.$.ts) | `/api/auth/*` catch-all delegating to `auth.handler` |
-| [`app/routes/dashboard/_layout.tsx`](../../app/routes/dashboard/_layout.tsx) | Canonical loader-level auth gate |
+| [`app/auth/server.ts`](../../../app/auth/server.ts) | `createAuth(database, secret, baseURL?)` factory |
+| [`app/auth/client.ts`](../../../app/auth/client.ts) | `authClient` (`signUp`, `signIn`, `signOut`, `useSession`) |
+| [`app/services/auth.ts`](../../../app/services/auth.ts) | `AuthApi` Effect Tag + `AuthApiLive` Layer |
+| [`app/services/session.ts`](../../../app/services/session.ts) | `Session` Tag (per-request, ad-hoc) |
+| [`app/trpc/index.ts`](../../../app/trpc/index.ts) | `createTRPCContext`, `publicProcedure`, `protectedProcedure`, `adminProcedure` |
+| [`app/lib/schemas/auth.ts`](../../../app/lib/schemas/auth.ts) | `LoginSchema`, `SignupSchema`, `Email`, `Password` |
+| [`app/routes/authentication/login.tsx`](../../../app/routes/authentication/login.tsx) | Login page |
+| [`app/routes/authentication/sign-up.tsx`](../../../app/routes/authentication/sign-up.tsx) | Sign-up page |
+| [`app/routes/authentication/components/login-form.tsx`](../../../app/routes/authentication/components/login-form.tsx) | Login form (RHF + `effectResolver(LoginSchema)`) |
+| [`app/routes/authentication/components/signup-form.tsx`](../../../app/routes/authentication/components/signup-form.tsx) | Sign-up form |
+| [`app/routes/api/auth.$.ts`](../../../app/routes/api/auth.$.ts) | `/api/auth/*` catch-all delegating to `auth.handler` |
+| [`app/routes/dashboard/_layout.tsx`](../../../app/routes/dashboard/_layout.tsx) | Canonical loader-level auth gate |
 
 ## Dependencies
 
@@ -70,7 +70,7 @@ Form components (`signup-form.tsx`, `login-form.tsx`) call `authClient.signUp.em
 
 ## Tagged Errors
 
-Auth-surface errors only. User-management errors raised through admin procedures (`NotFoundError`, `UpdateError`, `DeletionError`, `QueryError`, `ValidationError` from `UserRepository`) are documented in [`admin-dashboard.md`](admin-dashboard.md).
+Auth-surface errors only. User-management errors raised through admin procedures (`NotFoundError`, `UpdateError`, `DeletionError`, `QueryError`, `ValidationError` from `UserRepository`) are documented in [`admin-dashboard.md`](../admin-dashboard/admin-dashboard.md).
 
 | Error | Where raised | tRPC code |
 |-------|--------------|-----------|
@@ -82,7 +82,7 @@ Procedure-level auth failures throw `TRPCError({ code: "UNAUTHORIZED" \| "FORBID
 
 ## Known gaps
 
-See [`../high-level-architecture/security.md`](../high-level-architecture/security.md) "Known gaps". Specifically: `/admin/_layout.tsx` has no loader gate today.
+See [`../high-level-architecture/security.md`](../../high-level-architecture/security.md) "Known gaps". Specifically: `/admin/_layout.tsx` has no loader gate today.
 
 ## Changelog
 

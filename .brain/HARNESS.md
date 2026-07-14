@@ -47,7 +47,7 @@ What is true *right now*.
 | [`runs/progress.md`](runs/progress.md) | Rolling session cursor — newest entry on top, ≤5 lines per checkpoint. Read at session start. | Each meaningful checkpoint |
 | [`runs/<YYYY-MM-DD>-<slug>.md`](runs/) | Per-task deep state — baselines, dead ends, decisions, verbatim test output | During the task |
 | [`CHANGELOG.md`](CHANGELOG.md) | High-level architectural / brain shifts (NOT code changelog — `git log` is) | On architectural change |
-| `features/<slug>.md` "Changelog" table | Per-feature behaviour changes | On every behavior change to feature |
+| `features/<slug>/<slug>.md` "Changelog" table | Per-feature behaviour changes | On every behavior change to feature |
 
 **Two-layer rule**: `progress.md` is "where am I right now"; `runs/<slug>.md` is "everything I learned doing this task." First is read at session start, second when continuing a specific task.
 
@@ -59,15 +59,16 @@ Externalises "am I done?" so the agent does not declare victory on a half-built 
 
 | Tool | Purpose |
 |------|---------|
-| [`recipes/99-verify-done.md`](recipes/99-verify-done.md) | Full checklist: typecheck → test → **e2e (default ON)** → build (if CF-touching) → manual smoke (if UI) → harness-check → brain coherence |
+| [`recipes/99-verify-done.md`](recipes/99-verify-done.md) | Full checklist: typecheck → test → **e2e smoke (default ON)** → build (if CF-touching) → **feature verification** (if UI, via `feature-verifier`) → harness-check → brain coherence |
+| [`features/<slug>/verifications/`](features/index.md) | Browser-walk evidence per feature (screenshots + verdict), produced by the `feature-verifier` sub-agent — the feature-level proof layer, co-located in each feature's folder |
 | [`/verify-done`](../.claude/commands/verify-done.md) slash command | Same checklist, runnable mid-conversation |
 | [`init.sh --baseline`](../init.sh) | Captures pre-change baseline (typecheck + test + harness-check) so post-change failures aren't blamed on you |
 | [`scripts/harness-check.sh`](../scripts/harness-check.sh) | Deterministic harness invariant checker (11 checks: feature-list state, brain link integrity, sub-agent frontmatter, sync rule). Run by `init.sh` + CI. |
-| [`.github/workflows/ci.yml`](../.github/workflows/ci.yml) | CI gate mirroring `init.sh` baseline + `build` + `e2e` + non-negotiables grep sweep on every PR |
+| [`.github/workflows/ci.yml`](../.github/workflows/ci.yml) | CI gate mirroring `init.sh` baseline + `build` + `e2e` smoke specs + non-negotiables grep sweep on every PR |
 | [`.claude/hooks/brain-reminder.sh`](../.claude/hooks/brain-reminder.sh) | Pre-commit hook listing brain docs the staged paths likely affect (deterministic, no LLM, never blocks — CI is the gate) |
 | [`app/lib/effect-trpc.ts`](../app/lib/effect-trpc.ts) `appErrorToTRPC` | Compile-time exhaustiveness on tagged-error → HTTP code via `assertNever`. New tagged error w/o case = TS error. |
 
-**Verification rule**: green typecheck + green tests is *necessary, not sufficient*. UI changes need a browser walk. CF-binding changes need `bun run build`. E2E is default-on (opt-out only with run-note justification — see `99-verify-done.md` §2). Skipping is the single biggest source of premature "done."
+**Verification rule**: green typecheck + green tests is *necessary, not sufficient*. UI features need a `feature-verifier` browser walk with a PASS verdict doc. CF-binding changes need `bun run build`. E2E smoke specs are default-on (opt-out only with run-note justification — see `99-verify-done.md` §2). Skipping is the single biggest source of premature "done."
 
 ---
 
@@ -121,7 +122,8 @@ Custom subagents in [`.claude/agents/`](../.claude/agents/) wrap pieces of the h
 | `brain-navigator` | Read-only locator. Returns "what to read for X task" by walking the brain indexes. |
 | `effect-ts-enforcer` | Reviews a diff for the 5 non-negotiables (no `throw`, no Zod, tagged errors mapped, repo/service patterns, no `process.env`). |
 | `verify-done-runner` | Runs the full `99-verify-done.md` checklist and reports pass/fail per step. |
-| `feature-tracker` | Updates `feature_list.json` + `features/<slug>.md` on status change. Refuses to touch code. |
+| `feature-verifier` | Drives a feature's golden + error path through the live app with the Playwright CLI (throwaway headless script run via `bun`), screenshots each step, writes a verdict doc to `verifications/`. The feature-level proof layer. |
+| `feature-tracker` | Updates `feature_list.json` + `features/<slug>/<slug>.md` on status change. Refuses to touch code. |
 | `recipe-runner` | Executes one of the 8 `add-*` recipes deterministically. Inputs: recipe name + task params. |
 
 See [`.claude/agents/README.md`](../.claude/agents/README.md) for invocation syntax and full descriptions. Plugin-provided agents (`feature-dev`, `code-review`, `frontend-design`, etc.) are documented in their respective plugin READMEs and are *complementary* to these harness-specific ones.

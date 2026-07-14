@@ -23,7 +23,7 @@ For trivial edits (typo, comment, one-line change), bookends are optional — bu
 | Command | Purpose |
 |---------|---------|
 | [`/start-task`](.claude/commands/start-task.md) | Kickoff — `init.sh --baseline` + brain read + framing + run note + progress entry. Refuses if scope policy violated. |
-| [`/verify-done`](.claude/commands/verify-done.md) | Full verification — typecheck/test/e2e/build/UI/brain coherence/non-negotiables. |
+| [`/verify-done`](.claude/commands/verify-done.md) | Full verification — typecheck/test/e2e smoke/build/feature-verification/brain coherence/non-negotiables. |
 | [`/ship-feature`](.claude/commands/ship-feature.md) | Close out — verify-done + flip `feature_list.json` + update feature MD + close run note + harness-check. |
 | [`/harness-check`](.claude/commands/harness-check.md) | Validate 10 harness invariants via [`scripts/harness-check.sh`](scripts/harness-check.sh) (deterministic, no LLM, exits non-zero on drift). |
 
@@ -40,7 +40,7 @@ This repo follows the [5-subsystem harness framework](.brain/HARNESS.md). The fi
 ## Scope policy
 
 - **One in-progress feature at a time.** Source of truth: `status: "in-progress"` row in [`.brain/features/feature_list.json`](.brain/features/feature_list.json). If you must start a second, mark the first `blocked` with reason in `evidence`.
-- **Definition of done** for any feature/task: implementation complete + `/verify-done` passes + per-feature `.brain/features/<slug>.md` updated + `feature_list.json` status flipped + run note closed.
+- **Definition of done** for any feature/task: implementation complete + `/verify-done` passes + per-feature `.brain/features/<slug>/<slug>.md` updated + `feature_list.json` status flipped + run note closed.
 - **Scope creep guardrail**: if you touch >2 features in one diff, stop and split. Cross-feature refactor is a separate task with its own run note.
 
 ## Brain layout
@@ -51,9 +51,9 @@ This repo follows the [5-subsystem harness framework](.brain/HARNESS.md). The fi
 ├── high-level-architecture/   System layers, data flow, security, integrations, user journeys
 ├── codebase/                  Programming model, helpers, tests, i18n, tRPC API surface
 ├── rules/                     Layer-aligned conventions (frontend / cloudflare / repository / services / routes / library / errors)
-├── features/                  Per-feature memory — one MD per feature + feature_list.json (machine-readable status)
+├── features/                  Per-feature memory — one folder per feature (<slug>/<slug>.md + verifications/ + screenshots/ + runs/) + feature_list.json
 ├── recipes/                   Step-by-step runbooks (00-before-task, 99-verify-done, add-*)
-├── runs/                      progress.md (rolling cursor) + per-task <date>-<slug>.md work logs
+├── runs/                      progress.md (rolling cursor) + cross-cutting <date>-<slug>.md logs (feature-specific runs live under features/<slug>/runs/)
 ├── transcripts/               Meeting notes, decision logs
 ├── emails/                    Archived stakeholder correspondence
 └── CHANGELOG.md               High-level project + brain change log
@@ -69,6 +69,7 @@ This repo follows the [5-subsystem harness framework](.brain/HARNESS.md). The fi
 | Features | [`.brain/features/index.md`](.brain/features/index.md) | Modifying or extending an existing feature; before scoping a new one |
 | **Recipes** | [`.brain/recipes/index.md`](.brain/recipes/index.md) | **Adding code.** Step-by-step runbooks: 00-before-task / 99-verify-done bookends + tRPC endpoint, DB table, CF binding, tagged error, route, service, feature. Read this before writing. |
 | Runs | [`.brain/runs/index.md`](.brain/runs/index.md) | Multi-session task or recovery after compaction — past attempts, baselines, what failed and why |
+| Verifications | [`.brain/features/index.md`](.brain/features/index.md) | Verifying a user-visible feature — spawn `feature-verifier` (Playwright CLI); verdict doc + screenshots land in `features/<slug>/verifications/` + `screenshots/` (replaces per-feature e2e specs) |
 | Transcripts | [`.brain/transcripts/index.md`](.brain/transcripts/index.md) | A constraint or decision in code lacks visible "why" |
 | Emails | [`.brain/emails/index.md`](.brain/emails/index.md) | Same — for stakeholder-driven constraints |
 | Changelog | [`.brain/CHANGELOG.md`](.brain/CHANGELOG.md) | Recent architectural or brain shifts |
@@ -79,12 +80,12 @@ Direct pointers (each rule is the canonical "do / don't" for one layer):
 
 | # | Rule | Layer |
 |---|------|-------|
-| 1 | [`.brain/rules/frontend.md`](.brain/rules/frontend.md) | UI, forms, modals, Tailwind, manual Playwright verification |
+| 1 | [`.brain/rules/frontend.md`](.brain/rules/frontend.md) | UI, forms, modals, Tailwind, feature-verifier browser walk |
 | 2 | [`.brain/rules/cloudflare.md`](.brain/rules/cloudflare.md) | Workers runtime, bindings, env, Workflows declaration |
 | 3 | [`.brain/rules/repository.md`](.brain/rules/repository.md) | `Effect.Service` repos, Drizzle schema, repo inputs |
 | 4 | [`.brain/rules/services.md`](.brain/rules/services.md) | Effect Tags + Layers, Better Auth, Workflows, Session, Logger |
 | 5 | [`.brain/rules/routes.md`](.brain/rules/routes.md) | tRPC procedures via `runProcedure`, React Router loaders, auth gating |
-| 6 | [`.brain/rules/library.md`](.brain/rules/library.md) | Helpers, Effect Schema, effect-utils, Vitest, Playwright e2e |
+| 6 | [`.brain/rules/library.md`](.brain/rules/library.md) | Helpers, Effect Schema, effect-utils, Vitest, Playwright CLI (smoke specs + feature verification) |
 | 7 | [`.brain/rules/errors.md`](.brain/rules/errors.md) | Tagged errors, `tagToTRPC`, error helpers |
 
 ## Five non-negotiables
@@ -133,7 +134,8 @@ bun run db:studio         # Drizzle Studio
 | New tagged error | `rules/errors.md` (and add to `tagToTRPC`!) |
 | New UI component / form | `rules/frontend.md` |
 | New CF binding | `rules/cloudflare.md` + `high-level-architecture/architecture.md` |
-| New / changed feature | `features/<slug>.md` (use `_TEMPLATE.md`) |
+| New / changed feature | `features/<slug>/<slug>.md` (use `_TEMPLATE.md`) |
+| New / changed user-visible flow | Run `feature-verifier` → `features/<slug>/verifications/<date>.md` (browser walk + screenshots + PASS verdict) |
 | New / changed DB table or feature with user-visible data | extend fixtures in `scripts/seed-preview.ts` (see `rules/repository.md` "Seed data") |
 | Architectural shift | append to `CHANGELOG.md` |
 | Stakeholder decision | drop file in `transcripts/` or `emails/`, link from `CHANGELOG.md` |

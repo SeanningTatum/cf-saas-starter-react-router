@@ -198,9 +198,11 @@ describe("GetUserInput", () => {
 
 If drizzle is hard to stub (joins, transactions): extract pure logic into a top-level function, test that directly, keep the side-effecting wrapper thin. Examples: `isProtectedUser`, `buildUserConditions` in `app/repositories/user.ts`.
 
-## Playwright (e2e)
+## Playwright (e2e smoke specs — CI regression net)
 
-Lives in `e2e/*.spec.ts`. Use `@playwright/test`.
+Lives in `e2e/*.spec.ts`. Use `@playwright/test`. CI (`.github/workflows/ci.yml`) re-runs these on every PR.
+
+> **Scope: thin and stable, not one-per-feature.** These specs guard critical paths (auth, and any flow whose regression would be costly) against future breakage. Feature-level proof is the [`feature-verifier`](../../.claude/agents/feature-verifier.md) sub-agent + a doc in [`features/<slug>/verifications/`](../features/index.md), not a new spec each time. Add/extend a spec here only when a path is critical enough to warrant automated CI coverage.
 
 ### Patterns
 
@@ -254,9 +256,9 @@ bunx wrangler d1 execute testing-db --local --command "DELETE FROM account WHERE
 
 (Better Auth requires user creation through the API, not direct insert. The D1 binding name is `DATABASE`; `database_name` is `testing-db` per `wrangler.jsonc`.)
 
-### Manual verification with Playwright MCP
+### Feature verification with the Playwright CLI
 
-For frontend changes during dev, before writing the e2e: use `browser_navigate`, `browser_snapshot`, `browser_click`, `browser_fill_form`, `browser_take_screenshot`. See [`frontend.md`](frontend.md) for the loop.
+Feature-level flows are verified by driving the **live app**, not by writing a committed spec. The [`feature-verifier`](../../.claude/agents/feature-verifier.md) sub-agent authors a throwaway Playwright script (`chromium.launch()` → `page.goto`/`getByTestId`/`click`/`fill` → `page.screenshot`), runs it headless via `bun run <script>`, walks the golden + one error path, and writes a verdict doc to [`features/<slug>/verifications/<date>.md`](../features/index.md). The temp script is deleted after; only screenshots + doc are kept. See [`frontend.md`](frontend.md) and [`recipes/99-verify-done.md`](../recipes/99-verify-done.md) §4.
 
 ## Anti-patterns
 

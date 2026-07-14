@@ -7,7 +7,7 @@
 | Recipe | When to use |
 |--------|-------------|
 | [00-before-task.md](00-before-task.md) | **Start here.** Frame task, read the brain, capture baseline, open run note |
-| [99-verify-done.md](99-verify-done.md) | **End here.** Typecheck + tests + e2e + brain coherence before declaring done. Also runnable as `/verify-done` slash command |
+| [99-verify-done.md](99-verify-done.md) | **End here.** Typecheck + tests + e2e smoke + feature verification (browser walk, if UI) + brain coherence before declaring done. Also runnable as `/verify-done` slash command |
 
 ## Adding code
 

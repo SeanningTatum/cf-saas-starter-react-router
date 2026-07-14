@@ -74,10 +74,10 @@ const users = await context.runtime.runPromise(
 
 ### 8. Verify
 
-- `bun run dev` → manually exercise route
-- Check golden path + auth-redirect path
+- `bun run dev` → exercise route in a browser (golden path + auth-redirect path)
 - For protected routes: verify unauthenticated user redirected
 - For admin routes: verify non-admin user redirected to `/dashboard`
+- If this route is a feature flow, produce a verification doc via the [`feature-verifier`](../../.claude/agents/feature-verifier.md) sub-agent (see [`99-verify-done.md`](99-verify-done.md) §4)
 
 ## Definition of done
 
@@ -86,7 +86,7 @@ const users = await context.runtime.runPromise(
 - [ ] `handle.i18n` namespace declared
 - [ ] All visible strings via `t(...)` (no hardcoded English)
 - [ ] Forms use Effect Schema + effectResolver
-- [ ] Manual smoke test green
+- [ ] Browser walk green (feature-verifier doc PASS if a feature flow)
 
 ## Anti-patterns
 

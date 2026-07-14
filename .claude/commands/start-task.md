@@ -20,7 +20,7 @@ Steps:
    - `CLAUDE.md` (only if not read this session)
    - `.brain/<domain>/index.md` for the chosen domain
    - Every triggered file from that index
-   - For feature work: matching `.brain/features/<slug>.md`
+   - For feature work: matching `.brain/features/<slug>/<slug>.md`
    - Most recent relevant entry in `.brain/runs/progress.md`
 
 4. **Pick the runbook**:

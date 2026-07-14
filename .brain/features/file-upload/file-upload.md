@@ -45,12 +45,12 @@ Server-side file upload to Cloudflare R2. Exposed as a multipart/form-data endpo
 
 | File | Role |
 |------|------|
-| [`app/components/file-upload.tsx`](../../app/components/file-upload.tsx) | UI component |
-| [`app/routes/api/upload-file.ts`](../../app/routes/api/upload-file.ts) | `POST /api/upload-file` action handler |
-| [`app/repositories/bucket.ts`](../../app/repositories/bucket.ts) | `BucketRepository` (`upload`, `get`, `remove`, `list`) |
-| [`app/services/bucket.ts`](../../app/services/bucket.ts) | `Bucket` Effect Tag + `BucketLive` |
-| [`app/lib/schemas/bucket.ts`](../../app/lib/schemas/bucket.ts) | `UploadOptions`, `ListR2Input` |
-| [`app/models/errors/bucket.ts`](../../app/models/errors/bucket.ts) | All bucket-tagged errors |
+| [`app/components/file-upload.tsx`](../../../app/components/file-upload.tsx) | UI component |
+| [`app/routes/api/upload-file.ts`](../../../app/routes/api/upload-file.ts) | `POST /api/upload-file` action handler |
+| [`app/repositories/bucket.ts`](../../../app/repositories/bucket.ts) | `BucketRepository` (`upload`, `get`, `remove`, `list`) |
+| [`app/services/bucket.ts`](../../../app/services/bucket.ts) | `Bucket` Effect Tag + `BucketLive` |
+| [`app/lib/schemas/bucket.ts`](../../../app/lib/schemas/bucket.ts) | `UploadOptions`, `ListR2Input` |
+| [`app/models/errors/bucket.ts`](../../../app/models/errors/bucket.ts) | All bucket-tagged errors |
 
 ## Dependencies
 
@@ -72,7 +72,7 @@ Server-side file upload to Cloudflare R2. Exposed as a multipart/form-data endpo
 
 ## Known gaps
 
-See [`../high-level-architecture/security.md`](../high-level-architecture/security.md) gaps #2–#4:
+See [`../high-level-architecture/security.md`](../../high-level-architecture/security.md) gaps #2–#4:
 
 1. Route is unauthenticated — anyone with the URL can write to R2.
 2. `upload` does not validate file type or size.

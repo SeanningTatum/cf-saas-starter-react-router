@@ -113,13 +113,15 @@ Exception: gray scale OK for subtle layout (`border-gray-200 dark:border-gray-80
 - After mutations, invalidate via `api.useUtils()`.
 - `data-testid` on every interactive element used in e2e tests.
 
-## Playwright (manual verification during dev)
+## Verification (browser proof before done)
 
-For frontend changes, **verify in browser before declaring done**. Use Playwright MCP tools (`browser_navigate`, `browser_snapshot`, `browser_click`, `browser_fill_form`, `browser_take_screenshot`).
+For frontend changes, **verify in a browser before declaring done** — never claim UI works from reading code.
+
+For a **feature-level flow**, spawn the [`feature-verifier`](../../.claude/agents/feature-verifier.md) sub-agent (slug + golden path + one error path). It drives the live app with the Playwright CLI (throwaway headless script run via `bun`), screenshots each state, and writes a verdict doc to [`features/<slug>/verifications/<date>.md`](../features/index.md). Verdict must be PASS. For a **trivial tweak** (copy, spacing), a manual `bun run dev` walk noted in the run note is enough.
 
 Test admin credentials: `admin@test.local` / `TestAdmin123!`. Setup: see `library.md` test-credentials section.
 
-E2E tests: `library.md`.
+E2E smoke specs (CI regression net): `library.md`.
 
 ## Anti-patterns
 

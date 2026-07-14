@@ -1,13 +1,13 @@
 # Features (overview)
 
-Quick map of what's shipped. **Detailed per-feature memory lives in [`../features/<slug>.md`](../features/index.md)** — five files exist today; copy [`../features/_TEMPLATE.md`](../features/_TEMPLATE.md) when adding a new one.
+Quick map of what's shipped. **Detailed per-feature memory lives in [`../features/<slug>/<slug>.md`](../features/index.md)** — one folder per feature; copy [`../features/_TEMPLATE.md`](../features/_TEMPLATE.md) when adding a new one.
 
 | Feature | Per-feature doc |
 |---------|-----------------|
-| Authentication | [`../features/authentication.md`](../features/authentication.md) |
-| Admin Dashboard | [`../features/admin-dashboard.md`](../features/admin-dashboard.md) |
-| File Upload | [`../features/file-upload.md`](../features/file-upload.md) |
-| Analytics | [`../features/analytics.md`](../features/analytics.md) |
+| Authentication | [`../features/authentication/authentication.md`](../features/authentication/authentication.md) |
+| Admin Dashboard | [`../features/admin-dashboard/admin-dashboard.md`](../features/admin-dashboard/admin-dashboard.md) |
+| File Upload | [`../features/file-upload/file-upload.md`](../features/file-upload/file-upload.md) |
+| Analytics | [`../features/analytics/analytics.md`](../features/analytics/analytics.md) |
 
 This file is the high-level map. Each per-feature doc holds the detailed runtime flow, dependencies, tagged errors, and changelog.
 
@@ -43,4 +43,4 @@ Key files: `app/routes/admin/_index.tsx`, `app/routes/admin/components/{chart-ar
 
 ## Promoting a new feature
 
-When you start substantive work on a new feature, copy [`../features/_TEMPLATE.md`](../features/_TEMPLATE.md) to `../features/<slug>.md`, fill it out, register a row in [`../features/index.md`](../features/index.md), and add a row to the table at the top of this file.
+When you start substantive work on a new feature, copy [`../features/_TEMPLATE.md`](../features/_TEMPLATE.md) to `../features/<slug>/<slug>.md`, fill it out, register a row in [`../features/index.md`](../features/index.md), and add a row to the table at the top of this file.

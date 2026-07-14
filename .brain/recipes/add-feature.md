@@ -4,7 +4,7 @@ End-to-end checklist for new product features. Touches multiple layers.
 
 ## 0. Scope
 
-Before code: open [`.brain/features/_TEMPLATE.md`](../features/_TEMPLATE.md), copy to `.brain/features/<slug>.md`, fill at minimum:
+Before code: open [`.brain/features/_TEMPLATE.md`](../features/_TEMPLATE.md), copy to `.brain/features/<slug>/<slug>.md`, fill at minimum:
 - Purpose
 - When used
 - Persistence (D1 tables, R2 keys, KV)
@@ -44,10 +44,11 @@ Run [add-route.md](add-route.md) for each page. Auth-gate at the loader level.
 - Validation messages go in `validation.json` (use Effect Schema annotations to surface keys)
 - Test that translations load on the route (manual `bun run dev` or e2e)
 
-## 7. Tests
+## 7. Tests + verification
 
-- Unit: every new schema, helper, repository, service. See [`.brain/codebase/testing.md`](../codebase/testing.md)
-- E2E: at minimum the golden path through the new feature in [`e2e/`](../../e2e/)
+- **Unit** (required): every new schema, helper, repository, service. See [`.brain/codebase/testing.md`](../codebase/testing.md)
+- **Feature verification** (required for user-visible features): spawn the [`feature-verifier`](../../.claude/agents/feature-verifier.md) sub-agent with the feature slug + golden path + one error path. It walks the live app with the Playwright CLI (throwaway headless script run via `bun`), screenshots each step, and writes `.brain/features/<slug>/verifications/<date>.md` (see [`features/index.md`](../features/index.md)). Verdict must be PASS. Link the doc from `features/<slug>/<slug>.md`.
+- **E2E smoke** (only if critical-path): if this flow is important enough to guard against future regressions in CI, add/extend a thin spec in [`e2e/`](../../e2e/). Not one-per-feature — CI runs these on every PR.
 
 ## 8. Update brain
 
@@ -59,29 +60,31 @@ Run [add-route.md](add-route.md) for each page. Auth-gate at the loader level.
 | New tRPC | `api.md`, `routes.md` |
 | Auth/RBAC | `security.md`, `user-journeys.md` |
 | New helper | `library.md` |
-| Always | `features/<slug>.md`, `CHANGELOG.md` |
+| Always | `features/<slug>/<slug>.md`, `CHANGELOG.md` |
 
 ## 9. Verify
 
 ```bash
 bun run typecheck
 bun run test
-bun run test:e2e
+bun run test:e2e   # smoke specs (regression net)
 bun run build      # catches CF Workers compat issues
 ```
 
+Then feature verification (UI features): `feature-verifier` sub-agent → PASS + doc in `.brain/features/<slug>/verifications/`.
+
 ## Definition of done
 
-- [ ] Feature memo in `.brain/features/<slug>.md` (not just stub — every section filled)
+- [ ] Feature memo in `.brain/features/<slug>/<slug>.md` (not just stub — every section filled)
 - [ ] `scripts/seed-preview.ts` extended if the feature added a table or user-visible data
 - [ ] All five non-negotiables observed (Effect, Schema, tagged errors, tests, no Node)
 - [ ] CHANGELOG entry with date + scope
-- [ ] typecheck + unit + e2e + build all green
-- [ ] Manual smoke test on `bun run dev`
+- [ ] typecheck + unit + e2e smoke + build all green
+- [ ] Feature verification doc PASS in `.brain/features/<slug>/verifications/` (via `feature-verifier`), linked from feature memo
 
 ## Anti-patterns
 
 - ❌ Building UI before persistence + procedure — hides data shape decisions until the end
-- ❌ Inline-only feature (no `.brain/features/<slug>.md`) — invisible to next agent
+- ❌ Inline-only feature (no `.brain/features/<slug>/<slug>.md`) — invisible to next agent
 - ❌ Swallowing errors with generic `INTERNAL_SERVER_ERROR` instead of domain-specific tagged errors
 - ❌ Skipping i18n — hardcoded English strings in JSX

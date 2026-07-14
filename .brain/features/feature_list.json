@@ -1,6 +1,6 @@
 {
   "$schema": "Machine-readable feature state tracker. Source of truth for status; per-feature MD docs are source of truth for design/runtime.",
-  "updated": "2026-07-11",
+  "updated": "2026-07-13",
   "policy": {
     "one_in_progress_at_a_time": true,
     "definition_of_done": "implementation complete + verify-done passed + feature MD updated + brain coherent"
@@ -10,7 +10,7 @@
       "id": "feat-001",
       "name": "Authentication",
       "slug": "authentication",
-      "doc": ".brain/features/authentication.md",
+      "doc": ".brain/features/authentication/authentication.md",
       "description": "Email/password auth with role-based access (user/admin) and ban system, Better Auth + D1 + Drizzle.",
       "dependencies": [],
       "status": "shipped",
@@ -21,7 +21,7 @@
       "id": "feat-002",
       "name": "Admin Dashboard",
       "slug": "admin-dashboard",
-      "doc": ".brain/features/admin-dashboard.md",
+      "doc": ".brain/features/admin-dashboard/admin-dashboard.md",
       "description": "Admin-only area at /admin/* for user management and analytics; data-side gating via adminProcedure.",
       "dependencies": ["feat-001"],
       "status": "shipped",
@@ -32,7 +32,7 @@
       "id": "feat-003",
       "name": "File Upload",
       "slug": "file-upload",
-      "doc": ".brain/features/file-upload.md",
+      "doc": ".brain/features/file-upload/file-upload.md",
       "description": "Server-side multipart upload to Cloudflare R2 via /api/upload-file using BucketRepository.",
       "dependencies": [],
       "status": "shipped",
@@ -43,7 +43,7 @@
       "id": "feat-004",
       "name": "Analytics",
       "slug": "analytics",
-      "doc": ".brain/features/analytics.md",
+      "doc": ".brain/features/analytics/analytics.md",
       "description": "Read-only admin analytics at /admin: user growth, role + verification distribution, recent signups.",
       "dependencies": ["feat-001", "feat-002"],
       "status": "shipped",
@@ -54,11 +54,22 @@
       "id": "feat-005",
       "name": "Preview Deployments",
       "slug": "preview-deployments",
-      "doc": ".brain/features/preview-deployments.md",
+      "doc": ".brain/features/preview-deployments/preview-deployments.md",
       "description": "Per-PR preview deployments on Cloudflare Workers: dedicated `preview` wrangler environment (isolated worker/D1/R2/workflow) + GitHub Actions workflow uploading versions with `--preview-alias pr-<N>` for stable preview URLs.",
       "dependencies": [],
       "status": "shipped",
-      "evidence": "shipped 2026-07-11; live-verified: per-PR D1 (pr-999 binding test), alias URL auth signup 200 on pr-test, prod signup 200; run note .brain/runs/2026-07-10-preview-deployments.md; workflows .github/workflows/preview.yml + preview-cleanup.yml",
+      "evidence": "shipped 2026-07-11; live-verified: per-PR D1 (pr-999 binding test), alias URL auth signup 200 on pr-test, prod signup 200; run note .brain/features/preview-deployments/runs/2026-07-10-preview-deployments.md; workflows .github/workflows/preview.yml + preview-cleanup.yml",
+      "owners": ["sean"]
+    },
+    {
+      "id": "feat-006",
+      "name": "Feature Verification",
+      "slug": "feature-verification",
+      "doc": ".brain/features/feature-verification/feature-verification.md",
+      "description": "feature-verifier sub-agent drives the live app via the Playwright CLI (throwaway headless script), screenshots the golden + one error path, and writes a per-feature verdict doc. Replaces per-feature e2e specs; thin CI smoke specs remain the regression net.",
+      "dependencies": ["feat-001"],
+      "status": "shipped",
+      "evidence": "shipped 2026-07-13; self-verified: .brain/features/authentication/verifications/2026-07-13.md (PASS); harness-check 11/11; hardened clean-browser launch after dry-run extension artifact; agent .claude/agents/feature-verifier.md",
       "owners": ["sean"]
     }
   ]

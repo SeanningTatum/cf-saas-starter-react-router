@@ -29,15 +29,15 @@ Admin-only area for user management and analytics. Mounted under `/admin/*`. Pro
 
 | File | Role |
 |------|------|
-| [`app/routes/admin/_layout.tsx`](../../app/routes/admin/_layout.tsx) | Sidebar shell — ⚠ no auth loader |
-| [`app/routes/admin/_index.tsx`](../../app/routes/admin/_index.tsx) | Analytics dashboard (see `analytics.md`) |
-| [`app/routes/admin/users.tsx`](../../app/routes/admin/users.tsx) | User management page |
-| [`app/routes/admin/components/user-data-table.tsx`](../../app/routes/admin/components/user-data-table.tsx) | Data table + actions |
-| [`app/routes/admin/kitchen-sink.tsx`](../../app/routes/admin/kitchen-sink.tsx) | Component showcase |
-| [`app/routes/admin/layout/`](../../app/routes/admin/layout/) | Sidebar + site header |
-| [`app/trpc/routes/admin.ts`](../../app/trpc/routes/admin.ts) | `getUsers`, `getUser`, `updateUser`, `banUser`, `unbanUser`, `deleteUser`, `bulkBanUsers`, `bulkDeleteUsers`, `bulkUpdateUserRoles` |
-| [`app/repositories/user.ts`](../../app/repositories/user.ts) | `UserRepository` |
-| [`app/lib/schemas/user.ts`](../../app/lib/schemas/user.ts) | All user input/output schemas |
+| [`app/routes/admin/_layout.tsx`](../../../app/routes/admin/_layout.tsx) | Sidebar shell — ⚠ no auth loader |
+| [`app/routes/admin/_index.tsx`](../../../app/routes/admin/_index.tsx) | Analytics dashboard (see `analytics.md`) |
+| [`app/routes/admin/users.tsx`](../../../app/routes/admin/users.tsx) | User management page |
+| [`app/routes/admin/components/user-data-table.tsx`](../../../app/routes/admin/components/user-data-table.tsx) | Data table + actions |
+| [`app/routes/admin/kitchen-sink.tsx`](../../../app/routes/admin/kitchen-sink.tsx) | Component showcase |
+| [`app/routes/admin/layout/`](../../../app/routes/admin/layout/) | Sidebar + site header |
+| [`app/trpc/routes/admin.ts`](../../../app/trpc/routes/admin.ts) | `getUsers`, `getUser`, `updateUser`, `banUser`, `unbanUser`, `deleteUser`, `bulkBanUsers`, `bulkDeleteUsers`, `bulkUpdateUserRoles` |
+| [`app/repositories/user.ts`](../../../app/repositories/user.ts) | `UserRepository` |
+| [`app/lib/schemas/user.ts`](../../../app/lib/schemas/user.ts) | All user input/output schemas |
 
 ## Dependencies
 
@@ -56,7 +56,7 @@ Admin-only area for user management and analytics. Mounted under `/admin/*`. Pro
 
 ## Known gaps
 
-- Layout-level auth gate missing — see [`../high-level-architecture/security.md`](../high-level-architecture/security.md) gap #1
+- Layout-level auth gate missing — see [`../high-level-architecture/security.md`](../../high-level-architecture/security.md) gap #1
 - No Playwright e2e for admin user-mgmt flows
 
 ## Changelog

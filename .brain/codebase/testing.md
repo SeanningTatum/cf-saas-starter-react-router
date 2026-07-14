@@ -6,7 +6,7 @@
 
 - Vitest — unit-test runner
 - `@effect/vitest` — provides `it.effect(...)` for Effect-yielding tests
-- Playwright — e2e tests in `e2e/*.spec.ts`
+- Playwright — thin **e2e smoke specs** in `e2e/*.spec.ts` (CI regression net, not one-per-feature). Feature-level proof is the `feature-verifier` sub-agent → doc in `.brain/features/<slug>/verifications/`. See `.brain/rules/library.md` "Playwright".
 
 ## Co-location
 

@@ -20,7 +20,7 @@ Narrative description of the runtime flow: which service / repo / route owns sta
 - Migration / corruption behavior
 
 ### Testability
-What is unit-tested vs e2e-tested. Stub layers used. Edge cases covered.
+What is unit-tested. Stub layers used. Edge cases covered. Link the feature-verifier doc: `.brain/features/<slug>/verifications/<date>.md` (browser walk + screenshots). Note any `e2e/` smoke spec if this path is CI-guarded.
 
 ## Key Files
 

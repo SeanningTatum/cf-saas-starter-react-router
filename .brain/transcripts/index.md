@@ -20,7 +20,7 @@ Meeting notes, call transcripts, decision logs. Time-stamped record of conversat
 - One file per session — do not concatenate
 - Top of file: date, attendees, one-line summary
 - Bottom: `## Decisions` and `## Action items` (with owner + date)
-- Link any resulting feature memory: `See .brain/features/<slug>.md`
+- Link any resulting feature memory: `See .brain/features/<slug>/<slug>.md`
 
 ## Files
 

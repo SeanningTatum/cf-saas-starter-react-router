@@ -19,7 +19,7 @@ Open in this order:
 1. [`CLAUDE.md`](../../CLAUDE.md) — only if you have not read it this session
 2. The matching `.brain/<folder>/index.md` — index lists files + "Read when" triggers
 3. Every triggered file
-4. For feature work: [`.brain/features/<slug>.md`](../features/index.md) if it exists
+4. For feature work: [`.brain/features/<slug>/<slug>.md`](../features/index.md) if it exists
 5. Most recent relevant entry in [`../runs/`](../runs/index.md) — past attempts, what failed, why
 
 Skipping the brain is the most common failure mode. Training data does not reflect this repo.

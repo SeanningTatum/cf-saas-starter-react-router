@@ -46,13 +46,13 @@ All queries hit the `user` table directly. SQLite-side date bucketing uses `date
 
 | File | Role |
 |------|------|
-| [`app/routes/admin/_index.tsx`](../../app/routes/admin/_index.tsx) | Page (loader + layout) |
-| [`app/components/analytics/`](../../app/components/analytics/) | Reusable chart components (`StatCard`, `StatCardGrid`, `TimeSeriesChart`, `DistributionChart`, `InsightsCard`) |
-| [`app/routes/admin/components/chart-area-interactive.tsx`](../../app/routes/admin/components/chart-area-interactive.tsx) | Interactive area chart |
-| [`app/routes/admin/components/section-cards.tsx`](../../app/routes/admin/components/section-cards.tsx) | Stat cards row |
-| [`app/trpc/routes/analytics.ts`](../../app/trpc/routes/analytics.ts) | Analytics procedures |
-| [`app/repositories/analytics.ts`](../../app/repositories/analytics.ts) | `AnalyticsRepository` |
-| [`app/lib/schemas/analytics.ts`](../../app/lib/schemas/analytics.ts) | `DateRangeInput`, `UserGrowthPoint`, `UserStats`, `DistributionPoint` |
+| [`app/routes/admin/_index.tsx`](../../../app/routes/admin/_index.tsx) | Page (loader + layout) |
+| [`app/components/analytics/`](../../../app/components/analytics/) | Reusable chart components (`StatCard`, `StatCardGrid`, `TimeSeriesChart`, `DistributionChart`, `InsightsCard`) |
+| [`app/routes/admin/components/chart-area-interactive.tsx`](../../../app/routes/admin/components/chart-area-interactive.tsx) | Interactive area chart |
+| [`app/routes/admin/components/section-cards.tsx`](../../../app/routes/admin/components/section-cards.tsx) | Stat cards row |
+| [`app/trpc/routes/analytics.ts`](../../../app/trpc/routes/analytics.ts) | Analytics procedures |
+| [`app/repositories/analytics.ts`](../../../app/repositories/analytics.ts) | `AnalyticsRepository` |
+| [`app/lib/schemas/analytics.ts`](../../../app/lib/schemas/analytics.ts) | `DateRangeInput`, `UserGrowthPoint`, `UserStats`, `DistributionPoint` |
 
 ## Dependencies
 

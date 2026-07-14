@@ -12,7 +12,7 @@ Steps:
      - `codebase/i18n.md` — namespaces, supported locales, key-file changes
      - `codebase/testing.md` — test-pattern shifts, new stub layers
      - `codebase/features.md` — high-level overview map (also update the per-feature file)
-   - `.brain/features/index.md` AND the per-feature file(s) under `.brain/features/<slug>.md` for any feature being modified. For a new feature: copy `.brain/features/_TEMPLATE.md` to `<slug>.md`, fill it out, and **register a row in `.brain/features/index.md`**.
+   - `.brain/features/index.md` AND the per-feature file(s) under `.brain/features/<slug>/<slug>.md` for any feature being modified. For a new feature: copy `.brain/features/_TEMPLATE.md` to `<slug>/<slug>.md`, fill it out, and **register a row in `.brain/features/index.md`**.
    - `.brain/CHANGELOG.md` for architectural shifts, brain restructures, decisions reversed, or external-constraint changes (NOT for routine code commits — `git log` is the code changelog).
    - Any `.brain/rules/*.md` doc whose layer was touched. The 7 layers (verify before editing): `frontend.md`, `cloudflare.md`, `repository.md`, `services.md`, `routes.md`, `library.md`, `errors.md`. Each layer's "Source-of-truth files" list at the top tells you which `app/**` paths map to it.
 4. When updating `rules/*.md` examples or `codebase/*.md` references that name a specific symbol, file, or method: verify the name against the staged diff or the current source. Do not paste invented function names. The brain's value is that every cited identifier is real.

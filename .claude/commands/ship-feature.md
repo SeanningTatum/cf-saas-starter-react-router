@@ -15,7 +15,7 @@ Steps:
    - Set `evidence` to a one-line factual string: e.g. `"shipped 2026-MM-DD; tests: <paths>; e2e: <pass/skipped reason>"`. Source from the verify-done report — do not invent.
    - Bump top-level `updated` field to today's date.
 
-4. **Update per-feature MD** (`.brain/features/<slug>.md`):
+4. **Update per-feature MD** (`.brain/features/<slug>/<slug>.md`):
    - Bump `_Last updated: YYYY-MM-DD_`.
    - Append a Changelog row: `| YYYY-MM-DD | shipped | <one-line summary of what changed> |`.
 
@@ -33,7 +33,7 @@ Steps:
    ```
    Shipped: <feat-id> <name>
    Evidence: <one-line>
-   Files updated: feature_list.json, features/<slug>.md, features/index.md, runs/progress.md, runs/<date>-<slug>.md (if existed)
+   Files updated: feature_list.json, features/<slug>/<slug>.md, features/index.md, runs/progress.md, runs/<date>-<slug>.md (if existed)
    harness-check: PASS
 
    Next: commit & push, or pick up next feature.

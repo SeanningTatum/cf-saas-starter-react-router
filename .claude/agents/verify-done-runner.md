@@ -14,9 +14,9 @@ Executes the verification checklist from `.brain/recipes/99-verify-done.md`. Ret
 1. Read `.brain/recipes/99-verify-done.md` to get the latest checklist (do not memorise — it changes).
 2. Determine which steps apply:
    - **typecheck + test** — always
-   - **e2e** — only if diff touches a route + procedure + repo + UI / auth / forms / migration
+   - **e2e smoke** (`bun run test:e2e`) — only if diff touches a route + procedure + repo + UI / auth / forms / migration
    - **build** — only if diff touches `wrangler.jsonc`, bindings, workflows, runtime composition, or `workers/`
-   - **manual smoke** — flag for the human; you cannot run a browser
+   - **feature verification** — flag for the human / main thread: you cannot run a browser. If the diff touches a UI feature flow, the `feature-verifier` sub-agent must run and its `.brain/features/<slug>/verifications/<date>.md` verdict must be PASS. Report whether a current doc exists.
    - **brain coherence** — always (read `git diff --stat` and map to brain docs per the matrix in `99-verify-done.md`)
 3. Run each applicable step. Capture full output. Quote verbatim tails (last ~10 lines) in the report.
 4. Output structured report.
@@ -32,13 +32,13 @@ Verify-done report — <branch> @ <short-sha>
 [2] test              : PASS | FAIL
     <verbatim tail>
 
-[3] e2e               : SKIPPED (not cross-component) | PASS | FAIL
+[3] e2e smoke         : SKIPPED (not cross-component) | PASS | FAIL
     <verbatim tail>
 
 [4] build             : SKIPPED (no CF surface touched) | PASS | FAIL
     <verbatim tail>
 
-[5] manual smoke      : DEFERRED — human must walk: <list of URL paths if UI changed>
+[5] feature verification : DEFERRED — feature-verifier must walk: <feature slug + URL paths if UI changed>; existing doc: <path or none>
 
 [6] brain coherence   : <list of .brain/ files that should be updated based on diff>
     OK | NEEDS UPDATE: <files>
