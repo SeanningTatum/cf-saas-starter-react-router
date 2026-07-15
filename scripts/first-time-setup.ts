@@ -365,6 +365,20 @@ async function main() {
     await prompt("Enter your project name", defaultProjectName)
   );
 
+  // Ask whether to provision R2 file storage. When disabled, no buckets are
+  // created and the generated wrangler.jsonc omits the R2 bindings.
+  const enableR2Answer = await confirm({
+    message: "Enable R2 file storage (uploads)?",
+    initialValue: true,
+  });
+
+  if (typeof enableR2Answer === "symbol") {
+    cancel("Setup cancelled.");
+    process.exit(0);
+  }
+
+  const enableR2 = enableR2Answer;
+
   // Generate resource names based on project name
   const dbName = `${projectName}-db`;
   const previewDbName = `${dbName}-preview`;
@@ -375,8 +389,12 @@ async function main() {
   console.log(`  • Project: ${projectName}`);
   console.log(`  • Database: ${dbName}`);
   console.log(`  • Database (preview): ${previewDbName}`);
-  console.log(`  • Bucket: ${bucketName}`);
-  console.log(`  • Bucket (preview): ${previewBucketName}`);
+  if (enableR2) {
+    console.log(`  • Bucket: ${bucketName}`);
+    console.log(`  • Bucket (preview): ${previewBucketName}`);
+  } else {
+    console.log(`  • R2 file storage: disabled`);
+  }
 
   const shouldContinue = await confirm({
     message: "Continue with these names?",
@@ -402,8 +420,12 @@ async function main() {
     process.exit(1);
   }
 
-  await createBucket(bucketName, accountId);
-  await createBucket(previewBucketName, accountId);
+  if (enableR2) {
+    await createBucket(bucketName, accountId);
+    await createBucket(previewBucketName, accountId);
+  } else {
+    console.log("\x1b[33m⚠ Skipping R2 bucket creation (disabled)\x1b[0m");
+  }
 
   // Step 3: Set up authentication
   console.log("\n\x1b[36m🔐 Step 3: Authentication Setup\x1b[0m");
@@ -419,6 +441,7 @@ async function main() {
     projectName,
     dbId,
     previewDbId,
+    enableR2,
   });
   writeWranglerJsonc(wranglerConfig);
   console.log("\x1b[32m✓ Updated wrangler.jsonc\x1b[0m");
