@@ -1,7 +1,7 @@
 # Run: audit-remediation
 
 _Started: 2026-07-15_
-_Status: in-progress_
+_Status: shipped_
 
 ## Task
 
@@ -40,6 +40,27 @@ Key outcomes:
 - C: runAdminAction fixes ban-toast bug; real sidebar user + working logout (Account/Billing/Notifications dropped — no routes exist); requireSession/requireAdmin/redirectIfAuthenticated in app/lib/session.ts applied to 5 loaders; shared FeatureCard; runBulkUserAction in admin.ts; shared themeItems; shared localeCookie; date-utils gains zh locale, used by table+chart; buildUserInsights extracted w/ named constants; cn() fixes; Schema.is guards replace as-casts.
 
 Next: wave 2 spawned — Agent D (i18n sweep), Agent E (test backfill).
+
+---
+
+## Step 2 — Wave 2 + close-out
+
+_2026-07-15 12:15_
+
+- Wave 2 done: i18n sweep (upload namespace, admin table/nav/toasts, en+zh parity) + test backfill (157→222 tests, all 11 audit gaps filled).
+- effect-ts-enforcer found 4 seams from parallel agents; all fixed by coordinator: dead upload error UI (fetcher.data.success branch), createTRPCContext runPromise→runPromiseExit + edge catch in workers/app.ts, shared getInitials in lib/utils, dropped redundant non-null assertions.
+- verify-done: typecheck/test/build PASS; e2e FAIL was **environmental** — Playwright baseURL 5173 hit an unrelated project's dev server (Vite silently port-bumps). Fixed playwright.config.ts: `--strictPort` + `E2E_PORT` override. E2e then 2/2 PASS on port 5199.
+- Brain docs updated (8 by doc agent + architecture.md/integrations.md/frontend.md/library.md by coordinator).
+- Pre-PR Greptile review: 4 findings. P1 (user decided): removed image/svg+xml from upload allowlist; added magic-byte validation (`matchesMagicBytes`). P2/P3: getSession wrapped in Effect.tryPromise in upload route; `t` added to FileUpload effect deps. Final: 228/228 tests.
+
+## Final
+
+_Closed: 2026-07-15_
+
+- Shipped: branch `refactor/audit-remediation` (commits: remediation + Greptile fixes), PR opened from this branch
+- Brain docs updated: rules/{library,repository,routes,services,errors,frontend}.md, codebase/{api,i18n}.md, high-level-architecture/{architecture,integrations}.md, CHANGELOG.md
+- Left undone: feature-verifier browser walk of admin flow (killed by user mid-run; e2e + manual signup walk cover auth); FileUpload component still unrouted (pre-existing)
+- Surprises worth remembering: Vite port auto-bump made e2e silently test a DIFFERENT project's app on 5173 — now pinned with --strictPort; parallel fixer agents need a seam-review pass (enforcer caught 4 cross-agent inconsistencies)
 
 ## Baseline
 

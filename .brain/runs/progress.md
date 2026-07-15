@@ -21,12 +21,12 @@
 
 ---
 
-## 2026-07-15 — audit-remediation started
-- branch: `main`
-- in-progress feature: none (cross-cutting quality task)
-- run note: `.brain/runs/2026-07-15-audit-remediation.md`
-- baseline: PASS (typecheck/test/harness-check)
-- next: spawn wave-1 fixer agents (core plumbing / repositories / frontend DRY), shadcn scaffold explicitly kept
+## 2026-07-15 — audit-remediation shipped
+- branch: `refactor/audit-remediation` (PR opening; from main @ 8547acb)
+- in-progress feature: none (cross-cutting quality task, closed)
+- run note: `.brain/runs/2026-07-15-audit-remediation.md` (closed)
+- shipped: 4-agent audit → 5-agent remediation (security, Effect core, DRY, i18n, +71 tests → 228), Greptile pre-PR review resolved (SVG dropped from upload allowlist, magic-byte sniffing added)
+- next: merge PR; optional follow-ups — route FileUpload somewhere, feature-verifier walk of admin flow
 
 ---
 
