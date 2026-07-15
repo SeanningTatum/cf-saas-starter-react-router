@@ -86,6 +86,15 @@ export async function action({ request, context }: Route.ActionArgs) {
         Effect.succeed(
           data({ success: false as const, error: e.message }, { status: 400 })
         ),
+      // Transient upstream failure (Better Auth session lookup, file read) —
+      // 503 so clients can distinguish "retry later" from a real 500.
+      ExternalServiceError: () =>
+        Effect.succeed(
+          data(
+            { success: false as const, error: "Service temporarily unavailable" },
+            { status: 503 }
+          )
+        ),
     })
   );
 
