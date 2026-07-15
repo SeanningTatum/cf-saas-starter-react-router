@@ -5,6 +5,12 @@ export interface WranglerConfigInput {
   projectName: string;
   dbId: string;
   previewDbId: string;
+  /**
+   * Whether to include the R2 bucket bindings. Defaults to true so the
+   * committed placeholder config and teardown keep R2 wired. Set false when
+   * setup runs without R2 file storage.
+   */
+  enableR2?: boolean;
 }
 
 const HEADER_COMMENT =
@@ -15,7 +21,7 @@ const HEADER_COMMENT =
  * mirroring the committed wrangler.jsonc structure exactly.
  */
 export function buildWranglerConfig(input: WranglerConfigInput): object {
-  const { projectName, dbId, previewDbId } = input;
+  const { projectName, dbId, previewDbId, enableR2 = true } = input;
 
   const dbName = `${projectName}-db`;
   const bucketName = `${projectName}-bucket`;
@@ -23,6 +29,11 @@ export function buildWranglerConfig(input: WranglerConfigInput): object {
   const previewBucketName = `${bucketName}-preview`;
   const workflowName = `${projectName}-example-workflow`;
   const previewWorkflowName = `${workflowName}-preview`;
+
+  const r2Buckets = [{ binding: "BUCKET", bucket_name: bucketName }];
+  const previewR2Buckets = [
+    { binding: "BUCKET", bucket_name: previewBucketName },
+  ];
 
   return {
     name: projectName,
@@ -44,12 +55,7 @@ export function buildWranglerConfig(input: WranglerConfigInput): object {
         migrations_dir: "./drizzle",
       },
     ],
-    r2_buckets: [
-      {
-        binding: "BUCKET",
-        bucket_name: bucketName,
-      },
-    ],
+    ...(enableR2 ? { r2_buckets: r2Buckets } : {}),
     workflows: [
       {
         binding: "EXAMPLE_WORKFLOW",
@@ -82,12 +88,7 @@ export function buildWranglerConfig(input: WranglerConfigInput): object {
             migrations_dir: "./drizzle",
           },
         ],
-        r2_buckets: [
-          {
-            binding: "BUCKET",
-            bucket_name: previewBucketName,
-          },
-        ],
+        ...(enableR2 ? { r2_buckets: previewR2Buckets } : {}),
         workflows: [
           {
             binding: "EXAMPLE_WORKFLOW",
