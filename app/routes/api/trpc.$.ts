@@ -1,6 +1,7 @@
 import { createTRPCContext } from "@/trpc";
 import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
 import { appRouter } from "@/trpc/router";
+import { loggers } from "@/lib/logger";
 
 import type { Route } from "./+types/trpc.$";
 
@@ -17,7 +18,10 @@ const handler = async (req: Request, context: AppLoadContext) => {
         runtime: context.runtime,
       }),
     onError({ error, path }) {
-      console.error(`>>> tRPC Error on '${path}'`, error);
+      loggers.trpc.error(
+        { path, code: error.code, stack: error.stack },
+        error.message
+      );
     },
   });
 };

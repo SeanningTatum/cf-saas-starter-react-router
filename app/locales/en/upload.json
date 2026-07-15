@@ -1,0 +1,18 @@
+{
+  "dropzone": {
+    "click_to_upload": "Click to upload",
+    "drag_and_drop": "or drag and drop",
+    "any_file_type": "Any file type accepted",
+    "accepted_formats": "Accepted formats: {{formats}}",
+    "max_size": "Max size: {{size}}MB"
+  },
+  "uploading": "Uploading {{name}}...",
+  "please_wait": "Please wait",
+  "success": "Upload successful!",
+  "key_label": "Key: {{key}}",
+  "upload_another": "Upload Another File",
+  "failed": "Upload failed",
+  "try_again": "Try Again",
+  "file_input_label": "File input",
+  "size_limit_exceeded": "File size exceeds {{size}}MB limit"
+}

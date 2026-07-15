@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
-import { emitLog, shouldLog } from "../log-format";
+import { emitLog, shouldLog, isLevelEnabled } from "../log-format";
 
 describe("shouldLog", () => {
   it("returns true for info level", () => {
@@ -8,6 +8,29 @@ describe("shouldLog", () => {
 
   it("returns true for error level", () => {
     expect(shouldLog("error")).toBe(true);
+  });
+});
+
+describe("isLevelEnabled", () => {
+  it("passes when level is above minLevel", () => {
+    expect(isLevelEnabled("error", "info")).toBe(true);
+  });
+
+  it("passes when level equals minLevel", () => {
+    expect(isLevelEnabled("info", "info")).toBe(true);
+  });
+
+  it("filters out when level is below minLevel", () => {
+    expect(isLevelEnabled("trace", "info")).toBe(false);
+  });
+
+  it("filters out when level is below a fatal-only minLevel", () => {
+    expect(isLevelEnabled("error", "fatal")).toBe(false);
+  });
+
+  it("everything passes when minLevel is trace", () => {
+    expect(isLevelEnabled("trace", "trace")).toBe(true);
+    expect(isLevelEnabled("debug", "trace")).toBe(true);
   });
 });
 

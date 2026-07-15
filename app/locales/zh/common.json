@@ -28,5 +28,14 @@
     "404": "404"
   },
   "loading": "加载中...",
-  "loading_protected_data": "正在加载受保护的数据..."
+  "loading_protected_data": "正在加载受保护的数据...",
+  "theme": {
+    "toggle_label": "切换主题",
+    "light": "浅色",
+    "dark": "深色",
+    "system": "跟随系统"
+  },
+  "analytics": {
+    "total": "总计"
+  }
 }

@@ -1,8 +1,9 @@
 import { format, type Locale } from "date-fns";
-import { enUS } from "date-fns/locale";
+import { enUS, zhCN } from "date-fns/locale";
 
 const localeMap: Record<string, Locale> = {
   en: enUS,
+  zh: zhCN,
 };
 
 export function getDateFnsLocale(i18nLocale: string): Locale {

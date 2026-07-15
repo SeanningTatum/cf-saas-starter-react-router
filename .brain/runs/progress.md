@@ -21,6 +21,15 @@
 
 ---
 
+## 2026-07-15 — audit-remediation started
+- branch: `main`
+- in-progress feature: none (cross-cutting quality task)
+- run note: `.brain/runs/2026-07-15-audit-remediation.md`
+- baseline: PASS (typecheck/test/harness-check)
+- next: spawn wave-1 fixer agents (core plumbing / repositories / frontend DRY), shadcn scaffold explicitly kept
+
+---
+
 ## 2026-07-13 — feat-005 merged + released v1.1.0 — session end
 - branch: `main` @ 4f83efc (PR #7 merged)
 - in-progress feature: none

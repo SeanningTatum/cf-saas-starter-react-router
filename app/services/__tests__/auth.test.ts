@@ -3,9 +3,9 @@ import { it } from "@effect/vitest";
 import { Effect, Exit, Cause, Layer } from "effect";
 
 vi.mock("@/auth/server", () => ({
-  createAuth: vi.fn((_db: unknown, secret: string) => {
+  createAuth: vi.fn((_db: unknown, secret: string, baseURL?: string) => {
     if (secret === "throw") throw new Error("createAuth boom");
-    return { api: { tag: "api", secret } };
+    return { api: { tag: "api", secret, baseURL } };
   }),
 }));
 
@@ -23,7 +23,27 @@ describe("AuthApiLive", () => {
       expect((api as unknown as { tag: string }).tag).toBe("api");
     }).pipe(
       Effect.provide(
-        AuthApiLive.pipe(
+        AuthApiLive().pipe(
+          Layer.provide(
+            envLayer({
+              DATABASE: {} as D1Database,
+              BETTER_AUTH_SECRET: "ok",
+            })
+          )
+        )
+      )
+    )
+  );
+
+  it.effect("passes baseURL through to createAuth", () =>
+    Effect.gen(function* () {
+      const { api } = yield* AuthApi;
+      expect((api as unknown as { baseURL: string }).baseURL).toBe(
+        "https://example.com"
+      );
+    }).pipe(
+      Effect.provide(
+        AuthApiLive("https://example.com").pipe(
           Layer.provide(
             envLayer({
               DATABASE: {} as D1Database,
@@ -39,7 +59,7 @@ describe("AuthApiLive", () => {
     Effect.gen(function* () {
       const program = AuthApi.pipe(
         Effect.provide(
-          AuthApiLive.pipe(
+          AuthApiLive().pipe(
             Layer.provide(
               envLayer({
                 DATABASE: {} as D1Database,

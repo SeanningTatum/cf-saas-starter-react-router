@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import { Pie, PieChart, Cell, Bar, BarChart, XAxis, YAxis } from "recharts";
+import { useTranslation } from "react-i18next";
 
 import {
   Card,
@@ -59,6 +60,7 @@ export function DistributionChart({
   height = 300,
   colors = defaultColors,
 }: DistributionChartProps) {
+  const { t } = useTranslation("common");
   const chartConfig = React.useMemo(() => {
     const config: ChartConfig = {};
     data.forEach((item, index) => {
@@ -145,7 +147,7 @@ export function DistributionChart({
         {type === "donut" && (
           <div className="text-center mt-2">
             <div className="text-2xl font-bold">{total.toLocaleString()}</div>
-            <div className="text-sm text-muted-foreground">Total</div>
+            <div className="text-sm text-muted-foreground">{t("analytics.total")}</div>
           </div>
         )}
       </CardContent>

@@ -8,16 +8,56 @@ Shared helpers, schemas, constants, testing utilities. **Source-of-truth files**
 
 | Path | Contents |
 |------|----------|
-| `app/lib/effect-utils.ts` | `tryQuery`, `tryUpdate`, `tryCreate`, `tryDelete`, `requireFound` |
+| `app/lib/effect-utils.ts` | `tryQuery`, `tryUpdate`, `tryCreate`, `tryDelete`, `requireFound`, `requireFoundOrFail` |
 | `app/lib/effect-trpc.ts` | `runProcedure`, `tagToTRPC`, internal `toTRPC` switch |
 | `app/lib/effect-form.ts` | `effectResolver` — re-export of `effectTsResolver` from `@hookform/resolvers/effect-ts` |
+| `app/lib/session.ts` | `requireSession`, `requireAdmin`, `redirectIfAuthenticated` — loader auth-gating helpers |
+| `app/lib/insights.ts` | `buildUserInsights` + named threshold constants (admin dashboard insight copy) |
+| `app/lib/constants/upload.ts` | `MAX_UPLOAD_SIZE_BYTES`, `ALLOWED_UPLOAD_CONTENT_TYPES`, `isAllowedUploadContentType` |
 | `app/lib/schemas/{domain}.ts` | Effect Schema definitions (`user`, `auth`, `analytics`, `bucket`, `pagination`) |
 | `app/lib/utils.ts` | Generic helpers (`cn`, etc.) |
 | `app/lib/date-utils.ts` | date-fns locale wrappers |
-| `app/lib/log-format.ts` | Structured log formatter |
+| `app/lib/log-format.ts` | Structured log formatter (`emitLog`, `isLevelEnabled`, `shouldLog`) |
 | `app/lib/logger.ts` | Named loggers (`loggers.trpc`, ...) |
 
-> **Not present:** `app/lib/{ai,gemini,claude,stripe,email}.ts`, `app/lib/constants/`. If a feature needs them, add the directory + a `_TEMPLATE.md`-style README, then update this rule.
+> **Not present:** `app/lib/{ai,gemini,claude,stripe,email}.ts`. If a feature needs them, add the directory + a `_TEMPLATE.md`-style README, then update this rule.
+
+## Loader auth gating (`session.ts`)
+
+`app/lib/session.ts` centralizes the `context.auth.api.getSession({ headers })` + redirect branching that used to be duplicated inline across loaders:
+
+```typescript
+import { requireSession, requireAdmin, redirectIfAuthenticated } from "@/lib/session";
+
+// protected loader — redirects to /login if no session
+export async function loader({ request, context }: Route.LoaderArgs) {
+  const session = await requireSession(request, context);
+  return { user: session.user };
+}
+
+// admin-gated loader — redirects to /login (no session) or /dashboard (non-admin)
+export async function loader({ request, context }: Route.LoaderArgs) {
+  const session = await requireAdmin(request, context);
+  return { user: session.user };
+}
+
+// public-only loader (home, login, sign-up) — redirects an authenticated
+// visitor to /dashboard (or a custom `to`) instead of rendering the route
+export async function loader({ request, context }: Route.LoaderArgs) {
+  await redirectIfAuthenticated(request, context);
+  return null;
+}
+```
+
+All three `throw redirect(...)` (React Router's throw-to-redirect convention) rather than returning it — call them for their side effect, not their return value, except `requireSession`/`requireAdmin` which also resolve the session. Typed off `AppLoadContext` (not a bespoke context shape), so they drop into any loader unchanged. See [`routes.md`](routes.md) "Auth gating recap" for the full surface table.
+
+## Admin insight derivation (`insights.ts`)
+
+`buildUserInsights(stats, growthData, t)` is the pure function behind the admin dashboard's "Platform Insights" panel — no i18n/formatting side effects beyond calling the passed translator. Thresholds are named constants, not magic numbers: `VERIFICATION_RATE_EXCELLENT_THRESHOLD` (80), `VERIFICATION_RATE_MODERATE_THRESHOLD` (50), `BANNED_PERCENT_HIGH_THRESHOLD` (5), `RECENT_SIGNUPS_WINDOW_DAYS` (7).
+
+## Upload constants (`constants/upload.ts`)
+
+Shared between the `/api/upload-file` HTTP boundary route and the UI (`FileUpload` component `accept`/`maxSize` props) so client- and server-side validation never drift apart: `MAX_UPLOAD_SIZE_BYTES` (10MB), `ALLOWED_UPLOAD_CONTENT_TYPES` (readonly tuple of MIME types), `isAllowedUploadContentType(value): value is AllowedUploadContentType` (type-guard predicate).
 
 ## Schemas (Effect Schema)
 
@@ -59,7 +99,7 @@ Each schema gets a `*.test.ts` covering happy decode + at least one rejection pe
 ## Effect helpers (`effect-utils.ts`)
 
 ```typescript
-import { tryQuery, tryUpdate, tryCreate, tryDelete, requireFound } from "@/lib/effect-utils";
+import { tryQuery, tryUpdate, tryCreate, tryDelete, requireFound, requireFoundOrFail } from "@/lib/effect-utils";
 
 // Drizzle calls — wraps thrown Promise into a tagged error
 const rows = yield* tryQuery("widget", () => db.select().from(widget).limit(1));
@@ -67,6 +107,9 @@ yield* tryUpdate("widget", () => db.update(widget).set({...}).where(eq(widget.id
 
 // T | undefined → Effect<T, NotFoundError>
 const item = yield* requireFound("widget", id, rows[0]);
+
+// Generic form — build your own not-found tagged error instead of NotFoundError
+const object = yield* requireFoundOrFail(maybeObject, () => new BucketNotFoundError({ key }));
 ```
 
 | Helper | Wraps | Failure |
@@ -76,6 +119,9 @@ const item = yield* requireFound("widget", id, rows[0]);
 | `tryUpdate(entity, () => ...)` | UPDATE | `UpdateError` |
 | `tryDelete(entity, () => ...)` | DELETE | `DeletionError` |
 | `requireFound(entity, id, row)` | `T \| null \| undefined → Effect<T, NotFoundError>` | `NotFoundError` |
+| `requireFoundOrFail(value, onMissing)` | `T \| null \| undefined → Effect<T, E>` | caller-supplied `E` (e.g. `BucketNotFoundError`) |
+
+`requireFound` is now implemented in terms of `requireFoundOrFail` (`requireFoundOrFail(value, () => new NotFoundError({ entity, identifier }))`) — use `requireFoundOrFail` directly whenever the not-found case needs a domain-specific tagged error rather than the generic `NotFoundError`.
 
 ## Utils (`utils.ts`)
 
@@ -94,7 +140,7 @@ import { cn } from "@/lib/utils";
 
 - `vitest` — runner
 - `@effect/vitest` — provides `it.effect(...)` for Effect-yielding tests
-- `app/services/database.test-layer.ts` — `makeTestDatabase(stub)` swaps the `Database` service in repo tests; `chainable(value)` builds a Proxy mimicking drizzle's `select().from().where()` chain
+- `app/services/database.test-layer.ts` — `makeTestDatabase(stub)` swaps the `Database` service in repo tests; `chainable(value)` builds a Proxy mimicking drizzle's `select().from().where()` chain; `chainableSpy(value)` wraps `chainable(value)` in a `vi.fn()` so a stub method (e.g. `update: chainableSpy(undefined)`) is both a working chain stand-in **and** assertable via `toHaveBeenCalledWith(...)` / `toHaveBeenCalledTimes(...)` — use it to prove *which* drizzle method a repo call actually invoked
 
 ### Co-location
 
@@ -152,7 +198,7 @@ import { describe, expect } from "vitest";
 import { it } from "@effect/vitest";
 import { Effect, Layer, Exit, Cause } from "effect";
 import { UserRepository } from "../user";
-import { chainable, makeTestDatabase } from "@/services/database.test-layer";
+import { chainable, chainableSpy, makeTestDatabase } from "@/services/database.test-layer";
 import { NotFoundError } from "@/models/errors/repository";
 
 const provideStub = (stub: unknown) =>
@@ -168,6 +214,16 @@ it.effect("getUser fails with NotFoundError when missing", () => {
       const failure = Cause.failureOption(exit.cause);
       if (failure._tag === "Some") expect(failure.value).toBeInstanceOf(NotFoundError);
     }
+  }).pipe(Effect.provide(provideStub(stub)));
+});
+
+it.effect("updateUser calls db.update", () => {
+  const update = chainableSpy(undefined);
+  const stub = { select: () => chainable([{ id: "u1", role: "user" }]), update };
+  return Effect.gen(function* () {
+    const repo = yield* UserRepository;
+    yield* repo.updateUser({ userId: "u1", data: {}, currentUserId: "admin" });
+    expect(update).toHaveBeenCalledTimes(1);
   }).pipe(Effect.provide(provideStub(stub)));
 });
 ```
@@ -201,6 +257,8 @@ If drizzle is hard to stub (joins, transactions): extract pure logic into a top-
 ## Playwright (e2e smoke specs — CI regression net)
 
 Lives in `e2e/*.spec.ts`. Use `@playwright/test`. CI (`.github/workflows/ci.yml`) re-runs these on every PR.
+
+> **Port pinning**: `playwright.config.ts` starts the dev server with `--strictPort` and reads `E2E_PORT` (default 5173). If 5173 is occupied by another project's dev server, run `E2E_PORT=5199 bun run test:e2e` — without `--strictPort`, Vite silently bumps ports and e2e runs against the wrong app (this happened; symptom: forms submit natively via GET, specs time out).
 
 > **Scope: thin and stable, not one-per-feature.** These specs guard critical paths (auth, and any flow whose regression would be costly) against future breakage. Feature-level proof is the [`feature-verifier`](../../.claude/agents/feature-verifier.md) sub-agent + a doc in [`features/<slug>/verifications/`](../features/index.md), not a new spec each time. Add/extend a spec here only when a path is critical enough to warrant automated CI coverage.
 

@@ -1,7 +1,7 @@
 import { HashMap, Logger, LogLevel } from "effect";
 import { emitLog, isDev, type LogLevel as AppLogLevel } from "@/lib/log-format";
 
-const toAppLevel = (level: LogLevel.LogLevel): AppLogLevel => {
+export const toAppLevel = (level: LogLevel.LogLevel): AppLogLevel => {
   switch (level._tag) {
     case "Trace":
       return "trace";
@@ -20,7 +20,7 @@ const toAppLevel = (level: LogLevel.LogLevel): AppLogLevel => {
   }
 };
 
-const stringify = (message: unknown): string => {
+export const stringify = (message: unknown): string => {
   if (Array.isArray(message)) {
     return message
       .map((m) => (typeof m === "string" ? m : JSON.stringify(m)))

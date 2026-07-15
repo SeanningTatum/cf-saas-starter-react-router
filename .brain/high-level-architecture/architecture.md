@@ -123,7 +123,7 @@ Component → api.<router>.<method>.useMutation() → /api/trpc/* → runProcedu
 | Layer | Location | Purpose |
 |-------|----------|---------|
 | Worker entry | `workers/app.ts` | CF entry, builds runtime + tRPC ctx per request |
-| Runtime | `app/runtime.ts` | `makeAppRuntime(env, auth)` — composes all Layers |
+| Runtime | `app/runtime.ts` | `makeAppRuntime(env, baseURL?)` — composes all Layers; auth is built inside via `AuthApiLive(baseURL)` |
 | Routes | `app/routes.ts` | Route table |
 | tRPC bootstrap | `app/trpc/index.ts` | `createTRPCContext`, procedure types, error formatter |
 | tRPC router | `app/trpc/router.ts` | Top-level router (`user`, `admin`, `analytics`) |

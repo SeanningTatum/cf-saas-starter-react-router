@@ -50,8 +50,8 @@ export class WidgetRepository extends Effect.Service<WidgetRepository>()(
 - **Dependencies**: `yield*` service tags (`Database`, `Bucket`, `AuthApi`, `Workflows`). **Never** accept `db` as a parameter (legacy shape — gone).
 - **Inputs**: typed Effect Schema in `app/lib/schemas/{domain}.ts`
 - **Methods**: return `Effect<A, TaggedError, never>` — never `Promise<A>`, never `throw`
-- **Wrappers**: drizzle / R2 / fetch calls go through `tryQuery` / `tryUpdate` / `tryCreate` / `tryDelete` from `@/lib/effect-utils`
-- **`requireFound`**: convert `T | undefined` → `Effect<T, NotFoundError>`
+- **Wrappers — REQUIRED**: every drizzle / R2 / fetch call goes through `tryQuery` / `tryUpdate` / `tryCreate` / `tryDelete` / `requireFound` (or `requireFoundOrFail`) from `@/lib/effect-utils`. Hand-rolled `Effect.tryPromise({ try, catch })` blocks inside a repository are no longer acceptable — if a helper doesn't fit, extend `effect-utils.ts` rather than reaching for raw `Effect.tryPromise`.
+- **`requireFound`**: convert `T | undefined` → `Effect<T, NotFoundError>`. Use `requireFoundOrFail(value, onMissing)` when the not-found case needs a domain-specific tagged error instead of the generic `NotFoundError` (e.g. `BucketRepository.get` → `BucketNotFoundError`).
 - **Errors**: `Data.TaggedError` from `@/models/errors`. Never raw `Error`. See [`errors.md`](errors.md).
 - **No tRPC imports**: repository must be framework-agnostic
 - **No context access**: pass identity / role through input parameters (e.g. `currentUserId` field)
@@ -176,12 +176,17 @@ Deterministic fixtures for local dev + per-PR preview D1 databases live in [`scr
 - **RULE — seed evolves with features**: every feature that adds a table or user-visible data **MUST** extend the fixtures in `scripts/seed-preview.ts` in the same diff. Reviewers rely on preview URLs having representative data — a preview with an empty DB defeats the point of per-PR previews.
 - **Never seed production** by default — the script refuses `--remote` (top-level prod D1) unless `--force-production` is also passed. That escape hatch exists for emergencies only (e.g. bootstrapping a fresh prod DB), not routine use.
 
+## Bucket repository: `get` fails on missing key
+
+`BucketRepository.get(key)` (`app/repositories/bucket.ts`) no longer returns `R2ObjectBody | null` for a missing object — it wraps the R2 call with `requireFoundOrFail(object, () => new BucketNotFoundError({ key }))`, so a miss now fails with `BucketNotFoundError` (mapped to `NOT_FOUND` in `tagToTRPC`) instead of silently succeeding with `null`. Callers that used to check `if (!object)` should let the tagged error propagate instead.
+
 ## Anti-patterns
 
 - `async function getX(db, input)` — old shape, gone. Always `Effect.Service`.
 - Repos that accept `db` as parameter
 - Repos that import `ctx`, session, headers, request
 - Repos that throw or use `try/catch` (outside `Effect.tryPromise`)
+- Hand-rolled `Effect.tryPromise({ try, catch })` in a repo method where `tryQuery`/`tryUpdate`/`tryCreate`/`tryDelete`/`requireFound(OrFail)` already fit — extend `effect-utils.ts` instead of bypassing it. (`bulkUpdateUsersUnsafe`, a hand-rolled bulk-update path that skipped the shared wrappers, was deleted for this reason — use `tryUpdate` + `inArray(...)` per `bulkUpdateUserRoles`.)
 - Repos that import from `@/trpc` or `@/auth`
 - Inline SQL string concatenation — use Drizzle's typed builders
 - Shared mutable state in repo closure — derive everything from `yield*`'d services + inputs

@@ -58,13 +58,15 @@ Class exported from [`workflows/example.ts`](../../workflows/example.ts) and re-
 
 ## Better Auth
 
-Email/password authentication with the `admin` plugin. Configured per request in `workers/app.ts`:
+Email/password authentication with the `admin` plugin. Constructed per request through the Effect runtime in `workers/app.ts` — the raw `createAuth(...)` call was replaced by reading the `AuthApi` tag off the runtime (built by `AuthApiLive(baseURL)`, which wraps construction in `Effect.try` → `ExternalServiceError`):
 
 ```typescript
-const auth = createAuth(env.DATABASE, env.BETTER_AUTH_SECRET, new URL(request.url).origin);
+const runtime = makeAppRuntime(env, new URL(request.url).origin);
+const authExit = await runtime.runPromiseExit(AuthApi);
+// Exit.match → controlled 500 on failure; auth reused as context.auth
 ```
 
-Where `createAuth` (`app/auth/server.ts`) wires the drizzle adapter against D1:
+Underneath, `createAuth` (`app/auth/server.ts`) wires the drizzle adapter against D1:
 
 ```typescript
 betterAuth({

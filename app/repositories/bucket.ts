@@ -1,8 +1,10 @@
 import { Effect } from "effect";
 import { Bucket } from "@/services/bucket";
+import { requireFoundOrFail } from "@/lib/effect-utils";
 import {
   BucketUploadError,
   BucketGetError,
+  BucketNotFoundError,
   BucketDeleteError,
   BucketListError,
 } from "@/models/errors/bucket";
@@ -43,9 +45,12 @@ export class BucketRepository extends Effect.Service<BucketRepository>()(
         });
 
       const get = (key: string) =>
-        Effect.tryPromise({
-          try: () => bucket.get(key),
-          catch: (cause) => new BucketGetError({ cause }),
+        Effect.gen(function* () {
+          const object = yield* Effect.tryPromise({
+            try: () => bucket.get(key),
+            catch: (cause) => new BucketGetError({ cause }),
+          });
+          return yield* requireFoundOrFail(object, () => new BucketNotFoundError({ key }));
         });
 
       const remove = (key: string) =>

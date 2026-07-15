@@ -1,10 +1,13 @@
 import { describe, it, expect } from "vitest";
-import { enUS } from "date-fns/locale";
+import { enUS, zhCN } from "date-fns/locale";
 import { formatDate, getDateFnsLocale } from "../date-utils";
 
 describe("getDateFnsLocale", () => {
   it("returns enUS for 'en'", () => {
     expect(getDateFnsLocale("en")).toBe(enUS);
+  });
+  it("returns zhCN for 'zh'", () => {
+    expect(getDateFnsLocale("zh")).toBe(zhCN);
   });
   it("falls back to enUS for unknown locale", () => {
     expect(getDateFnsLocale("xx")).toBe(enUS);

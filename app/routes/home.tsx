@@ -1,5 +1,5 @@
 import type { Route } from "./+types/home";
-import { Link, redirect } from "react-router";
+import { Link } from "react-router";
 import { useTranslation } from "react-i18next";
 import {
   IconBrandGithub,
@@ -27,6 +27,8 @@ import {
 import { StackBadge } from "@/components/stack-badge";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { LanguageSwitcher } from "@/components/language-switcher";
+import { FeatureCard } from "@/components/feature-card";
+import { redirectIfAuthenticated } from "@/lib/session";
 
 export const handle = { i18n: ["home"] };
 
@@ -51,8 +53,7 @@ export function meta(_: Route.MetaArgs) {
 }
 
 export async function loader({ request, context }: Route.LoaderArgs) {
-  const session = await context.auth.api.getSession({ headers: request.headers });
-  if (session) return redirect("/dashboard");
+  await redirectIfAuthenticated(request, context);
   return null;
 }
 
@@ -324,57 +325,6 @@ function TopBar() {
         </div>
       </div>
     </header>
-  );
-}
-
-interface FeatureCardProps {
-  icon: React.ReactNode;
-  title: string;
-  description: string;
-  badges: string[];
-  to: string;
-  cta: string;
-  testId: string;
-}
-
-function FeatureCard({
-  icon,
-  title,
-  description,
-  badges,
-  to,
-  cta,
-  testId,
-}: FeatureCardProps) {
-  return (
-    <Link to={to} data-testid={testId} className="group">
-      <Card className="h-full gap-4 transition-shadow hover:shadow-md">
-        <CardHeader className="gap-3">
-          <div className="flex items-center justify-between">
-            <span className="flex size-9 items-center justify-center rounded-md border border-border bg-muted/40 text-foreground">
-              {icon}
-            </span>
-            <div className="flex flex-wrap justify-end gap-1.5">
-              {badges.map((b) => (
-                <StackBadge key={b}>{b}</StackBadge>
-              ))}
-            </div>
-          </div>
-          <div className="space-y-1.5">
-            <CardTitle className="text-base">{title}</CardTitle>
-            <CardDescription className="leading-relaxed">
-              {description}
-            </CardDescription>
-          </div>
-        </CardHeader>
-        <CardContent>
-          <span className="inline-flex items-center gap-1 text-sm font-medium text-primary">
-            {cta}
-            <IconArrowRight className="size-3.5 transition-transform group-hover:translate-x-0.5" />
-          </span>
-        </CardContent>
-      </Card>
-    </Link>
   );
 }
 

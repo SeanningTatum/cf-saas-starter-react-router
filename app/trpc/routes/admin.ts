@@ -2,6 +2,7 @@ import { Effect, Schema } from "effect";
 import { adminProcedure, createTRPCRouter } from "..";
 import { runProcedure } from "@/lib/effect-trpc";
 import { UserRepository } from "@/repositories/user";
+import type { AppRuntime } from "@/runtime";
 import {
   GetUsersInput,
   GetUserInput,
@@ -13,6 +14,52 @@ import {
   BulkDeleteUsersInput,
   BulkUpdateUserRolesInput,
 } from "@/lib/schemas/user";
+
+/**
+ * Shared shape for the three `bulk*` procedures below: filter out
+ * protected users (self/admin) → bail early with a zero-affected result if
+ * nothing is left → run the repo action on the remaining ids → log a
+ * structured `logEvent` with actor/targets/affectedCount/skippedCount (plus
+ * any `extraLogFields`, e.g. the new role for `bulkUpdateUserRoles`).
+ */
+function runBulkUserAction<E>(
+  ctx: { runtime: AppRuntime; auth: { user: { id: string } } },
+  userIds: readonly string[],
+  logEvent: string,
+  performAction: (
+    repo: UserRepository,
+    validUserIds: string[]
+  ) => Effect.Effect<number, E>,
+  extraLogFields: Record<string, unknown> = {}
+) {
+  return runProcedure(
+    ctx.runtime,
+    Effect.gen(function* () {
+      const repo = yield* UserRepository;
+      const { validUserIds, skippedCount } = yield* repo.filterProtectedUsers({
+        userIds: [...userIds],
+        currentUserId: ctx.auth.user.id,
+      });
+      if (validUserIds.length === 0) {
+        return { success: true, affectedCount: 0, skippedCount } as const;
+      }
+      const affectedCount = yield* performAction(repo, validUserIds);
+      return { success: true, affectedCount, skippedCount } as const;
+    }).pipe(
+      Effect.tap((result) =>
+        Effect.logInfo(logEvent).pipe(
+          Effect.annotateLogs({
+            actor: ctx.auth.user.id,
+            targets: userIds,
+            affectedCount: result.affectedCount,
+            skippedCount: result.skippedCount,
+            ...extraLogFields,
+          })
+        )
+      )
+    )
+  );
+}
 
 export const adminRouter = createTRPCRouter({
   getUsers: adminProcedure
@@ -99,103 +146,33 @@ export const adminRouter = createTRPCRouter({
   bulkBanUsers: adminProcedure
     .input(Schema.standardSchemaV1(BulkBanUsersInput))
     .mutation(({ ctx, input }) =>
-      runProcedure(
-        ctx.runtime,
-        Effect.gen(function* () {
-          const repo = yield* UserRepository;
-          const { validUserIds, skippedCount } = yield* repo.filterProtectedUsers({
-            userIds: input.userIds,
-            currentUserId: ctx.auth.user.id,
-          });
-          if (validUserIds.length === 0) {
-            return { success: true, affectedCount: 0, skippedCount } as const;
-          }
-          const affectedCount = yield* repo.bulkBanUsers({
-            userIds: validUserIds,
-            reason: input.reason,
-            expiresAt: input.expiresAt,
-          });
-          return { success: true, affectedCount, skippedCount } as const;
-        }).pipe(
-          Effect.tap((result) =>
-            Effect.logInfo("users.bulk_banned").pipe(
-              Effect.annotateLogs({
-                actor: ctx.auth.user.id,
-                targets: input.userIds,
-                affectedCount: result.affectedCount,
-                skippedCount: result.skippedCount,
-              })
-            )
-          )
-        )
+      runBulkUserAction(ctx, input.userIds, "users.bulk_banned", (repo, validUserIds) =>
+        repo.bulkBanUsers({
+          userIds: validUserIds,
+          reason: input.reason,
+          expiresAt: input.expiresAt,
+        })
       )
     ),
 
   bulkDeleteUsers: adminProcedure
     .input(Schema.standardSchemaV1(BulkDeleteUsersInput))
     .mutation(({ ctx, input }) =>
-      runProcedure(
-        ctx.runtime,
-        Effect.gen(function* () {
-          const repo = yield* UserRepository;
-          const { validUserIds, skippedCount } = yield* repo.filterProtectedUsers({
-            userIds: input.userIds,
-            currentUserId: ctx.auth.user.id,
-          });
-          if (validUserIds.length === 0) {
-            return { success: true, affectedCount: 0, skippedCount } as const;
-          }
-          const affectedCount = yield* repo.bulkDeleteUsers({
-            userIds: validUserIds,
-          });
-          return { success: true, affectedCount, skippedCount } as const;
-        }).pipe(
-          Effect.tap((result) =>
-            Effect.logInfo("users.bulk_deleted").pipe(
-              Effect.annotateLogs({
-                actor: ctx.auth.user.id,
-                targets: input.userIds,
-                affectedCount: result.affectedCount,
-                skippedCount: result.skippedCount,
-              })
-            )
-          )
-        )
+      runBulkUserAction(ctx, input.userIds, "users.bulk_deleted", (repo, validUserIds) =>
+        repo.bulkDeleteUsers({ userIds: validUserIds })
       )
     ),
 
   bulkUpdateUserRoles: adminProcedure
     .input(Schema.standardSchemaV1(BulkUpdateUserRolesInput))
     .mutation(({ ctx, input }) =>
-      runProcedure(
-        ctx.runtime,
-        Effect.gen(function* () {
-          const repo = yield* UserRepository;
-          const { validUserIds, skippedCount } = yield* repo.filterProtectedUsers({
-            userIds: input.userIds,
-            currentUserId: ctx.auth.user.id,
-          });
-          if (validUserIds.length === 0) {
-            return { success: true, affectedCount: 0, skippedCount } as const;
-          }
-          const affectedCount = yield* repo.bulkUpdateUserRoles({
-            userIds: validUserIds,
-            role: input.role,
-          });
-          return { success: true, affectedCount, skippedCount } as const;
-        }).pipe(
-          Effect.tap((result) =>
-            Effect.logInfo("users.bulk_role_updated").pipe(
-              Effect.annotateLogs({
-                actor: ctx.auth.user.id,
-                targets: input.userIds,
-                role: input.role,
-                affectedCount: result.affectedCount,
-                skippedCount: result.skippedCount,
-              })
-            )
-          )
-        )
+      runBulkUserAction(
+        ctx,
+        input.userIds,
+        "users.bulk_role_updated",
+        (repo, validUserIds) =>
+          repo.bulkUpdateUserRoles({ userIds: validUserIds, role: input.role }),
+        { role: input.role }
       )
     ),
 });

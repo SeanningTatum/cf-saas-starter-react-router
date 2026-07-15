@@ -10,7 +10,16 @@ const LEVEL_VALUE: Record<LogLevel, number> = {
 };
 
 export const isDev = import.meta.env.DEV;
-const minLevel = isDev ? LEVEL_VALUE.trace : LEVEL_VALUE.info;
+
+/**
+ * Pure, parameterized level comparison — `shouldLog` below always compares
+ * against the module's fixed `minLevel` (derived from `isDev` at import
+ * time), which makes the "filtered out" branch untestable in an environment
+ * where `isDev` is always true. This function takes `minLevel` as an
+ * argument so both the pass and filtered cases can be exercised directly.
+ */
+export const isLevelEnabled = (level: LogLevel, min: LogLevel): boolean =>
+  LEVEL_VALUE[level] >= LEVEL_VALUE[min];
 
 const COLORS: Record<LogLevel, string> = {
   trace: "\x1b[90m",
@@ -23,7 +32,7 @@ const COLORS: Record<LogLevel, string> = {
 const RESET = "\x1b[0m";
 
 export const shouldLog = (level: LogLevel) =>
-  LEVEL_VALUE[level] >= minLevel;
+  isLevelEnabled(level, isDev ? "trace" : "info");
 
 export function emitLog(
   level: LogLevel,

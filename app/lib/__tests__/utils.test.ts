@@ -1,5 +1,27 @@
 import { describe, it, expect } from "vitest";
-import { cn } from "../utils";
+import { cn, getInitials } from "../utils";
+
+describe("getInitials", () => {
+  it("takes first letter of first two words", () => {
+    expect(getInitials("Jane Doe")).toBe("JD");
+  });
+
+  it("caps at two characters for long names", () => {
+    expect(getInitials("Anna Maria van Beek")).toBe("AM");
+  });
+
+  it("handles single-word names", () => {
+    expect(getInitials("admin")).toBe("A");
+  });
+
+  it("ignores extra whitespace between words", () => {
+    expect(getInitials("Jane  Doe")).toBe("JD");
+  });
+
+  it("returns empty string for empty input", () => {
+    expect(getInitials("")).toBe("");
+  });
+});
 
 describe("cn", () => {
   it("merges class names from arguments", () => {

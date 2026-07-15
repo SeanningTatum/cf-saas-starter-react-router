@@ -2,10 +2,17 @@ import { describe, it, expect } from "vitest";
 import { Schema } from "effect";
 import {
   GetUsersInput,
+  GetUserInput,
   BulkBanUsersInput,
   BulkDeleteUsersInput,
   BulkUpdateUserRolesInput,
   UpdateUserInput,
+  UpdateUserData,
+  BanUserInput,
+  UnbanUserInput,
+  DeleteUserInput,
+  CreateWorkflowInput,
+  DeleteUserSelfCheckInput,
   Role,
   Status,
 } from "../user";
@@ -96,5 +103,68 @@ describe("UpdateUserInput", () => {
     expect(
       decode(UpdateUserInput)({ userId: "u1", data: {} })._tag
     ).toBe("Right");
+  });
+});
+
+describe("UpdateUserData email pattern", () => {
+  it("accepts a well-formed email", () => {
+    expect(decode(UpdateUserData)({ email: "a@b.com" })._tag).toBe("Right");
+  });
+
+  it("rejects a malformed email", () => {
+    expect(decode(UpdateUserData)({ email: "not-an-email" })._tag).toBe(
+      "Left"
+    );
+  });
+});
+
+describe("GetUserInput", () => {
+  it("decodes a valid userId", () => {
+    expect(decode(GetUserInput)({ userId: "u1" })._tag).toBe("Right");
+  });
+});
+
+describe("BanUserInput", () => {
+  it("decodes with only userId", () => {
+    expect(decode(BanUserInput)({ userId: "u1" })._tag).toBe("Right");
+  });
+
+  it("decodes with reason and expiresAt", () => {
+    expect(
+      decode(BanUserInput)({
+        userId: "u1",
+        reason: "spam",
+        expiresAt: new Date(),
+      })._tag
+    ).toBe("Right");
+  });
+});
+
+describe("UnbanUserInput", () => {
+  it("decodes a valid userId", () => {
+    expect(decode(UnbanUserInput)({ userId: "u1" })._tag).toBe("Right");
+  });
+});
+
+describe("DeleteUserInput", () => {
+  it("decodes a valid userId", () => {
+    expect(decode(DeleteUserInput)({ userId: "u1" })._tag).toBe("Right");
+  });
+});
+
+describe("CreateWorkflowInput", () => {
+  it("decodes email + metadata record", () => {
+    expect(
+      decode(CreateWorkflowInput)({
+        email: "a@b.com",
+        metadata: { source: "signup" },
+      })._tag
+    ).toBe("Right");
+  });
+});
+
+describe("DeleteUserSelfCheckInput", () => {
+  it("decodes a plain string", () => {
+    expect(decode(DeleteUserSelfCheckInput)("confirm")._tag).toBe("Right");
   });
 });

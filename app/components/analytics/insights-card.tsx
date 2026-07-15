@@ -7,6 +7,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { cn } from "@/lib/utils";
 
 export interface Insight {
   /** The insight text */
@@ -54,7 +55,7 @@ export function InsightsCard({
           {insights.map((insight, index) => (
             <li
               key={index}
-              className={`flex items-center gap-3 ${getInsightStyle(insight.type)}`}
+              className={cn("flex items-center gap-3", getInsightStyle(insight.type))}
             >
               <span className="size-1.5 shrink-0 rounded-full bg-current" />
               <span className="leading-relaxed">{insight.text}</span>

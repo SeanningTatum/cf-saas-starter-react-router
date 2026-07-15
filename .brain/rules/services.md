@@ -43,7 +43,7 @@ The runtime composes services into a single Layer in `app/runtime.ts` via `makeA
 |---------|------|--------|-------|
 | `Database` | `app/services/database.ts` | `app/Database` | `{ db: DrizzleD1 }` (drizzle over D1) |
 | `Bucket` | `app/services/bucket.ts` | `app/Bucket` | `{ bucket: R2Bucket }` (raw R2 binding) |
-| `AuthApi` | `app/services/auth.ts` | `app/AuthApi` | `{ auth: Auth, api: Auth["api"] }` |
+| `AuthApi` | `app/services/auth.ts` | `app/AuthApi` | `{ auth: Auth, api: Auth["api"] }` — Layer built via factory `AuthApiLive(baseURL?)`, not a bare Layer |
 | `Workflows` | `app/services/workflows.ts` | `app/Workflows` | `{ exampleWorkflow, triggerExample }` |
 | `Session` | `app/services/session.ts` | `app/Session` | `{ session, user }` — built ad-hoc via `SessionLive(headers)`, **not** in the global runtime |
 | `CloudflareEnv` | `app/services/cloudflare.ts` | `app/CloudflareEnv` | The raw `Env` |
@@ -65,7 +65,7 @@ Repos / procedures composition lives in `app/runtime.ts` (`AppServices` union: `
 
 ## Better Auth (server config)
 
-Configured in `app/auth/server.ts`. The `AuthApi` service exposes the running instance.
+Configured in `app/auth/server.ts`. The `AuthApi` service exposes the running instance — `AuthApiLive` is a **factory** (`AuthApiLive(baseURL?)`), not a bare Layer, because `baseURL` is request-scoped (the request's own origin), mirroring `SessionLive(headers)`:
 
 ```typescript
 // app/auth/server.ts (real shape)
@@ -84,7 +84,25 @@ export function createAuth(database: D1Database, secret: string, baseURL?: strin
 }
 ```
 
-- Created **per request** in `workers/app.ts` (not cached globally)
+```typescript
+// app/services/auth.ts (real shape) — factory, not a top-level Layer
+export const AuthApiLive = (baseURL?: string) =>
+  Layer.effect(
+    AuthApi,
+    Effect.gen(function* () {
+      const env = yield* CloudflareEnv;
+      const auth = yield* Effect.try({
+        try: () => createAuth(env.DATABASE, env.BETTER_AUTH_SECRET, baseURL),
+        catch: (cause) => new ExternalServiceError({ service: "BetterAuth", cause }),
+      });
+      return { auth, api: auth.api };
+    })
+  );
+```
+
+`AuthApiLive(baseURL)` is now the **single production auth construction path**. `makeAppRuntime(env, origin)` composes it into the per-request `ManagedRuntime`, and `workers/app.ts` reads the instance off the runtime — `const { auth } = (await runtime.runPromiseExit(AuthApi)).value` — instead of calling `createAuth(...)` raw outside any Effect. A failure to construct (bad config, missing binding) now surfaces as a controlled 500 via `Exit.match` rather than an unhandled throw. `auth` is then reused as `context.auth` for React Router loaders exactly as before.
+
+- Created **per request** (via the runtime, not cached globally)
 - Drizzle adapter against D1 → sessions persist in the `session` table
 - Plugins enabled: `admin`, email/password
 - Required env: `BETTER_AUTH_SECRET`
@@ -98,7 +116,7 @@ const session = yield* Effect.tryPromise({
 });
 ```
 
-> ⚠ Real `app/trpc/index.ts` `createTRPCContext` currently uses `Effect.promise(() => api.getSession({ headers }))` — that variant treats throws as **defects** (unrecoverable) instead of typed failures. New code should use the `Effect.tryPromise` form above so Better Auth errors surface as `ExternalServiceError` and can be caught.
+`app/trpc/index.ts` `createTRPCContext` now follows exactly this pattern: it builds a per-request `SessionLive(headers)` Layer (see "Session" below), resolves `{ session, user }` via `Effect.tryPromise` → `ExternalServiceError`, and locally provides the layer before running the program on `runtime.runPromise`. The previous `Effect.promise(() => api.getSession({ headers }))` anti-pattern (throws treated as unrecoverable defects) is gone — this was the only `Effect.promise` call in the repo and it's now `Effect.tryPromise`.
 
 Auth gating at the procedure level is handled by `protectedProcedure` / `adminProcedure` (see [`routes.md`](routes.md)) — they throw `TRPCError({ code: "UNAUTHORIZED" | "FORBIDDEN" })` directly because that's control flow, not a domain error.
 
@@ -121,14 +139,27 @@ export interface WorkflowsShape {
 
 export const WorkflowsLive = Layer.effect(
   Workflows,
-  Effect.map(CloudflareEnv, (env) => ({
-    exampleWorkflow: env.EXAMPLE_WORKFLOW,
-    triggerExample: (params) =>
-      Effect.tryPromise({
-        try: () => env.EXAMPLE_WORKFLOW.create({ params }),
-        catch: (cause) => new WorkflowTriggerError({ name: "EXAMPLE_WORKFLOW", cause }),
-      }),
-  }))
+  Effect.gen(function* () {
+    const env = yield* CloudflareEnv;
+    // EXAMPLE_WORKFLOW is declared non-optional in the generated Env type,
+    // but (like BUCKET) the binding can be absent from an actual deployment.
+    // Fail fast with a typed ConfigurationError — mirrors DatabaseLive /
+    // BucketLive — instead of letting a missing binding surface as a
+    // confusing TypeError deep inside WorkflowTriggerError's `cause`.
+    if (!env.EXAMPLE_WORKFLOW) {
+      return yield* Effect.fail(
+        new ConfigurationError({ service: "Workflows", field: "EXAMPLE_WORKFLOW" })
+      );
+    }
+    return {
+      exampleWorkflow: env.EXAMPLE_WORKFLOW,
+      triggerExample: (params) =>
+        Effect.tryPromise({
+          try: () => env.EXAMPLE_WORKFLOW.create({ params }),
+          catch: (cause) => new WorkflowTriggerError({ name: "EXAMPLE_WORKFLOW", cause }),
+        }),
+    };
+  })
 );
 ```
 
@@ -139,7 +170,7 @@ const wf = yield* Workflows;
 return yield* wf.triggerExample(input);
 ```
 
-`WorkflowTriggerError` is mapped to `INTERNAL_SERVER_ERROR` in `tagToTRPC`. Binding/declaration side: see [`cloudflare.md`](cloudflare.md).
+`WorkflowTriggerError` and `ConfigurationError` are both mapped to `INTERNAL_SERVER_ERROR` in `tagToTRPC`. Binding/declaration side: see [`cloudflare.md`](cloudflare.md).
 
 ## Bucket (R2)
 
@@ -163,11 +194,11 @@ export const BucketLive = Layer.effect(
 | Method | Returns | Failure |
 |--------|---------|---------|
 | `upload(file, options?)` | `Effect<string, BucketUploadError>` (returns the key) | `BucketUploadError` |
-| `get(key)` | `Effect<R2ObjectBody \| null, BucketGetError>` | `BucketGetError` |
+| `get(key)` | `Effect<R2ObjectBody, BucketGetError \| BucketNotFoundError>` | `BucketGetError` (R2 call itself failed) or `BucketNotFoundError` (key missing) |
 | `remove(key)` | `Effect<void, BucketDeleteError>` | `BucketDeleteError` |
 | `list(input?)` | `Effect<R2Objects, BucketListError>` | `BucketListError` |
 
-`get` returns `null` for missing keys — wrap with `requireFound` or check explicitly if you want `BucketNotFoundError` semantics. The error type exists in `tagToTRPC` (mapped to `NOT_FOUND`) but no built-in repo method raises it today.
+`get` no longer returns `null` for a missing key — it wraps the R2 call's result with `requireFoundOrFail(object, () => new BucketNotFoundError({ key }))` from `@/lib/effect-utils`, so a miss now fails with `BucketNotFoundError` (mapped to `NOT_FOUND` in `tagToTRPC`) instead of silently succeeding with `null`.
 
 The default key generator: `uploads/${Date.now()}-${crypto.randomUUID()}`.
 
@@ -199,16 +230,26 @@ External clients are created **once per request** at the worker entry. Repos rec
 3. Env access localized
 4. Predictable cleanup (`runtime.dispose()` in `ctx.waitUntil`)
 
-Worker entry:
+Worker entry — `makeAppRuntime` takes `(env, baseURL?)` and composes `AuthApiLive(baseURL)` into the runtime; `auth` is read back off the runtime's `AuthApi` Tag rather than constructed raw:
 
 ```typescript
 // workers/app.ts (real shape)
 export default {
   async fetch(request, env, ctx) {
-    const auth = createAuth(env.DATABASE, env.BETTER_AUTH_SECRET, new URL(request.url).origin);
-    const runtime = makeAppRuntime(env, auth);
+    const runtime = makeAppRuntime(env, new URL(request.url).origin);
 
     try {
+      // Single entry edge: read the Better Auth instance off the runtime's
+      // AuthApi tag instead of calling createAuth(...) raw outside any
+      // Effect. runPromiseExit + Exit.match keeps a broken config/binding a
+      // controlled 500 instead of an unhandled rejection.
+      const authExit = await runtime.runPromiseExit(AuthApi);
+      if (Exit.isFailure(authExit)) {
+        loggers.server.error({ cause: Cause.pretty(authExit.cause) }, "Failed to construct AuthApi");
+        return new Response("Internal Server Error", { status: 500 });
+      }
+      const { auth } = authExit.value;
+
       const trpcContext = await createTRPCContext({ headers: request.headers, runtime });
       const trpcCaller = createCaller(trpcContext);
 
@@ -263,7 +304,7 @@ Effect.logInfo("users.bulk_banned").pipe(
 | `Effect.promise(fn)` | Promise that **cannot reject** (e.g. `Promise.resolve(x)`, an in-memory `setTimeout` wrapper). | Throws are **defects** — unrecoverable, bypass `catchAll`/`catchTags`. |
 | `Effect.tryPromise({ try, catch })` | Any promise from an external client (Better Auth, fetch, drizzle, R2, third-party SDKs). | Throws map to a typed tagged error you can handle. |
 
-If unsure, default to `Effect.tryPromise` — being unable to recover is the dangerous case. **The only `Effect.promise` call in this repo today** ([`app/trpc/index.ts`](../../app/trpc/index.ts) `createTRPCContext`) is a known violation and should be migrated to `Effect.tryPromise` → `ExternalServiceError`.
+If unsure, default to `Effect.tryPromise` — being unable to recover is the dangerous case. **There are no `Effect.promise` calls in this repo today.** The one known violation — [`app/trpc/index.ts`](../../app/trpc/index.ts) `createTRPCContext` — has been migrated: it now resolves the session via the `Session`/`SessionLive` service, which wraps `api.getSession` in `Effect.tryPromise` → `ExternalServiceError`.
 
 ## Anti-patterns
 

@@ -1,0 +1,18 @@
+{
+  "dropzone": {
+    "click_to_upload": "点击上传",
+    "drag_and_drop": "或拖放文件",
+    "any_file_type": "接受任意文件类型",
+    "accepted_formats": "接受的格式：{{formats}}",
+    "max_size": "最大 {{size}}MB"
+  },
+  "uploading": "正在上传 {{name}}...",
+  "please_wait": "请稍候",
+  "success": "上传成功！",
+  "key_label": "键值：{{key}}",
+  "upload_another": "上传其他文件",
+  "failed": "上传失败",
+  "try_again": "重试",
+  "file_input_label": "文件输入",
+  "size_limit_exceeded": "文件大小超过 {{size}}MB 限制"
+}
