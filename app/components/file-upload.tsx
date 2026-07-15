@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, type DragEvent, type ChangeEvent } from "react";
 import { useFetcher } from "react-router";
+import { useTranslation } from "react-i18next";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
@@ -20,32 +21,32 @@ export function FileUpload({
   maxSize = 10 * 1024 * 1024, // 10MB default
   className,
 }: FileUploadProps) {
+  const { t } = useTranslation("upload");
   const [isDragging, setIsDragging] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const fetcher = useFetcher<Awaited<ReturnType<typeof action>>>();
+  const fetcher = useFetcher<typeof action>();
 
   const validateFile = (file: File): string | null => {
     if (maxSize && file.size > maxSize) {
-      return `File size exceeds ${(maxSize / 1024 / 1024).toFixed(0)}MB limit`;
+      return t("size_limit_exceeded", { size: (maxSize / 1024 / 1024).toFixed(0) });
     }
     return null;
   };
 
-  // Handle fetcher state changes
+  // Handle fetcher results — the action returns { success: true, key } or
+  // { success: false, error } on every branch (401/400/500 included)
   useEffect(() => {
-    if (fetcher.data && "success" in fetcher.data && fetcher.data.success) {
+    if (!fetcher.data) return;
+    if (fetcher.data.success) {
       onUploadSuccess?.(fetcher.data.key);
-    }
-    // Handle errors from Response.error
-    if (fetcher.state === "idle" && !fetcher.data && selectedFile) {
-      // This means the request completed but there's no data (likely an error)
-      const errorMessage = "Upload failed";
+    } else {
+      const errorMessage = fetcher.data.error || t("failed");
       setError(errorMessage);
       onUploadError?.(errorMessage);
     }
-  }, [fetcher.data, fetcher.state, onUploadSuccess, onUploadError, selectedFile]);
+  }, [fetcher.data, onUploadSuccess, onUploadError, t]);
 
   const handleFile = (file: File) => {
     setError(null);
@@ -109,8 +110,7 @@ export function FileUpload({
   };
 
   const isUploading = fetcher.state === "submitting" || fetcher.state === "loading";
-  const uploadedKey =
-    fetcher.data && "key" in fetcher.data ? fetcher.data.key : undefined;
+  const uploadedKey = fetcher.data?.success ? fetcher.data.key : undefined;
 
   return (
     <div className={cn("w-full", className)}>
@@ -120,7 +120,7 @@ export function FileUpload({
         onChange={handleFileInputChange}
         accept={accept}
         className="hidden"
-        aria-label="File input"
+        aria-label={t("file_input_label")}
       />
 
       {!uploadedKey ? (
@@ -143,10 +143,10 @@ export function FileUpload({
               <Spinner size="lg" />
               <div className="text-center">
                 <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                  Uploading {selectedFile?.name}...
+                  {t("uploading", { name: selectedFile?.name })}
                 </p>
                 <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                  Please wait
+                  {t("please_wait")}
                 </p>
               </div>
             </div>
@@ -168,17 +168,17 @@ export function FileUpload({
               </svg>
               <div className="text-center">
                 <p className="mb-2 text-sm font-semibold text-gray-700 dark:text-gray-300">
-                  <span className="text-primary">Click to upload</span> or drag
-                  and drop
+                  <span className="text-primary">{t("dropzone.click_to_upload")}</span>{" "}
+                  {t("dropzone.drag_and_drop")}
                 </p>
                 <p className="text-xs text-gray-500 dark:text-gray-400">
                   {accept
-                    ? `Accepted formats: ${accept}`
-                    : "Any file type accepted"}
+                    ? t("dropzone.accepted_formats", { formats: accept })
+                    : t("dropzone.any_file_type")}
                 </p>
                 {maxSize && (
                   <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                    Max size: {(maxSize / 1024 / 1024).toFixed(0)}MB
+                    {t("dropzone.max_size", { size: (maxSize / 1024 / 1024).toFixed(0) })}
                   </p>
                 )}
               </div>
@@ -201,16 +201,16 @@ export function FileUpload({
             />
           </svg>
           <p className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
-            Upload successful!
+            {t("success")}
           </p>
           <p className="text-xs text-gray-600 dark:text-gray-400 mb-1">
             {selectedFile?.name}
           </p>
           <p className="text-xs text-gray-500 dark:text-gray-500 mb-4 font-mono">
-            Key: {uploadedKey}
+            {t("key_label", { key: uploadedKey })}
           </p>
           <Button onClick={handleReset} variant="outline" size="sm">
-            Upload Another File
+            {t("upload_another")}
           </Button>
         </div>
       )}
@@ -231,7 +231,7 @@ export function FileUpload({
             </svg>
             <div>
               <p className="text-sm font-semibold text-red-800 dark:text-red-300">
-                Upload failed
+                {t("failed")}
               </p>
               <p className="text-sm text-red-700 dark:text-red-400 mt-1">
                 {error}
@@ -244,7 +244,7 @@ export function FileUpload({
             size="sm"
             className="mt-3"
           >
-            Try Again
+            {t("try_again")}
           </Button>
         </div>
       )}

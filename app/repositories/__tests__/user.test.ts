@@ -3,10 +3,17 @@ import { it } from "@effect/vitest";
 import { Effect, Layer, Exit, Cause } from "effect";
 import { UserRepository, isProtectedUser, buildUserConditions } from "../user";
 import { Database } from "@/services/database";
-import { chainable, makeTestDatabase } from "@/services/database.test-layer";
+import {
+  chainable,
+  chainableSpy,
+  makeTestDatabase,
+} from "@/services/database.test-layer";
+import { user } from "@/db/schema";
 import {
   NotFoundError,
   ValidationError,
+  UpdateError,
+  DeletionError,
 } from "@/models/errors/repository";
 
 const provideStub = (stub: unknown) =>
@@ -85,6 +92,24 @@ describe("UserRepository.getUser", () => {
   });
 });
 
+describe("UserRepository.getUsers", () => {
+  it.effect("returns paged rows with total/totalPages/page/limit", () => {
+    let call = 0;
+    const rows = [{ id: "u1" }, { id: "u2" }];
+    const responses = [rows, [{ count: 25 }]];
+    const stub = { select: () => chainable(responses[call++]) };
+    return Effect.gen(function* () {
+      const repo = yield* UserRepository;
+      const result = yield* repo.getUsers({ page: 1, limit: 10 });
+      expect(result.users).toEqual(rows);
+      expect(result.total).toBe(25);
+      expect(result.page).toBe(1);
+      expect(result.limit).toBe(10);
+      expect(result.totalPages).toBe(3);
+    }).pipe(Effect.provide(provideStub(stub)));
+  });
+});
+
 describe("UserRepository.bulkBanUsers", () => {
   it.effect("returns 0 for empty userIds without touching db", () =>
     Effect.gen(function* () {
@@ -93,6 +118,42 @@ describe("UserRepository.bulkBanUsers", () => {
       expect(n).toBe(0);
     }).pipe(Effect.provide(provideStub({})))
   );
+
+  it.effect("bans the given users and returns the count", () => {
+    const updateSpy = chainableSpy(undefined);
+    const stub = { update: updateSpy };
+    return Effect.gen(function* () {
+      const repo = yield* UserRepository;
+      const n = yield* repo.bulkBanUsers({
+        userIds: ["a", "b"],
+        reason: "spam",
+      });
+      expect(n).toBe(2);
+      expect(updateSpy).toHaveBeenCalledTimes(1);
+      expect(updateSpy).toHaveBeenCalledWith(user);
+    }).pipe(Effect.provide(provideStub(stub)));
+  });
+
+  it.effect("fails with UpdateError when the update throws", () => {
+    const stub = {
+      update: () => {
+        throw new Error("update boom");
+      },
+    };
+    return Effect.gen(function* () {
+      const repo = yield* UserRepository;
+      const exit = yield* Effect.exit(
+        repo.bulkBanUsers({ userIds: ["a"] })
+      );
+      expect(Exit.isFailure(exit)).toBe(true);
+      if (Exit.isFailure(exit)) {
+        const failure = Cause.failureOption(exit.cause);
+        if (failure._tag === "Some") {
+          expect(failure.value).toBeInstanceOf(UpdateError);
+        }
+      }
+    }).pipe(Effect.provide(provideStub(stub)));
+  });
 });
 
 describe("UserRepository.bulkDeleteUsers", () => {
@@ -103,6 +164,39 @@ describe("UserRepository.bulkDeleteUsers", () => {
       expect(n).toBe(0);
     }).pipe(Effect.provide(provideStub({})))
   );
+
+  it.effect("deletes the given users and returns the count", () => {
+    const deleteSpy = chainableSpy(undefined);
+    const stub = { delete: deleteSpy };
+    return Effect.gen(function* () {
+      const repo = yield* UserRepository;
+      const n = yield* repo.bulkDeleteUsers({ userIds: ["a", "b", "c"] });
+      expect(n).toBe(3);
+      expect(deleteSpy).toHaveBeenCalledTimes(1);
+      expect(deleteSpy).toHaveBeenCalledWith(user);
+    }).pipe(Effect.provide(provideStub(stub)));
+  });
+
+  it.effect("fails with DeletionError when the delete throws", () => {
+    const stub = {
+      delete: () => {
+        throw new Error("delete boom");
+      },
+    };
+    return Effect.gen(function* () {
+      const repo = yield* UserRepository;
+      const exit = yield* Effect.exit(
+        repo.bulkDeleteUsers({ userIds: ["a"] })
+      );
+      expect(Exit.isFailure(exit)).toBe(true);
+      if (Exit.isFailure(exit)) {
+        const failure = Cause.failureOption(exit.cause);
+        if (failure._tag === "Some") {
+          expect(failure.value).toBeInstanceOf(DeletionError);
+        }
+      }
+    }).pipe(Effect.provide(provideStub(stub)));
+  });
 });
 
 describe("UserRepository.bulkUpdateUserRoles", () => {
@@ -113,16 +207,42 @@ describe("UserRepository.bulkUpdateUserRoles", () => {
       expect(n).toBe(0);
     }).pipe(Effect.provide(provideStub({})))
   );
-});
 
-describe("UserRepository.bulkUpdateUsersUnsafe", () => {
-  it.effect("returns 0 for empty updates", () =>
-    Effect.gen(function* () {
+  it.effect("updates roles for the given users and returns the count", () => {
+    const updateSpy = chainableSpy(undefined);
+    const stub = { update: updateSpy };
+    return Effect.gen(function* () {
       const repo = yield* UserRepository;
-      const n = yield* repo.bulkUpdateUsersUnsafe({ updates: [] });
-      expect(n).toBe(0);
-    }).pipe(Effect.provide(provideStub({})))
-  );
+      const n = yield* repo.bulkUpdateUserRoles({
+        userIds: ["a", "b"],
+        role: "admin",
+      });
+      expect(n).toBe(2);
+      expect(updateSpy).toHaveBeenCalledTimes(1);
+      expect(updateSpy).toHaveBeenCalledWith(user);
+    }).pipe(Effect.provide(provideStub(stub)));
+  });
+
+  it.effect("fails with UpdateError when the update throws", () => {
+    const stub = {
+      update: () => {
+        throw new Error("update boom");
+      },
+    };
+    return Effect.gen(function* () {
+      const repo = yield* UserRepository;
+      const exit = yield* Effect.exit(
+        repo.bulkUpdateUserRoles({ userIds: ["a"], role: "admin" })
+      );
+      expect(Exit.isFailure(exit)).toBe(true);
+      if (Exit.isFailure(exit)) {
+        const failure = Cause.failureOption(exit.cause);
+        if (failure._tag === "Some") {
+          expect(failure.value).toBeInstanceOf(UpdateError);
+        }
+      }
+    }).pipe(Effect.provide(provideStub(stub)));
+  });
 });
 
 describe("UserRepository.filterProtectedUsers", () => {
@@ -229,6 +349,22 @@ describe("UserRepository.updateUser", () => {
       }
     }).pipe(Effect.provide(provideStub(stub)));
   });
+
+  it.effect("updates a valid non-protected target and returns success", () => {
+    const stub = {
+      select: () => chainable([{ id: "u1", role: "user" }]),
+      update: () => chainable(undefined),
+    };
+    return Effect.gen(function* () {
+      const repo = yield* UserRepository;
+      const result = yield* repo.updateUser({
+        userId: "u1",
+        currentUserId: "actor",
+        data: { name: "New Name" },
+      });
+      expect(result).toEqual({ success: true });
+    }).pipe(Effect.provide(provideStub(stub)));
+  });
 });
 
 describe("UserRepository.unbanUser", () => {
@@ -246,6 +382,18 @@ describe("UserRepository.unbanUser", () => {
           );
         }
       }
+    }).pipe(Effect.provide(provideStub(stub)));
+  });
+
+  it.effect("unbans a found user and returns success", () => {
+    const stub = {
+      select: () => chainable([{ id: "u1" }]),
+      update: () => chainable(undefined),
+    };
+    return Effect.gen(function* () {
+      const repo = yield* UserRepository;
+      const result = yield* repo.unbanUser({ userId: "u1" });
+      expect(result).toEqual({ success: true });
     }).pipe(Effect.provide(provideStub(stub)));
   });
 });
@@ -271,6 +419,21 @@ describe("UserRepository.deleteUser", () => {
       }
     }).pipe(Effect.provide(provideStub(stub)));
   });
+
+  it.effect("deletes a valid non-protected target and returns success", () => {
+    const stub = {
+      select: () => chainable([{ id: "u1", role: "user" }]),
+      delete: () => chainable(undefined),
+    };
+    return Effect.gen(function* () {
+      const repo = yield* UserRepository;
+      const result = yield* repo.deleteUser({
+        userId: "u1",
+        currentUserId: "actor",
+      });
+      expect(result).toEqual({ success: true });
+    }).pipe(Effect.provide(provideStub(stub)));
+  });
 });
 
 describe("UserRepository.banUser", () => {
@@ -293,6 +456,22 @@ describe("UserRepository.banUser", () => {
           expect(failure.value).toBeInstanceOf(ValidationError);
         }
       }
+    }).pipe(Effect.provide(provideStub(stub)));
+  });
+
+  it.effect("bans a valid non-protected target and returns success", () => {
+    const stub = {
+      select: () => chainable([{ id: "u1", role: "user" }]),
+      update: () => chainable(undefined),
+    };
+    return Effect.gen(function* () {
+      const repo = yield* UserRepository;
+      const result = yield* repo.banUser({
+        userId: "u1",
+        currentUserId: "actor",
+        reason: "spam",
+      });
+      expect(result).toEqual({ success: true });
     }).pipe(Effect.provide(provideStub(stub)));
   });
 });

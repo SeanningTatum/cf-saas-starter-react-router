@@ -42,5 +42,64 @@
     "data_library": "Data Library",
     "reports": "Reports",
     "word_assistant": "Word Assistant"
+  },
+  "nav_user": {
+    "theme_menu": "Theme",
+    "log_out": "Log out"
+  },
+  "site_header": {
+    "github": "GitHub"
+  },
+  "users_table": {
+    "search_placeholder": "Search users...",
+    "role_placeholder": "Role",
+    "status_placeholder": "Status",
+    "roles": {
+      "all": "All Roles",
+      "admin": "Admin",
+      "user": "User"
+    },
+    "statuses": {
+      "all": "All Status",
+      "verified": "Verified",
+      "unverified": "Unverified",
+      "banned": "Banned"
+    },
+    "columns": {
+      "user": "User",
+      "role": "Role",
+      "status": "Status",
+      "joined": "Joined"
+    },
+    "select_all": "Select all",
+    "select_row": "Select row",
+    "columns_button": "Columns",
+    "open_menu": "Open menu",
+    "actions_label": "Actions",
+    "impersonate": "Impersonate User",
+    "change_role": "Change Role",
+    "make_admin": "Make Admin",
+    "make_user": "Make User",
+    "unban_user": "Unban User",
+    "ban_user": "Ban User",
+    "loading_users": "Loading users...",
+    "no_users_found": "No users found.",
+    "rows_selected": "{{selected}} of {{total}} row(s) selected.",
+    "rows_per_page": "Rows per page",
+    "page_of": "Page {{page}} of {{total}}",
+    "first_page": "Go to first page",
+    "previous_page": "Go to previous page",
+    "next_page": "Go to next page",
+    "last_page": "Go to last page",
+    "toasts": {
+      "impersonate_success": "Now impersonating {{name}}",
+      "impersonate_error": "Failed to impersonate {{name}}",
+      "ban_success": "User {{name}} has been banned",
+      "ban_error": "Failed to ban user {{name}}",
+      "unban_success": "User {{name}} has been unbanned",
+      "unban_error": "Failed to unban user {{name}}",
+      "role_update_success": "{{name}}'s role updated to {{role}}",
+      "role_update_error": "Failed to update role for {{name}}"
+    }
   }
 }

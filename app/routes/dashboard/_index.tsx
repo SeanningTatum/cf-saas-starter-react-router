@@ -5,7 +5,6 @@ import {
   IconLayoutDashboard,
   IconCloudUpload,
   IconAtom,
-  IconArrowRight,
   IconSparkles,
   IconBook,
   IconBrandGithub,
@@ -22,6 +21,7 @@ import { Button } from "@/components/ui/button";
 import { StackBadge } from "@/components/stack-badge";
 import { LanguageSwitcher } from "@/components/language-switcher";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { FeatureCard } from "@/components/feature-card";
 
 export const handle = { i18n: ["dashboard"] };
 
@@ -78,7 +78,7 @@ export default function DashboardIndex() {
         </div>
 
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-2">
-          <ExploreCard
+          <FeatureCard
             icon={<IconShieldLock className="size-5" />}
             title={t("explore.cards.auth.title")}
             description={t("explore.cards.auth.description")}
@@ -89,7 +89,7 @@ export default function DashboardIndex() {
             cta={t("explore.cards.auth.cta")}
             testId="dash-card-auth"
           />
-          <ExploreCard
+          <FeatureCard
             icon={<IconLayoutDashboard className="size-5" />}
             title={t("explore.cards.admin.title")}
             description={t("explore.cards.admin.description")}
@@ -100,7 +100,7 @@ export default function DashboardIndex() {
             cta={t("explore.cards.admin.cta")}
             testId="dash-card-admin"
           />
-          <ExploreCard
+          <FeatureCard
             icon={<IconCloudUpload className="size-5" />}
             title={t("explore.cards.upload.title")}
             description={t("explore.cards.upload.description")}
@@ -111,7 +111,7 @@ export default function DashboardIndex() {
             cta={t("explore.cards.upload.cta")}
             testId="dash-card-upload"
           />
-          <ExploreCard
+          <FeatureCard
             icon={<IconAtom className="size-5" />}
             title={t("explore.cards.effect.title")}
             description={t("explore.cards.effect.description")}
@@ -155,78 +155,5 @@ export default function DashboardIndex() {
         </Card>
       </section>
     </div>
-  );
-}
-
-interface ExploreCardProps {
-  icon: React.ReactNode;
-  title: string;
-  description: string;
-  badges: string[];
-  to: string;
-  cta: string;
-  testId: string;
-  disabled?: boolean;
-  disabledHint?: string;
-}
-
-function ExploreCard({
-  icon,
-  title,
-  description,
-  badges,
-  to,
-  cta,
-  testId,
-  disabled = false,
-  disabledHint,
-}: ExploreCardProps) {
-  const inner = (
-    <Card
-      data-testid={testId}
-      className={
-        disabled
-          ? "h-full opacity-70"
-          : "h-full transition-shadow hover:shadow-md"
-      }
-    >
-      <CardHeader className="gap-3">
-        <div className="flex items-center justify-between">
-          <span className="flex size-9 items-center justify-center rounded-md border border-border bg-muted/40 text-foreground">
-            {icon}
-          </span>
-          <div className="flex flex-wrap justify-end gap-1.5">
-            {badges.map((b) => (
-              <StackBadge key={b}>{b}</StackBadge>
-            ))}
-          </div>
-        </div>
-        <div className="space-y-1.5">
-          <CardTitle className="text-base">{title}</CardTitle>
-          <CardDescription className="leading-relaxed">
-            {description}
-          </CardDescription>
-        </div>
-      </CardHeader>
-      <CardContent>
-        {disabled && disabledHint ? (
-          <span className="font-mono text-[11px] uppercase tracking-wider text-muted-foreground">
-            {disabledHint}
-          </span>
-        ) : (
-          <span className="inline-flex items-center gap-1 text-sm font-medium text-primary">
-            {cta}
-            <IconArrowRight className="size-3.5" />
-          </span>
-        )}
-      </CardContent>
-    </Card>
-  );
-
-  if (disabled) return inner;
-  return (
-    <Link to={to} className="group">
-      {inner}
-    </Link>
   );
 }

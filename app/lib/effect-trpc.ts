@@ -1,17 +1,57 @@
-import { Effect, ManagedRuntime } from "effect";
+import { Cause, Effect, Exit, ManagedRuntime } from "effect";
 import { TRPCError } from "@trpc/server";
 import type { AppServices } from "@/runtime";
 import type { AppError } from "@/models/errors";
+import { loggers } from "@/lib/logger";
 
-const assertNever = (x: never): never => {
-  throw new Error(`unhandled tagged error: ${JSON.stringify(x)}`);
+// The literal set of tags every AppError union member can carry. Anything
+// with a `_tag` outside this set is NOT a known AppError — even though it
+// duck-types like one — and must fall through to the generic-500 branch
+// below rather than being routed into `appErrorToTRPC`'s switch.
+const APP_ERROR_TAGS = new Set<AppError["_tag"]>([
+  "NotFoundError",
+  "CreationError",
+  "UpdateError",
+  "DeletionError",
+  "QueryError",
+  "ValidationError",
+  "ConfigurationError",
+  "ExternalServiceError",
+  "BucketBindingError",
+  "BucketUploadError",
+  "BucketGetError",
+  "BucketNotFoundError",
+  "BucketDeleteError",
+  "BucketListError",
+  "BucketValidationError",
+  "WorkflowTriggerError",
+]);
+
+// Compile-time exhaustiveness guard for `appErrorToTRPC`'s switch. Reachable
+// only if a future AppError variant's tag is added to APP_ERROR_TAGS without
+// a matching switch case — never throws; logs and degrades to a generic 500
+// so a missed mapping is a defect in observability, not an unhandled crash.
+const assertNever = (x: never): TRPCError => {
+  const tag =
+    typeof x === "object" && x !== null && "_tag" in x
+      ? String((x as { _tag: unknown })._tag)
+      : "unknown";
+  loggers.trpc.error(
+    { tag },
+    "appErrorToTRPC: unhandled tagged error variant — add a case + a tagToTRPC test"
+  );
+  return new TRPCError({
+    code: "INTERNAL_SERVER_ERROR",
+    message: "Internal Server Error",
+  });
 };
 
 const isAppError = (e: unknown): e is AppError =>
   typeof e === "object" &&
   e !== null &&
   "_tag" in e &&
-  typeof (e as { _tag: unknown })._tag === "string";
+  typeof (e as { _tag: unknown })._tag === "string" &&
+  APP_ERROR_TAGS.has((e as { _tag: AppError["_tag"] })._tag);
 
 const appErrorToTRPC = (e: AppError): TRPCError => {
   switch (e._tag) {
@@ -112,13 +152,25 @@ const appErrorToTRPC = (e: AppError): TRPCError => {
   }
 };
 
+// Generic fallback for anything that isn't a pre-existing TRPCError or a
+// known AppError (a raw thrown Error, a rejected promise's reason, etc).
+// The raw message/stack is logged server-side only — never sent to the
+// client, which only ever sees a generic "Internal Server Error".
 const toTRPC = (err: unknown): TRPCError => {
   if (err instanceof TRPCError) return err;
   if (isAppError(err)) return appErrorToTRPC(err);
+  loggers.trpc.error(
+    {
+      err:
+        err instanceof Error
+          ? { name: err.name, message: err.message, stack: err.stack }
+          : err,
+    },
+    "Unhandled error in tRPC procedure"
+  );
   return new TRPCError({
     code: "INTERNAL_SERVER_ERROR",
-    message: err instanceof Error ? err.message : "Unknown error",
-    cause: err,
+    message: "Internal Server Error",
   });
 };
 
@@ -127,14 +179,41 @@ export const tagToTRPC = <A, E, R>(
 ): Effect.Effect<A, TRPCError, R> =>
   Effect.catchAll(effect, (err) => Effect.fail(toTRPC(err)));
 
+// The runtime's own layer construction can fail — a missing D1/R2/Workflow
+// binding or a broken Better Auth config surfaces as ConfigurationError |
+// ExternalServiceError | BucketBindingError when the request-scoped
+// ManagedRuntime resolves its services. That failure is NOT part of
+// `effect`'s own error channel (E) — it's injected by the runtime when it
+// builds AppServices — so it can only be observed via `runPromiseExit`,
+// never by wrapping `effect` itself in `catchAll` beforehand. We run the
+// already-mapped (tagToTRPC) effect via `runPromiseExit` and translate BOTH
+// the effect's own (now-TRPCError) failures and any layer-construction
+// failure through the same `toTRPC` mapping, so a missing binding produces a
+// clean, logged 500 instead of a raw rejection.
 export const runProcedure = <A, E, R extends AppServices = AppServices>(
-  runtime: ManagedRuntime.ManagedRuntime<AppServices, unknown>,
+  runtime: ManagedRuntime.ManagedRuntime<AppServices, AppError>,
   effect: Effect.Effect<A, E, R>
 ): Promise<A> =>
-  (
-    runtime as ManagedRuntime.ManagedRuntime<AppServices, never>
-  ).runPromise(
-    tagToTRPC(effect).pipe(
-      Effect.annotateLogs({ layer: "trpc" })
-    ) as Effect.Effect<A, TRPCError, AppServices>
-  );
+  runtime
+    .runPromiseExit(tagToTRPC(effect).pipe(Effect.annotateLogs({ layer: "trpc" })))
+    .then((exit) =>
+      Exit.match(exit, {
+        onSuccess: (value) => value,
+        onFailure: (cause) => {
+          const failure = Cause.failureOption(cause);
+          if (failure._tag === "Some") {
+            throw toTRPC(failure.value);
+          }
+          // Unrecoverable defect (interruption, die, etc) — log full cause,
+          // never leak it to the client.
+          loggers.trpc.error(
+            { cause: Cause.pretty(cause) },
+            "Unhandled defect in tRPC procedure"
+          );
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: "Internal Server Error",
+          });
+        },
+      })
+    );

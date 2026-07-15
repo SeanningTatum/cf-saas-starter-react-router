@@ -2,13 +2,8 @@ import { Effect } from "effect";
 import { eq, inArray, count, desc, or, like, and, type SQL } from "drizzle-orm";
 import { user } from "@/db/schema";
 import { Database } from "@/services/database";
-import {
-  NotFoundError,
-  UpdateError,
-  DeletionError,
-  ValidationError,
-  QueryError,
-} from "@/models/errors/repository";
+import { tryQuery, tryUpdate, tryDelete, requireFound } from "@/lib/effect-utils";
+import { ValidationError } from "@/models/errors/repository";
 import type {
   GetUsersInput,
   GetUserInput,
@@ -19,27 +14,11 @@ import type {
   BulkBanUsersInput,
   BulkDeleteUsersInput,
   BulkUpdateUserRolesInput,
-  Role,
 } from "@/lib/schemas/user";
 
 export interface FilterProtectedInput {
   readonly userIds: ReadonlyArray<string>;
   readonly currentUserId: string;
-}
-
-export interface BulkUpdateUsersUnsafeInput {
-  readonly updates: ReadonlyArray<{
-    readonly userId: string;
-    readonly data: {
-      readonly name?: string;
-      readonly email?: string;
-      readonly role?: Role;
-      readonly banned?: boolean;
-      readonly banReason?: string;
-      readonly banExpires?: Date;
-      readonly verified?: boolean;
-    };
-  }>;
 }
 
 export const isProtectedUser = (
@@ -80,27 +59,18 @@ export class UserRepository extends Effect.Service<UserRepository>()(
 
           const [users, totalCountResult] = yield* Effect.all(
             [
-              Effect.tryPromise({
-                try: () =>
-                  db
-                    .select()
-                    .from(user)
-                    .where(condition)
-                    .orderBy(desc(user.createdAt))
-                    .limit(input.limit)
-                    .offset(offset),
-                catch: (cause) =>
-                  new QueryError({ entity: "user", cause }),
-              }),
-              Effect.tryPromise({
-                try: () =>
-                  db
-                    .select({ count: count() })
-                    .from(user)
-                    .where(condition),
-                catch: (cause) =>
-                  new QueryError({ entity: "user", cause }),
-              }),
+              tryQuery("user", () =>
+                db
+                  .select()
+                  .from(user)
+                  .where(condition)
+                  .orderBy(desc(user.createdAt))
+                  .limit(input.limit)
+                  .offset(offset)
+              ),
+              tryQuery("user", () =>
+                db.select({ count: count() }).from(user).where(condition)
+              ),
             ],
             { concurrency: "unbounded" }
           );
@@ -120,14 +90,12 @@ export class UserRepository extends Effect.Service<UserRepository>()(
           if (input.userIds.length === 0) {
             return { validUserIds: [] as string[], skippedCount: 0 };
           }
-          const usersToCheck = yield* Effect.tryPromise({
-            try: () =>
-              db
-                .select({ id: user.id, role: user.role })
-                .from(user)
-                .where(inArray(user.id, [...input.userIds])),
-            catch: (cause) => new QueryError({ entity: "user", cause }),
-          });
+          const usersToCheck = yield* tryQuery("user", () =>
+            db
+              .select({ id: user.id, role: user.role })
+              .from(user)
+              .where(inArray(user.id, [...input.userIds]))
+          );
           const validUserIds = usersToCheck
             .filter((u) => !isProtectedUser(u, input.currentUserId))
             .map((u) => u.id);
@@ -140,84 +108,56 @@ export class UserRepository extends Effect.Service<UserRepository>()(
       const bulkBanUsers = (input: BulkBanUsersInput) =>
         input.userIds.length === 0
           ? Effect.succeed(0)
-          : Effect.tryPromise({
-              try: async () => {
-                await db
-                  .update(user)
-                  .set({
-                    banned: true,
-                    banReason: input.reason ?? null,
-                    banExpires: input.expiresAt ?? null,
-                  })
-                  .where(inArray(user.id, [...input.userIds]));
-                return input.userIds.length;
-              },
-              catch: (cause) => new UpdateError({ entity: "user", cause }),
+          : tryUpdate("user", async () => {
+              await db
+                .update(user)
+                .set({
+                  banned: true,
+                  banReason: input.reason ?? null,
+                  banExpires: input.expiresAt ?? null,
+                })
+                .where(inArray(user.id, [...input.userIds]));
+              return input.userIds.length;
             });
 
       const bulkDeleteUsers = (input: BulkDeleteUsersInput) =>
         input.userIds.length === 0
           ? Effect.succeed(0)
-          : Effect.tryPromise({
-              try: async () => {
-                await db
-                  .delete(user)
-                  .where(inArray(user.id, [...input.userIds]));
-                return input.userIds.length;
-              },
-              catch: (cause) => new DeletionError({ entity: "user", cause }),
+          : tryDelete("user", async () => {
+              await db.delete(user).where(inArray(user.id, [...input.userIds]));
+              return input.userIds.length;
             });
 
       const bulkUpdateUserRoles = (input: BulkUpdateUserRolesInput) =>
         input.userIds.length === 0
           ? Effect.succeed(0)
-          : Effect.tryPromise({
-              try: async () => {
-                await db
-                  .update(user)
-                  .set({ role: input.role })
-                  .where(inArray(user.id, [...input.userIds]));
-                return input.userIds.length;
-              },
-              catch: (cause) => new UpdateError({ entity: "user", cause }),
+          : tryUpdate("user", async () => {
+              await db
+                .update(user)
+                .set({ role: input.role })
+                .where(inArray(user.id, [...input.userIds]));
+              return input.userIds.length;
             });
 
       const getUser = (input: GetUserInput) =>
         Effect.gen(function* () {
-          const found = yield* Effect.tryPromise({
-            try: () =>
-              db
-                .select()
-                .from(user)
-                .where(eq(user.id, input.userId))
-                .limit(1),
-            catch: (cause) => new QueryError({ entity: "user", cause }),
-          });
-          if (found.length === 0) {
-            return yield* Effect.fail(
-              new NotFoundError({ entity: "user", identifier: input.userId })
-            );
-          }
-          return found[0];
+          const found = yield* tryQuery("user", () =>
+            db.select().from(user).where(eq(user.id, input.userId)).limit(1)
+          );
+          return yield* requireFound("user", input.userId, found[0]);
         });
 
       const assertMutable = (input: { userId: string; currentUserId: string }) =>
         Effect.gen(function* () {
-          const target = yield* Effect.tryPromise({
-            try: () =>
-              db
-                .select({ id: user.id, role: user.role })
-                .from(user)
-                .where(eq(user.id, input.userId))
-                .limit(1),
-            catch: (cause) => new QueryError({ entity: "user", cause }),
-          });
-          if (target.length === 0) {
-            return yield* Effect.fail(
-              new NotFoundError({ entity: "user", identifier: input.userId })
-            );
-          }
-          if (isProtectedUser(target[0], input.currentUserId)) {
+          const target = yield* tryQuery("user", () =>
+            db
+              .select({ id: user.id, role: user.role })
+              .from(user)
+              .where(eq(user.id, input.userId))
+              .limit(1)
+          );
+          const found = yield* requireFound("user", input.userId, target[0]);
+          if (isProtectedUser(found, input.currentUserId)) {
             return yield* Effect.fail(
               new ValidationError({
                 entity: "user",
@@ -226,7 +166,7 @@ export class UserRepository extends Effect.Service<UserRepository>()(
               })
             );
           }
-          return target[0];
+          return found;
         });
 
       const updateUser = (
@@ -237,22 +177,20 @@ export class UserRepository extends Effect.Service<UserRepository>()(
             userId: input.userId,
             currentUserId: input.currentUserId,
           });
-          yield* Effect.tryPromise({
-            try: () =>
-              db
-                .update(user)
-                .set({
-                  name: input.data.name,
-                  email: input.data.email,
-                  role: input.data.role,
-                  banned: input.data.banned,
-                  banReason: input.data.banReason,
-                  banExpires: input.data.banExpires,
-                  emailVerified: input.data.verified,
-                })
-                .where(eq(user.id, input.userId)),
-            catch: (cause) => new UpdateError({ entity: "user", cause }),
-          });
+          yield* tryUpdate("user", () =>
+            db
+              .update(user)
+              .set({
+                name: input.data.name,
+                email: input.data.email,
+                role: input.data.role,
+                banned: input.data.banned,
+                banReason: input.data.banReason,
+                banExpires: input.data.banExpires,
+                emailVerified: input.data.verified,
+              })
+              .where(eq(user.id, input.userId))
+          );
           return { success: true } as const;
         });
 
@@ -262,49 +200,35 @@ export class UserRepository extends Effect.Service<UserRepository>()(
             userId: input.userId,
             currentUserId: input.currentUserId,
           });
-          yield* Effect.tryPromise({
-            try: () =>
-              db
-                .update(user)
-                .set({
-                  banned: true,
-                  banReason: input.reason ?? null,
-                  banExpires: input.expiresAt ?? null,
-                })
-                .where(eq(user.id, input.userId)),
-            catch: (cause) => new UpdateError({ entity: "user", cause }),
-          });
+          yield* tryUpdate("user", () =>
+            db
+              .update(user)
+              .set({
+                banned: true,
+                banReason: input.reason ?? null,
+                banExpires: input.expiresAt ?? null,
+              })
+              .where(eq(user.id, input.userId))
+          );
           return { success: true } as const;
         });
 
       const unbanUser = (input: UnbanUserInput) =>
         Effect.gen(function* () {
-          const target = yield* Effect.tryPromise({
-            try: () =>
-              db
-                .select({ id: user.id })
-                .from(user)
-                .where(eq(user.id, input.userId))
-                .limit(1),
-            catch: (cause) => new QueryError({ entity: "user", cause }),
-          });
-          if (target.length === 0) {
-            return yield* Effect.fail(
-              new NotFoundError({ entity: "user", identifier: input.userId })
-            );
-          }
-          yield* Effect.tryPromise({
-            try: () =>
-              db
-                .update(user)
-                .set({
-                  banned: false,
-                  banReason: null,
-                  banExpires: null,
-                })
-                .where(eq(user.id, input.userId)),
-            catch: (cause) => new UpdateError({ entity: "user", cause }),
-          });
+          const target = yield* tryQuery("user", () =>
+            db.select({ id: user.id }).from(user).where(eq(user.id, input.userId)).limit(1)
+          );
+          yield* requireFound("user", input.userId, target[0]);
+          yield* tryUpdate("user", () =>
+            db
+              .update(user)
+              .set({
+                banned: false,
+                banReason: null,
+                banExpires: null,
+              })
+              .where(eq(user.id, input.userId))
+          );
           return { success: true } as const;
         });
 
@@ -316,39 +240,9 @@ export class UserRepository extends Effect.Service<UserRepository>()(
             userId: input.userId,
             currentUserId: input.currentUserId,
           });
-          yield* Effect.tryPromise({
-            try: () =>
-              db.delete(user).where(eq(user.id, input.userId)),
-            catch: (cause) => new DeletionError({ entity: "user", cause }),
-          });
+          yield* tryDelete("user", () => db.delete(user).where(eq(user.id, input.userId)));
           return { success: true } as const;
         });
-
-      const bulkUpdateUsersUnsafe = (input: BulkUpdateUsersUnsafeInput) =>
-        input.updates.length === 0
-          ? Effect.succeed(0)
-          : Effect.tryPromise({
-              try: async () => {
-                await Promise.all(
-                  input.updates.map((update) =>
-                    db
-                      .update(user)
-                      .set({
-                        name: update.data.name,
-                        email: update.data.email,
-                        role: update.data.role,
-                        banned: update.data.banned,
-                        banReason: update.data.banReason,
-                        banExpires: update.data.banExpires,
-                        emailVerified: update.data.verified,
-                      })
-                      .where(eq(user.id, update.userId))
-                  )
-                );
-                return input.updates.length;
-              },
-              catch: (cause) => new UpdateError({ entity: "user", cause }),
-            });
 
       return {
         getUsers,
@@ -361,7 +255,6 @@ export class UserRepository extends Effect.Service<UserRepository>()(
         banUser,
         unbanUser,
         deleteUser,
-        bulkUpdateUsersUnsafe,
       } as const;
     }),
   }

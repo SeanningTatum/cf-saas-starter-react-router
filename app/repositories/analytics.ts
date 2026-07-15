@@ -2,7 +2,7 @@ import { Effect } from "effect";
 import { sql, count, eq, gte, lte, and } from "drizzle-orm";
 import { user } from "@/db/schema";
 import { Database } from "@/services/database";
-import { QueryError } from "@/models/errors/repository";
+import { tryQuery } from "@/lib/effect-utils";
 import type {
   DateRangeInput,
   GetRecentSignupsCountInput,
@@ -15,62 +15,37 @@ export class AnalyticsRepository extends Effect.Service<AnalyticsRepository>()(
       const { db } = yield* Database;
 
       const getUserGrowth = (input: DateRangeInput) =>
-        Effect.tryPromise({
-          try: () =>
-            db
-              .select({
-                date: sql<string>`date(${user.createdAt} / 1000, 'unixepoch')`,
-                count: count(),
-              })
-              .from(user)
-              .where(
-                and(
-                  gte(user.createdAt, input.startDate),
-                  lte(user.createdAt, input.endDate)
-                )
+        tryQuery("user_growth", () =>
+          db
+            .select({
+              date: sql<string>`date(${user.createdAt} / 1000, 'unixepoch')`,
+              count: count(),
+            })
+            .from(user)
+            .where(
+              and(
+                gte(user.createdAt, input.startDate),
+                lte(user.createdAt, input.endDate)
               )
-              .groupBy(sql`date(${user.createdAt} / 1000, 'unixepoch')`)
-              .orderBy(sql`date(${user.createdAt} / 1000, 'unixepoch')`),
-          catch: (cause) =>
-            new QueryError({ entity: "user_growth", cause }),
-        });
+            )
+            .groupBy(sql`date(${user.createdAt} / 1000, 'unixepoch')`)
+            .orderBy(sql`date(${user.createdAt} / 1000, 'unixepoch')`)
+        );
 
       const getUserStats = Effect.gen(function* () {
         const [totalResult, verifiedResult, bannedResult, adminResult] =
           yield* Effect.all(
             [
-              Effect.tryPromise({
-                try: () => db.select({ count: count() }).from(user),
-                catch: (cause) =>
-                  new QueryError({ entity: "user_stats", cause }),
-              }),
-              Effect.tryPromise({
-                try: () =>
-                  db
-                    .select({ count: count() })
-                    .from(user)
-                    .where(eq(user.emailVerified, true)),
-                catch: (cause) =>
-                  new QueryError({ entity: "user_stats", cause }),
-              }),
-              Effect.tryPromise({
-                try: () =>
-                  db
-                    .select({ count: count() })
-                    .from(user)
-                    .where(eq(user.banned, true)),
-                catch: (cause) =>
-                  new QueryError({ entity: "user_stats", cause }),
-              }),
-              Effect.tryPromise({
-                try: () =>
-                  db
-                    .select({ count: count() })
-                    .from(user)
-                    .where(eq(user.role, "admin")),
-                catch: (cause) =>
-                  new QueryError({ entity: "user_stats", cause }),
-              }),
+              tryQuery("user_stats", () => db.select({ count: count() }).from(user)),
+              tryQuery("user_stats", () =>
+                db.select({ count: count() }).from(user).where(eq(user.emailVerified, true))
+              ),
+              tryQuery("user_stats", () =>
+                db.select({ count: count() }).from(user).where(eq(user.banned, true))
+              ),
+              tryQuery("user_stats", () =>
+                db.select({ count: count() }).from(user).where(eq(user.role, "admin"))
+              ),
             ],
             { concurrency: "unbounded" }
           );
@@ -92,18 +67,15 @@ export class AnalyticsRepository extends Effect.Service<AnalyticsRepository>()(
       });
 
       const getRoleDistribution = Effect.gen(function* () {
-        const results = yield* Effect.tryPromise({
-          try: () =>
-            db
-              .select({
-                name: user.role,
-                value: count(),
-              })
-              .from(user)
-              .groupBy(user.role),
-          catch: (cause) =>
-            new QueryError({ entity: "role_distribution", cause }),
-        });
+        const results = yield* tryQuery("role_distribution", () =>
+          db
+            .select({
+              name: user.role,
+              value: count(),
+            })
+            .from(user)
+            .groupBy(user.role)
+        );
         return results.map((r) => ({
           name: r.name.charAt(0).toUpperCase() + r.name.slice(1),
           value: r.value,
@@ -113,30 +85,12 @@ export class AnalyticsRepository extends Effect.Service<AnalyticsRepository>()(
       const getVerificationDistribution = Effect.gen(function* () {
         const [verifiedResult, unverifiedResult] = yield* Effect.all(
           [
-            Effect.tryPromise({
-              try: () =>
-                db
-                  .select({ count: count() })
-                  .from(user)
-                  .where(eq(user.emailVerified, true)),
-              catch: (cause) =>
-                new QueryError({
-                  entity: "verification_distribution",
-                  cause,
-                }),
-            }),
-            Effect.tryPromise({
-              try: () =>
-                db
-                  .select({ count: count() })
-                  .from(user)
-                  .where(eq(user.emailVerified, false)),
-              catch: (cause) =>
-                new QueryError({
-                  entity: "verification_distribution",
-                  cause,
-                }),
-            }),
+            tryQuery("verification_distribution", () =>
+              db.select({ count: count() }).from(user).where(eq(user.emailVerified, true))
+            ),
+            tryQuery("verification_distribution", () =>
+              db.select({ count: count() }).from(user).where(eq(user.emailVerified, false))
+            ),
           ],
           { concurrency: "unbounded" }
         );
@@ -150,15 +104,9 @@ export class AnalyticsRepository extends Effect.Service<AnalyticsRepository>()(
         Effect.gen(function* () {
           const startDate = new Date();
           startDate.setDate(startDate.getDate() - input.days);
-          const result = yield* Effect.tryPromise({
-            try: () =>
-              db
-                .select({ count: count() })
-                .from(user)
-                .where(gte(user.createdAt, startDate)),
-            catch: (cause) =>
-              new QueryError({ entity: "recent_signups", cause }),
-          });
+          const result = yield* tryQuery("recent_signups", () =>
+            db.select({ count: count() }).from(user).where(gte(user.createdAt, startDate))
+          );
           return result[0]?.count ?? 0;
         });
 

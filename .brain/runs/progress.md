@@ -21,6 +21,15 @@
 
 ---
 
+## 2026-07-15 — audit-remediation shipped
+- branch: `refactor/audit-remediation` (PR opening; from main @ 8547acb)
+- in-progress feature: none (cross-cutting quality task, closed)
+- run note: `.brain/runs/2026-07-15-audit-remediation.md` (closed)
+- shipped: 4-agent audit → 5-agent remediation (security, Effect core, DRY, i18n, +71 tests → 228), Greptile pre-PR review resolved (SVG dropped from upload allowlist, magic-byte sniffing added)
+- next: merge PR; optional follow-ups — route FileUpload somewhere, feature-verifier walk of admin flow
+
+---
+
 ## 2026-07-13 — feat-005 merged + released v1.1.0 — session end
 - branch: `main` @ 4f83efc (PR #7 merged)
 - in-progress feature: none

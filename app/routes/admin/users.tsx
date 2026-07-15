@@ -1,10 +1,15 @@
+import { Schema } from "effect";
 import { SiteHeader } from "./layout/site-header";
 import { UserDataTable } from "./components/user-data-table";
 import type { Route } from "./+types/users";
 import type { User } from "@/db/schema";
+import { Role, Status } from "@/lib/schemas/user";
 import { useTranslation } from "react-i18next";
 
 export const handle = { i18n: ["admin"] };
+
+const isRole = Schema.is(Role);
+const isStatus = Schema.is(Status);
 
 export const loader = async ({ context, request }: Route.LoaderArgs) => {
   const url = new URL(request.url);
@@ -16,12 +21,12 @@ export const loader = async ({ context, request }: Route.LoaderArgs) => {
   const statusParam = url.searchParams.get("status");
 
   const role =
-    roleParam && roleParam !== "all"
-      ? (roleParam as "user" | "admin")
+    roleParam && roleParam !== "all" && isRole(roleParam)
+      ? roleParam
       : undefined;
   const status =
-    statusParam && statusParam !== "all"
-      ? (statusParam as "verified" | "unverified" | "banned")
+    statusParam && statusParam !== "all" && isStatus(statusParam)
+      ? statusParam
       : undefined;
 
   const response = await context.trpc.admin.getUsers({

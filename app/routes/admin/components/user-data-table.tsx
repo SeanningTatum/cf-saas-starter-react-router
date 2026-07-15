@@ -27,8 +27,11 @@ import {
 } from "@tanstack/react-table";
 import { toast } from "sonner";
 import { useSearchParams, useRevalidator } from "react-router";
+import { useTranslation } from "react-i18next";
 
 import { authClient } from "@/auth/client";
+import { formatDate } from "@/lib/date-utils";
+import { getInitials } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -69,6 +72,34 @@ type UserDataTableProps = {
   initialPageSize: number;
 };
 
+/**
+ * Shared runner for the admin action menu (impersonate/ban/unban/role change):
+ * calls `action`, toasts success/error based on the Better Auth `{ error }`
+ * response shape, and reports unexpected throws the same way as a `response.error`.
+ * `onSuccess` lets each caller decide how to refresh (revalidate vs. reload).
+ */
+async function runAdminAction<T extends { error?: unknown } | null | undefined>(
+  action: () => Promise<T>,
+  { successMessage, errorMessage, onSuccess }: {
+    successMessage: string;
+    errorMessage: string;
+    onSuccess?: () => void;
+  }
+): Promise<void> {
+  try {
+    const response = await action();
+    if (response?.error) {
+      toast.error(errorMessage);
+      return;
+    }
+    toast.success(successMessage);
+    onSuccess?.();
+  } catch (error) {
+    console.error(errorMessage, error);
+    toast.error(errorMessage);
+  }
+}
+
 export function UserDataTable({
   initialUsers,
   initialTotal,
@@ -77,6 +108,7 @@ export function UserDataTable({
 }: UserDataTableProps) {
   const [searchParams, setSearchParams] = useSearchParams();
   const revalidator = useRevalidator();
+  const { t, i18n } = useTranslation("admin");
   const [rowSelection, setRowSelection] = React.useState({});
   const [columnVisibility, setColumnVisibility] =
     React.useState<VisibilityState>({});
@@ -110,92 +142,48 @@ export function UserDataTable({
     setSearchParams(newSearchParams);
   };
 
-  const handleImpersonate = async (userId: string, userName: string) => {
-    try {
-      const response = await authClient.admin.impersonateUser({
-        userId,
-      });
-
-      if (response.error) {
-        toast.error(`Failed to impersonate ${userName}`);
-        return;
-      }
-
-      toast.success(`Now impersonating ${userName}`);
+  const handleImpersonate = (userId: string, userName: string) =>
+    runAdminAction(() => authClient.admin.impersonateUser({ userId }), {
+      successMessage: t("users_table.toasts.impersonate_success", { name: userName }),
+      errorMessage: t("users_table.toasts.impersonate_error", { name: userName }),
       // Reload the page to apply the new session
-      window.location.reload();
-    } catch (error) {
-      console.error("Impersonation error:", error);
-      toast.error("Failed to impersonate user");
-    }
-  };
+      onSuccess: () => window.location.reload(),
+    });
 
-  const handleBanUser = async (userId: string, userName: string) => {
-    try {
-      const response = await authClient.admin.banUser({
-        userId,
-        banReason: "Banned by admin",
-      });
-
-      toast.success(`User ${userName} has been banned`);
-      revalidator.revalidate();
-    } catch (error) {
-      console.error("Ban error:", error);
-      toast.error("Failed to ban user");
-    }
-  };
-
-  const handleUnbanUser = async (userId: string, userName: string) => {
-    try {
-      const response = await authClient.admin.unbanUser({
-        userId,
-      });
-
-      if (response.error) {
-        toast.error(`Failed to unban user ${userName}`);
-        return;
+  const handleBanUser = (userId: string, userName: string) =>
+    runAdminAction(
+      () =>
+        authClient.admin.banUser({ userId, banReason: "Banned by admin" }),
+      {
+        successMessage: t("users_table.toasts.ban_success", { name: userName }),
+        errorMessage: t("users_table.toasts.ban_error", { name: userName }),
+        onSuccess: () => revalidator.revalidate(),
       }
+    );
 
-      toast.success(`User ${userName} has been unbanned`);
-      revalidator.revalidate();
-    } catch (error) {
-      console.error("Unban error:", error);
-      toast.error("Failed to unban user");
-    }
-  };
+  const handleUnbanUser = (userId: string, userName: string) =>
+    runAdminAction(() => authClient.admin.unbanUser({ userId }), {
+      successMessage: t("users_table.toasts.unban_success", { name: userName }),
+      errorMessage: t("users_table.toasts.unban_error", { name: userName }),
+      onSuccess: () => revalidator.revalidate(),
+    });
 
-  const handleRoleChange = async (
+  const handleRoleChange = (
     userId: string,
     userName: string,
     newRole: "user" | "admin"
-  ) => {
-    try {
-      const response = await authClient.admin.setRole({
-        userId,
-        role: newRole,
-      });
-
-      if (response.error) {
-        toast.error(`Failed to update role for ${userName}`);
-        return;
+  ) =>
+    runAdminAction(
+      () => authClient.admin.setRole({ userId, role: newRole }),
+      {
+        successMessage: t("users_table.toasts.role_update_success", {
+          name: userName,
+          role: t(`users_table.roles.${newRole}`),
+        }),
+        errorMessage: t("users_table.toasts.role_update_error", { name: userName }),
+        onSuccess: () => revalidator.revalidate(),
       }
-
-      toast.success(`${userName}'s role updated to ${newRole}`);
-      revalidator.revalidate();
-    } catch (error) {
-      console.error("Role change error:", error);
-      toast.error("Failed to update user role");
-    }
-  };
-
-  const getInitials = (name: string) => {
-    return name
-      .split(" ")
-      .map((n) => n[0])
-      .join("")
-      .toUpperCase()
-      .slice(0, 2);
-  };
+    );
 
   const columns: ColumnDef<User>[] = [
     {
@@ -208,7 +196,7 @@ export function UserDataTable({
               (table.getIsSomePageRowsSelected() && "indeterminate")
             }
             onCheckedChange={(value) => table.toggleAllPageRowsSelected(!!value)}
-            aria-label="Select all"
+            aria-label={t("users_table.select_all")}
           />
         </div>
       ),
@@ -217,7 +205,7 @@ export function UserDataTable({
           <Checkbox
             checked={row.getIsSelected()}
             onCheckedChange={(value) => row.toggleSelected(!!value)}
-            aria-label="Select row"
+            aria-label={t("users_table.select_row")}
           />
         </div>
       ),
@@ -226,7 +214,7 @@ export function UserDataTable({
     },
     {
       accessorKey: "name",
-      header: "User",
+      header: t("users_table.columns.user"),
       cell: ({ row }) => {
         const user = row.original;
         return (
@@ -248,7 +236,7 @@ export function UserDataTable({
     },
     {
       accessorKey: "role",
-      header: "Role",
+      header: t("users_table.columns.role"),
       cell: ({ row }) => {
         const role = row.original.role;
         return (
@@ -261,7 +249,7 @@ export function UserDataTable({
             ) : (
               <IconShield className="mr-1 h-3 w-3" />
             )}
-            {role}
+            {t(`users_table.roles.${role === "admin" ? "admin" : "user"}`)}
           </Badge>
         );
       },
@@ -271,7 +259,7 @@ export function UserDataTable({
     },
     {
       accessorKey: "emailVerified",
-      header: "Status",
+      header: t("users_table.columns.status"),
       cell: ({ row }) => {
         const verified = row.original.emailVerified;
         const banned = row.original.banned;
@@ -280,7 +268,7 @@ export function UserDataTable({
           return (
             <Badge variant="destructive">
               <IconUserX className="mr-1 h-3 w-3" />
-              Banned
+              {t("users_table.statuses.banned")}
             </Badge>
           );
         }
@@ -290,7 +278,9 @@ export function UserDataTable({
             {verified ? (
               <IconUserCheck className="mr-1 h-3 w-3" />
             ) : null}
-            {verified ? "Verified" : "Unverified"}
+            {verified
+              ? t("users_table.statuses.verified")
+              : t("users_table.statuses.unverified")}
           </Badge>
         );
       },
@@ -303,13 +293,13 @@ export function UserDataTable({
     },
     {
       accessorKey: "createdAt",
-      header: "Joined",
+      header: t("users_table.columns.joined"),
       cell: ({ row }) => {
-        return new Date(row.original.createdAt).toLocaleDateString("en-US", {
-          year: "numeric",
-          month: "short",
-          day: "numeric",
-        });
+        return formatDate(
+          new Date(row.original.createdAt),
+          "MMM d, yyyy",
+          i18n.language
+        );
       },
     },
     {
@@ -326,27 +316,27 @@ export function UserDataTable({
                 size="icon"
               >
                 <IconDotsVertical className="h-4 w-4" />
-                <span className="sr-only">Open menu</span>
+                <span className="sr-only">{t("users_table.open_menu")}</span>
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-48">
-              <DropdownMenuLabel>Actions</DropdownMenuLabel>
+              <DropdownMenuLabel>{t("users_table.actions_label")}</DropdownMenuLabel>
               <DropdownMenuItem
                 onClick={() => handleImpersonate(user.id, user.name)}
                 className="cursor-pointer"
               >
                 <IconUserCog className="mr-2 h-4 w-4" />
-                Impersonate User
+                {t("users_table.impersonate")}
               </DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuLabel>Change Role</DropdownMenuLabel>
+              <DropdownMenuLabel>{t("users_table.change_role")}</DropdownMenuLabel>
               <DropdownMenuItem
                 onClick={() => handleRoleChange(user.id, user.name, "admin")}
                 disabled={user.role === "admin"}
                 className="cursor-pointer"
               >
                 <IconShieldCheck className="mr-2 h-4 w-4" />
-                Make Admin
+                {t("users_table.make_admin")}
               </DropdownMenuItem>
               <DropdownMenuItem
                 onClick={() => handleRoleChange(user.id, user.name, "user")}
@@ -354,7 +344,7 @@ export function UserDataTable({
                 className="cursor-pointer"
               >
                 <IconShield className="mr-2 h-4 w-4" />
-                Make User
+                {t("users_table.make_user")}
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               {user.banned ? (
@@ -363,7 +353,7 @@ export function UserDataTable({
                   className="cursor-pointer"
                 >
                   <IconUserCheck className="mr-2 h-4 w-4" />
-                  Unban User
+                  {t("users_table.unban_user")}
                 </DropdownMenuItem>
               ) : (
                 <DropdownMenuItem
@@ -372,7 +362,7 @@ export function UserDataTable({
                   className="cursor-pointer"
                 >
                   <IconUserX className="mr-2 h-4 w-4" />
-                  Ban User
+                  {t("users_table.ban_user")}
                 </DropdownMenuItem>
               )}
             </DropdownMenuContent>
@@ -413,7 +403,7 @@ export function UserDataTable({
           <div className="relative flex-1 sm:max-w-sm">
             <IconSearch className="text-muted-foreground absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2" />
             <Input
-              placeholder="Search users..."
+              placeholder={t("users_table.search_placeholder")}
               value={searchInput}
               onChange={(e) => setSearchInput(e.target.value)}
               className="pl-9"
@@ -429,12 +419,12 @@ export function UserDataTable({
             }
           >
             <SelectTrigger className="w-32">
-              <SelectValue placeholder="Role" />
+              <SelectValue placeholder={t("users_table.role_placeholder")} />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All Roles</SelectItem>
-              <SelectItem value="admin">Admin</SelectItem>
-              <SelectItem value="user">User</SelectItem>
+              <SelectItem value="all">{t("users_table.roles.all")}</SelectItem>
+              <SelectItem value="admin">{t("users_table.roles.admin")}</SelectItem>
+              <SelectItem value="user">{t("users_table.roles.user")}</SelectItem>
             </SelectContent>
           </Select>
           <Select
@@ -447,20 +437,20 @@ export function UserDataTable({
             }
           >
             <SelectTrigger className="w-36">
-              <SelectValue placeholder="Status" />
+              <SelectValue placeholder={t("users_table.status_placeholder")} />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All Status</SelectItem>
-              <SelectItem value="verified">Verified</SelectItem>
-              <SelectItem value="unverified">Unverified</SelectItem>
-              <SelectItem value="banned">Banned</SelectItem>
+              <SelectItem value="all">{t("users_table.statuses.all")}</SelectItem>
+              <SelectItem value="verified">{t("users_table.statuses.verified")}</SelectItem>
+              <SelectItem value="unverified">{t("users_table.statuses.unverified")}</SelectItem>
+              <SelectItem value="banned">{t("users_table.statuses.banned")}</SelectItem>
             </SelectContent>
           </Select>
         </div>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="outline" size="sm">
-              Columns
+              {t("users_table.columns_button")}
               <IconChevronDown className="ml-2 h-4 w-4" />
             </Button>
           </DropdownMenuTrigger>
@@ -518,7 +508,7 @@ export function UserDataTable({
                   colSpan={columns.length}
                   className="h-24 text-center"
                 >
-                  Loading users...
+                  {t("users_table.loading_users")}
                 </TableCell>
               </TableRow>
             ) : table.getRowModel().rows?.length ? (
@@ -543,7 +533,7 @@ export function UserDataTable({
                   colSpan={columns.length}
                   className="h-24 text-center"
                 >
-                  No users found.
+                  {t("users_table.no_users_found")}
                 </TableCell>
               </TableRow>
             )}
@@ -554,13 +544,15 @@ export function UserDataTable({
       {/* Pagination */}
       <div className="flex items-center justify-between px-2">
         <div className="text-muted-foreground flex-1 text-sm">
-          {table.getFilteredSelectedRowModel().rows.length} of{" "}
-          {initialTotal} row(s) selected.
+          {t("users_table.rows_selected", {
+            selected: table.getFilteredSelectedRowModel().rows.length,
+            total: initialTotal,
+          })}
         </div>
         <div className="flex items-center gap-6">
           <div className="flex items-center gap-2">
             <Label htmlFor="rows-per-page" className="text-sm font-medium">
-              Rows per page
+              {t("users_table.rows_per_page")}
             </Label>
             <Select
               value={`${initialPageSize}`}
@@ -584,7 +576,7 @@ export function UserDataTable({
             </Select>
           </div>
           <div className="flex w-fit items-center justify-center text-sm font-medium">
-            Page {initialPage} of {totalPages || 1}
+            {t("users_table.page_of", { page: initialPage, total: totalPages || 1 })}
           </div>
           <div className="flex items-center gap-2">
             <Button
@@ -593,7 +585,7 @@ export function UserDataTable({
               onClick={() => updateSearchParams({ page: "1" })}
               disabled={initialPage <= 1}
             >
-              <span className="sr-only">Go to first page</span>
+              <span className="sr-only">{t("users_table.first_page")}</span>
               <IconChevronsLeft className="h-4 w-4" />
             </Button>
             <Button
@@ -605,7 +597,7 @@ export function UserDataTable({
               }
               disabled={initialPage <= 1}
             >
-              <span className="sr-only">Go to previous page</span>
+              <span className="sr-only">{t("users_table.previous_page")}</span>
               <IconChevronLeft className="h-4 w-4" />
             </Button>
             <Button
@@ -617,7 +609,7 @@ export function UserDataTable({
               }
               disabled={initialPage >= totalPages}
             >
-              <span className="sr-only">Go to next page</span>
+              <span className="sr-only">{t("users_table.next_page")}</span>
               <IconChevronRight className="h-4 w-4" />
             </Button>
             <Button
@@ -627,7 +619,7 @@ export function UserDataTable({
               onClick={() => updateSearchParams({ page: String(totalPages) })}
               disabled={initialPage >= totalPages}
             >
-              <span className="sr-only">Go to last page</span>
+              <span className="sr-only">{t("users_table.last_page")}</span>
               <IconChevronsRight className="h-4 w-4" />
             </Button>
           </div>

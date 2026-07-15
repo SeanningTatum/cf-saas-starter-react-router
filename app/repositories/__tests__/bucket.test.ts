@@ -6,6 +6,7 @@ import { Bucket } from "@/services/bucket";
 import {
   BucketUploadError,
   BucketGetError,
+  BucketNotFoundError,
   BucketDeleteError,
   BucketListError,
 } from "@/models/errors/bucket";
@@ -90,9 +91,39 @@ describe("BucketRepository.get", () => {
       expect(result).toEqual({ body: "data" });
     }).pipe(Effect.provide(provideStub(stub)));
   });
+
+  it.effect("fails with BucketNotFoundError when object is null", () => {
+    const stub = { get: async () => null };
+    return Effect.gen(function* () {
+      const repo = yield* BucketRepository;
+      const exit = yield* Effect.exit(repo.get("missing-key"));
+      expect(Exit.isFailure(exit)).toBe(true);
+      if (Exit.isFailure(exit)) {
+        const failure = Cause.failureOption(exit.cause);
+        if (failure._tag === "Some") {
+          expect(failure.value).toBeInstanceOf(BucketNotFoundError);
+          expect((failure.value as BucketNotFoundError).key).toBe("missing-key");
+        }
+      }
+    }).pipe(Effect.provide(provideStub(stub)));
+  });
 });
 
 describe("BucketRepository.remove", () => {
+  it.effect("deletes the object and resolves on success", () => {
+    let deletedKey: string | undefined;
+    const stub = {
+      delete: async (key: string) => {
+        deletedKey = key;
+      },
+    };
+    return Effect.gen(function* () {
+      const repo = yield* BucketRepository;
+      yield* repo.remove("uploads/x.png");
+      expect(deletedKey).toBe("uploads/x.png");
+    }).pipe(Effect.provide(provideStub(stub)));
+  });
+
   it.effect("wraps delete failure as BucketDeleteError", () => {
     const stub = {
       delete: async () => {

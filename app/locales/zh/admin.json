@@ -42,5 +42,64 @@
     "data_library": "数据库",
     "reports": "报告",
     "word_assistant": "写作助手"
+  },
+  "nav_user": {
+    "theme_menu": "主题",
+    "log_out": "退出登录"
+  },
+  "site_header": {
+    "github": "GitHub"
+  },
+  "users_table": {
+    "search_placeholder": "搜索用户...",
+    "role_placeholder": "角色",
+    "status_placeholder": "状态",
+    "roles": {
+      "all": "所有角色",
+      "admin": "管理员",
+      "user": "用户"
+    },
+    "statuses": {
+      "all": "所有状态",
+      "verified": "已验证",
+      "unverified": "未验证",
+      "banned": "已封禁"
+    },
+    "columns": {
+      "user": "用户",
+      "role": "角色",
+      "status": "状态",
+      "joined": "加入时间"
+    },
+    "select_all": "全选",
+    "select_row": "选择该行",
+    "columns_button": "显示列",
+    "open_menu": "打开菜单",
+    "actions_label": "操作",
+    "impersonate": "模拟登录该用户",
+    "change_role": "更改角色",
+    "make_admin": "设为管理员",
+    "make_user": "设为普通用户",
+    "unban_user": "解除封禁",
+    "ban_user": "封禁用户",
+    "loading_users": "正在加载用户...",
+    "no_users_found": "未找到用户。",
+    "rows_selected": "已选择 {{selected}} / {{total}} 行。",
+    "rows_per_page": "每页行数",
+    "page_of": "第 {{page}} 页，共 {{total}} 页",
+    "first_page": "转到第一页",
+    "previous_page": "转到上一页",
+    "next_page": "转到下一页",
+    "last_page": "转到最后一页",
+    "toasts": {
+      "impersonate_success": "正在模拟登录 {{name}}",
+      "impersonate_error": "模拟登录 {{name}} 失败",
+      "ban_success": "用户 {{name}} 已被封禁",
+      "ban_error": "封禁用户 {{name}} 失败",
+      "unban_success": "用户 {{name}} 已解除封禁",
+      "unban_error": "解除封禁用户 {{name}} 失败",
+      "role_update_success": "{{name}} 的角色已更新为 {{role}}",
+      "role_update_error": "更新 {{name}} 的角色失败"
+    }
   }
 }

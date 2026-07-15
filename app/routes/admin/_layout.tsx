@@ -1,14 +1,11 @@
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
-import { Outlet, redirect } from "react-router";
+import { Outlet } from "react-router";
 import { AppSidebar } from "./layout/app-sidebar";
+import { requireAdmin } from "@/lib/session";
 import type { Route } from "./+types/_layout";
 
 export async function loader({ request, context }: Route.LoaderArgs) {
-  const session = await context.auth.api.getSession({
-    headers: request.headers,
-  });
-  if (!session) throw redirect("/login");
-  if (session.user.role !== "admin") throw redirect("/dashboard");
+  const session = await requireAdmin(request, context);
   return { user: session.user };
 }
 
@@ -22,7 +19,7 @@ export default function AdminLayout({ loaderData }: Route.ComponentProps) {
         } as React.CSSProperties
       }
     >
-      <AppSidebar variant="inset" />
+      <AppSidebar variant="inset" user={loaderData.user} />
       <SidebarInset>
         <Outlet context={loaderData} />
       </SidebarInset>

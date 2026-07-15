@@ -6,7 +6,7 @@ Mounted at `/api/trpc/*`. The top-level router (`app/trpc/router.ts`) composes t
 
 | Router | File | Procedures |
 |--------|------|------------|
-| `user` | `app/trpc/router.ts` | `getUsers` (public), `getUsersProtected`, `deleteUser`, `createWorkflow` |
+| `user` | `app/trpc/router.ts` | `getUsers` (protected, safe projection), `deleteUser`, `createWorkflow` |
 | `admin` | `app/trpc/routes/admin.ts` | `getUsers`, `getUser`, `updateUser`, `banUser`, `unbanUser`, `deleteUser`, `bulkBanUsers`, `bulkDeleteUsers`, `bulkUpdateUserRoles` |
 | `analytics` | `app/trpc/routes/analytics.ts` | `getUserStats`, `getUserGrowth`, `getRoleDistribution`, `getVerificationDistribution`, `getRecentSignupsCount` |
 
@@ -32,10 +32,12 @@ export const adminRouter = createTRPCRouter({
 ```
 
 Rules:
-- **Body always wrapped in `runProcedure(ctx.runtime, Effect.gen(...))`.** It runs the Effect on the per-request `ManagedRuntime` and converts tagged errors → `TRPCError` via `tagToTRPC`.
+- **Body always wrapped in `runProcedure(ctx.runtime, Effect.gen(...))`.** It runs the Effect on the per-request `ManagedRuntime` and converts tagged errors → `TRPCError` via `tagToTRPC`. `runProcedure` also maps failures from the runtime's own **layer construction** (a missing D1/R2/Workflow binding or broken Better Auth config, surfaced only via `runPromiseExit` — not part of the procedure's own error channel) through the same `toTRPC` mapping, so a broken binding produces a clean, logged 500 instead of a raw rejection.
 - **Input via Effect Schema:** `Schema.standardSchemaV1(MySchema)`. Decode failures surface to clients as `TRPCError({ code: "BAD_REQUEST" })` with structured `data.schemaError` (formatted by `ParseResult.ArrayFormatter`).
 - **Yield repos** (`yield* WidgetRepository`) — never call repo methods as plain functions.
 - **Domain pre-conditions:** `Effect.fail(new ValidationError(...))` inside the gen — `tagToTRPC` maps to `BAD_REQUEST`.
+
+**`user.getUsers` is now auth-gated + narrowed.** It used to be a `publicProcedure` returning full `user` rows (email, role, ban reason, verification status) with no auth check. It's now `protectedProcedure` and maps the repo result down to a safe projection — `{ id, name, image, createdAt }` — before returning. The duplicate `getUsersProtected` procedure (same body, no callers) was folded into this one rather than kept as a second surface.
 
 ### Server-side calls (loaders)
 
@@ -94,7 +96,7 @@ From [`app/routes.ts`](../../app/routes.ts):
 |------|------|-------|
 | `/api/trpc/*` | `routes/api/trpc.$.ts` | tRPC HTTP handler |
 | `/api/auth/*` | `routes/api/auth.$.ts` | Better Auth handler |
-| `/api/upload-file` | `routes/api/upload-file.ts` | R2 upload (⚠ no auth) |
+| `/api/upload-file` | `routes/api/upload-file.ts` | R2 upload — auth + size/type validated |
 | `/` | `routes/home.tsx` | Public marketing page |
 | `/:lng` | same | Locale-prefixed variant |
 | `/login`, `/sign-up` | `routes/authentication/{login,sign-up}.tsx` | Redirect to `/dashboard` if session present. `:lng` variants exist. |
@@ -136,21 +138,28 @@ POST /api/upload-file
 Content-Type: multipart/form-data
 Body: FormData with 'file' field
 
+Requires an authenticated session (cookie) — no session → 401 before the body is even read.
+
 Success → 200 { success: true, key: string }    // key = "uploads/<timestamp>-<uuid>"
-Failure → 400 "No file provided"
-        | 500 <Cause.pretty(...)>
+Failure → 401 { success: false, error: "Unauthorized" }                      // no session
+        | 400 { success: false, error: "No file provided" }                 // missing file field
+        | 400 { success: false, error: "File must be one of [...] and at most 10MB" } // size/type
+        | 500 { success: false, error: "Internal Server Error" }            // unrecoverable
 ```
 
 Implemented at [`app/routes/api/upload-file.ts`](../../app/routes/api/upload-file.ts). Backed by `BucketRepository.upload` over the `BUCKET` (R2) binding. The response returns the **R2 object key** — there is no signed-URL or public-URL construction today.
+
+Every branch — success and failure alike — now returns a consistent JSON envelope `{ success: boolean, key?: string, error?: string }`, so client code (`app/components/file-upload.tsx`) narrows on `"success" in data` rather than juggling different shapes per status code. The action:
+1. Resolves the session via `context.auth.api.getSession(...)` first — `401` if absent, before `request.formData()` is even read.
+2. Validates `{ size, type }` against `MAX_UPLOAD_SIZE_BYTES` (10MB) + `ALLOWED_UPLOAD_CONTENT_TYPES` from [`app/lib/constants/upload.ts`](../../app/lib/constants/upload.ts) via an Effect Schema struct — `400` with a descriptive message on failure.
+3. Uploads via `BucketRepository.upload` — unrecoverable failures degrade to a generic `500` (never leak `Cause.pretty(...)` to the client; see [`rules/routes.md`](../rules/routes.md) HTTP boundary pattern).
 
 ```typescript
 const formData = new FormData();
 formData.append("file", file);
 const res = await fetch("/api/upload-file", { method: "POST", body: formData });
-const { key } = await res.json();
+const { success, key, error } = await res.json();
 ```
-
-> ⚠ This route is **not auth-gated** and the repository performs **no file-type or size validation**. See [`../high-level-architecture/security.md`](../high-level-architecture/security.md) gaps #2–#4.
 
 ---
 

@@ -1,13 +1,6 @@
 import { data } from "react-router";
-import { createCookie } from "react-router";
-import { localeCookieName, supportedLngs } from "@/i18n";
+import { localeCookie, supportedLngs } from "@/i18n";
 import type { Route } from "./+types/set-locale";
-
-const localeCookie = createCookie(localeCookieName, {
-  path: "/",
-  sameSite: "lax",
-  maxAge: 60 * 60 * 24 * 365,
-});
 
 /**
  * Persist the user's locale choice in the i18n cookie. The cookie format is

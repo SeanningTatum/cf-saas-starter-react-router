@@ -118,14 +118,23 @@ jobs:
         run: |
           set -euo pipefail
           BASE="${{ steps.diff.outputs.base }}"
-          DIFF=$(git diff "$BASE"...HEAD -- 'app/**/*.ts' 'app/**/*.tsx' 'workers/**/*.ts' || true)
+          # Test files are excluded by path (throwing stubs are how error paths
+          # are exercised); production code is line-swept below.
+          DIFF=$(git diff "$BASE"...HEAD -- 'app/**/*.ts' 'app/**/*.tsx' 'workers/**/*.ts' \
+            ':(exclude)app/**/__tests__/**' \
+            ':(exclude)app/**/*.test.ts' \
+            ':(exclude)app/**/*.test-layer.ts' || true)
           if [ -z "$DIFF" ]; then
             echo "No app/worker TS changes — skipping."
             exit 0
           fi
           ADDED=$(echo "$DIFF" | grep -E '^\+' | grep -vE '^\+\+\+' || true)
           VIOLATIONS=""
-          if echo "$ADDED" | grep -E '\bthrow new\b' | grep -vE 'tryPromise|test|spec|//|throw new Error\(`unhandled tagged'; then
+          # Allowed throws: inside Effect.tryPromise, comments, and
+          # `throw new TRPCError` — tRPC's middleware/errorFormatter contract
+          # requires throwing at the boundary (see app/trpc/index.ts and
+          # app/lib/effect-trpc.ts, the designated Effect→tRPC edge).
+          if echo "$ADDED" | grep -E '\bthrow new\b' | grep -vE 'tryPromise|//|throw new TRPCError'; then
             VIOLATIONS="$VIOLATIONS\n- Bare \`throw\` (use Effect.fail)"
           fi
           if echo "$ADDED" | grep -E 'process\.env'; then

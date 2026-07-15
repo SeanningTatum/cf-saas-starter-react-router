@@ -53,6 +53,7 @@ export const widgetRouter = createTRPCRouter({
 - **Domain pre-conditions** (e.g. "can't delete self"): `Effect.fail(new ValidationError(...))` inside the gen — runtime maps to `BAD_REQUEST`
 - **Don't** call `runtime.runPromise(...)` directly — use `runProcedure` so errors map correctly
 - **Register** the new router in `app/trpc/router.ts`
+- **Never expose a full row on an unauthenticated or under-scoped procedure.** The root `user.getUsers` (`app/trpc/router.ts`) used to be a `publicProcedure` returning full `user` rows (email, role, ban reason, verification status) with no auth check. It's now `protectedProcedure` and returns a safe projection only — `{ id, name, image, createdAt }` — mapped explicitly from the repo result rather than spreading the row. If a procedure only ever needs a subset of columns, project it down at the procedure layer instead of trusting the client not to read the extra fields.
 
 ### Procedure-level error transformation
 
@@ -204,12 +205,12 @@ File patterns:
 ### Loader pattern
 
 ```typescript
-import { Outlet, redirect } from "react-router";
+import { Outlet } from "react-router";
+import { requireSession } from "@/lib/session";
 import type { Route } from "./+types/_layout";
 
 export async function loader({ request, context }: Route.LoaderArgs) {
-  const session = await context.auth.api.getSession({ headers: request.headers });
-  if (!session) return redirect("/login");
+  const session = await requireSession(request, context);
 
   const data = await context.trpc.widget.list();
   return { user: session.user, data };
@@ -223,7 +224,7 @@ export default function Layout({ loaderData }: Route.ComponentProps) {
 
 ### Rules
 
-- **Auth gate first** — `context.auth.api.getSession({ headers: request.headers })`, redirect on null
+- **Auth gate first** — via the [`app/lib/session.ts`](../../app/lib/session.ts) helpers: `requireSession(request, context)` (redirects to `/login` if no session), `requireAdmin(request, context)` (redirects to `/login` if no session, `/dashboard` if not admin), `redirectIfAuthenticated(request, context, to?)` (public-only routes — redirects an already-authenticated visitor away). Don't inline `context.auth.api.getSession({ headers }) + if (!session) return redirect(...)` in a new loader — call the helper. See [`library.md`](library.md) "Loader auth gating".
 - **`context.trpc.*`** for server-side data fetching — same router, no HTTP roundtrip
 - **`context.runtime.runPromise(Effect.gen(...))`** for direct Effect calls in loaders (rare; prefer tRPC)
 - **Parallel fetches**: `Promise.all([...])`
@@ -271,7 +272,9 @@ const navigate = useNavigate();
 
 | Surface | Pattern |
 |---------|---------|
-| Loader | `getSession` then `redirect("/login")` if null |
+| Loader (protected) | `requireSession(request, context)` from `@/lib/session` — redirects to `/login` if no session |
+| Loader (admin) | `requireAdmin(request, context)` from `@/lib/session` — redirects to `/login` (no session) or `/dashboard` (non-admin) |
+| Loader (public-only) | `redirectIfAuthenticated(request, context, to?)` from `@/lib/session` — redirects an authenticated visitor away from home/login/sign-up |
 | tRPC public | `publicProcedure` (no guarantee) |
 | tRPC user | `protectedProcedure` (`ctx.auth.user` non-null) |
 | tRPC admin | `adminProcedure` (`role === "admin"` non-null) |

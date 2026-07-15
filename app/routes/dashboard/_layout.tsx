@@ -1,11 +1,9 @@
-import { Outlet, redirect } from "react-router";
+import { Outlet } from "react-router";
+import { requireSession } from "@/lib/session";
 import type { Route } from "./+types/_layout";
 
 export async function loader({ request, context }: Route.LoaderArgs) {
-  const session = await context.auth.api.getSession({
-    headers: request.headers,
-  });
-  if (!session) return redirect("/login");
+  const session = await requireSession(request, context);
   return { user: session.user };
 }
 

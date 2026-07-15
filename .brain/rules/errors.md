@@ -146,11 +146,18 @@ Direct `Effect.fail(new SomeTaggedError(...))` inside an `Effect.gen` is still t
 | `CreationError`, `UpdateError`, `DeletionError`, `QueryError`, `ConfigurationError`, `Bucket{Binding,Upload,Get,Delete,List}Error`, `WorkflowTriggerError` | `INTERNAL_SERVER_ERROR` |
 | `ExternalServiceError` | `BAD_GATEWAY` |
 
+## `tagToTRPC` hardening — `isAppError` + generic fallback
+
+`app/lib/effect-trpc.ts`'s `isAppError` type guard no longer trusts any object with a string `_tag` — it checks the tag against a literal `APP_ERROR_TAGS` set (one entry per `AppError` union member). An error whose `_tag` duck-types like a known tag but isn't actually registered (e.g. a third-party error that happens to have a `_tag` field) now falls through to the **generic fallback** branch — logged server-side via `loggers.trpc.error(...)` and returned to the client as a plain `INTERNAL_SERVER_ERROR` — instead of being routed into `appErrorToTRPC`'s switch, where an unregistered tag would previously have hit the `default: assertNever(e)` branch. `assertNever` itself no longer throws: it logs `"appErrorToTRPC: unhandled tagged error variant — add a case + a tagToTRPC test"` with the offending tag and degrades to the same generic 500, so a missed mapping is an observability defect, not an unhandled crash.
+
+The generic fallback (`toTRPC`'s final branch, for anything that isn't a pre-existing `TRPCError` or a known `AppError`) also no longer leaks `err.message` / `err.stack` to the client. The raw error is logged server-side only (`loggers.trpc.error({ err: ... }, "Unhandled error in tRPC procedure")`); the client always receives `{ code: "INTERNAL_SERVER_ERROR", message: "Internal Server Error" }`. Same discipline applies at `runProcedure`'s `Exit.match` `onFailure` branch for unrecoverable defects — full `Cause.pretty(cause)` is logged, never sent to the client.
+
 ## Anti-patterns
 
 - `throw new Error(...)` in app code (test code OK)
 - `try / catch` outside `Effect.tryPromise` or `Effect.try`
 - Class hierarchies with `Object.setPrototypeOf` — old style, gone
 - Constructing `TRPCError` directly inside a procedure for **domain** errors — emit a tagged error and let `tagToTRPC` map it. (Only acceptable for procedure-specific control flow like auth checks.)
-- Adding a tagged error without (a) registering in `tagToTRPC`, (b) writing the mapping test
+- Adding a tagged error without (a) registering in `tagToTRPC`'s `APP_ERROR_TAGS` set + switch case, (b) writing the mapping test
+- Leaking a caught error's raw `message`/`stack` to the client in a generic-fallback branch — log it server-side, return a fixed "Internal Server Error" string
 - `Effect.die` for recoverable conditions — that's for unrecoverable defects only

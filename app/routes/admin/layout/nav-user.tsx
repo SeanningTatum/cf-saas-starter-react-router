@@ -1,13 +1,12 @@
-import {
-  IconCreditCard,
-  IconDotsVertical,
-  IconLogout,
-  IconNotification,
-  IconUserCircle,
-} from "@tabler/icons-react"
-import { Moon, Sun, Monitor } from "lucide-react"
+import { IconDotsVertical, IconLogout } from "@tabler/icons-react"
+import { Sun, Moon } from "lucide-react"
 import { useTheme } from "next-themes"
+import { useNavigate } from "react-router"
+import { useTranslation } from "react-i18next"
 
+import { authClient } from "@/auth/client"
+import { getInitials } from "@/lib/utils"
+import { themeItems } from "@/components/theme-toggle"
 import {
   Avatar,
   AvatarFallback,
@@ -16,7 +15,6 @@ import {
 import {
   DropdownMenu,
   DropdownMenuContent,
-  DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
@@ -38,11 +36,19 @@ export function NavUser({
   user: {
     name: string
     email: string
-    avatar: string
+    image?: string | null
   }
 }) {
   const { isMobile } = useSidebar()
   const { setTheme } = useTheme()
+  const navigate = useNavigate()
+  const { t } = useTranslation("admin")
+  const { t: tc } = useTranslation("common")
+
+  const handleLogout = async () => {
+    await authClient.signOut()
+    navigate("/login")
+  }
 
   return (
     <SidebarMenu>
@@ -54,8 +60,10 @@ export function NavUser({
               className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
             >
               <Avatar className="h-8 w-8 rounded-lg grayscale">
-                <AvatarImage src={user.avatar} alt={user.name} />
-                <AvatarFallback className="rounded-lg">CN</AvatarFallback>
+                <AvatarImage src={user.image ?? undefined} alt={user.name} />
+                <AvatarFallback className="rounded-lg">
+                  {getInitials(user.name)}
+                </AvatarFallback>
               </Avatar>
               <div className="grid flex-1 text-left text-sm leading-tight">
                 <span className="truncate font-medium">{user.name}</span>
@@ -75,8 +83,10 @@ export function NavUser({
             <DropdownMenuLabel className="p-0 font-normal">
               <div className="flex items-center gap-2 px-1 py-1.5 text-left text-sm">
                 <Avatar className="h-8 w-8 rounded-lg">
-                  <AvatarImage src={user.avatar} alt={user.name} />
-                  <AvatarFallback className="rounded-lg">CN</AvatarFallback>
+                  <AvatarImage src={user.image ?? undefined} alt={user.name} />
+                  <AvatarFallback className="rounded-lg">
+                    {getInitials(user.name)}
+                  </AvatarFallback>
                 </Avatar>
                 <div className="grid flex-1 text-left text-sm leading-tight">
                   <span className="truncate font-medium">{user.name}</span>
@@ -87,46 +97,25 @@ export function NavUser({
               </div>
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
-            <DropdownMenuGroup>
-              <DropdownMenuItem>
-                <IconUserCircle />
-                Account
-              </DropdownMenuItem>
-              <DropdownMenuItem>
-                <IconCreditCard />
-                Billing
-              </DropdownMenuItem>
-              <DropdownMenuItem>
-                <IconNotification />
-                Notifications
-              </DropdownMenuItem>
-            </DropdownMenuGroup>
-            <DropdownMenuSeparator />
             <DropdownMenuSub>
               <DropdownMenuSubTrigger>
                 <Sun className="h-4 w-4 rotate-0 scale-100 dark:-rotate-90 dark:scale-0" />
                 <Moon className="absolute h-4 w-4 rotate-90 scale-0 dark:rotate-0 dark:scale-100" />
-                Theme
+                {t("nav_user.theme_menu")}
               </DropdownMenuSubTrigger>
               <DropdownMenuSubContent>
-                <DropdownMenuItem onClick={() => setTheme("light")}>
-                  <Sun className="h-4 w-4" />
-                  Light
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setTheme("dark")}>
-                  <Moon className="h-4 w-4" />
-                  Dark
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setTheme("system")}>
-                  <Monitor className="h-4 w-4" />
-                  System
-                </DropdownMenuItem>
+                {themeItems.map(({ value, icon: Icon }) => (
+                  <DropdownMenuItem key={value} onClick={() => setTheme(value)}>
+                    <Icon className="h-4 w-4" />
+                    {tc(`theme.${value}`)}
+                  </DropdownMenuItem>
+                ))}
               </DropdownMenuSubContent>
             </DropdownMenuSub>
             <DropdownMenuSeparator />
-            <DropdownMenuItem>
+            <DropdownMenuItem onClick={handleLogout}>
               <IconLogout />
-              Log out
+              {t("nav_user.log_out")}
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>

@@ -2,7 +2,9 @@
 
 import * as React from "react";
 import { Area, AreaChart, CartesianGrid, XAxis, YAxis, Bar, BarChart, Line, LineChart } from "recharts";
+import { useTranslation } from "react-i18next";
 
+import { formatDate as formatDateI18n } from "@/lib/date-utils";
 import {
   Card,
   CardAction,
@@ -80,6 +82,7 @@ export function TimeSeriesChart({
   valueFormatter,
 }: TimeSeriesChartProps) {
   const isMobile = useIsMobile();
+  const { i18n } = useTranslation();
   const [timeRange, setTimeRange] = React.useState(timeRanges[0]?.value || "90d");
 
   React.useEffect(() => {
@@ -109,21 +112,11 @@ export function TimeSeriesChart({
     },
   } satisfies ChartConfig;
 
-  const formatDate = (value: string) => {
-    const date = new Date(value);
-    return date.toLocaleDateString("en-US", {
-      month: "short",
-      day: "numeric",
-    });
-  };
+  const formatDate = (value: string) =>
+    formatDateI18n(new Date(value), "MMM d", i18n.language);
 
-  const formatTooltipDate = (value: string) => {
-    return new Date(value).toLocaleDateString("en-US", {
-      month: "long",
-      day: "numeric",
-      year: "numeric",
-    });
-  };
+  const formatTooltipDate = (value: string) =>
+    formatDateI18n(new Date(value), "MMMM d, yyyy", i18n.language);
 
   const renderChart = () => {
     const commonProps = {

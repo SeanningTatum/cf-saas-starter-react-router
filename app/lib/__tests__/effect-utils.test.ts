@@ -7,6 +7,7 @@ import {
   tryCreate,
   tryDelete,
   requireFound,
+  requireFoundOrFail,
 } from "../effect-utils";
 import {
   QueryError,
@@ -122,6 +123,48 @@ describe("requireFound", () => {
     Effect.gen(function* () {
       const exit = yield* Effect.exit(requireFound("widget", "id-1", undefined));
       expect(Exit.isFailure(exit)).toBe(true);
+    })
+  );
+});
+
+describe("requireFoundOrFail", () => {
+  it.effect("returns the value when present", () =>
+    Effect.gen(function* () {
+      const v = yield* requireFoundOrFail({ id: "id-1" }, () => new Error("unused"));
+      expect(v).toEqual({ id: "id-1" });
+    })
+  );
+
+  it.effect("fails with the caller-provided error on null", () =>
+    Effect.gen(function* () {
+      class CustomError {
+        readonly _tag = "CustomError";
+      }
+      const exit = yield* Effect.exit(
+        requireFoundOrFail(null, () => new CustomError())
+      );
+      expect(Exit.isFailure(exit)).toBe(true);
+      if (Exit.isFailure(exit)) {
+        const failure = Cause.failureOption(exit.cause);
+        if (failure._tag === "Some") {
+          expect(failure.value).toBeInstanceOf(CustomError);
+        }
+      }
+    })
+  );
+
+  it.effect("fails with the caller-provided error on undefined", () =>
+    Effect.gen(function* () {
+      const exit = yield* Effect.exit(
+        requireFoundOrFail(undefined, () => "missing")
+      );
+      expect(Exit.isFailure(exit)).toBe(true);
+      if (Exit.isFailure(exit)) {
+        const failure = Cause.failureOption(exit.cause);
+        if (failure._tag === "Some") {
+          expect(failure.value).toBe("missing");
+        }
+      }
     })
   );
 });

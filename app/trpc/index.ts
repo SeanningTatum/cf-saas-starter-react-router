@@ -1,32 +1,46 @@
 import { initTRPC, TRPCError } from "@trpc/server";
 import superjson from "superjson";
-import { Effect, ParseResult, Schema } from "effect";
-import { AuthApi } from "@/services/auth";
+import { Cause, Effect, Exit, ParseResult, Schema } from "effect";
+import { Session, SessionLive } from "@/services/session";
 import type { AppRuntime } from "@/runtime";
 import { loggers } from "@/lib/logger";
 
+// Decision (fix 5): wire the already-tested `Session`/`SessionLive` service
+// in as the single source of truth for session resolution, rather than
+// deleting it. `SessionLive(headers)` is per-request (needs the request's
+// Headers) so it's provided locally here — exactly the pattern documented
+// in `.brain/rules/services.md` "Session" section — instead of being added
+// to the global `AppServices` union in runtime.ts, which is built once per
+// request before headers are threaded through and has no per-request
+// parameter today. This also replaces the previous `Effect.promise(() =>
+// api.getSession(...))`, which turned a throwing Better Auth call into an
+// unrecoverable defect; `SessionLive` already wraps it in `Effect.tryPromise`
+// mapped to `ExternalServiceError`.
 export const createTRPCContext = async (opts: {
   headers: Headers;
   runtime: AppRuntime;
 }) => {
-  const session = await opts.runtime.runPromise(
-    Effect.gen(function* () {
-      const { api } = yield* AuthApi;
-      return yield* Effect.promise(() =>
-        api.getSession({ headers: opts.headers })
-      );
-    })
+  const exit = await opts.runtime.runPromiseExit(
+    Session.pipe(Effect.provide(SessionLive(opts.headers)))
   );
+
+  if (Exit.isFailure(exit)) {
+    loggers.trpc.error(
+      { cause: Cause.pretty(exit.cause) },
+      "Failed to resolve session for tRPC context"
+    );
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Internal Server Error",
+    });
+  }
+
+  const { session, user } = exit.value;
 
   return {
     headers: opts.headers,
     runtime: opts.runtime,
-    auth: session
-      ? {
-          session: session.session,
-          user: session.user,
-        }
-      : null,
+    auth: session && user ? { session, user } : null,
   };
 };
 
@@ -84,8 +98,8 @@ export const protectedProcedure = t.procedure
       ctx: {
         ...ctx,
         auth: {
-          session: ctx.auth.session!,
-          user: ctx.auth.user!,
+          session: ctx.auth.session,
+          user: ctx.auth.user,
         },
       },
     });

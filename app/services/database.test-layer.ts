@@ -1,4 +1,5 @@
 import { Layer } from "effect";
+import { vi } from "vitest";
 import type { DrizzleD1, DatabaseShape } from "./database";
 import { Database } from "./database";
 
@@ -27,3 +28,11 @@ export const chainable = <T>(value: T) => {
   );
   return proxy;
 };
+
+/**
+ * Builds a `vi.fn` spy that returns `chainable(value)` when invoked, so a
+ * stub method (e.g. `update: chainableSpy(undefined)`) is both a working
+ * drizzle-chain stand-in AND an assertable mock — `toHaveBeenCalledWith(...)`,
+ * `toHaveBeenCalledTimes(...)`, etc — to prove WHICH drizzle method ran.
+ */
+export const chainableSpy = <T>(value: T) => vi.fn(() => chainable(value));

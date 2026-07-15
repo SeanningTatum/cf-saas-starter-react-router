@@ -113,6 +113,15 @@ Exception: gray scale OK for subtle layout (`border-gray-200 dark:border-gray-80
 - After mutations, invalidate via `api.useUtils()`.
 - `data-testid` on every interactive element used in e2e tests.
 
+### Shared components / patterns (2026-07-15 remediation)
+
+- **`FeatureCard`** (`app/components/feature-card.tsx`) — the linked icon/title/badges/CTA card used by both `home.tsx` and `dashboard/_index.tsx` (optional `disabled`/`disabledHint`). Don't re-roll per-route card components.
+- **Loader auth gating** — use `requireSession` / `requireAdmin` / `redirectIfAuthenticated` from `app/lib/session.ts`, never inline `context.auth.api.getSession` + redirect branching (see `routes.md`).
+- **Admin client actions** — route `authClient.admin.*` calls through the `runAdminAction` helper in `user-data-table.tsx` (checks `response.error`, toasts, revalidates). Never toast success before checking the response.
+- **Theme switcher** — one source: `themeItems` exported from `app/components/theme-toggle.tsx` (values double as `common.theme.*` i18n key suffixes; translate at the render site).
+- **Avatar initials** — `getInitials` from `@/lib/utils`, not per-component copies.
+- **Dates** — always through `app/lib/date-utils.ts` `formatDate` + `useTranslation().i18n.language`; never raw `toLocaleDateString("en-US", ...)` (breaks `zh`).
+
 ## Verification (browser proof before done)
 
 For frontend changes, **verify in a browser before declaring done** — never claim UI works from reading code.

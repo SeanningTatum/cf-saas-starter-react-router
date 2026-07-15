@@ -28,5 +28,14 @@
     "404": "404"
   },
   "loading": "Loading...",
-  "loading_protected_data": "Loading protected data..."
+  "loading_protected_data": "Loading protected data...",
+  "theme": {
+    "toggle_label": "Toggle theme",
+    "light": "Light",
+    "dark": "Dark",
+    "system": "System"
+  },
+  "analytics": {
+    "total": "Total"
+  }
 }

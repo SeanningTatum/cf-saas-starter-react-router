@@ -5,8 +5,8 @@ import {
   TimeSeriesChart,
   DistributionChart,
   InsightsCard,
-  type Insight,
 } from "@/components/analytics";
+import { buildUserInsights } from "@/lib/insights";
 import { Users, ShieldCheck, UserX, Shield } from "lucide-react";
 import type { Route } from "./+types/_index";
 import { useTranslation } from "react-i18next";
@@ -47,54 +47,7 @@ export default function AdminHome({ loaderData }: Route.ComponentProps) {
   const { stats, growthData, roleDistribution, verificationDistribution } =
     loaderData;
 
-  const insights: Insight[] = [];
-
-  if (stats.verificationRate >= 80) {
-    insights.push({
-      text: t("insights.verification_excellent", { rate: stats.verificationRate }),
-      type: "positive",
-    });
-  } else if (stats.verificationRate >= 50) {
-    insights.push({
-      text: t("insights.verification_moderate", { rate: stats.verificationRate }),
-      type: "neutral",
-    });
-  } else {
-    insights.push({
-      text: t("insights.verification_low", { rate: stats.verificationRate }),
-      type: "negative",
-    });
-  }
-
-  if (stats.bannedUsers > 0) {
-    const bannedPercent = Math.round(
-      (stats.bannedUsers / stats.totalUsers) * 100
-    );
-    insights.push({
-      text: t("insights.banned_users", { count: stats.bannedUsers, percent: bannedPercent }),
-      type: bannedPercent > 5 ? "negative" : "neutral",
-    });
-  } else {
-    insights.push({
-      text: t("insights.no_banned"),
-      type: "positive",
-    });
-  }
-
-  if (stats.adminUsers > 0) {
-    insights.push({
-      text: t("insights.admins_managing", { count: stats.adminUsers }),
-      type: "neutral",
-    });
-  }
-
-  if (growthData.length > 0) {
-    const recentSignups = growthData.slice(-7).reduce((sum, d) => sum + d.count, 0);
-    insights.push({
-      text: t("insights.recent_signups", { count: recentSignups }),
-      type: recentSignups > 0 ? "positive" : "neutral",
-    });
-  }
+  const insights = buildUserInsights(stats, growthData, t);
 
   return (
     <div>

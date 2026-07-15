@@ -25,7 +25,6 @@ export const user = sqliteTable("user", {
 });
 
 export type User = typeof user.$inferSelect;
-export type UpdateUserInput = typeof user.$inferInsert;
 
 export const session = sqliteTable("session", {
   id: text("id").primaryKey(),

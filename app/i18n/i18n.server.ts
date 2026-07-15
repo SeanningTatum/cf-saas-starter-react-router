@@ -1,18 +1,11 @@
 import { RemixI18Next } from "remix-i18next/server";
-import { createCookie } from "react-router";
 import {
   supportedLngs,
   fallbackLng,
   defaultNS,
-  localeCookieName,
+  localeCookie,
 } from "./i18n";
 import resourcesToBackend from "i18next-resources-to-backend";
-
-const localeCookie = createCookie(localeCookieName, {
-  path: "/",
-  sameSite: "lax",
-  maxAge: 60 * 60 * 24 * 365, // 1 year
-});
 
 export const i18nServer = new RemixI18Next({
   detection: {
