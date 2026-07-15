@@ -1,11 +1,13 @@
 import { Effect, Exit, Schema } from "effect";
 import { data } from "react-router";
 import { BucketRepository } from "@/repositories/bucket";
-import { ValidationError } from "@/models/errors/repository";
+import { ExternalServiceError, ValidationError } from "@/models/errors/repository";
 import { BucketValidationError } from "@/models/errors/bucket";
 import {
   MAX_UPLOAD_SIZE_BYTES,
   ALLOWED_UPLOAD_CONTENT_TYPES,
+  MAGIC_BYTES_SNIFF_LENGTH,
+  matchesMagicBytes,
 } from "@/lib/constants/upload";
 import type { Route } from "./+types/upload-file";
 
@@ -14,18 +16,23 @@ const UploadedFileMeta = Schema.Struct({
   type: Schema.Literal(...ALLOWED_UPLOAD_CONTENT_TYPES),
 });
 
-export async function action({ request, context }: Route.ActionArgs) {
-  const session = await context.auth.api.getSession({
-    headers: request.headers,
-  });
-  if (!session) {
-    return data({ success: false as const, error: "Unauthorized" }, { status: 401 });
-  }
+const typeAndSizeMessage = `File must be one of [${ALLOWED_UPLOAD_CONTENT_TYPES.join(", ")}] and at most ${
+  MAX_UPLOAD_SIZE_BYTES / (1024 * 1024)
+}MB`;
 
+export async function action({ request, context }: Route.ActionArgs) {
   const formData = await request.formData();
   const file = formData.get("file");
 
   const program = Effect.gen(function* () {
+    const session = yield* Effect.tryPromise({
+      try: () => context.auth.api.getSession({ headers: request.headers }),
+      catch: (cause) => new ExternalServiceError({ service: "BetterAuth", cause }),
+    });
+    if (!session) {
+      return data({ success: false as const, error: "Unauthorized" }, { status: 401 });
+    }
+
     if (!(file instanceof File)) {
       return yield* Effect.fail(
         new ValidationError({
@@ -36,20 +43,34 @@ export async function action({ request, context }: Route.ActionArgs) {
       );
     }
 
-    yield* Schema.decodeUnknown(UploadedFileMeta)(
+    const meta = yield* Schema.decodeUnknown(UploadedFileMeta)(
       { size: file.size, type: file.type },
       { errors: "all" }
     ).pipe(
       Effect.mapError(
         () =>
           new BucketValidationError({
-            message: `File must be one of [${ALLOWED_UPLOAD_CONTENT_TYPES.join(", ")}] and at most ${
-              MAX_UPLOAD_SIZE_BYTES / (1024 * 1024)
-            }MB`,
+            message: typeAndSizeMessage,
             field: "file",
           })
       )
     );
+
+    // The declared multipart type is client-controlled — verify the actual
+    // leading bytes match the declared type's signature.
+    const head = yield* Effect.tryPromise({
+      try: () => file.slice(0, MAGIC_BYTES_SNIFF_LENGTH).arrayBuffer(),
+      catch: (cause) =>
+        new ExternalServiceError({ service: "FileRead", cause }),
+    });
+    if (!matchesMagicBytes(meta.type, new Uint8Array(head))) {
+      return yield* Effect.fail(
+        new BucketValidationError({
+          message: "File content does not match its declared type",
+          field: "file",
+        })
+      );
+    }
 
     const repo = yield* BucketRepository;
     const key = yield* repo.upload(file);

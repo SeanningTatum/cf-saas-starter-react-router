@@ -46,8 +46,7 @@ export function FileUpload({
       setError(errorMessage);
       onUploadError?.(errorMessage);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fetcher.data, onUploadSuccess, onUploadError]);
+  }, [fetcher.data, onUploadSuccess, onUploadError, t]);
 
   const handleFile = (file: File) => {
     setError(null);
