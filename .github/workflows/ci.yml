@@ -39,7 +39,8 @@ jobs:
         run: bun run test
 
       - name: Install brain-axi CLI
-        run: npm i -g github:SeanningTatum/brain-axi
+        # Pinned to a tag for reproducible CI — bump deliberately when adopting a newer CLI.
+        run: npm i -g github:SeanningTatum/brain-axi#v0.1.0
 
       - name: Harness invariants
         run: ./scripts/harness-check.sh

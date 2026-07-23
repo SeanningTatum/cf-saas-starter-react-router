@@ -12,7 +12,7 @@ SaaS starter on **Cloudflare Workers + React Router v7 + tRPC + D1/Drizzle + Bet
 
 The `.brain/` harness is driven by the **[brain-axi](https://github.com/SeanningTatum/brain-axi) CLI** (`brain`). It reads and writes brain state (features, checkpoints, docs, runs, plan reviews, verifications) with token-efficient TOON output. Prefer `brain` over reading/editing raw `.brain/` files — every command emits a `help[]` block so you self-bootstrap.
 
-Install: `npx skills add SeanningTatum/brain-axi --skill brain` (installs the `brain` Agent Skill). CLI on PATH via `npm i -g github:SeanningTatum/brain-axi` (or `npm link` from a checkout); it is **not** on npm, so any fallback uses the GitHub spec: `npx -y github:SeanningTatum/brain-axi <cmd>`.
+Install: `npx skills add SeanningTatum/brain-axi --skill brain` (installs the `brain` Agent Skill). CLI on PATH via `npm i -g github:SeanningTatum/brain-axi#v0.1.0` (or `npm link` from a checkout); it is **not** on npm, so any fallback uses the pinned GitHub spec: `npx -y github:SeanningTatum/brain-axi#v0.1.0 <cmd>`.
 
 | Phase | Command |
 |-------|---------|

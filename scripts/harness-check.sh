@@ -33,8 +33,8 @@ echo ""
 if command -v brain >/dev/null 2>&1; then
   BRAIN_CMD=(brain)
 elif command -v npx >/dev/null 2>&1; then
-  # brain-axi is not published to npm — resolve from GitHub.
-  BRAIN_CMD=(npx -y github:SeanningTatum/brain-axi)
+  # brain-axi is not published to npm — resolve from GitHub, pinned to a tag for reproducibility.
+  BRAIN_CMD=(npx -y github:SeanningTatum/brain-axi#v0.1.0)
 else
   BRAIN_CMD=()
 fi
@@ -113,7 +113,7 @@ done < <(find .brain -name "*.md" -type f)
 if [ -z "$DEAD_LINKS" ]; then
   ok "no dead internal links in .brain/"
 else
-  fail "dead internal links found:$(printf "$DEAD_LINKS")"
+  fail "dead internal links found:$(printf '%s' "$DEAD_LINKS")"
 fi
 
 echo ""

@@ -163,7 +163,7 @@ Single explainer: [`.brain/HARNESS.md`](.brain/HARNESS.md). The 5 subsystems map
 | [`/ship-feature`](.claude/commands/ship-feature.md) | Close out: `/verify-done` + `brain ship <slug> --evidence` (flip + checkpoint + `brain check`) + update feature MD + close run note. |
 | [`/harness-check`](.claude/commands/harness-check.md) | `brain check` (brain-state invariants) + repo supplement (sync rule, sub-agent frontmatter, dead links) via [`scripts/harness-check.sh`](scripts/harness-check.sh) — no LLM, exits non-zero on drift. |
 
-`scripts/harness-check.sh` wraps `brain check` and adds the repo-only invariants; run it (or `init.sh`) yourself anytime to verify state without invoking Claude. Requires the `brain` CLI on PATH (`npm i -g github:SeanningTatum/brain-axi`).
+`scripts/harness-check.sh` wraps `brain check` and adds the repo-only invariants; run it (or `init.sh`) yourself anytime to verify state without invoking Claude. Requires the `brain` CLI on PATH (`npm i -g github:SeanningTatum/brain-axi#v0.1.0`).
 
 ### Project-local sub-agents ([`.claude/agents/`](.claude/agents/))
 
