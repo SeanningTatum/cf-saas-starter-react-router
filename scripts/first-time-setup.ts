@@ -9,8 +9,10 @@ import {
   select,
   spinner,
   text,
+  password,
   confirm,
   cancel,
+  isCancel,
 } from "@clack/prompts";
 import { buildWranglerConfig, writeWranglerJsonc } from "./lib/wrangler-config";
 
@@ -323,6 +325,118 @@ async function runDatabaseMigrations(accountId?: string) {
   previewSpinner.stop("\x1b[32m✓ Preview migrations applied\x1b[0m");
 }
 
+// Wires the two GitHub Actions credentials the CI/CD workflows need:
+//   - repo VARIABLE CLOUDFLARE_ACCOUNT_ID (auto — we already know it)
+//   - repo SECRET   CLOUDFLARE_API_TOKEN  (prompted, masked)
+// Uses the GitHub CLI (`gh`). No-ops with guidance if gh is missing, not
+// authenticated, or the repo has no GitHub remote — never blocks setup.
+async function setupGitHubCiCredentials(accountId?: string) {
+  console.log("\n\x1b[36m🤖 Step 11: GitHub Actions CI/CD credentials\x1b[0m");
+
+  const manualHint = () => {
+    console.log(
+      "\x1b[33mSkipped. To enable auto-deploy later, set these on GitHub\n" +
+        "  (Settings → Secrets and variables → Actions):\n" +
+        "    • Variable CLOUDFLARE_ACCOUNT_ID\n" +
+        "    • Secret   CLOUDFLARE_API_TOKEN\x1b[0m"
+    );
+  };
+
+  // gh installed?
+  if (
+    typeof executeCommand("gh --version", true) === "object" ||
+    // gh authenticated? (`gh auth status` exits non-zero when logged out)
+    typeof executeCommand("gh auth status", true) === "object" ||
+    // repo has a GitHub remote gh can resolve?
+    typeof executeCommand("gh repo view --json nameWithOwner", true) === "object"
+  ) {
+    console.log(
+      "\x1b[33mGitHub CLI unavailable, not authenticated, or no GitHub remote detected.\x1b[0m"
+    );
+    manualHint();
+    return;
+  }
+
+  const wire = await confirm({
+    message:
+      "Set CI/CD credentials on GitHub now (enables push-to-main → production deploy + PR previews)?",
+    initialValue: true,
+  });
+  if (isCancel(wire) || !wire) {
+    manualHint();
+    return;
+  }
+
+  // 1. Account ID → repo variable (we already resolved it above; prompt if not).
+  let resolvedAccountId = accountId;
+  if (!resolvedAccountId) {
+    const entered = await text({
+      message: "Cloudflare account ID:",
+    });
+    if (isCancel(entered) || !entered) {
+      manualHint();
+      return;
+    }
+    resolvedAccountId = entered as string;
+  }
+
+  const varSpinner = spinner();
+  varSpinner.start("Setting CLOUDFLARE_ACCOUNT_ID variable...");
+  const varResult = executeCommand(
+    `gh variable set CLOUDFLARE_ACCOUNT_ID --body "${resolvedAccountId}"`,
+    true
+  );
+  if (varResult && typeof varResult === "object" && varResult.error) {
+    varSpinner.stop("\x1b[31m✗ Failed to set CLOUDFLARE_ACCOUNT_ID\x1b[0m");
+    console.error(`\x1b[31m${varResult.message}\x1b[0m`);
+  } else {
+    varSpinner.stop("\x1b[32m✓ CLOUDFLARE_ACCOUNT_ID variable set\x1b[0m");
+  }
+
+  // 2. API token → repo secret (sensitive → masked prompt).
+  console.log(
+    "\x1b[2mCreate a token at https://dash.cloudflare.com/profile/api-tokens\n" +
+      "  from the 'Edit Cloudflare Workers' template, then add 'D1:Edit'\n" +
+      "  (needed to run migrations in CI). Leave blank to skip.\x1b[0m"
+  );
+  const token = await password({
+    message: "Cloudflare API token (input hidden):",
+  });
+  if (isCancel(token) || !token) {
+    console.log(
+      "\x1b[33mSkipped CLOUDFLARE_API_TOKEN. Set it later with:\n" +
+        "  gh secret set CLOUDFLARE_API_TOKEN\x1b[0m"
+    );
+    return;
+  }
+
+  const secretSpinner = spinner();
+  secretSpinner.start("Setting CLOUDFLARE_API_TOKEN secret...");
+  // Pass the token via stdin (not argv) so it never lands in the process list.
+  let secretError: string | undefined;
+  try {
+    execSync("gh secret set CLOUDFLARE_API_TOKEN", {
+      input: token as string,
+      encoding: "utf-8",
+      stdio: ["pipe", "pipe", "pipe"],
+    });
+  } catch (error: any) {
+    secretError = error.stdout || error.stderr || String(error);
+  }
+  if (secretError) {
+    secretSpinner.stop("\x1b[31m✗ Failed to set CLOUDFLARE_API_TOKEN\x1b[0m");
+    console.error(`\x1b[31m${secretError}\x1b[0m`);
+    console.log(
+      "\x1b[33mSet it later with: gh secret set CLOUDFLARE_API_TOKEN\x1b[0m"
+    );
+  } else {
+    secretSpinner.stop("\x1b[32m✓ CLOUDFLARE_API_TOKEN secret set\x1b[0m");
+    console.log(
+      "\x1b[32m🚀 CI/CD wired — pushes to main will now auto-deploy to production.\x1b[0m"
+    );
+  }
+}
+
 // Main setup function
 async function main() {
   intro("🚀 Cloudflare SaaS Stack - First-Time Setup");
@@ -582,6 +696,13 @@ async function main() {
   uploadSecret("production", "");
   uploadSecret("preview", " --env preview");
 
+  // Step 11: Wire up GitHub Actions CI/CD credentials (optional).
+  // Sets the repo VARIABLE CLOUDFLARE_ACCOUNT_ID and the repo SECRET
+  // CLOUDFLARE_API_TOKEN that .github/workflows/{deploy,preview}.yml need to
+  // deploy on push to main / per-PR. Entirely opt-in and skipped cleanly if
+  // the GitHub CLI isn't available.
+  await setupGitHubCiCredentials(accountId);
+
   // Final instructions
   console.log("\n\x1b[36m✅ Setup Complete!\x1b[0m\n");
   console.log("\x1b[32mNext steps:\x1b[0m");
@@ -591,10 +712,15 @@ async function main() {
   console.log(
     `     \x1b[33mhttps://${projectName}.<subdomain>.workers.dev\x1b[0m\n`
   );
-  console.log("  3. Preview deploys happen automatically per-PR via:");
-  console.log("     \x1b[33m.github/workflows/preview.yml\x1b[0m");
+  console.log("  3. CI/CD (GitHub Actions):");
   console.log(
-    "     (requires the repo variable \x1b[33mCLOUDFLARE_ACCOUNT_ID\x1b[0m and the secret \x1b[33mCLOUDFLARE_API_TOKEN\x1b[0m to be set on GitHub)\n"
+    "     \x1b[33m.github/workflows/deploy.yml\x1b[0m — push to main auto-deploys to production (after CI passes)"
+  );
+  console.log(
+    "     \x1b[33m.github/workflows/preview.yml\x1b[0m — every PR gets its own preview deployment"
+  );
+  console.log(
+    "     (both require the repo variable \x1b[33mCLOUDFLARE_ACCOUNT_ID\x1b[0m and the secret \x1b[33mCLOUDFLARE_API_TOKEN\x1b[0m on GitHub — Step 11 above sets these for you if the GitHub CLI is available)\n"
   );
 
   outro("✨ Happy building! 🎉");
