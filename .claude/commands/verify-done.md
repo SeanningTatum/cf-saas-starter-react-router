@@ -13,7 +13,8 @@ Steps:
 5. If diff touches a UI feature flow (`app/components/`, `app/routes/*.tsx`) — spawn the `feature-verifier` sub-agent (slug + golden path + one error path) and report its verdict + the `.brain/features/<slug>/verifications/<date>.md` path. For a trivial tweak, state plainly whether you walked it in a browser. Do not claim UI works without a browser walk.
 6. Run `git diff --stat` and for each changed path, name the brain doc that owns it (table in `99-verify-done.md`). Flag any path whose owning doc was not updated.
 7. Grep the diff for the five non-negotiables: `throw` outside `Effect.tryPromise.catch`, `process.env`, `from "zod"`, bare `try {}`. Quote any hit.
-8. If a `.brain/runs/<file>.md` was opened for this task — append a final entry and close it.
+8. Run `./scripts/harness-check.sh` (wraps `brain check` + repo supplement). Must exit zero. Quote any violation.
+9. If a run note was opened for this task — `brain runs append <slug> --step "verify-done" --observed "<result tails>"` (or append+close the flat run note), then `brain progress add --summary "..." --next "..."`.
 
 Output a final summary table:
 
@@ -26,6 +27,7 @@ Output a final summary table:
 | feature verification (doc path) | ✅ PASS / ❌ / N/A |
 | brain coherence | ✅ / paths missing docs: ... |
 | non-negotiables clean | ✅ / hits: ... |
+| harness-check (brain check + supplement) | ✅ / ❌ (violation) |
 | run note closed | ✅ / N/A |
 
 Only if every row is ✅ or justified-N/A: tell the user the task is done. Otherwise list what is blocking.

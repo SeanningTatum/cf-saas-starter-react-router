@@ -14,13 +14,13 @@ If you cannot answer cleanly, ask the user. Do not start.
 
 ## 2. Read the brain (retrieval over recall)
 
-Open in this order:
+Query via the **brain-axi CLI** (`brain`) — it emits token-efficient TOON and beats reading raw files:
 
-1. [`CLAUDE.md`](../../CLAUDE.md) — only if you have not read it this session
-2. The matching `.brain/<folder>/index.md` — index lists files + "Read when" triggers
-3. Every triggered file
-4. For feature work: [`.brain/features/<slug>/<slug>.md`](../features/index.md) if it exists
-5. Most recent relevant entry in [`../runs/`](../runs/index.md) — past attempts, what failed, why
+1. `brain` — dashboard (in-progress feature, last checkpoint); `brain progress` — where you left off
+2. [`CLAUDE.md`](../../CLAUDE.md) — only if you have not read it this session
+3. `brain docs <domain>` then `brain docs view <sec/file>` for the matching layer's docs; `brain search "<keyword>"` for anything cross-cutting
+4. For feature work: `brain features view <slug>`
+5. `brain runs` / `brain runs view <name>` — past attempts, what failed, why
 
 Skipping the brain is the most common failure mode. Training data does not reflect this repo.
 
@@ -48,9 +48,13 @@ bun run test
 
 Record both results in your run note. If anything fails *before* your changes, that is pre-existing — note it, do not silently "fix" unrelated breakage.
 
-## 5. Open a run note (optional but encouraged for >30min tasks)
+## 5. Open a run note + checkpoint (encouraged for >30min tasks)
 
-Copy [`../runs/_TEMPLATE.md`](../runs/_TEMPLATE.md) to `.brain/runs/<YYYY-MM-DD>-<task-slug>.md`. Update as you go. Future sessions read this to recover state without re-running everything.
+- Feature work: `brain runs append <slug> --step "kickoff" --observed "<baseline tail>"` opens the per-feature run note.
+- Otherwise copy [`../runs/_TEMPLATE.md`](../runs/_TEMPLATE.md) to `.brain/runs/<YYYY-MM-DD>-<task-slug>.md`.
+- Always checkpoint: `brain progress add --summary "<framing>" --next "<first edit>"`.
+
+Future sessions read these to recover state without re-running everything.
 
 ## Definition of done for init phase
 

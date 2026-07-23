@@ -38,6 +38,9 @@ jobs:
       - name: Unit tests
         run: bun run test
 
+      - name: Install brain-axi CLI
+        run: npm i -g github:SeanningTatum/brain-axi
+
       - name: Harness invariants
         run: ./scripts/harness-check.sh
 

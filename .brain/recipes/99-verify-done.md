@@ -47,7 +47,7 @@ This catches Workers-specific compat issues that local dev hides.
 
 If a user-visible flow changed, produce browser evidence — **do not claim UI works without a browser walk.**
 
-Spawn the [`feature-verifier`](../../.claude/agents/feature-verifier.md) sub-agent with the feature slug + golden path + one error path. It drives the live app with the Playwright CLI (throwaway headless script run via `bun`), screenshots each state, and writes `.brain/features/<slug>/verifications/<date>.md` (see [`features/index.md`](../features/index.md)). Read its returned verdict:
+Spawn the [`feature-verifier`](../../.claude/agents/feature-verifier.md) sub-agent with the feature slug + golden path + one error path (the standard is `brain playbook verify`). It drives the live app with the Playwright CLI (throwaway headless script run via `bun`), screenshots each state (`brain shots add --feature <slug> --step NN-name`), and writes `.brain/features/<slug>/verifications/<date>.md` (see [`features/index.md`](../features/index.md)). Read its returned verdict:
 
 - **PASS** → link the doc from `features/<slug>/<slug>.md` ("Testability") and the run note. Done.
 - **FAIL / BLOCKED** → not done. Fix the blocker (or the bug) and re-run the verifier.
@@ -92,9 +92,17 @@ Any hit = re-read [`.brain/codebase/effect-ts.md`](../codebase/effect-ts.md). Li
 - `from "zod"` → use Effect Schema
 - bare `try {}` → use `Effect.tryPromise`
 
-## 7. Close the run note
+## 7. Harness invariants
 
-If you opened one, append a final entry: what shipped, what is left, what surprised you. Future you will read this.
+```bash
+./scripts/harness-check.sh
+```
+
+Runs `brain check` (brain-state invariants) + the repo supplement (sync rule, sub-agent frontmatter, dead links). Must exit zero.
+
+## 8. Close the run note + checkpoint
+
+If you opened one, append a final entry via `brain runs append <slug> --step "verify-done" --observed "<result tails>"` (or the flat run note), then `brain progress add --summary "..." --next "..."`: what shipped, what is left, what surprised you. Future you will read this.
 
 ## Definition of done
 
@@ -103,7 +111,7 @@ If you opened one, append a final entry: what shipped, what is left, what surpri
 - [ ] `test:e2e` smoke green (default — opt-out only with run-note justification per §2)
 - [ ] `build` green (if CF-touching)
 - [ ] Feature verification doc PASS (if UI feature — via `feature-verifier`, per §4)
-- [ ] `./scripts/harness-check.sh` green (feature-list invariants, brain link integrity, sub-agent frontmatter)
+- [ ] `./scripts/harness-check.sh` green (`brain check` brain-state invariants + repo supplement: sync rule, sub-agent frontmatter, dead links)
 - [ ] Every diffed path → owning brain doc updated
 - [ ] No five-non-negotiables grep hits
 - [ ] Feature memo + `CHANGELOG.md` updated if applicable

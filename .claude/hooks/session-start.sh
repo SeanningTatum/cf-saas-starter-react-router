@@ -1,22 +1,32 @@
 #!/usr/bin/env bash
-# SessionStart hook: print harness pointers so agent reads brain before working.
+# SessionStart hook: inject live brain state via the brain-axi CLI, then repo pointers.
 # Cheap, deterministic, no LLM call. Runs once per session start.
 
 set -uo pipefail
 
-cat <<'EOF'
-🧠 Harness loaded — read these before non-trivial work:
+# --- Live brain state (brain-axi CLI is the source of truth) ---
+if command -v brain >/dev/null 2>&1; then
+  echo "🧠 brain context:"
+  brain context 2>/dev/null || true
+  echo ""
+fi
 
-  1. .brain/HARNESS.md             — what this harness is and how to use it
-  2. CLAUDE.md                      — brain pointer (5 non-negotiables)
-  3. .brain/recipes/00-before-task.md — task init checklist
-  4. .brain/runs/progress.md        — rolling session cursor (where you left off)
-  5. .brain/features/feature_list.json — feature state (status + dependencies)
+cat <<'EOF'
+🧠 Harness loaded — brain-axi CLI is the interface. Read before non-trivial work:
+
+  brain              — dashboard (feature counts, in-progress, last checkpoint)
+  brain progress     — rolling session cursor (where you left off)
+  brain features     — feature state (status + dependencies)
+  brain docs         — rules / recipes / architecture / codebase docs
+  brain search "..." — find text anywhere in the brain
+
+Anchors: .brain/HARNESS.md (how the harness works) · CLAUDE.md (5 non-negotiables).
 
 For non-trivial code changes:
-  - Open matching recipe in .brain/recipes/
-  - End with /verify-done or .brain/recipes/99-verify-done.md
-  - Update .brain/features/feature_list.json status field if scope changes
+  - /start-task to kick off (baseline + brain read + framing)
+  - Open the matching recipe: brain docs recipes
+  - End with /verify-done (typecheck/test/e2e/build/feature-verify + brain check)
+  - Flip feature state: brain features set-status <slug> --status <...>
 EOF
 
 exit 0

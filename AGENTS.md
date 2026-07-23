@@ -6,7 +6,25 @@
 
 SaaS starter on **Cloudflare Workers + React Router v7 + tRPC + D1/Drizzle + Better Auth + Effect TS + ShadCN/Tailwind**. Email/password auth, admin dashboard, file upload (R2), analytics, i18n, dark mode.
 
-> **Retrieval over recall.** Read the relevant `.brain/<folder>/index.md` before any task. The index points to the right doc(s). Do not rely on training data for project-specific patterns.
+> **Retrieval over recall.** Query the brain before any task. Do not rely on training data for project-specific patterns.
+
+## brain-axi CLI — the harness interface
+
+The `.brain/` harness is driven by the **[brain-axi](https://github.com/SeanningTatum/brain-axi) CLI** (`brain`). It reads and writes brain state (features, checkpoints, docs, runs, plan reviews, verifications) with token-efficient TOON output. Prefer `brain` over reading/editing raw `.brain/` files — every command emits a `help[]` block so you self-bootstrap.
+
+Install: `npx skills add SeanningTatum/brain-axi --skill brain` (installs the `brain` Agent Skill). CLI on PATH via `npm i -g github:SeanningTatum/brain-axi` (or `npm link` from a checkout); it is **not** on npm, so any fallback uses the GitHub spec: `npx -y github:SeanningTatum/brain-axi <cmd>`.
+
+| Phase | Command |
+|-------|---------|
+| Orient | `brain` (dashboard) · `brain progress` (last checkpoint) · `brain features` |
+| Look up | `brain docs <section>` · `brain docs view <sec/file>` · `brain search "<q>"` · `brain features view <slug>` |
+| Record | `brain progress add --summary "..." --next "..."` · `brain runs append <slug> --step "..." --observed "..."` |
+| Feature state | `brain features set-status <slug> --status <planned\|in-progress\|shipped\|blocked\|cut>` · `brain ship <slug> --evidence "..."` |
+| Playbooks | `brain playbook plan` · `brain playbook verify` · `brain playbook execute` |
+| Verify | `brain check` (brain-state invariants; wrapped by `./scripts/harness-check.sh` + repo supplement) |
+| Setup | `brain setup --app claude` (session-start context hook) |
+
+`brain-axi` is the primary interface; the slash commands and `scripts/harness-check.sh` below are thin repo-specific wrappers on top of it. See [`.brain/HARNESS.md`](.brain/HARNESS.md) for how the CLI maps to the 5 harness subsystems.
 
 ## Read-before-task workflow
 
@@ -20,22 +38,24 @@ For trivial edits (typo, comment, one-line change), bookends are optional — bu
 
 ## Slash commands (deterministic gates)
 
+Thin wrappers that sequence `brain` CLI commands with repo-specific steps (baseline, typecheck, e2e, feature-verify).
+
 | Command | Purpose |
 |---------|---------|
-| [`/start-task`](.claude/commands/start-task.md) | Kickoff — `init.sh --baseline` + brain read + framing + run note + progress entry. Refuses if scope policy violated. |
-| [`/verify-done`](.claude/commands/verify-done.md) | Full verification — typecheck/test/e2e smoke/build/feature-verification/brain coherence/non-negotiables. |
-| [`/ship-feature`](.claude/commands/ship-feature.md) | Close out — verify-done + flip `feature_list.json` + update feature MD + close run note + harness-check. |
-| [`/harness-check`](.claude/commands/harness-check.md) | Validate 11 harness invariants via [`scripts/harness-check.sh`](scripts/harness-check.sh) (deterministic, no LLM, exits non-zero on drift). |
+| [`/start-task`](.claude/commands/start-task.md) | Kickoff — `init.sh --baseline` + brain read (`brain`/`brain progress`/`brain docs`/`brain search`) + framing + run note + `brain progress add`. Refuses if scope policy violated. |
+| [`/verify-done`](.claude/commands/verify-done.md) | Full verification — typecheck/test/e2e smoke/build/feature-verification/brain coherence/non-negotiables + `brain check`. |
+| [`/ship-feature`](.claude/commands/ship-feature.md) | Close out — verify-done + `brain ship <slug> --evidence` (flips `feature_list.json`, checkpoints, runs `brain check`) + update feature MD + close run note. |
+| [`/harness-check`](.claude/commands/harness-check.md) | Validate harness invariants via [`scripts/harness-check.sh`](scripts/harness-check.sh) = `brain check` + repo supplement (sync rule, sub-agent frontmatter, dead links). Deterministic, no LLM, exits non-zero on drift. |
 
 ## Harness — what holds this together
 
 This repo follows the [5-subsystem harness framework](.brain/HARNESS.md). The five concerns:
 
-1. **Instructions** — this file + `.brain/` (rules, recipes, features)
-2. **State** — [`.brain/features/feature_list.json`](.brain/features/feature_list.json) (machine-readable status), [`.brain/runs/progress.md`](.brain/runs/progress.md) (rolling cursor), per-task `.brain/runs/<date>-<slug>.md`
-3. **Verification** — [`.brain/recipes/99-verify-done.md`](.brain/recipes/99-verify-done.md) + `/verify-done`
-4. **Scope** — see "Scope policy" below
-5. **Lifecycle** — [`init.sh`](init.sh) at repo root + SessionStart hook in `.claude/`
+1. **Instructions** — this file + `.brain/` (rules, recipes, features), queried via `brain docs` / `brain search`
+2. **State** — [`.brain/features/feature_list.json`](.brain/features/feature_list.json) (via `brain features` / `set-status` / `ship`), [`.brain/runs/progress.md`](.brain/runs/progress.md) (via `brain progress`), per-feature/task run notes (via `brain runs`)
+3. **Verification** — [`.brain/recipes/99-verify-done.md`](.brain/recipes/99-verify-done.md) + `/verify-done` + `brain check` + `brain playbook verify`
+4. **Scope** — see "Scope policy" below (enforced by `brain check` one-in-progress invariant)
+5. **Lifecycle** — [`init.sh`](init.sh) at repo root + SessionStart hook (`brain context`) in `.claude/`
 
 ## Scope policy
 
@@ -101,6 +121,10 @@ Direct pointers (each rule is the canonical "do / don't" for one layer):
 ## Commands
 
 ```bash
+brain                     # Harness dashboard (features, in-progress, last checkpoint) — brain-axi CLI
+brain check               # Brain-state invariants (feature_list, one-in-progress, doc paths, verifications)
+brain search "<query>"    # Find text anywhere in the brain
+./scripts/harness-check.sh # brain check + repo supplement (sync rule, sub-agent frontmatter, dead links)
 ./init.sh                 # Harness bootstrap — install + migrate + typecheck + test (run start of session)
 ./init.sh --baseline      # Baseline only (typecheck + test) — used by 00-before-task.md
 bun run dev               # Dev server (auto-runs local DB migrations) → http://localhost:5173
