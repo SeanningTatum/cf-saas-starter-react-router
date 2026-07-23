@@ -10,6 +10,7 @@ export default defineConfig({
       "app/**/*.test.ts",
       "app/**/*.test.tsx",
       "workers/**/*.test.ts",
+      "scripts/**/*.test.ts",
     ],
     exclude: ["node_modules", "e2e", ".react-router"],
     setupFiles: [],
