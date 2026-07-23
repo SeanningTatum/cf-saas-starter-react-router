@@ -1,0 +1,89 @@
+# Production deploy on push to main.
+#
+# Fires only AFTER the `CI` workflow concludes successfully on `main`, so a
+# red typecheck / test / harness-check never reaches production. (Deploy runs
+# once per green push — it does not re-run the test suite.)
+#
+# Like preview.yml this is OPT-IN. It stays off until you wire up your own
+# Cloudflare account:
+#
+#   1. Set the repo VARIABLE `CLOUDFLARE_ACCOUNT_ID`
+#      (Settings → Secrets and variables → Actions → Variables tab) to your
+#      Cloudflare account ID.
+#   2. Set the repo SECRET `CLOUDFLARE_API_TOKEN`
+#      (same page → Secrets tab) to an API token created from the
+#      "Edit Cloudflare Workers" template, with "D1:Edit" permission added
+#      (the template alone can't run D1 migrations).
+#
+# `bun run setup` must have filled in the real production wrangler IDs
+# (D1 database_id, R2 bucket, etc.) and committed them, or `wrangler deploy`
+# will fail. Production uses the default (top-level) wrangler.jsonc env.
+name: Deploy Production
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+
+concurrency:
+  group: deploy-production
+  # Never cancel an in-flight production deploy.
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    name: Deploy to Cloudflare (production)
+    runs-on: ubuntu-latest
+    # Only on a green CI run for main, and only when credentials are wired up.
+    if: >-
+      ${{ github.event.workflow_run.conclusion == 'success'
+          && vars.CLOUDFLARE_ACCOUNT_ID != '' }}
+    timeout-minutes: 15
+    environment: production
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      # workflow_run checks out the default branch by default — pin to the
+      # exact commit that passed CI so we deploy what was tested.
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      # The job gate can only read the CLOUDFLARE_ACCOUNT_ID variable (secrets
+      # aren't readable in job-level `if`), so verify the token separately.
+      - name: Check Cloudflare credentials
+        run: |
+          if [ -z "$CLOUDFLARE_API_TOKEN" ]; then
+            echo "::error::CLOUDFLARE_ACCOUNT_ID is set but the CLOUDFLARE_API_TOKEN secret is missing or empty. Set it under Settings → Secrets and variables → Actions."
+            exit 1
+          fi
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Apply production D1 migrations
+        run: bun run db:migrate:remote
+
+      - name: Build
+        run: bun run build
+
+      - name: Deploy to Cloudflare Workers
+        run: bunx wrangler deploy
+
+      - name: Deploy summary
+        run: |
+          {
+            echo "### Production deploy"
+            echo
+            echo "Deployed commit \`${{ github.event.workflow_run.head_sha }}\` to Cloudflare Workers (production)."
+          } >> "$GITHUB_STEP_SUMMARY"
