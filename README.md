@@ -8,6 +8,12 @@
 
 > **The harness-first, AI-first SaaS starter.** Cloudflare Workers + React Router v7 + tRPC + D1 + Drizzle + Better Auth + Effect TS + ShadCN. Same runtime on your laptop and at the edge. Drop in any agent (Claude Code, Cursor, Codex) and ship real features by following retrieval-based docs, paste-able recipes, and deterministic verification gates.
 
+<p align="center">
+  <img src="docs/assets/harness-loop.gif" alt="The Harness Loop — /start-task → work → /verify-done → /ship-feature, gated by typecheck, test, and brain-sync" width="720">
+  <br>
+  <em>Every task runs the same loop. Deterministic gates keep the agent coherent across sessions.</em>
+</p>
+
 **Three pillars:**
 1. **Harness-first** — agents stay coherent across sessions via the [5-subsystem framework](.brain/HARNESS.md): instructions, state, verification, scope, lifecycle.
 2. **AI-first** — five project-local sub-agents, eight paste-able recipes, four deterministic slash commands, five grep-checkable non-negotiables.
@@ -41,6 +47,19 @@ If you're a human, scroll to [Quick Start](#quick-start). If you're an agent, sc
 - `.claude/hooks/brain-reminder.sh` — staged-path → relevant-doc reminder before commit
 - `.claude/commands/verify-done.md` — `/verify-done` slash command runs the full termination checklist
 - `CLAUDE.md` / `AGENTS.md` — kept byte-identical, both are the agent entry point
+
+---
+
+## In the wild
+
+Real apps built on this starter — same runtime, same harness, same conventions:
+
+| Project | What it is |
+|---------|------------|
+| [**home-karaoke**](https://github.com/SeanningTatum/home-karaoke) 🎤 | Open-source group karaoke — host a room on the big screen, guests scan a QR to search YouTube and add songs to a live shared queue. Extends the base with Cloudflare Durable Objects for the real-time queue. |
+| [**portfolio-v3**](https://github.com/SeanningTatum/portfolio-v3) | Sean's personal portfolio — the starter stripped down to a content-first site on the edge. |
+
+Shipped something on it? Open a PR adding it here.
 
 ---
 
