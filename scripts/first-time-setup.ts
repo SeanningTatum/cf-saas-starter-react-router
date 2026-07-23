@@ -66,7 +66,11 @@ export function executeArgv(
   if (result.error || result.status !== 0) {
     return {
       error: true,
-      message: result.stderr || result.stdout || result.error?.message,
+      message:
+        result.stderr ||
+        result.stdout ||
+        result.error?.message ||
+        `${file} exited with status ${result.status ?? "unknown"}`,
     };
   }
   return result.stdout ?? "";
@@ -369,7 +373,7 @@ async function runDatabaseMigrations(accountId?: string) {
 //   - repo SECRET   CLOUDFLARE_API_TOKEN  (prompted, masked)
 // Uses the GitHub CLI (`gh`). No-ops with guidance if gh is missing, not
 // authenticated, or the repo has no GitHub remote — never blocks setup.
-async function setupGitHubCiCredentials(accountId?: string) {
+export async function setupGitHubCiCredentials(accountId?: string) {
   console.log("\n\x1b[36m🤖 Step 11: GitHub Actions CI/CD credentials\x1b[0m");
 
   const manualHint = () => {

@@ -15,10 +15,26 @@ vi.mock("node:child_process", () => ({
   })),
 }));
 
+// Stub the interactive prompt layer so the call-site integration test can drive
+// setupGitHubCiCredentials end-to-end without a TTY: confirm → yes, password →
+// dummy token, nothing cancelled, spinners are no-ops.
+vi.mock("@clack/prompts", () => ({
+  intro: vi.fn(),
+  outro: vi.fn(),
+  select: vi.fn(),
+  cancel: vi.fn(),
+  isCancel: vi.fn(() => false),
+  confirm: vi.fn(async () => true),
+  text: vi.fn(async () => "unused-account-id"),
+  password: vi.fn(async () => "dummy-api-token"),
+  spinner: vi.fn(() => ({ start: vi.fn(), stop: vi.fn(), message: vi.fn() })),
+}));
+
 import { execSync, spawnSync } from "node:child_process";
 import {
   buildAccountIdVariableArgs,
   executeArgv,
+  setupGitHubCiCredentials,
 } from "../first-time-setup";
 
 // A grab-bag of classic shell-injection payloads. If any of these were ever
@@ -121,4 +137,59 @@ describe("executeArgv (shell-injection safety)", () => {
     const result = executeArgv("gh", ["variable", "set", "X", "--body", "y"], true);
     expect(result).toEqual({ error: true, message: "spawn gh ENOENT" });
   });
+
+  it("falls back to a file/status message when a nonzero exit has no stdout/stderr/error", () => {
+    // A silent nonzero exit must never surface as `undefined` to the caller.
+    (spawnSync as unknown as ReturnType<typeof vi.fn>).mockReturnValueOnce({
+      status: 1,
+      stdout: "",
+      stderr: "",
+      error: undefined,
+    });
+    const result = executeArgv("gh", ["variable", "set", "X", "--body", "y"], true);
+    expect(result).toEqual({ error: true, message: "gh exited with status 1" });
+    // Guard specifically against the original bug (an undefined message).
+    expect((result as { message: string }).message).toBeTruthy();
+  });
+});
+
+describe("setupGitHubCiCredentials (call-site shell-injection regression)", () => {
+  it.each(INJECTION_PAYLOADS)(
+    "routes a malicious account id %j to gh via spawnSync argv and never through a shell string",
+    async (payload) => {
+      // gh-availability gate calls execSync; a string return means "gh present".
+      (execSync as unknown as ReturnType<typeof vi.fn>).mockReturnValue("");
+      (spawnSync as unknown as ReturnType<typeof vi.fn>).mockReturnValue({
+        status: 0,
+        stdout: "",
+        stderr: "",
+        error: undefined,
+      });
+
+      // Pass the payload as the accountId arg so the account-id text prompt is skipped.
+      await setupGitHubCiCredentials(payload);
+
+      // The account ID reached `gh` as a discrete argv element via spawnSync (no shell).
+      const ghVarCall = (
+        spawnSync as unknown as ReturnType<typeof vi.fn>
+      ).mock.calls.find(
+        ([file, args]: [string, string[]]) =>
+          file === "gh" &&
+          Array.isArray(args) &&
+          args[2] === "CLOUDFLARE_ACCOUNT_ID"
+      );
+      expect(ghVarCall).toBeDefined();
+      expect((ghVarCall![1] as string[])[4]).toBe(payload);
+
+      // The payload must NEVER be interpolated into a shell command string handed to
+      // execSync. This is what fails if someone reverts to `gh variable set ... --body
+      // "${accountId}"` (the original P1 bug).
+      for (const [cmd] of (
+        execSync as unknown as ReturnType<typeof vi.fn>
+      ).mock.calls) {
+        expect(String(cmd)).not.toContain(`--body "${payload}"`);
+        expect(String(cmd)).not.toContain(payload);
+      }
+    }
+  );
 });
