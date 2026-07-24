@@ -2,9 +2,11 @@
 # Harness invariant checker. Deterministic. No LLM. Exit non-zero on any violation.
 #
 # Two layers:
-#   1. `brain check` (brain-axi CLI) — the authoritative brain-state invariants:
-#        feature_list parses, ≤1 in-progress, feature doc paths, dependency refs,
-#        progress.md exists, plan meta.json, reviews.jsonl, verification Verdict lines.
+#   1. Brain-state invariants. If the brain-axi CLI (`brain`) is on PATH, run the authoritative
+#        `brain check` (feature_list parses, ≤1 in-progress, feature doc paths, dependency refs,
+#        progress.md exists, plan meta.json, reviews.jsonl, verification Verdict lines).
+#        If not, fall back to the core invariants inline with jq — NO network dependency, so
+#        offline dev still works (install brain-axi for the full check).
 #   2. Repo-specific supplement (below) — invariants brain-axi does not own:
 #        A. .brain/HARNESS.md exists
 #        B. init.sh exists and is executable
@@ -30,23 +32,65 @@ fail() { echo "  ✗ $1"; FAIL_COUNT=$((FAIL_COUNT+1)); FAIL=1; }
 echo "=== brain check (brain-axi CLI) ==="
 echo ""
 
-if command -v brain >/dev/null 2>&1; then
-  BRAIN_CMD=(brain)
-elif command -v npx >/dev/null 2>&1; then
-  # brain-axi is not published to npm — resolve from GitHub, pinned to a tag for reproducibility.
-  BRAIN_CMD=(npx -y github:SeanningTatum/brain-axi#v0.1.0)
-else
-  BRAIN_CMD=()
-fi
+FL=.brain/features/feature_list.json
 
-if [ ${#BRAIN_CMD[@]} -eq 0 ]; then
-  fail "brain-axi CLI not found (install: npm i -g github:SeanningTatum/brain-axi, or npx skills add SeanningTatum/brain-axi --skill brain)"
-else
-  if "${BRAIN_CMD[@]}" check; then
+if command -v brain >/dev/null 2>&1; then
+  # brain-axi on PATH: authoritative, no network dependency.
+  if brain check; then
     ok "brain check passed"
   else
     fail "brain check reported violations (see output above)"
   fi
+else
+  # No brain-axi on PATH. Run the core brain-state invariants inline with jq — NO network
+  # dependency, so offline dev + `init.sh --baseline` still work. (Install brain-axi for the
+  # full check, incl. plan/review integrity + verification Verdict lines:
+  #   npm i -g github:SeanningTatum/brain-axi   — or   npx -y github:SeanningTatum/brain-axi#v0.1.0 check)
+  echo "  brain CLI not on PATH — running inline brain-state checks (install brain-axi for full coverage)."
+  echo ""
+
+  # 1. feature_list.json parses
+  if jq empty "$FL" 2>/dev/null; then
+    ok "feature_list.json parses"
+  else
+    fail "feature_list.json does NOT parse as JSON"
+  fi
+
+  # 2. ≤1 in-progress
+  IN_PROGRESS=$(jq '[.features[] | select(.status=="in-progress")] | length' "$FL" 2>/dev/null || echo "ERR")
+  if [ "$IN_PROGRESS" = "ERR" ]; then
+    fail "could not count in-progress features"
+  elif [ "$IN_PROGRESS" -le 1 ]; then
+    ok "in-progress feature count = $IN_PROGRESS (max 1)"
+  else
+    IP_LIST=$(jq -r '.features[] | select(.status=="in-progress") | .id' "$FL" | tr '\n' ' ')
+    fail "in-progress count = $IN_PROGRESS — violates one-at-a-time policy. Conflicts: $IP_LIST"
+  fi
+
+  # 3. Every feature.doc resolves
+  MISSING_DOCS=$(jq -r '.features[] | select(.doc != null) | .doc' "$FL" | while read -r d; do
+    [ -f "$d" ] || echo "$d"
+  done)
+  if [ -z "$MISSING_DOCS" ]; then
+    ok "every feature doc path resolves"
+  else
+    fail "missing feature docs: $(echo $MISSING_DOCS | tr '\n' ' ')"
+  fi
+
+  # 4. Dependencies reference real feat-ids
+  ALL_IDS=$(jq -r '.features[].id' "$FL" | sort -u)
+  DANGLING=""
+  while IFS= read -r dep; do
+    echo "$ALL_IDS" | grep -qx "$dep" || DANGLING="$DANGLING $dep"
+  done < <(jq -r '.features[].dependencies[]?' "$FL" | sort -u)
+  if [ -z "$DANGLING" ]; then
+    ok "all dependencies reference real feat-ids"
+  else
+    fail "dangling dependency refs:$DANGLING"
+  fi
+
+  # 5. progress.md exists
+  [ -f .brain/runs/progress.md ] && ok ".brain/runs/progress.md exists" || fail ".brain/runs/progress.md missing"
 fi
 
 echo ""
