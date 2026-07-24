@@ -1,5 +1,5 @@
 #!/usr/bin/env bun
-import { execSync } from "node:child_process";
+import { execSync, spawnSync } from "node:child_process";
 import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
@@ -40,6 +40,49 @@ function executeCommand(
   } catch (error: any) {
     return { error: true, message: error.stdout || error.stderr };
   }
+}
+
+// Like executeCommand, but takes an explicit executable + argv array and runs
+// it WITHOUT a shell (spawnSync defaults to shell:false). Because each argument
+// is passed as a discrete element, user-supplied values can never be
+// interpreted by a shell — no command injection via `$(...)`, backticks, `;`,
+// etc. Use this (never executeCommand) whenever any argument comes from user
+// input. Returns the same shape as executeCommand: stdout string on success,
+// or { error: true, message } on failure.
+export function executeArgv(
+  file: string,
+  args: string[],
+  silent = false,
+  env?: Record<string, string>
+) {
+  if (!silent) {
+    console.log(`\x1b[33m${file} ${args.join(" ")}\x1b[0m`);
+  }
+  const result = spawnSync(file, args, {
+    encoding: "utf-8",
+    stdio: silent ? "pipe" : "inherit",
+    env: env ? { ...process.env, ...env } : undefined,
+  });
+  if (result.error || result.status !== 0) {
+    return {
+      error: true,
+      message:
+        result.stderr ||
+        result.stdout ||
+        result.error?.message ||
+        `${file} exited with status ${result.status ?? "unknown"}`,
+    };
+  }
+  return result.stdout ?? "";
+}
+
+// Builds the argv for setting the CLOUDFLARE_ACCOUNT_ID repo variable via `gh`.
+// Kept as a pure function so the account ID is always carried as a single,
+// discrete argv element (index 4) — passed to spawnSync without a shell it is
+// treated as a literal string, so a crafted value like `foo"$(touch /tmp/pwned)"`
+// can never execute in the developer's shell.
+export function buildAccountIdVariableArgs(accountId: string): string[] {
+  return ["variable", "set", "CLOUDFLARE_ACCOUNT_ID", "--body", accountId];
 }
 
 async function prompt(message: string, defaultValue: string): Promise<string> {
@@ -330,7 +373,7 @@ async function runDatabaseMigrations(accountId?: string) {
 //   - repo SECRET   CLOUDFLARE_API_TOKEN  (prompted, masked)
 // Uses the GitHub CLI (`gh`). No-ops with guidance if gh is missing, not
 // authenticated, or the repo has no GitHub remote — never blocks setup.
-async function setupGitHubCiCredentials(accountId?: string) {
+export async function setupGitHubCiCredentials(accountId?: string) {
   console.log("\n\x1b[36m🤖 Step 11: GitHub Actions CI/CD credentials\x1b[0m");
 
   const manualHint = () => {
@@ -382,8 +425,12 @@ async function setupGitHubCiCredentials(accountId?: string) {
 
   const varSpinner = spinner();
   varSpinner.start("Setting CLOUDFLARE_ACCOUNT_ID variable...");
-  const varResult = executeCommand(
-    `gh variable set CLOUDFLARE_ACCOUNT_ID --body "${resolvedAccountId}"`,
+  // Pass the account ID as a discrete argv entry via spawnSync (no shell) so a
+  // crafted value can't inject commands into the developer's shell. See
+  // buildAccountIdVariableArgs / executeArgv.
+  const varResult = executeArgv(
+    "gh",
+    buildAccountIdVariableArgs(resolvedAccountId),
     true
   );
   if (varResult && typeof varResult === "object" && varResult.error) {
@@ -726,7 +773,11 @@ async function main() {
   outro("✨ Happy building! 🎉");
 }
 
-main().catch((error) => {
-  console.error("\x1b[31mUnexpected error:\x1b[0m", error);
-  process.exit(1);
-});
+// Only run the interactive setup when executed directly (e.g. `bun setup`),
+// not when imported (e.g. by unit tests). Mirrors scripts/seed-preview.ts.
+if (import.meta.main) {
+  main().catch((error) => {
+    console.error("\x1b[31mUnexpected error:\x1b[0m", error);
+    process.exit(1);
+  });
+}
