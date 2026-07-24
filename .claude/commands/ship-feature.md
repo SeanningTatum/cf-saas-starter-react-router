@@ -21,13 +21,15 @@ Steps:
    - This flips `feature_list.json` to `shipped`, screenshot-checks, appends a `brain progress` checkpoint, and runs `brain check`. Source evidence from the verify-done report — do not invent.
    - If it exits non-zero — stop, surface the violation; the ship is incomplete.
 
-6. **Close the run note** if one was opened: `brain runs append <slug> --step "shipped" --observed "<evidence + commit SHA(s)>"`.
+6. **Sync the human-facing index** — `brain ship` updates `feature_list.json` (authoritative) but not the mirror table in `.brain/features/index.md`. Flip that feature's **Status** column to `shipped` and bump its **Last updated** date so the index doesn't disagree with the tracker.
 
-7. **Report**:
+7. **Close the run note** if one was opened: `brain runs append <slug> --step "shipped" --observed "<evidence + commit SHA(s)>"`.
+
+8. **Report**:
    ```
    Shipped: <slug> <name>
    Evidence: <one-line>
-   Files updated: feature_list.json (via brain ship), features/<slug>/<slug>.md, runs/progress.md (via brain ship), run note (if existed)
+   Files updated: feature_list.json (via brain ship), features/<slug>/<slug>.md, features/index.md, runs/progress.md (via brain ship), run note (if existed)
    brain check: PASS
 
    Next: commit & push, or pick up next feature.
