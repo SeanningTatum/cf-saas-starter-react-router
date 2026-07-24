@@ -19,7 +19,7 @@
 2. **AI-first** — five project-local sub-agents, eight paste-able recipes, four deterministic slash commands, five grep-checkable non-negotiables.
 3. **DX that just works** — `bun install` + `bun run dev` and you're live. `bun run scripts/first-time-setup.ts` gets you from zero to deployed Worker in ~3 minutes. Local dev runs the same Workers runtime that ships to production.
 
-📦 **Latest release:** [`v1.0.0` — The Agent-First SaaS Starter](https://github.com/SeanningTatum/cf-saas-starter-react-router/releases/latest)
+📦 **Latest release:** [`v1.2.0` — The Boilerplate Audited Itself](https://github.com/SeanningTatum/cf-saas-starter-react-router/releases/tag/v1.2.0)
 
 If you're a human, scroll to [Quick Start](#quick-start). If you're an agent, scroll to [How To Work In This Repo](#how-to-work-in-this-repo) — it tells you which docs to open before writing code.
 
