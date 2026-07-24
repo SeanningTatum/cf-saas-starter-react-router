@@ -18,6 +18,19 @@ This repo follows the **5-subsystem framework** from [walkinglabs/learn-harness-
 
 Every concrete artifact below maps to one of those five.
 
+## The interface: the brain-axi CLI
+
+State, verification, and lifecycle are driven by the **[brain-axi](https://github.com/SeanningTatum/brain-axi) CLI** (`brain`) rather than by hand-editing files. The CLI reads/writes `.brain/` and emits token-efficient TOON with a `help[]` block on every command, so an agent self-bootstraps.
+
+- **Orient:** `brain` · `brain progress` · `brain features`
+- **Look up:** `brain docs <section>` · `brain docs view <sec/file>` · `brain search "<q>"` · `brain features view <slug>`
+- **Record:** `brain progress add …` · `brain runs append <slug> …` · `brain features set-status <slug> …` · `brain ship <slug> --evidence …`
+- **Verify:** `brain check` (brain-state invariants) — wrapped by [`scripts/harness-check.sh`](../scripts/harness-check.sh) which adds repo-only checks
+- **Playbooks:** `brain playbook plan|verify|execute`
+- **Setup:** `brain setup --app claude` (session-start context hook)
+
+Install: `npx skills add SeanningTatum/brain-axi --skill brain`. The slash commands, `init.sh`, and `scripts/harness-check.sh` are **thin repo-specific wrappers** on top of the CLI — they add bun/CF steps (baseline, typecheck, e2e, feature-verify) the generic CLI does not own. Prefer `brain` over reading raw files.
+
 ---
 
 ## 1. Instructions — Recipe Shelf
@@ -41,11 +54,11 @@ The agent's reading list. Layered from generic to specific.
 
 What is true *right now*.
 
-| File | Purpose | Update cadence |
-|------|---------|----------------|
-| [`features/feature_list.json`](features/feature_list.json) | Machine-readable feature status, dependencies, evidence. Source of truth for "what's in flight." | On every status change |
-| [`runs/progress.md`](runs/progress.md) | Rolling session cursor — newest entry on top, ≤5 lines per checkpoint. Read at session start. | Each meaningful checkpoint |
-| [`runs/<YYYY-MM-DD>-<slug>.md`](runs/) | Per-task deep state — baselines, dead ends, decisions, verbatim test output | During the task |
+| File | Purpose | CLI access |
+|------|---------|------------|
+| [`features/feature_list.json`](features/feature_list.json) | Machine-readable feature status, dependencies, evidence. Source of truth for "what's in flight." | read: `brain features` / `brain features view <slug>`; write: `brain features set-status <slug> …` / `brain ship <slug> …` |
+| [`runs/progress.md`](runs/progress.md) | Rolling session cursor — newest entry on top, ≤5 lines per checkpoint. Read at session start. | read: `brain progress`; write: `brain progress add --summary … --next …` |
+| [`runs/<YYYY-MM-DD>-<slug>.md`](runs/) | Per-task deep state — baselines, dead ends, decisions, verbatim test output | read: `brain runs` / `brain runs view <name>`; write: `brain runs append <slug> --step … --observed …` |
 | [`CHANGELOG.md`](CHANGELOG.md) | High-level architectural / brain shifts (NOT code changelog — `git log` is) | On architectural change |
 | `features/<slug>/<slug>.md` "Changelog" table | Per-feature behaviour changes | On every behavior change to feature |
 
@@ -63,7 +76,8 @@ Externalises "am I done?" so the agent does not declare victory on a half-built 
 | [`features/<slug>/verifications/`](features/index.md) | Browser-walk evidence per feature (screenshots + verdict), produced by the `feature-verifier` sub-agent — the feature-level proof layer, co-located in each feature's folder |
 | [`/verify-done`](../.claude/commands/verify-done.md) slash command | Same checklist, runnable mid-conversation |
 | [`init.sh --baseline`](../init.sh) | Captures pre-change baseline (typecheck + test + harness-check) so post-change failures aren't blamed on you |
-| [`scripts/harness-check.sh`](../scripts/harness-check.sh) | Deterministic harness invariant checker (11 checks: feature-list state, brain link integrity, sub-agent frontmatter, sync rule). Run by `init.sh` + CI. |
+| `brain check` | brain-axi's deterministic brain-state invariants: feature_list parses, ≤1 in-progress, feature doc paths, dependency refs, progress.md, plan/review integrity, verification Verdict lines. The authoritative state gate. |
+| [`scripts/harness-check.sh`](../scripts/harness-check.sh) | Wraps `brain check`, then adds repo-only invariants brain-axi does not own: HARNESS.md exists, init.sh executable, CLAUDE↔AGENTS sync, sub-agent frontmatter, core recipes, dead internal links. Run by `init.sh` + CI. |
 | [`.github/workflows/ci.yml`](../.github/workflows/ci.yml) | CI gate mirroring `init.sh` baseline + `build` + `e2e` smoke specs + non-negotiables grep sweep on every PR |
 | [`.claude/hooks/brain-reminder.sh`](../.claude/hooks/brain-reminder.sh) | Pre-commit hook listing brain docs the staged paths likely affect (deterministic, no LLM, never blocks — CI is the gate) |
 | [`app/lib/effect-trpc.ts`](../app/lib/effect-trpc.ts) `appErrorToTRPC` | Compile-time exhaustiveness on tagged-error → HTTP code via `assertNever`. New tagged error w/o case = TS error. |
@@ -89,14 +103,14 @@ Bootstrap, handoff, recovery.
 
 | Step | Tool |
 |------|------|
-| Session start | SessionStart hook prints harness pointers ([`.claude/hooks/session-start.sh`](../.claude/hooks/session-start.sh)) |
+| Session start | SessionStart hook injects `brain context` (live brain state) + harness pointers ([`.claude/hooks/session-start.sh`](../.claude/hooks/session-start.sh)); install the canonical brain-axi hook with `brain setup --app claude` |
 | Project bootstrap | [`./init.sh`](../init.sh) — install + typegen + migrate + typecheck + test |
 | Baseline before edit | [`./init.sh --baseline`](../init.sh) — capture green state |
 | Task framing | `/start-task` ([`commands/start-task.md`](../.claude/commands/start-task.md)) — runs baseline, reads brain, opens run note, writes progress entry |
-| Mid-task checkpoint | Append entry to [`runs/progress.md`](runs/progress.md) |
+| Mid-task checkpoint | `brain progress add --summary … --next …` (appends to [`runs/progress.md`](runs/progress.md)) |
 | Task done | `/verify-done` ([`commands/verify-done.md`](../.claude/commands/verify-done.md)) — full checklist |
-| Ship a feature | `/ship-feature` ([`commands/ship-feature.md`](../.claude/commands/ship-feature.md)) — verify-done + flip `feature_list.json` + update feature MD + close run note + harness-check |
-| Validate harness | `/harness-check` ([`commands/harness-check.md`](../.claude/commands/harness-check.md)) — runs [`scripts/harness-check.sh`](../scripts/harness-check.sh) (11 deterministic invariants) |
+| Ship a feature | `/ship-feature` ([`commands/ship-feature.md`](../.claude/commands/ship-feature.md)) — verify-done + `brain ship <slug> --evidence` (flips `feature_list.json`, checkpoints, runs `brain check`) + update feature MD + close run note |
+| Validate harness | `/harness-check` ([`commands/harness-check.md`](../.claude/commands/harness-check.md)) — runs [`scripts/harness-check.sh`](../scripts/harness-check.sh) = `brain check` + repo supplement |
 | Pre-commit | [`brain-reminder.sh`](../.claude/hooks/brain-reminder.sh) hook lists brain files to update |
 | Architectural shift | Append to [`CHANGELOG.md`](CHANGELOG.md) |
 

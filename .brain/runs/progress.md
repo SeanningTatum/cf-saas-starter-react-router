@@ -21,6 +21,14 @@
 
 ---
 
+## 2026-07-23 — Harness adopts brain-axi CLI as primary interface (hybrid): slash commands + harness-check.sh wrap brain check/ship/progress; docs (AGENTS/HARNESS/README/recipes) rewritten; CI installs brain-axi
+- branch: `docs/readme-harness-loop-in-the-wild`
+- in-progress feature: none
+- run note: none
+- next: create-pr-with-review
+
+---
+
 ## 2026-07-15 — audit-remediation shipped
 - branch: `refactor/audit-remediation` (PR opening; from main @ 8547acb)
 - in-progress feature: none (cross-cutting quality task, closed)

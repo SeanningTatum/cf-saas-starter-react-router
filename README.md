@@ -109,7 +109,8 @@ You're working in a codebase with strict conventions. Skipping the brain will co
 - Runs `./init.sh --baseline` to capture pre-change typecheck + test state
 - Reads the brain (matching `.brain/<folder>/index.md` + triggered files)
 - Frames task: intent, domain, scope, affected feature(s)
-- Validates scope policy via `jq` on [`feature_list.json`](.brain/features/feature_list.json) — refuses if >1 feature in progress
+- Reads brain state via the `brain` CLI (`brain`, `brain progress`, `brain docs`, `brain search`)
+- Validates scope policy via `brain features --status in-progress` (`brain check` enforces one-in-progress) — refuses if >1 feature in progress
 - Opens run note (`.brain/runs/<date>-<slug>.md`) for >30min work
 - Appends entry to [`.brain/runs/progress.md`](.brain/runs/progress.md)
 
@@ -125,7 +126,7 @@ You're working in a codebase with strict conventions. Skipping the brain will co
 - Close the run note if you opened one
 
 **Shipping a feature — [`/ship-feature`](.claude/commands/ship-feature.md)**
-- Runs `/verify-done`, flips `feature_list.json` status to `"shipped"`, updates per-feature MD changelog, closes run note, runs `/harness-check`. Refuses on red.
+- Runs `/verify-done`, then `brain ship <slug> --evidence "..."` (flips `feature_list.json` to `"shipped"`, screenshot-check, checkpoint, `brain check`), updates per-feature MD changelog, closes run note. Refuses on red.
 
 **The five non-negotiables** (also in [`.brain/codebase/effect-ts.md`](.brain/codebase/effect-ts.md)):
 
@@ -141,14 +142,16 @@ You're working in a codebase with strict conventions. Skipping the brain will co
 
 This repo follows the [walkinglabs 5-subsystem harness framework](https://github.com/walkinglabs/learn-harness-engineering/tree/main/skills/harness-creator). The harness is everything that keeps coding agents reliable across sessions: instructions, state, verification, scope, and lifecycle.
 
-Single explainer: [`.brain/HARNESS.md`](.brain/HARNESS.md). The 5 subsystems mapped to actual files:
+The `.brain/` harness is driven by the **[brain-axi](https://github.com/SeanningTatum/brain-axi) CLI** (`brain`) — it reads/writes brain state (features, checkpoints, docs, runs, verifications) with token-efficient TOON output, so agents prefer it over hand-editing files. Install: `npx skills add SeanningTatum/brain-axi --skill brain`.
+
+Single explainer: [`.brain/HARNESS.md`](.brain/HARNESS.md). The 5 subsystems mapped to actual files (and the `brain` commands that drive them):
 
 | Subsystem | Artifacts |
 |-----------|-----------|
-| **Instructions** | [`CLAUDE.md`](CLAUDE.md) / [`AGENTS.md`](AGENTS.md), [`.brain/`](.brain/) (rules, recipes, features) |
-| **State** | [`.brain/features/feature_list.json`](.brain/features/feature_list.json) (machine-readable status), [`.brain/runs/progress.md`](.brain/runs/progress.md) (rolling cursor), per-task `.brain/runs/<date>-<slug>.md` |
-| **Verification** | [`.brain/recipes/99-verify-done.md`](.brain/recipes/99-verify-done.md), [`/verify-done`](.claude/commands/verify-done.md), [`scripts/harness-check.sh`](scripts/harness-check.sh) |
-| **Scope** | One in-progress feature at a time (enforced by [`feature_list.json`](.brain/features/feature_list.json) + [`harness-check.sh`](scripts/harness-check.sh)); ≤2 features per diff |
+| **Instructions** | [`CLAUDE.md`](CLAUDE.md) / [`AGENTS.md`](AGENTS.md), [`.brain/`](.brain/) (rules, recipes, features) — via `brain docs` / `brain search` |
+| **State** | [`.brain/features/feature_list.json`](.brain/features/feature_list.json) (via `brain features` / `set-status` / `ship`), [`.brain/runs/progress.md`](.brain/runs/progress.md) (via `brain progress`), per-task run notes (via `brain runs`) |
+| **Verification** | [`.brain/recipes/99-verify-done.md`](.brain/recipes/99-verify-done.md), [`/verify-done`](.claude/commands/verify-done.md), `brain check` + [`scripts/harness-check.sh`](scripts/harness-check.sh), `brain playbook verify` |
+| **Scope** | One in-progress feature at a time (enforced by `brain check` + [`harness-check.sh`](scripts/harness-check.sh)); ≤2 features per diff |
 | **Lifecycle** | [`init.sh`](init.sh), [`.claude/hooks/session-start.sh`](.claude/hooks/session-start.sh) (SessionStart hook), [`.claude/hooks/brain-reminder.sh`](.claude/hooks/brain-reminder.sh) (PreToolUse hook) |
 
 ### Slash commands (deterministic gates)
@@ -156,11 +159,11 @@ Single explainer: [`.brain/HARNESS.md`](.brain/HARNESS.md). The 5 subsystems map
 | Command | What it does |
 |---------|--------------|
 | [`/start-task`](.claude/commands/start-task.md) | Kickoff: `init.sh --baseline` + brain read + framing + run note + progress entry. Refuses if scope policy violated. |
-| [`/verify-done`](.claude/commands/verify-done.md) | Full verification: typecheck/test/e2e/build/UI/brain coherence/non-negotiables. |
-| [`/ship-feature`](.claude/commands/ship-feature.md) | Close out: `/verify-done` + flip `feature_list.json` + update feature MD + close run note + `/harness-check`. |
-| [`/harness-check`](.claude/commands/harness-check.md) | 10 deterministic invariants via [`scripts/harness-check.sh`](scripts/harness-check.sh) (no LLM, exits non-zero on drift). |
+| [`/verify-done`](.claude/commands/verify-done.md) | Full verification: typecheck/test/e2e/build/UI/brain coherence/non-negotiables + `brain check`. |
+| [`/ship-feature`](.claude/commands/ship-feature.md) | Close out: `/verify-done` + `brain ship <slug> --evidence` (flip + checkpoint + `brain check`) + update feature MD + close run note. |
+| [`/harness-check`](.claude/commands/harness-check.md) | `brain check` (brain-state invariants) + repo supplement (sync rule, sub-agent frontmatter, dead links) via [`scripts/harness-check.sh`](scripts/harness-check.sh) — no LLM, exits non-zero on drift. |
 
-The two scripts (`init.sh` + `scripts/harness-check.sh`) are pure shell — run them yourself anytime to verify state without invoking Claude.
+`scripts/harness-check.sh` wraps `brain check` and adds the repo-only invariants; run it (or `init.sh`) yourself anytime to verify state without invoking Claude. Requires the `brain` CLI on PATH (`npm i -g github:SeanningTatum/brain-axi#v0.1.0`).
 
 ### Project-local sub-agents ([`.claude/agents/`](.claude/agents/))
 
