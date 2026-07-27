@@ -122,7 +122,10 @@ const timingMiddleware = t.middleware(async ({ next, path }) => {
 
   log.debug("Procedure starting");
 
-  const waitMs = devDelayMs(t._config.isDev);
+  // Read the module constant, not `t._config.isDev`: same value (it is what
+  // `create` was given), but it keeps both call sites on one source of truth
+  // and off tRPC's internal config shape.
+  const waitMs = devDelayMs(isDev);
   if (waitMs > 0) {
     await new Promise((resolve) => setTimeout(resolve, waitMs));
   }

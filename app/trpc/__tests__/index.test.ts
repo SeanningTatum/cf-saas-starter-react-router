@@ -5,7 +5,7 @@ import { devDelayMs, stripStackOutsideDev } from "..";
  * These cover the two symptoms of one bug: tRPC derives `isDev` from
  * `process.env.NODE_ENV`, which does not exist on Workers, so it resolved to
  * `true` in production — leaking stacks in error payloads and sleeping
- * 100-500ms on every procedure call.
+ * 100-499ms on every procedure call.
  *
  * Both helpers take `dev` as an argument rather than reading the module-level
  * `isDev`, because `import.meta.env.DEV` is always `true` under vitest and the
