@@ -300,7 +300,7 @@ const t = initTRPC.context<typeof createTRPCContext>().create({
 });
 ```
 
-Left unset, `config.isDev` was `true` in production, which meant every error response carried `data.stack` (tRPC only attaches it when `isDev`) and `timingMiddleware`'s deliberate 100–500ms delay ran on every real request — measured at a 335ms p50 against a 111ms static baseline, restored to 103ms once wired.
+Left unset, `config.isDev` was `true` in production, which meant every error response carried `data.stack` (tRPC only attaches it when `isDev`) and `timingMiddleware`'s deliberate 100–499ms delay ran on every real request — measured at a 335ms p50 against a 111ms static baseline, restored to 103ms once wired.
 
 Two habits that follow from it:
 

@@ -54,6 +54,28 @@ describe("stripStackOutsideDev", () => {
     expect(original.data.stack).toContain("TRPCError: UNAUTHORIZED");
   });
 
+  it("preserves every data key except stack", () => {
+    // The `as S` cast in `stripStackOutsideDev` means TypeScript cannot verify
+    // that required `data` fields survive the spread — this test is that
+    // guarantee, so an edit that drops an extra key fails here rather than
+    // compiling silently.
+    const kept = {
+      code: "BAD_REQUEST",
+      httpStatus: 400,
+      path: "user.create",
+      schemaError: null,
+      customField: { nested: true },
+    };
+
+    const result = stripStackOutsideDev(
+      { message: "m", data: { ...kept, stack: "trace" } },
+      false
+    );
+
+    expect(Object.keys(result.data).sort()).toEqual(Object.keys(kept).sort());
+    expect(result.data).toEqual(kept);
+  });
+
   it("preserves the schemaError the errorFormatter attaches", () => {
     const withSchemaError = {
       message: "BAD_REQUEST",
@@ -93,7 +115,8 @@ describe("devDelayMs", () => {
     expect(devDelayMs(false, 0.999)).toBe(0);
   });
 
-  it("stays within 100-500ms in dev", () => {
+  it("stays within 100-499ms in dev", () => {
+    // Upper bound is 499, not 500: Math.random() is exclusive of 1.
     expect(devDelayMs(true, 0)).toBe(100);
     expect(devDelayMs(true, 0.5)).toBe(300);
     expect(devDelayMs(true, 0.9999)).toBe(499);
@@ -103,7 +126,7 @@ describe("devDelayMs", () => {
     for (let i = 0; i < 50; i++) {
       const ms = devDelayMs(true);
       expect(ms).toBeGreaterThanOrEqual(100);
-      expect(ms).toBeLessThanOrEqual(500);
+      expect(ms).toBeLessThanOrEqual(499);
     }
   });
 });

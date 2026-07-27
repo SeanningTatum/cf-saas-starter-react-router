@@ -66,7 +66,10 @@ export const stripStackOutsideDev = <S extends ErrorShapeLike>(
 ): S => {
   if (dev || shape.data?.stack === undefined) return shape;
   const { stack: _stack, ...data } = shape.data;
-  // Same shape minus one optional field; TS cannot narrow that through a spread.
+  // TS cannot prove a generic spread still satisfies `S`, so the cast is
+  // unavoidable — which means "every other key survives" is guaranteed by the
+  // tests, not by the compiler. `preserves every data key except stack` in
+  // `__tests__/index.test.ts` is that guarantee; keep it if this is edited.
   return { ...shape, data } as S;
 };
 
@@ -74,6 +77,8 @@ export const stripStackOutsideDev = <S extends ErrorShapeLike>(
  * Artificial latency that makes loading states visible while developing.
  * Returns 0 outside dev — it ran in production for every procedure until
  * tRPC's `isDev` was wired up (see `initTRPC.create` below).
+ *
+ * Range is [100, 499]ms, not [100, 500]: `Math.random()` is exclusive of 1.
  */
 export const devDelayMs = (dev: boolean, random: number = Math.random()) =>
   dev ? Math.floor(random * 400) + 100 : 0;
@@ -93,7 +98,7 @@ const t = initTRPC.context<typeof createTRPCContext>().create({
   // tRPC defaults `isDev` to `process.env.NODE_ENV !== "production"`. There is
   // no `process.env` on Workers, so it resolved to `true` in production: every
   // error response carried a `stack`, and `timingMiddleware` below slept
-  // 100-500ms on every procedure call. Pass the repo's build-time flag
+  // 100-499ms on every procedure call. Pass the repo's build-time flag
   // (`import.meta.env.DEV`, statically replaced by Vite) instead.
   isDev,
   errorFormatter: ({ shape, error }) =>
