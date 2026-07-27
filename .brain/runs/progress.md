@@ -21,6 +21,14 @@
 
 ---
 
+## 2026-07-27 — v1.3.0 deployed to production by hand: version d8c10b0b at cf-saas-starter-react-router.royal-snowflake-2464.workers.dev. Root-caused why CD is red: NOT a token scope issue — wrangler.jsonc commits placeholder D1 ids by design, so CI's deploy.yml always hits database_id 00000000-... (code 10181). deploy.yml only works in apps generated FROM the template. Patched real ids locally, migrated (no-op), deployed, restored placeholders; tree clean.
+- branch: `main`
+- in-progress feature: none
+- run note: none
+- next: Two follow-ups: (1) gate deploy.yml + preview.yml behind a 'real IDs present' check so they skip instead of failing red in the template repo, or document the red as expected; (2) unauthenticated tRPC errors leak data.stack — tRPC only strips stacks when process.env.NODE_ENV==='production', which never holds on Workers. Set an explicit errorFormatter.
+
+---
+
 ## 2026-07-27 — Shipped v1.3.0 'Nothing Left To Remember' (squash de06009, tag v1.3.0) covering PRs #12-#16 unreleased since v1.2.0. PR #16 (layer-rule auto-surfacing PreToolUse hook) merged after 3 pre-PR Greptile rounds + 1 post-PR round: 6 findings, 6 fixed, 0 escalated. Unit tests 228->251 plus 58 offline hook checks; harness-check at 10 invariants.
 - branch: `main`
 - in-progress feature: none
