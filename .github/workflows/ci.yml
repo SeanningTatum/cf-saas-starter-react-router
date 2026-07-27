@@ -141,7 +141,12 @@ jobs:
           if echo "$ADDED" | grep -E '\bthrow new\b' | grep -vE 'tryPromise|//|throw new TRPCError'; then
             VIOLATIONS="$VIOLATIONS\n- Bare \`throw\` (use Effect.fail)"
           fi
-          if echo "$ADDED" | grep -E 'process\.env'; then
+          # Comment-only lines are exempt: documenting the trap (e.g. "tRPC
+          # defaults isDev from process.env.NODE_ENV, which Workers lack") has
+          # to be possible, and a rule that punishes writing that down pushes
+          # the knowledge out of the codebase. Only leading-comment lines are
+          # skipped, so `const x = process.env.FOO; // note` is still caught.
+          if echo "$ADDED" | grep -E 'process\.env' | grep -vE '^\+[[:space:]]*(//|\*|/\*)'; then
             VIOLATIONS="$VIOLATIONS\n- process.env (use CloudflareEnv Tag)"
           fi
           if echo "$ADDED" | grep -E 'from "zod"|from \"zod/'; then
