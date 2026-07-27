@@ -21,6 +21,14 @@
 
 ---
 
+## 2026-07-27 — All 3 tRPC isDev PRs green: template#17, home-karaoke#14, portfolio-v3#6. Fixed a self-inflicted CI regression along the way — the non-negotiables sweep greps added lines for process.env with no comment carve-out, so comments DOCUMENTING the trap tripped the gate. Exempted leading-comment lines only (stricter than the adjacent throw-new rule's bare grep -vE '//'), applied as a targeted one-rule edit in each repo since downstream ci.yml files have legit divergence (no brain-axi install; portfolio-v3 has NODE_OPTIONS for a runner OOM + a throw-new-Response allowance).
+- branch: `fix/trpc-isdev-production`
+- in-progress feature: none
+- run note: none
+- next: Merge + deploy home-karaoke#14 and portfolio-v3#6 — both apps still leak data.stack and pay the delay until then. Template prod already fixed. Open: (1) audit other deps sniffing process.env; (2) throw-new sweep rule has the same comment hole (grep -vE '//' matches anywhere, so 'throw new Error(); // ok' slips through); (3) template's own deploy.yml/preview.yml should skip cleanly instead of failing red — confirmed they PASS in generated apps, so it is placeholder-ID-specific; (4) no tracking of which generated apps exist or what revision they forked from.
+
+---
+
 ## 2026-07-27 — tRPC isDev bug fixed + propagated. Root cause: tRPC defaults isDev from process.env.NODE_ENV, absent on Workers, so it was true in production -> data.stack in every error payload + timingMiddleware's 100-499ms dev delay on every real request. Template PR #17 (Greptile 4/5 -> 2 findings fixed -> refined to one isDev source of truth); prod measured 335ms p50 -> 103ms, stack gone. Confirmed the SAME bug in both downstream apps (app/trpc/index.ts byte-identical to pre-fix template) and reproduced it live: home-karaoke +300ms, portfolio-v3 +215ms, stack leaked in both. Propagation PRs: home-karaoke#14 (Greptile 5/5, 0 findings), portfolio-v3#6 (4/5, 2 stylistic, fixed). All three repos now share an identical app/trpc/index.ts.
 - branch: `fix/trpc-isdev-production`
 - in-progress feature: none
