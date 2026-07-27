@@ -1,0 +1,267 @@
+#!/usr/bin/env bash
+# Tests for .claude/hooks/rule-router.sh — the path -> .brain/rules layer mapping.
+# Deterministic, offline, no LLM. Run standalone or via scripts/harness-check.sh.
+#
+# Each case gets a fresh TMPDIR so the hook's once-per-session dedupe is controlled.
+
+set -uo pipefail
+
+cd "$(dirname "$0")/.."
+REPO=$PWD
+HOOK=.claude/hooks/rule-router.sh
+
+PASS=0
+FAILED=0
+
+ok()   { echo "  ✓ $1"; PASS=$((PASS+1)); }
+bad()  { echo "  ✗ $1"; FAILED=$((FAILED+1)); }
+
+# payload <file_path> [session] [extra_json_for_tool_input]
+payload() {
+  jq -nc \
+    --arg f "$1" \
+    --arg s "${2:-sess-1}" \
+    --arg cwd "$REPO" \
+    --arg extra "${3:-}" \
+    '{
+      session_id: $s,
+      cwd: $cwd,
+      hook_event_name: "PreToolUse",
+      tool_name: "Edit",
+      tool_input: ({ file_path: $f } + (if $extra == "" then {} else { old_string: $extra } end))
+    }'
+}
+
+# run <file_path> [session] [extra] -> hook stdout
+run() {
+  local tmp
+  tmp=$(mktemp -d)
+  payload "$1" "${2:-sess-1}" "${3:-}" | TMPDIR="$tmp" bash "$HOOK"
+  rm -rf "$tmp"
+}
+
+ctx() { jq -r '.hookSpecificOutput.additionalContext // ""' 2>/dev/null; }
+
+# --- 1. each layer maps to its rule ------------------------------------------
+declare -a CASES=(
+  "app/services/billing.ts|services"
+  "app/auth/server.ts|services"
+  "app/repositories/user.ts|repository"
+  "app/db/schema.ts|repository"
+  "app/components/ui/button.tsx|frontend"
+  "app/app.css|frontend"
+  "app/trpc/routes/user.ts|routes"
+  "wrangler.jsonc|cloudflare"
+  "workers/app.ts|cloudflare"
+  "workflows/import.ts|cloudflare"
+  "worker-configuration.d.ts|cloudflare"
+  "app/models/errors/user.ts|errors"
+  "e2e/smoke.spec.ts|library"
+)
+for c in "${CASES[@]}"; do
+  path=${c%%|*}; want=${c##*|}
+  got=$(run "$path" | ctx)
+  if grep -q "\.brain/rules/${want}\.md" <<<"$got"; then
+    ok "$path → rules/${want}.md"
+  else
+    bad "$path → expected rules/${want}.md, got: ${got:-<empty>}"
+  fi
+done
+
+# --- 2. multi-layer files emit every matching rule ---------------------------
+got=$(run "app/routes/dashboard/settings.tsx" | ctx)
+if grep -q "rules/frontend.md" <<<"$got" && grep -q "rules/routes.md" <<<"$got"; then
+  ok "app/routes/**/*.tsx → frontend.md + routes.md"
+else
+  bad "nested .tsx route should hit frontend + routes, got: ${got:-<empty>}"
+fi
+
+got=$(run "app/lib/effect-trpc.ts" | ctx)
+if grep -q "rules/library.md" <<<"$got" && grep -q "rules/errors.md" <<<"$got"; then
+  ok "app/lib/effect-trpc.ts → library.md + errors.md"
+else
+  bad "effect-trpc.ts should hit library + errors, got: ${got:-<empty>}"
+fi
+
+# --- 3. absolute paths are relativized --------------------------------------
+got=$(run "$REPO/app/services/billing.ts" | ctx)
+if grep -q "rules/services.md" <<<"$got"; then
+  ok "absolute file_path relativized against cwd"
+else
+  bad "absolute path not relativized, got: ${got:-<empty>}"
+fi
+
+# --- 4. unmatched paths stay silent -----------------------------------------
+for p in "README.md" ".brain/rules/services.md" "app/models/user.ts" "package.json"; do
+  got=$(run "$p")
+  [ -z "$got" ] && ok "no output for $p" || bad "expected silence for $p, got: $got"
+done
+
+# --- 5. once per rule per session -------------------------------------------
+tmp=$(mktemp -d)
+first=$(payload "app/services/a.ts" sess-dedupe | TMPDIR="$tmp" bash "$HOOK")
+second=$(payload "app/services/b.ts" sess-dedupe | TMPDIR="$tmp" bash "$HOOK")
+third=$(payload "app/repositories/a.ts" sess-dedupe | TMPDIR="$tmp" bash "$HOOK")
+rm -rf "$tmp"
+[ -n "$first" ] && ok "first edit in a layer emits" || bad "first edit emitted nothing"
+[ -z "$second" ] && ok "second edit in same layer is silent (dedupe)" || bad "dedupe failed: $second"
+grep -q "rules/repository.md" <<<"$(ctx <<<"$third")" \
+  && ok "a different layer still emits in the same session" \
+  || bad "second layer suppressed: ${third:-<empty>}"
+
+# --- 5b. a stale session dir must not take the live one with it -------------
+# `mkdir -p` does not refresh an existing dir's mtime, so pruning after it could delete the dir
+# the hook is about to write markers into — silently re-firing an already-emitted rule. Backdate
+# both the session dir and its marker, then confirm dedupe still holds.
+tmp=$(mktemp -d)
+payload "app/services/a.ts" sess-stale | TMPDIR="$tmp" bash "$HOOK" >/dev/null
+STALE="$tmp/claude-rule-router/sess-stale"
+if [ -e "$STALE/services" ]; then
+  touch -t 202001010000 "$STALE/services" "$STALE" 2>/dev/null
+  again=$(payload "app/services/b.ts" sess-stale | TMPDIR="$tmp" bash "$HOOK")
+  [ -z "$again" ] && ok "stale-dir prune does not re-fire an emitted rule" \
+    || bad "prune deleted the live session dir — rule re-fired: $again"
+  # An unrelated old session must still be collected.
+  mkdir -p "$tmp/claude-rule-router/sess-ancient"
+  touch -t 202001010000 "$tmp/claude-rule-router/sess-ancient" 2>/dev/null
+  payload "app/services/c.ts" sess-stale | TMPDIR="$tmp" bash "$HOOK" >/dev/null
+  [ -d "$tmp/claude-rule-router/sess-ancient" ] \
+    && bad "old unrelated session dir was not pruned" \
+    || ok "old unrelated session dirs are pruned"
+else
+  bad "expected a marker file at $STALE/services"
+fi
+rm -rf "$tmp"
+
+# --- 6. different sessions are independent ----------------------------------
+tmp=$(mktemp -d)
+payload "app/services/a.ts" sess-A | TMPDIR="$tmp" bash "$HOOK" >/dev/null
+other=$(payload "app/services/a.ts" sess-B | TMPDIR="$tmp" bash "$HOOK")
+rm -rf "$tmp"
+[ -n "$other" ] && ok "a new session re-emits" || bad "session isolation failed"
+
+# --- 7. hostile tool_input does not break parsing ---------------------------
+NASTY='{"file_path": "/etc/passwd"} `rm -rf /` "quoted" $(whoami)
+newline'
+got=$(run "app/services/billing.ts" sess-nasty "$NASTY" | ctx)
+if grep -q "rules/services.md" <<<"$got"; then
+  ok "quotes/newlines/shell metachars in old_string are inert"
+else
+  bad "hostile old_string broke the hook, got: ${got:-<empty>}"
+fi
+
+# --- 8. output contract -----------------------------------------------------
+raw=$(run "app/services/billing.ts" sess-contract)
+if jq -e '.hookSpecificOutput.hookEventName == "PreToolUse"
+          and (.hookSpecificOutput.additionalContext | type == "string")
+          and .suppressOutput == true' >/dev/null 2>&1 <<<"$raw"; then
+  ok "emits valid PreToolUse hookSpecificOutput JSON"
+else
+  bad "output contract broken: $raw"
+fi
+
+# --- 9. degrades safely -----------------------------------------------------
+got=$(jq -nc '{session_id:"s", tool_name:"Edit", tool_input:{}}' | bash "$HOOK")
+[ -z "$got" ] && ok "missing file_path → no output" || bad "expected silence, got: $got"
+
+got=$(printf '' | bash "$HOOK")
+[ -z "$got" ] && ok "empty stdin → no output" || bad "expected silence, got: $got"
+
+got=$(printf 'not json' | bash "$HOOK" 2>/dev/null)
+[ -z "$got" ] && ok "non-JSON stdin → no output" || bad "expected silence, got: $got"
+
+# An empty array under `set -u` aborts on bash 3.2 if expanded as ${arr[@]}; the unmatched-path
+# branch only reads ${#arr[@]}, which is safe. Assert no stderr so that stays true.
+err=$(run "README.md" 2>&1 >/dev/null)
+[ -z "$err" ] && ok "unmatched path writes nothing to stderr (bash 3.2 safe)" \
+  || bad "hook wrote to stderr on unmatched path: $err"
+err=$(run "app/services/billing.ts" sess-stderr 2>&1 >/dev/null)
+[ -z "$err" ] && ok "matched path writes nothing to stderr" \
+  || bad "hook wrote to stderr on matched path: $err"
+if grep -vE '^[[:space:]]*#' "$HOOK" | grep -qE 'declare -A|mapfile'; then
+  bad "declare -A / mapfile used (both unavailable on macOS bash 3.2)"
+else
+  ok "hook avoids declare -A / mapfile"
+fi
+
+# --- 10. glob table matches .brain/rules/index.md ----------------------------
+INDEX=.brain/rules/index.md
+RULES="frontend cloudflare repository services routes library errors"
+
+MISSING=""
+for r in $RULES; do
+  grep -q "add ${r} ;;" "$HOOK" || MISSING="$MISSING $r"
+  [ -f ".brain/rules/${r}.md" ] || MISSING="$MISSING ${r}(no-doc)"
+done
+[ -z "$MISSING" ] && ok "all 7 layer rules are routed and exist" || bad "unrouted/missing rules:$MISSING"
+
+# The two sides are compared *behaviourally*, not textually: the doc writes `**` where the hook's
+# `case` writes `*` (a case `*` already spans `/`), and the doc lists subpaths the hook covers with
+# one broader glob (`app/lib/schemas/**` under `app/lib/*`). Textual set-equality would fail on
+# formatting alone, so instead every documented glob is turned into a concrete sample path and the
+# hook must route it to that rule — and every hook glob's literal prefix must appear in that rule's
+# documented Touches cell. A one-sided glob change fails one direction or the other.
+
+# doc_globs <rule> — backticked globs in the Touches cell (column 4) of that rule's row
+doc_globs() {
+  grep -F "[\`$1.md\`]($1.md)" "$INDEX" \
+    | head -1 \
+    | awk -F'|' '{print $4}' \
+    | grep -oE '`[^`]+`' \
+    | tr -d '`'
+}
+
+# hook_globs <rule> — case patterns on the `add <rule>` arm
+hook_globs() {
+  grep -E "add ${1} ;;" "$HOOK" \
+    | head -1 \
+    | sed -E 's/^[[:space:]]*case "\$REL" in //; s/\).*$//' \
+    | tr '|' '\n'
+}
+
+# sample_path <glob> — a concrete path the glob is meant to match
+sample_path() { sed -E 's#\*\*/#sub/#g; s#\*\*#sample#g; s#\*#sample#g' <<<"$1"; }
+
+# Direction 1: every documented glob must actually be routed to its rule.
+UNROUTED=""
+for r in $RULES; do
+  while IFS= read -r g; do
+    [ -z "$g" ] && continue
+    sample=$(sample_path "$g")
+    got=$(run "$sample" "sess-sync-${r}-$(tr -dc 'A-Za-z0-9' <<<"$g")" | ctx)
+    grep -q "rules/${r}\.md" <<<"$got" || UNROUTED="$UNROUTED ${r}:${g}(sample=${sample})"
+  done < <(doc_globs "$r")
+done
+[ -z "$UNROUTED" ] \
+  && ok "every documented Touches glob routes to its rule" \
+  || bad "documented globs the hook does not route:$UNROUTED"
+
+# Direction 2: every hook glob must be documented in that rule's Touches cell.
+UNDOCUMENTED=""
+for r in $RULES; do
+  cell=$(doc_globs "$r" | tr '\n' ' ')
+  while IFS= read -r g; do
+    [ -z "$g" ] && continue
+    # Compare on the literal prefix before the first wildcard — `app/auth/*` vs `app/auth/**`.
+    prefix=${g%%\**}
+    [ -z "$prefix" ] && continue
+    case "$cell" in
+      *"$prefix"*) ;;
+      *) UNDOCUMENTED="$UNDOCUMENTED ${r}:${g}" ;;
+    esac
+  done < <(hook_globs "$r")
+done
+[ -z "$UNDOCUMENTED" ] \
+  && ok "every hook glob is documented in its Touches cell" \
+  || bad "hook globs missing from rules/index.md:$UNDOCUMENTED"
+
+# Guard the guard: both directions must be able to fail. A doc glob the hook does not route, and a
+# hook glob absent from the doc, are each detectable.
+probe=$(run "$(sample_path 'app/nonexistent-layer/**')" sess-sync-negative | ctx)
+[ -z "$probe" ] \
+  && ok "sync check can fail (an unrouted path really produces nothing)" \
+  || bad "negative control matched something: $probe"
+
+echo ""
+echo "rule-router: passed $PASS, failed $FAILED"
+[ "$FAILED" -eq 0 ] && exit 0 || exit 1

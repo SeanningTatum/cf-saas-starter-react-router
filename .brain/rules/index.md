@@ -15,12 +15,27 @@ Domain-specific lint-style rules organized by **architecture layer**. Each rule 
 | # | Rule | Touches | Read when |
 |---|------|---------|-----------|
 | 1 | [`frontend.md`](frontend.md) | `app/components/**`, `app/routes/**/*.tsx`, `app/app.css` | Building UI, forms (Effect Schema + `effectResolver`), modals, Tailwind / CSS variables, AI prompts in UI, Playwright manual verification |
-| 2 | [`cloudflare.md`](cloudflare.md) | `wrangler.jsonc`, `worker-configuration.d.ts`, `workers/app.ts`, `workflows/**` | Adding bindings, env vars, secrets, Workflows definition, anything Workers-runtime-specific |
+| 2 | [`cloudflare.md`](cloudflare.md) | `wrangler.jsonc`, `worker-configuration.d.ts`, `workers/**`, `workflows/**` | Adding bindings, env vars, secrets, Workflows definition, anything Workers-runtime-specific |
 | 3 | [`repository.md`](repository.md) | `app/repositories/**`, `app/db/schema.ts` | Writing or modifying an `Effect.Service` repository, Drizzle schema, repo input schemas |
-| 4 | [`services.md`](services.md) | `app/services/**`, `app/auth/server.ts` | Adding a new external client / Effect service, wiring Better Auth, Workflows, Session, Logger |
+| 4 | [`services.md`](services.md) | `app/services/**`, `app/auth/**` | Adding a new external client / Effect service, wiring Better Auth, Workflows, Session, Logger |
 | 5 | [`routes.md`](routes.md) | `app/routes/**`, `app/trpc/**` | Adding a tRPC procedure, React Router loader, auth-gating, parallel data fetching |
 | 6 | [`library.md`](library.md) | `app/lib/**`, `app/lib/schemas/**`, `app/lib/constants/**`, `e2e/**` | Adding a helper, Effect Schema, constant, AI structured-output config, unit test, e2e test |
 | 7 | [`errors.md`](errors.md) | `app/models/errors/**`, `app/lib/effect-trpc.ts` | Adding a tagged error, mapping it to a TRPC code, using error helpers in repos |
+
+## Auto-surfacing (Claude Code)
+
+The **Touches** column above is not just documentation — it is the routing table for
+[`.claude/hooks/rule-router.sh`](../../.claude/hooks/rule-router.sh), a `PreToolUse(Edit|Write|NotebookEdit)`
+hook that injects the matching rule pointer when a file in that layer is touched. Fires once per
+layer per session; the injected context lands on the turn *after* the tool call, so it governs the
+edits that follow (and prompts a re-check of the one just made).
+
+This is the Claude-native **trigger** for these rules, not a copy of them — `.brain/rules/` stays the
+single source of truth so Cursor / Codex / Aider keep reading the same files via `AGENTS.md`.
+
+> **If you change a layer's globs, change both:** the table above and the `case` block in the hook.
+> [`scripts/test-rule-router.sh`](../../scripts/test-rule-router.sh) (run by `scripts/harness-check.sh`)
+> asserts every one of the 7 rules is routed and its doc exists.
 
 ## Layer dependency direction
 

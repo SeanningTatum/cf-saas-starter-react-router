@@ -14,6 +14,8 @@
 #        D. Every .claude/agents/*.md has YAML frontmatter with name + description
 #        E. Core recipes (00-before-task, 99-verify-done) exist
 #        F. Brain internal markdown links resolve
+#        G. Every hook script referenced by .claude/settings.json exists and is executable
+#        H. The rule-router path->rules mapping passes its own tests
 #
 # brain-axi is the primary harness interface; this script layers the repo-only checks on top.
 
@@ -159,6 +161,36 @@ if [ -z "$DEAD_LINKS" ]; then
 else
   fail "dead internal links found:$(printf '%s' "$DEAD_LINKS")"
 fi
+
+# G. Hook scripts referenced by settings.json exist and are executable
+HOOK_BAD=""
+if [ -f .claude/settings.json ]; then
+  while IFS= read -r h; do
+    [ -z "$h" ] && continue
+    [ -f "$h" ] || { HOOK_BAD="$HOOK_BAD $h(missing)"; continue; }
+    [ -x "$h" ] || HOOK_BAD="$HOOK_BAD $h(not-executable)"
+  done < <(jq -r '[.hooks // {} | .[][]? | .hooks[]? | .command // empty] | .[]' .claude/settings.json 2>/dev/null \
+             | grep -oE '\.claude/hooks/[A-Za-z0-9_.-]+\.sh' | sort -u)
+fi
+if [ -z "$HOOK_BAD" ]; then
+  ok "all settings.json hook scripts exist and are executable"
+else
+  fail "broken hook wiring:$HOOK_BAD"
+fi
+
+# H. Hook behaviour tests (path -> docs mappings)
+for t in test-rule-router test-brain-reminder; do
+  if [ -x "scripts/${t}.sh" ]; then
+    if T_OUT=$("./scripts/${t}.sh" 2>&1); then
+      ok "${t#test-} hook tests pass ($(grep -c '✓' <<<"$T_OUT") checks)"
+    else
+      fail "${t#test-} hook tests failed:"
+      printf '%s\n' "$T_OUT" | sed 's/^/      /'
+    fi
+  else
+    fail "scripts/${t}.sh missing or not executable"
+  fi
+done
 
 echo ""
 echo "=== Summary ==="
