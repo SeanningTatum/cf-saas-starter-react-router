@@ -146,6 +146,20 @@ got=$(printf '' | bash "$HOOK")
 got=$(printf 'not json' | bash "$HOOK" 2>/dev/null)
 [ -z "$got" ] && ok "non-JSON stdin → no output" || bad "expected silence, got: $got"
 
+# An empty array under `set -u` aborts on bash 3.2 if expanded as ${arr[@]}; the unmatched-path
+# branch only reads ${#arr[@]}, which is safe. Assert no stderr so that stays true.
+err=$(run "README.md" 2>&1 >/dev/null)
+[ -z "$err" ] && ok "unmatched path writes nothing to stderr (bash 3.2 safe)" \
+  || bad "hook wrote to stderr on unmatched path: $err"
+err=$(run "app/services/billing.ts" sess-stderr 2>&1 >/dev/null)
+[ -z "$err" ] && ok "matched path writes nothing to stderr" \
+  || bad "hook wrote to stderr on matched path: $err"
+if grep -vE '^[[:space:]]*#' "$HOOK" | grep -qE 'declare -A|mapfile'; then
+  bad "declare -A / mapfile used (both unavailable on macOS bash 3.2)"
+else
+  ok "hook avoids declare -A / mapfile"
+fi
+
 # --- 10. glob table matches .brain/rules/index.md ----------------------------
 MISSING=""
 for r in frontend cloudflare repository services routes library errors; do
