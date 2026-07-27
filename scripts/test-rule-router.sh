@@ -185,12 +185,82 @@ else
 fi
 
 # --- 10. glob table matches .brain/rules/index.md ----------------------------
+INDEX=.brain/rules/index.md
+RULES="frontend cloudflare repository services routes library errors"
+
 MISSING=""
-for r in frontend cloudflare repository services routes library errors; do
+for r in $RULES; do
   grep -q "add ${r} ;;" "$HOOK" || MISSING="$MISSING $r"
   [ -f ".brain/rules/${r}.md" ] || MISSING="$MISSING ${r}(no-doc)"
 done
 [ -z "$MISSING" ] && ok "all 7 layer rules are routed and exist" || bad "unrouted/missing rules:$MISSING"
+
+# The two sides are compared *behaviourally*, not textually: the doc writes `**` where the hook's
+# `case` writes `*` (a case `*` already spans `/`), and the doc lists subpaths the hook covers with
+# one broader glob (`app/lib/schemas/**` under `app/lib/*`). Textual set-equality would fail on
+# formatting alone, so instead every documented glob is turned into a concrete sample path and the
+# hook must route it to that rule — and every hook glob's literal prefix must appear in that rule's
+# documented Touches cell. A one-sided glob change fails one direction or the other.
+
+# doc_globs <rule> — backticked globs in the Touches cell (column 4) of that rule's row
+doc_globs() {
+  grep -F "[\`$1.md\`]($1.md)" "$INDEX" \
+    | head -1 \
+    | awk -F'|' '{print $4}' \
+    | grep -oE '`[^`]+`' \
+    | tr -d '`'
+}
+
+# hook_globs <rule> — case patterns on the `add <rule>` arm
+hook_globs() {
+  grep -E "add ${1} ;;" "$HOOK" \
+    | head -1 \
+    | sed -E 's/^[[:space:]]*case "\$REL" in //; s/\).*$//' \
+    | tr '|' '\n'
+}
+
+# sample_path <glob> — a concrete path the glob is meant to match
+sample_path() { sed -E 's#\*\*/#sub/#g; s#\*\*#sample#g; s#\*#sample#g' <<<"$1"; }
+
+# Direction 1: every documented glob must actually be routed to its rule.
+UNROUTED=""
+for r in $RULES; do
+  while IFS= read -r g; do
+    [ -z "$g" ] && continue
+    sample=$(sample_path "$g")
+    got=$(run "$sample" "sess-sync-${r}-$(tr -dc 'A-Za-z0-9' <<<"$g")" | ctx)
+    grep -q "rules/${r}\.md" <<<"$got" || UNROUTED="$UNROUTED ${r}:${g}(sample=${sample})"
+  done < <(doc_globs "$r")
+done
+[ -z "$UNROUTED" ] \
+  && ok "every documented Touches glob routes to its rule" \
+  || bad "documented globs the hook does not route:$UNROUTED"
+
+# Direction 2: every hook glob must be documented in that rule's Touches cell.
+UNDOCUMENTED=""
+for r in $RULES; do
+  cell=$(doc_globs "$r" | tr '\n' ' ')
+  while IFS= read -r g; do
+    [ -z "$g" ] && continue
+    # Compare on the literal prefix before the first wildcard — `app/auth/*` vs `app/auth/**`.
+    prefix=${g%%\**}
+    [ -z "$prefix" ] && continue
+    case "$cell" in
+      *"$prefix"*) ;;
+      *) UNDOCUMENTED="$UNDOCUMENTED ${r}:${g}" ;;
+    esac
+  done < <(hook_globs "$r")
+done
+[ -z "$UNDOCUMENTED" ] \
+  && ok "every hook glob is documented in its Touches cell" \
+  || bad "hook globs missing from rules/index.md:$UNDOCUMENTED"
+
+# Guard the guard: both directions must be able to fail. A doc glob the hook does not route, and a
+# hook glob absent from the doc, are each detectable.
+probe=$(run "$(sample_path 'app/nonexistent-layer/**')" sess-sync-negative | ctx)
+[ -z "$probe" ] \
+  && ok "sync check can fail (an unrouted path really produces nothing)" \
+  || bad "negative control matched something: $probe"
 
 echo ""
 echo "rule-router: passed $PASS, failed $FAILED"
