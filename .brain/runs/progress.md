@@ -21,6 +21,14 @@
 
 ---
 
+## 2026-07-27 — Shipped v1.3.0 'Nothing Left To Remember' (squash de06009, tag v1.3.0) covering PRs #12-#16 unreleased since v1.2.0. PR #16 (layer-rule auto-surfacing PreToolUse hook) merged after 3 pre-PR Greptile rounds + 1 post-PR round: 6 findings, 6 fixed, 0 escalated. Unit tests 228->251 plus 58 offline hook checks; harness-check at 10 invariants.
+- branch: `main`
+- in-progress feature: none
+- run note: none
+- next: Cloudflare API token is misscoped — deploy.yml + preview.yml have failed since 2026-07-24 (Info error from wrangler, D1 unreachable). Fix the token permissions (Workers + D1:Edit) or CD/preview stay dead.
+
+---
+
 ## 2026-07-27 — Layer rules auto-surface via new .claude/hooks/rule-router.sh (PreToolUse Edit|Write|NotebookEdit → .brain/rules layer doc, once per layer per session, pointers only). Decided AGAINST moving .brain/rules into Claude-specific rules: tool-agnostic AGENTS.md contract + no glob-scoped rules format in Claude Code; the gap was the trigger, not the storage. Fixed 2 pre-existing brain-reminder.sh bugs (declare -A dies on macOS bash 3.2; PreToolUse stdout never reaches the model). 48 new hook tests + harness-check invariants G/H enforce glob-table sync in CI.
 - branch: `harness/adopt-brain-axi-cli`
 - in-progress feature: none
