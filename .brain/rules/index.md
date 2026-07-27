@@ -22,6 +22,21 @@ Domain-specific lint-style rules organized by **architecture layer**. Each rule 
 | 6 | [`library.md`](library.md) | `app/lib/**`, `app/lib/schemas/**`, `app/lib/constants/**`, `e2e/**` | Adding a helper, Effect Schema, constant, AI structured-output config, unit test, e2e test |
 | 7 | [`errors.md`](errors.md) | `app/models/errors/**`, `app/lib/effect-trpc.ts` | Adding a tagged error, mapping it to a TRPC code, using error helpers in repos |
 
+## Auto-surfacing (Claude Code)
+
+The **Touches** column above is not just documentation — it is the routing table for
+[`.claude/hooks/rule-router.sh`](../../.claude/hooks/rule-router.sh), a `PreToolUse(Edit|Write|NotebookEdit)`
+hook that injects the matching rule pointer when a file in that layer is touched. Fires once per
+layer per session; the injected context lands on the turn *after* the tool call, so it governs the
+edits that follow (and prompts a re-check of the one just made).
+
+This is the Claude-native **trigger** for these rules, not a copy of them — `.brain/rules/` stays the
+single source of truth so Cursor / Codex / Aider keep reading the same files via `AGENTS.md`.
+
+> **If you change a layer's globs, change both:** the table above and the `case` block in the hook.
+> [`scripts/test-rule-router.sh`](../../scripts/test-rule-router.sh) (run by `scripts/harness-check.sh`)
+> asserts every one of the 7 rules is routed and its doc exists.
+
 ## Layer dependency direction
 
 ```

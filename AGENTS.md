@@ -45,7 +45,7 @@ Thin wrappers that sequence `brain` CLI commands with repo-specific steps (basel
 | [`/start-task`](.claude/commands/start-task.md) | Kickoff — `init.sh --baseline` + brain read (`brain`/`brain progress`/`brain docs`/`brain search`) + framing + run note + `brain progress add`. Refuses if scope policy violated. |
 | [`/verify-done`](.claude/commands/verify-done.md) | Full verification — typecheck/test/e2e smoke/build/feature-verification/brain coherence/non-negotiables + `brain check`. |
 | [`/ship-feature`](.claude/commands/ship-feature.md) | Close out — verify-done + `brain ship <slug> --evidence` (flips `feature_list.json`, checkpoints, runs `brain check`) + update feature MD + close run note. |
-| [`/harness-check`](.claude/commands/harness-check.md) | Validate harness invariants via [`scripts/harness-check.sh`](scripts/harness-check.sh) = `brain check` + repo supplement (sync rule, sub-agent frontmatter, dead links). Deterministic, no LLM, exits non-zero on drift. |
+| [`/harness-check`](.claude/commands/harness-check.md) | Validate harness invariants via [`scripts/harness-check.sh`](scripts/harness-check.sh) = `brain check` + repo supplement (sync rule, sub-agent frontmatter, dead links, hook wiring + hook tests). Deterministic, no LLM, exits non-zero on drift. |
 
 ## Harness — what holds this together
 
@@ -55,7 +55,9 @@ This repo follows the [5-subsystem harness framework](.brain/HARNESS.md). The fi
 2. **State** — [`.brain/features/feature_list.json`](.brain/features/feature_list.json) (via `brain features` / `set-status` / `ship`), [`.brain/runs/progress.md`](.brain/runs/progress.md) (via `brain progress`), per-feature/task run notes (via `brain runs`)
 3. **Verification** — [`.brain/recipes/99-verify-done.md`](.brain/recipes/99-verify-done.md) + `/verify-done` + `brain check` + `brain playbook verify`
 4. **Scope** — see "Scope policy" below (enforced by `brain check` one-in-progress invariant)
-5. **Lifecycle** — [`init.sh`](init.sh) at repo root + SessionStart hook (`brain context`) in `.claude/`
+5. **Lifecycle** — [`init.sh`](init.sh) at repo root + hooks in `.claude/hooks/`: SessionStart (`brain context`), pre-edit rule routing ([`rule-router.sh`](.claude/hooks/rule-router.sh)), pre-commit brain reminder ([`brain-reminder.sh`](.claude/hooks/brain-reminder.sh))
+
+> **Rules auto-surface.** A `PreToolUse(Edit|Write|NotebookEdit)` hook maps the edited path to its `.brain/rules/` layer doc and injects the pointer — once per layer per session. `.brain/rules/` stays the single tool-agnostic source of truth; the hook is only the Claude-native trigger. Globs live in [`.brain/rules/index.md`](.brain/rules/index.md) and must stay in sync with the `case` block in the hook.
 
 ## Scope policy
 
@@ -124,7 +126,7 @@ Direct pointers (each rule is the canonical "do / don't" for one layer):
 brain                     # Harness dashboard (features, in-progress, last checkpoint) — brain-axi CLI
 brain check               # Brain-state invariants (feature_list, one-in-progress, doc paths, verifications)
 brain search "<query>"    # Find text anywhere in the brain
-./scripts/harness-check.sh # brain check + repo supplement (sync rule, sub-agent frontmatter, dead links)
+./scripts/harness-check.sh # brain check + repo supplement (sync rule, sub-agent frontmatter, dead links, hooks)
 ./init.sh                 # Harness bootstrap — install + migrate + typecheck + test (run start of session)
 ./init.sh --baseline      # Baseline only (typecheck + test) — used by 00-before-task.md
 bun run dev               # Dev server (auto-runs local DB migrations) → http://localhost:5173

@@ -41,7 +41,18 @@
             "if": "Bash(git commit*)",
             "timeout": 5,
             "statusMessage": "Checking which .brain/ docs to update",
-            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/brain-reminder.sh\" 2>&1 || true"
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/brain-reminder.sh\" || true"
+          }
+        ]
+      },
+      {
+        "matcher": "Edit|Write|NotebookEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "timeout": 5,
+            "statusMessage": "Routing to the .brain/rules layer doc",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/rule-router.sh\" || true"
           }
         ]
       }

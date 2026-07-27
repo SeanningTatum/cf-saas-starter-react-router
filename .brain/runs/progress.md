@@ -21,6 +21,14 @@
 
 ---
 
+## 2026-07-27 — Layer rules auto-surface via new .claude/hooks/rule-router.sh (PreToolUse Edit|Write|NotebookEdit → .brain/rules layer doc, once per layer per session, pointers only). Decided AGAINST moving .brain/rules into Claude-specific rules: tool-agnostic AGENTS.md contract + no glob-scoped rules format in Claude Code; the gap was the trigger, not the storage. Fixed 2 pre-existing brain-reminder.sh bugs (declare -A dies on macOS bash 3.2; PreToolUse stdout never reaches the model). 48 new hook tests + harness-check invariants G/H enforce glob-table sync in CI.
+- branch: `harness/adopt-brain-axi-cli`
+- in-progress feature: none
+- run note: none
+- next: create-pr-with-review
+
+---
+
 ## 2026-07-23 — Harness adopts brain-axi CLI as primary interface (hybrid): slash commands + harness-check.sh wrap brain check/ship/progress; docs (AGENTS/HARNESS/README/recipes) rewritten; CI installs brain-axi
 - branch: `docs/readme-harness-loop-in-the-wild`
 - in-progress feature: none
