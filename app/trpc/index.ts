@@ -4,6 +4,7 @@ import { Cause, Effect, Exit, ParseResult, Schema } from "effect";
 import { Session, SessionLive } from "@/services/session";
 import type { AppRuntime } from "@/runtime";
 import { loggers } from "@/lib/logger";
+import { isDev } from "@/lib/log-format";
 
 // Decision (fix 5): wire the already-tested `Session`/`SessionLive` service
 // in as the single source of truth for session resolution, rather than
@@ -44,6 +45,44 @@ export const createTRPCContext = async (opts: {
   };
 };
 
+/**
+ * Pure, parameterized helpers — same reasoning as `isLevelEnabled` in
+ * `lib/log-format.ts`: the module-level `isDev` is always `true` under vitest,
+ * so a production branch that read it directly would be untestable.
+ */
+
+// tRPC's shape also carries `message` / `code` alongside `data`; the index
+// signature keeps those (and any future additions) assignable.
+type ErrorShapeLike = { data?: Record<string, unknown>; [key: string]: unknown };
+
+/**
+ * Drop `stack` from an error shape outside dev. tRPC only includes it when its
+ * own `isDev` is set, so this is defence in depth rather than the primary fix —
+ * it keeps stacks out of client payloads even if that config regresses.
+ */
+export const stripStackOutsideDev = <S extends ErrorShapeLike>(
+  shape: S,
+  dev: boolean
+): S => {
+  if (dev || shape.data?.stack === undefined) return shape;
+  const { stack: _stack, ...data } = shape.data;
+  // TS cannot prove a generic spread still satisfies `S`, so the cast is
+  // unavoidable — which means "every other key survives" is guaranteed by the
+  // tests, not by the compiler. `preserves every data key except stack` in
+  // `__tests__/index.test.ts` is that guarantee; keep it if this is edited.
+  return { ...shape, data } as S;
+};
+
+/**
+ * Artificial latency that makes loading states visible while developing.
+ * Returns 0 outside dev — it ran in production for every procedure until
+ * tRPC's `isDev` was wired up (see `initTRPC.create` below).
+ *
+ * Range is [100, 499]ms, not [100, 500]: `Math.random()` is exclusive of 1.
+ */
+export const devDelayMs = (dev: boolean, random: number = Math.random()) =>
+  dev ? Math.floor(random * 400) + 100 : 0;
+
 const formatSchemaError = (cause: unknown) => {
   if (ParseResult.isParseError(cause)) {
     return ParseResult.ArrayFormatter.formatErrorSync(cause).map((issue) => ({
@@ -56,13 +95,23 @@ const formatSchemaError = (cause: unknown) => {
 
 const t = initTRPC.context<typeof createTRPCContext>().create({
   transformer: superjson,
-  errorFormatter: ({ shape, error }) => ({
-    ...shape,
-    data: {
-      ...shape.data,
-      schemaError: formatSchemaError(error.cause),
-    },
-  }),
+  // tRPC defaults `isDev` to `process.env.NODE_ENV !== "production"`. There is
+  // no `process.env` on Workers, so it resolved to `true` in production: every
+  // error response carried a `stack`, and `timingMiddleware` below slept
+  // 100-499ms on every procedure call. Pass the repo's build-time flag
+  // (`import.meta.env.DEV`, statically replaced by Vite) instead.
+  isDev,
+  errorFormatter: ({ shape, error }) =>
+    stripStackOutsideDev(
+      {
+        ...shape,
+        data: {
+          ...shape.data,
+          schemaError: formatSchemaError(error.cause),
+        },
+      },
+      isDev
+    ),
 });
 
 export const createTRPCRouter = t.router;
@@ -73,8 +122,11 @@ const timingMiddleware = t.middleware(async ({ next, path }) => {
 
   log.debug("Procedure starting");
 
-  if (t._config.isDev) {
-    const waitMs = Math.floor(Math.random() * 400) + 100;
+  // Read the module constant, not `t._config.isDev`: same value (it is what
+  // `create` was given), but it keeps both call sites on one source of truth
+  // and off tRPC's internal config shape.
+  const waitMs = devDelayMs(isDev);
+  if (waitMs > 0) {
     await new Promise((resolve) => setTimeout(resolve, waitMs));
   }
 
