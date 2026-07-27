@@ -109,6 +109,30 @@ grep -q "rules/repository.md" <<<"$(ctx <<<"$third")" \
   && ok "a different layer still emits in the same session" \
   || bad "second layer suppressed: ${third:-<empty>}"
 
+# --- 5b. a stale session dir must not take the live one with it -------------
+# `mkdir -p` does not refresh an existing dir's mtime, so pruning after it could delete the dir
+# the hook is about to write markers into — silently re-firing an already-emitted rule. Backdate
+# both the session dir and its marker, then confirm dedupe still holds.
+tmp=$(mktemp -d)
+payload "app/services/a.ts" sess-stale | TMPDIR="$tmp" bash "$HOOK" >/dev/null
+STALE="$tmp/claude-rule-router/sess-stale"
+if [ -e "$STALE/services" ]; then
+  touch -t 202001010000 "$STALE/services" "$STALE" 2>/dev/null
+  again=$(payload "app/services/b.ts" sess-stale | TMPDIR="$tmp" bash "$HOOK")
+  [ -z "$again" ] && ok "stale-dir prune does not re-fire an emitted rule" \
+    || bad "prune deleted the live session dir — rule re-fired: $again"
+  # An unrelated old session must still be collected.
+  mkdir -p "$tmp/claude-rule-router/sess-ancient"
+  touch -t 202001010000 "$tmp/claude-rule-router/sess-ancient" 2>/dev/null
+  payload "app/services/c.ts" sess-stale | TMPDIR="$tmp" bash "$HOOK" >/dev/null
+  [ -d "$tmp/claude-rule-router/sess-ancient" ] \
+    && bad "old unrelated session dir was not pruned" \
+    || ok "old unrelated session dirs are pruned"
+else
+  bad "expected a marker file at $STALE/services"
+fi
+rm -rf "$tmp"
+
 # --- 6. different sessions are independent ----------------------------------
 tmp=$(mktemp -d)
 payload "app/services/a.ts" sess-A | TMPDIR="$tmp" bash "$HOOK" >/dev/null

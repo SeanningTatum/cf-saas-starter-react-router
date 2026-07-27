@@ -38,7 +38,10 @@ for path in \
   "app/models/errors/" "app/auth/" "wrangler.jsonc" "workflows/" \
   "app/lib/" "app/components/" "app/routes/" "app/i18n/"
 do
-  if grep -q "^${path}" <<< "$STAGED"; then
+  # Escape dots: unescaped, `app/db/schema.ts` is a BRE where `.` is a wildcard, so a staged
+  # `app/db/schema_ts` would spuriously match.
+  pattern=${path//./\\.}
+  if grep -q "^${pattern}" <<< "$STAGED"; then
     HITS+=("  • ${path} → $(hint_for "$path")")
   fi
 done

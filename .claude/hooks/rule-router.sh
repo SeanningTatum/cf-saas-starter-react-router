@@ -67,10 +67,22 @@ SESSION=${SESSION//[^A-Za-z0-9_-]/}
 
 STATE_ROOT="${TMPDIR:-/tmp}/claude-rule-router"
 STATE="$STATE_ROOT/$SESSION"
-mkdir -p "$STATE" 2>/dev/null || exit 0
 
 # Drop session state older than a day so $TMPDIR does not accumulate marker dirs.
-find "$STATE_ROOT" -mindepth 1 -maxdepth 1 -type d -mtime +1 -exec rm -rf {} + 2>/dev/null || true
+#
+# `! -name "$SESSION"` is load-bearing: the live session's dir must never be a prune candidate.
+# `mkdir -p` does not refresh an existing dir's mtime, so a session open >24h whose markers were
+# all written on day one has a stale dir — pruning it (before *or* after mkdir) would drop markers
+# still in use and silently re-fire an already-emitted rule. SESSION is sanitized to
+# [A-Za-z0-9_-] above, so it carries no glob metacharacters into -name.
+# Guarded by -d so the common case does not fork `find` at all.
+[ -d "$STATE_ROOT" ] &&
+  find "$STATE_ROOT" -mindepth 1 -maxdepth 1 -type d ! -name "$SESSION" -mtime +1 \
+    -exec rm -rf {} + 2>/dev/null
+
+mkdir -p "$STATE" 2>/dev/null || exit 0
+# Refresh mtime so this session ages out a day after its last edit, not its first.
+touch "$STATE" 2>/dev/null || true
 
 LINES=""
 for rule in "${HITS[@]}"; do

@@ -84,6 +84,14 @@ else
   bad "expected services + frontend, got: ${got:-<empty>}"
 fi
 
+# --- 3b. dots in prefixes are literal, not regex wildcards ------------------
+# Unescaped, `app/db/schema.ts` is a BRE where `.` matches any character.
+for near in "app/db/schema_ts" "wranglerxjsonc"; do
+  got=$(run "$near" | ctx)
+  [ -z "$got" ] && ok "$near does not match (dots are literal)" \
+    || bad "$near spuriously matched — unescaped dot in pattern: $got"
+done
+
 # --- 4. silence when nothing relevant is staged -----------------------------
 got=$(run "README.md")
 [ -z "$got" ] && ok "no output for unmapped staged path" || bad "expected silence, got: $got"

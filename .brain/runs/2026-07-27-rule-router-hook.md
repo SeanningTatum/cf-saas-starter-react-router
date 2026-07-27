@@ -137,6 +137,29 @@ passed: 10
 failed: 0
 ```
 
+## Step 5 — pre-PR Greptile round
+
+_2026-07-27_
+
+First review (on the pre-rebase branch): confidence 5/5, zero formal findings. Second review, after
+rebasing onto current `origin/main`: confidence 3/5, **3 findings**, all real.
+
+1. **`find -mtime +1` could delete the live session's marker dir.** Greptile proposed reordering the
+   prune before `mkdir -p`. I wrote the regression test first — and it **failed against that fix**: if
+   the *live* session's own dir is stale (open >24h, all markers written on day one), pruning before
+   `mkdir` deletes it just as surely as pruning after. The actual fix is to exclude the current
+   session from the prune (`! -name "$SESSION"`), plus `touch` so a dir ages out a day after its
+   *last* edit rather than its first. Worth remembering: the suggested fix was directionally right
+   and materially incomplete — the test is what caught the difference.
+2. **Unescaped dots in `brain-reminder.sh`'s grep patterns.** `^app/db/schema.ts` is a BRE, so `.` is
+   a wildcard and a staged `app/db/schema_ts` would match. Dots now escaped.
+3. **Prune forked `find` even when `$STATE_ROOT` did not exist.** Added a `[ -d ]` guard.
+
+Triaged 1 as P2 rather than P1 (Greptile's label): no security / payments / migration / API-break /
+ambiguity trigger, bounded single-concern fix, and Greptile's own reasoning said "safe to merge with
+the ordering fixed". 3 auto-fixed, 0 escalated. Suites: 48 → **55 checks** (35 rule-router, 20
+brain-reminder).
+
 ---
 
 ## Final
@@ -153,3 +176,7 @@ _Closed: 2026-07-27_
     `hookSpecificOutput.additionalContext` — and it arrives on the turn *after* the tool call.
   - macOS bash is **3.2**. No `declare -A`, no `mapfile`. Any hook using them dies silently under
     `set -u`. Use `case` tables. Both hook suites now guard this.
+  - `mkdir -p` on an existing directory does **not** refresh its mtime, so any `find -mtime`
+    reaper must exclude the live session explicitly — reordering the calls is not enough.
+  - A path used as a `grep` pattern is a regex. `.` in `schema.ts` / `wrangler.jsonc` is a
+    wildcard unless escaped.
