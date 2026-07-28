@@ -2,6 +2,8 @@
 
 **Required for every helper and every repository.**
 
+> **Who writes them:** delegate to the [`test-author`](../../.claude/agents/test-author.md) sub-agent after implementing a feature/fix. It writes to `**/__tests__/**` only, and every test has to name the regression it catches — the goal is a small set of tests that fail on real business-logic breakage, not a coverage number. Bans tautologies, mock theater, snapshots, and library tests.
+
 ## Tooling
 
 - Vitest — unit-test runner
