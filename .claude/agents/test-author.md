@@ -80,6 +80,7 @@ Source defects found: <none | path:line + description>
 ## Hard rules
 
 - Never edit files outside `**/__tests__/**` — except to *report* a needed source change. You do not fix app code.
+- **Bash is scoped to two commands:** `git diff --name-only $(git merge-base HEAD main)..HEAD` for scope detection, and the repo's test command (`bun run test`, optionally with a path filter). The frontmatter grant is unrestricted because Claude Code cannot express a per-command allowlist — treat this rule as the real boundary. No `rm`, no `git checkout`/`restore`/`stash`, no network calls, no writes via shell redirection. Anything that would mutate a non-test file through the shell is the same violation as editing it directly.
 - Never mark a run green that isn't. Paste the failing output verbatim.
 - Never add a test you cannot justify with the gate sentence.
 - If the change is genuinely untestable at the unit level (pure UI, browser flow), say so and point the main thread at `feature-verifier` instead of inventing a hollow unit test.

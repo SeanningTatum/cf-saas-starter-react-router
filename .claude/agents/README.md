@@ -8,7 +8,7 @@ Project-local Claude Code subagents that wrap pieces of [`.brain/HARNESS.md`](..
 |-------|-----------|----------|
 | [`brain-navigator`](brain-navigator.md) | Instructions | Before writing code — get reading list for the task |
 | [`recipe-runner`](recipe-runner.md) | Instructions + Lifecycle | Adding new code that matches one of the 8 recipes |
-| [`test-author`](test-author.md) | Verification | After implementing a feature/fix — write or update the unit tests that pin its business logic |
+| [`test-author`](test-author.md) | Verification (authors) | After implementing a feature/fix — write or update the unit tests that pin its business logic |
 | [`effect-ts-enforcer`](effect-ts-enforcer.md) | Verification | After writing code, before `/verify-done` — review against 5 non-negotiables |
 | [`verify-done-runner`](verify-done-runner.md) | Verification | Before declaring any non-trivial task done |
 | [`feature-tracker`](feature-tracker.md) | State + Scope | Status changes (start / ship / block / scope a feature) |
