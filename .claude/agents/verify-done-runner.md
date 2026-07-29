@@ -13,11 +13,11 @@ Executes the verification checklist from `.brain/recipes/99-verify-done.md`. Ret
 
 1. Read `.brain/recipes/99-verify-done.md` to get the latest checklist (do not memorise — it changes).
 2. Determine which steps apply:
-   - **tests pin the change** (§1) — flag for the main thread: you cannot spawn sub-agents. If the diff touches source (anything outside `.md` / comments / config / `__tests__/`), report that `test-author` must run and list the changed source paths that have no corresponding `__tests__/` entry in the diff.
+   - **tests pin the change** (§1) — you cannot spawn sub-agents, so decide from the diff. List every changed source path (anything outside `.md` / comments / config / `__tests__/`) and check whether the diff also touches a corresponding test. All covered → `PASS`. Any source path with no test in the diff → `FAIL`, naming them. Only when coverage is genuinely undecidable → `DEFERRED`.
    - **typecheck + test** — always
    - **e2e smoke** (`bun run test:e2e`) — only if diff touches a route + procedure + repo + UI / auth / forms / migration
    - **build** — only if diff touches `wrangler.jsonc`, bindings, workflows, runtime composition, or `workers/`
-   - **feature verification** — flag for the human / main thread: you cannot run a browser. If the diff touches a UI feature flow, the `feature-verifier` sub-agent must run and its `.brain/features/<slug>/verifications/<date>.md` verdict must be PASS. Report whether a current doc exists.
+   - **feature verification** — you cannot run a browser, so decide from the filesystem. If the diff touches a UI feature flow, a `.brain/features/<slug>/verifications/<date>.md` doc with a PASS verdict must already exist for this change → `PASS`. Touched a UI flow with no current doc → `FAIL`, naming the slug the `feature-verifier` sub-agent must walk. Only when you cannot tell whether the flow is user-visible → `DEFERRED`.
    - **brain coherence** — always (read `git diff --stat` and map to brain docs per the matrix in `99-verify-done.md`)
 3. Run each applicable step. Capture full output. Quote verbatim tails (last ~10 lines) in the report.
 4. Output structured report.
@@ -27,7 +27,9 @@ Executes the verification checklist from `.brain/recipes/99-verify-done.md`. Ret
 ```
 Verify-done report — <branch> @ <short-sha>
 
-[1] tests pin change  : N/A (no source touched) | DEFERRED — test-author must cover: <source paths with no test in the diff>
+[1] tests pin change  : N/A (no source touched) | PASS (<n> source paths, all with tests in diff)
+                      | FAIL — no test in diff for: <paths>; test-author must run
+                      | DEFERRED — cannot determine coverage: <why>
 
 [2] typecheck         : PASS | FAIL
     <verbatim tail>
@@ -41,7 +43,9 @@ Verify-done report — <branch> @ <short-sha>
 [5] build             : SKIPPED (no CF surface touched) | PASS | FAIL
     <verbatim tail>
 
-[6] feature verification : DEFERRED — feature-verifier must walk: <feature slug + URL paths if UI changed>; existing doc: <path or none>
+[6] feature verification : N/A (no UI flow touched) | PASS — current doc: <path>
+                      | FAIL — no current verification doc; feature-verifier must walk: <slug + URL paths>
+                      | DEFERRED — cannot determine whether the flow is user-visible: <why>
 
 [7] brain coherence   : <list of .brain/ files that should be updated based on diff>
     OK | NEEDS UPDATE: <files>
@@ -54,5 +58,6 @@ Verdict: SHIP | DO NOT SHIP — <one-line reason>
 - **Quote output verbatim.** Do not paraphrase test output. Tail to last 10–15 lines max.
 - **Do not fix failures.** Diagnostic only. If a test fails, report it and stop.
 - **Do not skip e2e to make verdict green.** If criteria say e2e applies, run it.
+- **Never green-light a step you did not observe.** A `FAIL` **or** `DEFERRED` on `[1] tests pin change` or `[6] feature verification` forces `DO NOT SHIP — <step> unproven`. You cannot spawn sub-agents or drive a browser, so those two steps are only ever `PASS` on evidence you can actually see in the diff or on disk. Absence of evidence is not a pass.
 - **Brain coherence check is mandatory.** Even if all green, if brain docs need update, verdict is `DO NOT SHIP — update brain first`.
 - If pre-existing failures exist (compare to `init.sh --baseline`): report them but mark as `pre-existing` so they don't block this task.
