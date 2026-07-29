@@ -149,9 +149,12 @@ const appErrorToTRPC = (e: AppError): TRPCError => {
         cause: e.cause,
       });
     case "AiOutputError":
+      // Generic client message: promptId/reason are internal diagnostics and
+      // stay server-side (procedure logs them via ai_insights.failed; the
+      // tagged error itself is the `cause`).
       return new TRPCError({
         code: "BAD_GATEWAY",
-        message: `AI output failed the contract: ${e.promptId} (${e.reason})`,
+        message: "AI service temporarily unavailable",
         cause: e.cause,
       });
     default:

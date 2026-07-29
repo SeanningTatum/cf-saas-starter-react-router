@@ -117,11 +117,11 @@ const holds = (expr: MustNotExpr, output: unknown): boolean => {
     case "!=":
       return JSON.stringify(got) !== JSON.stringify(expr.value);
     case "contains":
-      return (
-        got !== undefined && String(got).includes(String(expr.value))
-      );
+      return got !== undefined && String(got).includes(String(expr.value));
     case "not_contains":
-      return got !== undefined && !String(got).includes(String(expr.value));
+      // Logical negation of `contains`: an absent field trivially does not
+      // contain the value, so the expression holds (and is a violation).
+      return got === undefined || !String(got).includes(String(expr.value));
   }
 };
 

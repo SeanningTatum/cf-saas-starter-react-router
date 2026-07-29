@@ -89,6 +89,17 @@ export const analyticsRouter = createTRPCRouter({
           recentSignups7d,
         });
       }).pipe(
+        // Known AppErrors map to client responses silently in tagToTRPC, so
+        // without this tap an upstream model regression (schema violations,
+        // empty responses) would produce untraceable 502s in production.
+        Effect.tapError((err) =>
+          Effect.logError("ai_insights.failed").pipe(
+            Effect.annotateLogs({
+              actor: ctx.auth.user.id,
+              errorTag: err._tag,
+            })
+          )
+        ),
         Effect.tap(() =>
           Effect.logInfo("ai_insights.generated").pipe(
             Effect.annotateLogs({ actor: ctx.auth.user.id })

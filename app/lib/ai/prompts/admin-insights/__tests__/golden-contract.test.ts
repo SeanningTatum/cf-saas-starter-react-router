@@ -167,6 +167,13 @@ describe("gradeMustNot", () => {
       gradeMustNot(validOutput, ["headline not_contains steady"])
     ).toHaveLength(0);
   });
+
+  it("treats an absent field as satisfying not_contains (violation)", () => {
+    // Logical negation of contains: undefined trivially does not contain X.
+    expect(
+      gradeMustNot(validOutput, ["missingField not_contains x"])
+    ).toHaveLength(1);
+  });
 });
 
 describe("parseMustNot", () => {

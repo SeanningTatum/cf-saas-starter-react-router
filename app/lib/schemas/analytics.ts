@@ -17,7 +17,10 @@ export const GetRecentSignupsCountInput = Schema.Struct({
 export type GetRecentSignupsCountInput = typeof GetRecentSignupsCountInput.Type;
 
 export const UserGrowthPoint = Schema.Struct({
-  date: Schema.String,
+  // YYYY-MM-DD as produced by the SQLite date() aggregation — also the only
+  // string field that flows into the admin-insights prompt, so constrain it
+  // at the boundary rather than trusting the query shape forever.
+  date: Schema.String.pipe(Schema.pattern(/^\d{4}-\d{2}-\d{2}$/)),
   count: Schema.Number,
 });
 export type UserGrowthPoint = typeof UserGrowthPoint.Type;
