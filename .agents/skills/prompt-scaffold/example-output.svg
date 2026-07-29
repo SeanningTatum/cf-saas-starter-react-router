@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="940" height="430" viewBox="0 0 940 430" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">
+  <style>.mono{font-size:13px;white-space:pre}</style>
+  <rect width="940" height="430" rx="10" fill="#1e2127"/>
+  <path d="M0 10a10 10 0 0 1 10-10h920a10 10 0 0 1 10 10v26H0z" fill="#2c313a"/>
+  <circle cx="20" cy="18" r="6" fill="#ff5f57"/>
+  <circle cx="40" cy="18" r="6" fill="#febc2e"/>
+  <circle cx="60" cy="18" r="6" fill="#28c840"/>
+  <text x="470" y="22" text-anchor="middle" fill="#5c6370" font-size="12">/ai-toolkit:prompt-scaffold — a prompt becomes a versioned, tested module</text>
+  <text x="924" y="22" text-anchor="end" fill="#5c6370" font-size="10" font-style="italic">example output</text>
+  <text x="20" y="67.0" xml:space="preserve" class="mono"><tspan fill="#c678dd">$ </tspan><tspan fill="#d8dee9">/ai-toolkit:prompt-scaffold </tspan><tspan fill="#5c6370">invoice-extraction</tspan></text>
+  <text x="20" y="87.0" xml:space="preserve" class="mono"><tspan fill="#d8dee9"></tspan></text>
+  <text x="20" y="107.0" xml:space="preserve" class="mono"><tspan fill="#98c379">✓ Stack: </tspan><tspan fill="#d8dee9">TypeScript + vitest + @anthropic-ai/sdk</tspan><tspan fill="#5c6370">   runtime: </tspan><tspan fill="#56b6c2">cloudflare-workers</tspan></text>
+  <text x="20" y="127.0" xml:space="preserve" class="mono"><tspan fill="#98c379">✓ Asked for 12 real invoices — 8 supplied, 12 synthetic cases marked</tspan></text>
+  <text x="20" y="147.0" xml:space="preserve" class="mono"><tspan fill="#d8dee9"></tspan></text>
+  <text x="20" y="167.0" xml:space="preserve" class="mono"><tspan fill="#d8dee9" font-weight="bold">  prompts/invoice-extraction/</tspan></text>
+  <text x="20" y="187.0" xml:space="preserve" class="mono"><tspan fill="#d8dee9">    prompt.ts             </tspan><tspan fill="#5c6370">model </tspan><tspan fill="#56b6c2">claude-opus-5</tspan><tspan fill="#5c6370">  effort </tspan><tspan fill="#56b6c2">medium</tspan><tspan fill="#e5c07b">  v3</tspan></text>
+  <text x="20" y="207.0" xml:space="preserve" class="mono"><tspan fill="#d8dee9">    golden.jsonl          </tspan><tspan fill="#d8dee9" font-weight="bold">20 cases</tspan><tspan fill="#5c6370">  happy 11 · edge 4 · adversarial 5</tspan></text>
+  <text x="20" y="227.0" xml:space="preserve" class="mono"><tspan fill="#d8dee9">    graders.ts            </tspan><tspan fill="#5c6370">schema + field equality → </tspan><tspan fill="#56b6c2">bun test</tspan></text>
+  <text x="20" y="247.0" xml:space="preserve" class="mono"><tspan fill="#d8dee9">    promptfooconfig.yaml  </tspan><tspan fill="#5c6370">devDependency only — not bundled</tspan></text>
+  <text x="20" y="267.0" xml:space="preserve" class="mono"><tspan fill="#d8dee9">    README.md             </tspan><tspan fill="#5c6370">contract · failure modes · changelog</tspan></text>
+  <text x="20" y="287.0" xml:space="preserve" class="mono"><tspan fill="#d8dee9"></tspan></text>
+  <text x="20" y="307.0" xml:space="preserve" class="mono"><tspan fill="#d8dee9" font-weight="bold">  output contract   </tspan><tspan fill="#d8dee9">zod → output_config.format   </tspan><tspan fill="#5c6370">(enforced, not parsed)</tspan></text>
+  <text x="20" y="327.0" xml:space="preserve" class="mono"><tspan fill="#d8dee9" font-weight="bold">  refusal handling  </tspan><tspan fill="#d8dee9">stop_reason == "refusal" → </tspan><tspan fill="#56b6c2">confidence: low</tspan></text>
+  <text x="20" y="347.0" xml:space="preserve" class="mono"><tspan fill="#d8dee9" font-weight="bold">  cache breakpoint  </tspan><tspan fill="#d8dee9">last system block   </tspan><tspan fill="#5c6370">prefix 1.4k tok &gt; 512 min </tspan><tspan fill="#98c379">✓</tspan></text>
+  <text x="20" y="367.0" xml:space="preserve" class="mono"><tspan fill="#d8dee9" font-weight="bold">  sampling params   </tspan><tspan fill="#5c6370">none — </tspan><tspan fill="#e5c07b">temperature is a 400 on Opus 5</tspan></text>
+  <text x="20" y="387.0" xml:space="preserve" class="mono"><tspan fill="#d8dee9"></tspan></text>
+  <text x="20" y="407.0" xml:space="preserve" class="mono"><tspan fill="#98c379">→ next: </tspan><tspan fill="#61afef">/ai-toolkit:prompt-eval invoice-extraction --baseline</tspan></text>
+</svg>

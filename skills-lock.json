@@ -1,11 +1,29 @@
 {
   "version": 1,
   "skills": {
+    "prompt-eval": {
+      "source": "SeanningTatum/marketplace",
+      "sourceType": "github",
+      "skillPath": "plugins/ai-toolkit/skills/prompt-eval/SKILL.md",
+      "computedHash": "f5ec701ef1352eea8b88da1ea8e01368aae8c7761b8b3c9b20480a13cffbbfae"
+    },
+    "prompt-pipeline": {
+      "source": "SeanningTatum/marketplace",
+      "sourceType": "github",
+      "skillPath": "plugins/ai-toolkit/skills/prompt-pipeline/SKILL.md",
+      "computedHash": "655a5c97c7bbe61031065747df167ff4f4f302f67add6939c177849d88ab7133"
+    },
+    "prompt-scaffold": {
+      "source": "SeanningTatum/marketplace",
+      "sourceType": "github",
+      "skillPath": "plugins/ai-toolkit/skills/prompt-scaffold/SKILL.md",
+      "computedHash": "8dde76098eb91f18861e641cbc2328b0d4dcc66d20ebf7f8c7f24685956f4988"
+    },
     "refero-design": {
       "source": "referodesign/refero_skill",
       "sourceType": "github",
       "skillPath": "SKILL.md",
-      "computedHash": "7c17b3d2c4377e931101691d8cb4a2c714785cae66f0c60461fd99447833dbbe"
+      "computedHash": "31a559a556a0bba06320f709041acaf5b9418d5cc136f7d3ae120850eef794b0"
     }
   }
 }

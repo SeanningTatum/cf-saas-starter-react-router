@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="940" height="470" viewBox="0 0 940 470" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">
+  <style>.mono{font-size:13px;white-space:pre}</style>
+  <rect width="940" height="470" rx="10" fill="#1e2127"/>
+  <path d="M0 10a10 10 0 0 1 10-10h920a10 10 0 0 1 10 10v26H0z" fill="#2c313a"/>
+  <circle cx="20" cy="18" r="6" fill="#ff5f57"/>
+  <circle cx="40" cy="18" r="6" fill="#febc2e"/>
+  <circle cx="60" cy="18" r="6" fill="#28c840"/>
+  <text x="470" y="22" text-anchor="middle" fill="#5c6370" font-size="12">/ai-toolkit:prompt-pipeline — coordinator, workers, and a checker that can say no</text>
+  <text x="924" y="22" text-anchor="end" fill="#5c6370" font-size="10" font-style="italic">example output</text>
+  <text x="20" y="67.0" xml:space="preserve" class="mono"><tspan fill="#c678dd">$ </tspan><tspan fill="#d8dee9">/ai-toolkit:prompt-pipeline </tspan><tspan fill="#5c6370">triage support tickets and draft replies</tspan></text>
+  <text x="20" y="87.0" xml:space="preserve" class="mono"><tspan fill="#d8dee9"></tspan></text>
+  <text x="20" y="107.0" xml:space="preserve" class="mono"><tspan fill="#98c379">✓ Architecture: </tspan><tspan fill="#d8dee9" font-weight="bold">StateGraph</tspan><tspan fill="#d8dee9"> — branching + capped repair loop needs real state</tspan></text>
+  <text x="20" y="127.0" xml:space="preserve" class="mono"><tspan fill="#5c6370">  deliberately not used: </tspan><tspan fill="#5c6370">LangChain chains (no retrievers, no provider swap)</tspan></text>
+  <text x="20" y="147.0" xml:space="preserve" class="mono"><tspan fill="#d8dee9"></tspan></text>
+  <text x="20" y="167.0" xml:space="preserve" class="mono"><tspan fill="#d8dee9" font-weight="bold">  node          role          model              effort   edge schema</tspan></text>
+  <text x="20" y="187.0" xml:space="preserve" class="mono"><tspan fill="#d8dee9">  coordinate    plans         </tspan><tspan fill="#56b6c2">claude-opus-5</tspan><tspan fill="#d8dee9">      xhigh    </tspan><tspan fill="#c678dd">Plan</tspan></text>
+  <text x="20" y="207.0" xml:space="preserve" class="mono"><tspan fill="#d8dee9">  classify      worker        </tspan><tspan fill="#56b6c2">claude-haiku-4-5</tspan><tspan fill="#d8dee9">   </tspan><tspan fill="#5c6370">n/a</tspan><tspan fill="#d8dee9">      </tspan><tspan fill="#c678dd">Category</tspan></text>
+  <text x="20" y="227.0" xml:space="preserve" class="mono"><tspan fill="#d8dee9">  draft         worker        </tspan><tspan fill="#56b6c2">claude-sonnet-5</tspan><tspan fill="#d8dee9">    medium   </tspan><tspan fill="#c678dd">Reply</tspan></text>
+  <text x="20" y="247.0" xml:space="preserve" class="mono"><tspan fill="#d8dee9">  check         verifies      </tspan><tspan fill="#56b6c2">claude-sonnet-5</tspan><tspan fill="#d8dee9">    medium   </tspan><tspan fill="#c678dd">Verdict</tspan></text>
+  <text x="20" y="267.0" xml:space="preserve" class="mono"><tspan fill="#d8dee9"></tspan></text>
+  <text x="20" y="287.0" xml:space="preserve" class="mono"><tspan fill="#5c6370">  haiku-4-5 takes no effort param — omit it; passing one errors</tspan></text>
+  <text x="20" y="307.0" xml:space="preserve" class="mono"><tspan fill="#d8dee9"></tspan></text>
+  <text x="20" y="327.0" xml:space="preserve" class="mono"><tspan fill="#5c6370">  checker sees output + contract only — never the drafter's reasoning</tspan></text>
+  <text x="20" y="347.0" xml:space="preserve" class="mono"><tspan fill="#5c6370">  repair cap 2 · fails closed · state in </tspan><tspan fill="#56b6c2">D1</tspan><tspan fill="#5c6370"> (nodejs_compat on)</tspan></text>
+  <text x="20" y="367.0" xml:space="preserve" class="mono"><tspan fill="#d8dee9"></tspan></text>
+  <text x="20" y="387.0" xml:space="preserve" class="mono"><tspan fill="#d8dee9">  run 1: draft → </tspan><tspan fill="#e06c75">check ✗</tspan><tspan fill="#d8dee9"> tone violation → repair → </tspan><tspan fill="#98c379">check ✓</tspan></text>
+  <text x="20" y="407.0" xml:space="preserve" class="mono"><tspan fill="#d8dee9"></tspan></text>
+  <text x="20" y="427.0" xml:space="preserve" class="mono"><tspan fill="#5c6370">  end-to-end 18/20   repair rate 22%   checker rejection rate </tspan><tspan fill="#98c379">14%</tspan><tspan fill="#5c6370">  </tspan><tspan fill="#98c379">(fires ✓)</tspan></text>
+  <text x="20" y="447.0" xml:space="preserve" class="mono"><tspan fill="#5c6370">  $0.019/ticket   p95 4.1s</tspan></text>
+</svg>

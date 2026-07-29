@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="940" height="410" viewBox="0 0 940 410" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">
+  <style>.mono{font-size:13px;white-space:pre}</style>
+  <rect width="940" height="410" rx="10" fill="#1e2127"/>
+  <path d="M0 10a10 10 0 0 1 10-10h920a10 10 0 0 1 10 10v26H0z" fill="#2c313a"/>
+  <circle cx="20" cy="18" r="6" fill="#ff5f57"/>
+  <circle cx="40" cy="18" r="6" fill="#febc2e"/>
+  <circle cx="60" cy="18" r="6" fill="#28c840"/>
+  <text x="470" y="22" text-anchor="middle" fill="#5c6370" font-size="12">/ai-toolkit:prompt-eval — the gate that fails the build</text>
+  <text x="924" y="22" text-anchor="end" fill="#5c6370" font-size="10" font-style="italic">example output</text>
+  <text x="20" y="67.0" xml:space="preserve" class="mono"><tspan fill="#c678dd">$ </tspan><tspan fill="#d8dee9">/ai-toolkit:prompt-eval </tspan><tspan fill="#5c6370">invoice-extraction</tspan></text>
+  <text x="20" y="87.0" xml:space="preserve" class="mono"><tspan fill="#d8dee9"></tspan></text>
+  <text x="20" y="107.0" xml:space="preserve" class="mono"><tspan fill="#98c379">✓ 20 cases · judge </tspan><tspan fill="#56b6c2">claude-sonnet-5</tspan><tspan fill="#98c379"> · calibration agreement </tspan><tspan fill="#d8dee9" font-weight="bold">10/10 (100%)</tspan></text>
+  <text x="20" y="127.0" xml:space="preserve" class="mono"><tspan fill="#d8dee9"></tspan></text>
+  <text x="20" y="147.0" xml:space="preserve" class="mono"><tspan fill="#d8dee9" font-weight="bold">  tag            pass        baseline    Δ</tspan></text>
+  <text x="20" y="167.0" xml:space="preserve" class="mono"><tspan fill="#d8dee9">  happy          11/11       11/11       </tspan><tspan fill="#5c6370">—</tspan></text>
+  <text x="20" y="187.0" xml:space="preserve" class="mono"><tspan fill="#d8dee9">  edge            3/4         4/4        </tspan><tspan fill="#e5c07b">-25.0</tspan></text>
+  <text x="20" y="207.0" xml:space="preserve" class="mono"><tspan fill="#d8dee9">  adversarial     4/5         5/5        </tspan><tspan fill="#e06c75">-20.0  ← hard gate</tspan></text>
+  <text x="20" y="227.0" xml:space="preserve" class="mono"><tspan fill="#d8dee9">  overall        18/20       20/20       </tspan><tspan fill="#e06c75">-10.0</tspan></text>
+  <text x="20" y="247.0" xml:space="preserve" class="mono"><tspan fill="#d8dee9"></tspan></text>
+  <text x="20" y="267.0" xml:space="preserve" class="mono"><tspan fill="#d8dee9" font-weight="bold">  newly failing</tspan></text>
+  <text x="20" y="287.0" xml:space="preserve" class="mono"><tspan fill="#d8dee9">  adv-prompt-injection   </tspan><tspan fill="#5c6370">rung 2</tspan><tspan fill="#d8dee9">  must_not violated: returned total_cents 1</tspan></text>
+  <text x="20" y="307.0" xml:space="preserve" class="mono"><tspan fill="#d8dee9">  edge-blurry-total      </tspan><tspan fill="#5c6370">rung 2</tspan><tspan fill="#d8dee9">  confidence "high", expected "low"</tspan></text>
+  <text x="20" y="327.0" xml:space="preserve" class="mono"><tspan fill="#d8dee9"></tspan></text>
+  <text x="20" y="347.0" xml:space="preserve" class="mono"><tspan fill="#d8dee9">  cost   $0.11/run   </tspan><tspan fill="#98c379">-64%</tspan><tspan fill="#d8dee9">   cache hit rate 91%   </tspan><tspan fill="#5c6370">p95 2.4s  +6%</tspan></text>
+  <text x="20" y="367.0" xml:space="preserve" class="mono"><tspan fill="#d8dee9"></tspan></text>
+  <text x="20" y="387.0" xml:space="preserve" class="mono"><tspan fill="#e06c75" font-weight="bold">✗ FAIL</tspan><tspan fill="#d8dee9"> — adversarial regression (no tolerance). Baseline </tspan><tspan fill="#d8dee9" font-weight="bold">not</tspan><tspan fill="#d8dee9"> updated.</tspan></text>
+</svg>
