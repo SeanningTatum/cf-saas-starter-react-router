@@ -8,7 +8,7 @@ Mounted at `/api/trpc/*`. The top-level router (`app/trpc/router.ts`) composes t
 |--------|------|------------|
 | `user` | `app/trpc/router.ts` | `getUsers` (protected, safe projection), `deleteUser`, `createWorkflow` |
 | `admin` | `app/trpc/routes/admin.ts` | `getUsers`, `getUser`, `updateUser`, `banUser`, `unbanUser`, `deleteUser`, `bulkBanUsers`, `bulkDeleteUsers`, `bulkUpdateUserRoles` |
-| `analytics` | `app/trpc/routes/analytics.ts` | `getUserStats`, `getUserGrowth`, `getRoleDistribution`, `getVerificationDistribution`, `getRecentSignupsCount` |
+| `analytics` | `app/trpc/routes/analytics.ts` | `getUserStats`, `getUserGrowth`, `getRoleDistribution`, `getVerificationDistribution`, `getRecentSignupsCount`, `getAiInsights` (mutation — on-demand Workers AI inference) |
 
 Read the route files directly for current input schemas — they're authoritative.
 

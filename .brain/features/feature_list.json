@@ -1,6 +1,6 @@
 {
   "$schema": "Machine-readable feature state tracker. Source of truth for status; per-feature MD docs are source of truth for design/runtime.",
-  "updated": "2026-07-13",
+  "updated": "2026-07-29",
   "policy": {
     "one_in_progress_at_a_time": true,
     "definition_of_done": "implementation complete + verify-done passed + feature MD updated + brain coherent"
@@ -15,7 +15,9 @@
       "dependencies": [],
       "status": "shipped",
       "evidence": "shipped 2026-05-07; tests: app/repositories/__tests__/user.test.ts; e2e gap noted",
-      "owners": ["sean"]
+      "owners": [
+        "sean"
+      ]
     },
     {
       "id": "feat-002",
@@ -23,10 +25,14 @@
       "slug": "admin-dashboard",
       "doc": ".brain/features/admin-dashboard/admin-dashboard.md",
       "description": "Admin-only area at /admin/* for user management and analytics; data-side gating via adminProcedure.",
-      "dependencies": ["feat-001"],
+      "dependencies": [
+        "feat-001"
+      ],
       "status": "shipped",
       "evidence": "shipped 2026-05-07; known gap: layout has no loader auth gate (data-side only)",
-      "owners": ["sean"]
+      "owners": [
+        "sean"
+      ]
     },
     {
       "id": "feat-003",
@@ -37,7 +43,9 @@
       "dependencies": [],
       "status": "shipped",
       "evidence": "shipped 2026-05-07; tests: app/repositories/__tests__/bucket.test.ts",
-      "owners": ["sean"]
+      "owners": [
+        "sean"
+      ]
     },
     {
       "id": "feat-004",
@@ -45,10 +53,15 @@
       "slug": "analytics",
       "doc": ".brain/features/analytics/analytics.md",
       "description": "Read-only admin analytics at /admin: user growth, role + verification distribution, recent signups.",
-      "dependencies": ["feat-001", "feat-002"],
+      "dependencies": [
+        "feat-001",
+        "feat-002"
+      ],
       "status": "shipped",
       "evidence": "shipped 2026-05-07; AnalyticsRepository runs queries with Effect.all unbounded concurrency",
-      "owners": ["sean"]
+      "owners": [
+        "sean"
+      ]
     },
     {
       "id": "feat-005",
@@ -59,7 +72,9 @@
       "dependencies": [],
       "status": "shipped",
       "evidence": "shipped 2026-07-11; live-verified: per-PR D1 (pr-999 binding test), alias URL auth signup 200 on pr-test, prod signup 200; run note .brain/features/preview-deployments/runs/2026-07-10-preview-deployments.md; workflows .github/workflows/preview.yml + preview-cleanup.yml",
-      "owners": ["sean"]
+      "owners": [
+        "sean"
+      ]
     },
     {
       "id": "feat-006",
@@ -67,10 +82,31 @@
       "slug": "feature-verification",
       "doc": ".brain/features/feature-verification/feature-verification.md",
       "description": "feature-verifier sub-agent drives the live app via the Playwright CLI (throwaway headless script), screenshots the golden + one error path, and writes a per-feature verdict doc. Replaces per-feature e2e specs; thin CI smoke specs remain the regression net.",
-      "dependencies": ["feat-001"],
+      "dependencies": [
+        "feat-001"
+      ],
       "status": "shipped",
       "evidence": "shipped 2026-07-13; self-verified: .brain/features/authentication/verifications/2026-07-13.md (PASS); harness-check 11/11; hardened clean-browser launch after dry-run extension artifact; agent .claude/agents/feature-verifier.md",
-      "owners": ["sean"]
+      "owners": [
+        "sean"
+      ]
+    },
+    {
+      "id": "feat-007",
+      "name": "AI Admin Insights",
+      "slug": "ai-admin-insights",
+      "doc": ".brain/features/ai-admin-insights/ai-admin-insights.md",
+      "description": "Admin dashboard card that summarizes recent signups/activity via a pinned Claude model with a schema-locked output; first prompt module scaffolded per ai-toolkit skills (prompt dir + golden set + graders + promptfoo config).",
+      "dependencies": [
+        "feat-001",
+        "feat-002",
+        "feat-004"
+      ],
+      "status": "shipped",
+      "evidence": "typecheck PASS; 298 unit tests PASS (36 new: ai service, run.ts, prompt invariants, golden-contract, tagToTRPC AiOutputError); build PASS; e2e smoke 2/2 PASS; harness-check 10/10; feature-verifier PASS 2026-07-28 (.brain/features/ai-admin-insights/verifications/2026-07-28.md) — live model generation on seeded data + admin gate both halves; first verifier run FAILED (empty_response) → root-caused kimi chat.completion shape via probe worker, fixed normalization + maxTokens, re-run PASS. Side fixes from verifier findings: data-testids on card, library.md test-credential docs drift corrected (seed fixtures admin@preview.local).",
+      "owners": [
+        "sean"
+      ]
     }
   ]
 }

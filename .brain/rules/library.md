@@ -295,22 +295,20 @@ test.describe("Widget feature", () => {
 
 ### Test admin credentials
 
-Local dev only. Created via sign-up flow then upgraded:
+Local dev + preview. Created by the seed script (`scripts/seed-preview.ts`), which inserts three fixtures sharing one password:
 
 ```bash
-bunx wrangler d1 execute testing-db --local --command "UPDATE user SET role = 'admin', email_verified = 1 WHERE email = 'admin@test.local';"
+bun run db:seed          # local D1
+bun run db:seed:preview  # preview-env D1
 ```
 
-| Field | Value |
-|-------|-------|
-| Email | `admin@test.local` |
-| Password | `TestAdmin123!` |
-| Role | `admin` |
+| Fixture | Email | Password | Role |
+|---------|-------|----------|------|
+| Admin | `admin@preview.local` | `Password123!` | `admin` |
+| Regular user | `user@preview.local` | `Password123!` | `user` |
+| Banned user | `banned@preview.local` | `Password123!` | `user` (banned) |
 
-Cleanup if user exists:
-```bash
-bunx wrangler d1 execute testing-db --local --command "DELETE FROM account WHERE user_id IN (SELECT id FROM user WHERE email = 'admin@test.local'); DELETE FROM session WHERE user_id IN (SELECT id FROM user WHERE email = 'admin@test.local'); DELETE FROM user WHERE email = 'admin@test.local';"
-```
+Rows use fixed `seed-*` ids and `INSERT OR IGNORE`, so re-seeding is idempotent. The local D1 database name is `cf-saas-starter-react-router-db` (see `wrangler.jsonc`).
 
 (Better Auth requires user creation through the API, not direct insert. The D1 binding name is `DATABASE`; `database_name` is `testing-db` per `wrangler.jsonc`.)
 

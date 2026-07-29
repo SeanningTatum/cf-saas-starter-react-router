@@ -45,11 +45,12 @@ The runtime composes services into a single Layer in `app/runtime.ts` via `makeA
 | `Bucket` | `app/services/bucket.ts` | `app/Bucket` | `{ bucket: R2Bucket }` (raw R2 binding) |
 | `AuthApi` | `app/services/auth.ts` | `app/AuthApi` | `{ auth: Auth, api: Auth["api"] }` — Layer built via factory `AuthApiLive(baseURL?)`, not a bare Layer |
 | `Workflows` | `app/services/workflows.ts` | `app/Workflows` | `{ exampleWorkflow, triggerExample }` |
+| `WorkersAi` | `app/services/ai.ts` | `app/WorkersAi` | `{ runJson({ model, messages, jsonSchema, maxTokens? }) }` — Workers AI binding wrapper; JSON Mode requests only, returns raw `response` (parsing/validation is the prompt module's job) |
 | `Session` | `app/services/session.ts` | `app/Session` | `{ session, user }` — built ad-hoc via `SessionLive(headers)`, **not** in the global runtime |
 | `CloudflareEnv` | `app/services/cloudflare.ts` | `app/CloudflareEnv` | The raw `Env` |
 | `Logger` | `app/services/logger.ts` | — (no Tag) | `LoggerLive` + `MinLogLevelLive` Layers — replace Effect's default Logger |
 
-Repos / procedures composition lives in `app/runtime.ts` (`AppServices` union: `Database | Bucket | AuthApi | Workflows | UserRepository | AnalyticsRepository | BucketRepository`).
+Repos / procedures composition lives in `app/runtime.ts` (`AppServices` union: `Database | Bucket | AuthApi | Workflows | WorkersAi | UserRepository | AnalyticsRepository | BucketRepository`).
 
 > **Not present in this repo:** Stripe, PostHog, Resend, external AI SDKs. If a feature needs one, follow "Adding a new service" below and document under [`../high-level-architecture/integrations.md`](../high-level-architecture/integrations.md).
 

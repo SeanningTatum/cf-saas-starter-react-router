@@ -53,6 +53,12 @@ The argument shape becomes readonly fields on the instance. Discriminate via `_t
 |-------|--------|-----------|
 | `WorkflowTriggerError` | `name`, `cause?` | `INTERNAL_SERVER_ERROR` |
 
+### AI (`app/models/errors/ai.ts`)
+
+| Error | Fields | TRPC code |
+|-------|--------|-----------|
+| `AiOutputError` | `promptId`, `reason` (`invalid_json` \| `schema_violation` \| `empty_response`), `cause?` | `BAD_GATEWAY` |
+
 ## Adding a new tagged error
 
 1. Define the class in `app/models/errors/{domain}.ts` (or extend an existing union)
@@ -144,7 +150,7 @@ Direct `Effect.fail(new SomeTaggedError(...))` inside an `Effect.gen` is still t
 | `NotFoundError`, `BucketNotFoundError` | `NOT_FOUND` |
 | `ValidationError`, `BucketValidationError` | `BAD_REQUEST` |
 | `CreationError`, `UpdateError`, `DeletionError`, `QueryError`, `ConfigurationError`, `Bucket{Binding,Upload,Get,Delete,List}Error`, `WorkflowTriggerError` | `INTERNAL_SERVER_ERROR` |
-| `ExternalServiceError` | `BAD_GATEWAY` |
+| `ExternalServiceError`, `AiOutputError` | `BAD_GATEWAY` |
 
 ## `tagToTRPC` hardening — `isAppError` + generic fallback
 

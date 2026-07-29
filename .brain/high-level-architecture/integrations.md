@@ -10,7 +10,7 @@ Bindings declared in [`wrangler.jsonc`](../../wrangler.jsonc) and typed in `work
 |---------|------|---------|
 | `DATABASE` | D1 | SQLite DB via Drizzle |
 | `BUCKET` | R2 | Object storage |
-| `AI` | Workers AI | Native model inference (binding only — no usage yet) |
+| `AI` | Workers AI | Native model inference — `WorkersAi` service + admin-insights prompt module (`@cf/moonshotai/kimi-k2.5`, JSON Mode structured output) |
 | `EXAMPLE_WORKFLOW` | Workflow | Sample CF Workflow class `ExampleWorkflow` |
 | `ASSETS` | Assets | Static assets directory |
 
@@ -48,7 +48,7 @@ Default key generator: `uploads/<timestamp>-<uuid>`. Tagged errors: `BucketBindi
 
 ### Workers AI (`AI`)
 
-Binding present but no consumers yet. To use: yield `CloudflareEnv`, call `env.AI.run(model, input)` inside `Effect.tryPromise` with an `ExternalServiceError` catch.
+Consumed by the `WorkersAi` service (`app/services/ai.ts`) — never call `env.AI.run` directly. First user: admin AI insights (see [`../features/ai-admin-insights/ai-admin-insights.md`](../features/ai-admin-insights/ai-admin-insights.md)) on pinned `@cf/moonshotai/kimi-k2.5` with JSON Mode (`response_format: json_schema`). Gotchas (verified live 2026-07-29): the binding's return shape is **model-dependent** — kimi returns an OpenAI `chat.completion` object (`choices[0].message.content`), not `{ response }`; `WorkersAi.runJson` normalizes both. kimi-k2.5 is a reasoning model and `reasoning_content` **counts against `max_tokens`** — budget generously (4000) or content truncates mid-JSON. JSON Mode does not support streaming; an unsatisfiable schema fails the request with "JSON Mode couldn't be met" (surfaces as `ExternalServiceError`). Prompt modules live under `app/lib/ai/prompts/<name>/` (see the `prompt-scaffold` skill).
 
 ### Workflows (`EXAMPLE_WORKFLOW`)
 

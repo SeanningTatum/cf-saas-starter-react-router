@@ -18,7 +18,7 @@ Available bindings (declared in `wrangler.jsonc`, typed in `worker-configuration
 |---------|------|---------|
 | `DATABASE` | D1 | SQLite via Drizzle |
 | `BUCKET` | R2 | Object storage |
-| `AI` | Workers AI | Native model inference (binding present, no consumers yet) |
+| `AI` | Workers AI | Native model inference — consumed by `WorkersAi` service (`app/services/ai.ts`); first user: admin AI insights (`@cf/moonshotai/kimi-k2.5`, JSON Mode) |
 | `EXAMPLE_WORKFLOW` | Workflow | Sample workflow class `ExampleWorkflow` |
 | `ASSETS` | Assets | Static assets directory (`build/client`) |
 | `BETTER_AUTH_SECRET` | secret | Auth signing (set via `wrangler secret put`) |

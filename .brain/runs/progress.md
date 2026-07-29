@@ -21,6 +21,29 @@
 
 ---
 
+## 2026-07-29 — feat-007 ai-admin-insights SHIPPED. ai-toolkit skills (from marketplace#15) installed via skills-lock.json; first prompt module app/lib/ai/prompts/admin-insights/ on pinned @cf/moonshotai/kimi-k2.5 via AI binding (JSON Mode, Effect Schema contract, 23 golden cases, deterministic grader ladder on Vitest, promptfoo live-gate config as devDependency). WorkersAi service + AiOutputError→502 + analytics.getAiInsights admin mutation + AiInsightsCard (en+zh, testids). Verifier caught a real bug: kimi returns OpenAI chat.completion (choices[0].message.content), not {response} — fixed normalization + maxTokens 4000 (reasoning counts against budget); re-verified PASS against live model. All gates green: typecheck, 298 tests, build, e2e 2/2, harness-check 10/10.
+- branch: `beaver/283411c1`
+- in-progress feature: none
+- run note: none
+- next: Open follow-ups: (1) run live promptfoo baseline with CLOUDFLARE_ACCOUNT_ID+API token; (2) tune gate thresholds once baseline exists; (3) pre-existing login-page hydration noise (caret-color, env artifact); (4) marketplace#15 next-step items still open (merge/deploy home-karaoke#14 + portfolio-v3#6 from earlier session).
+
+---
+
+## 2026-07-29 — shipped ai-admin-insights: typecheck PASS; 298 unit tests PASS (36 new: ai service, run.ts, prompt invariants, golden-contract, tagToTRPC AiOutputE
+- branch: `beaver/283411c1`
+- in-progress feature: none
+- run note: none
+
+---
+
+## 2026-07-29 — feat-007 ai-admin-insights kicked off. Installed ai-toolkit skills (prompt-scaffold/eval/pipeline) from SeanningTatum/marketplace#15 via npx skills add → .agents/skills + .claude/skills symlinks + skills-lock.json (user chose manifest install over adapted port; zod→Effect Schema mapping handled by repo non-negotiables, not skill edits). Baseline green: typecheck PASS, 262 tests PASS, harness-check PASS (needed bun install first — fresh worktree had no node_modules). Use case chosen: admin AI insights card summarizing recent signups via pinned Claude model + schema-locked output.
+- branch: `beaver/283411c1`
+- in-progress feature: none
+- run note: none
+- next: Read app/runtime.ts, services, trpc routes, errors; scaffold Anthropic service + prompt module under app/lib/ai/prompts/admin-insights/ with golden.jsonl + graders + promptfoo config
+
+---
+
 ## 2026-07-27 — All 3 tRPC isDev PRs green: template#17, home-karaoke#14, portfolio-v3#6. Fixed a self-inflicted CI regression along the way — the non-negotiables sweep greps added lines for process.env with no comment carve-out, so comments DOCUMENTING the trap tripped the gate. Exempted leading-comment lines only (stricter than the adjacent throw-new rule's bare grep -vE '//'), applied as a targeted one-rule edit in each repo since downstream ci.yml files have legit divergence (no brain-axi install; portfolio-v3 has NODE_OPTIONS for a runner OOM + a throw-new-Response allowance).
 - branch: `fix/trpc-isdev-production`
 - in-progress feature: none
