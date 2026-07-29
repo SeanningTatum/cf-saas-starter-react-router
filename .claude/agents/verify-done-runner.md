@@ -13,13 +13,13 @@ Executes the verification checklist from `.brain/recipes/99-verify-done.md`. Ret
 
 1. Read `.brain/recipes/99-verify-done.md` to get the latest checklist (do not memorise — it changes).
 2. Determine which steps apply:
-   - **tests pin the change** (§1) — you cannot spawn sub-agents, so check the mechanical floor only, and **only for the categories that own unit tests**:
+   - **tests pin the change** (§1) — you cannot spawn sub-agents, so check the mechanical floor only, and the floor is exactly non-negotiable #4:
 
-     `app/lib/**` · `app/repositories/**` · `app/services/**` · `app/trpc/**` · `workers/**` · `scripts/**`
+     `app/lib/**` · `app/repositories/**`
 
-     Non-negotiable #4 is the hard floor there (helpers + repositories); the other four are included because they already carry co-located suites, so a missing one is a regression rather than a new policy. For a changed path under those roots (excluding `.md` / comments / config / `__tests__/` itself), does a co-located `__tests__/<name>.test.ts` **exist on disk**? Missing → `FAIL`, naming the paths — decidable without judgment. Present but untouched by the diff → still `PASS`, listed under "existing coverage (unchanged)" so the main thread can sanity-check it.
+     For a changed path under those two roots (excluding `.md` / comments / config / `__tests__/` itself), does a co-located `__tests__/<name>.test.ts` **exist on disk**? Missing → `FAIL`, naming the paths — decidable without judgment, and winnable: `test-author` writes the missing test. Present but untouched by the diff → still `PASS`, listed under "existing coverage (unchanged)" so the main thread can sanity-check it.
 
-     **Changed source outside those roots never FAILs here.** `app/routes/`, `app/components/`, `app/hooks/`, `app/db/`, `app/models/`, `app/i18n/`, `app/auth/` have no co-located unit suites by design — they are proved by `[4] e2e smoke` and `[6] feature verification`, which are their gate. List them under "covered elsewhere (see [4]/[6])" and move on; demanding a unit test there would reject a compliant change outright.
+     **Changed source outside those two roots never FAILs here.** `app/services/`, `app/trpc/`, `workers/`, `scripts/` carry suites but not per-file coverage (`workers/` has no unit tests at all), so a missing identically-named test there is the norm, not a regression — list them under "suite-level coverage (no per-file floor)". `app/routes/`, `app/components/`, `app/hooks/`, `app/db/`, `app/models/`, `app/i18n/`, `app/auth/` have no co-located unit suites by design — they are proved by `[4] e2e smoke` and `[6] feature verification`, which are their gate: list them under "covered elsewhere (see [4]/[6])". For anything outside the floor, whether a test *semantically* pins the change is `test-author`'s call, not yours — demanding an identically-named file there would reject compliant changes outright.
 
      **Do not FAIL a path just because the diff adds no test** — `test-author` deliberately declines to add duplicate coverage when an existing test already pins the change, and blocking on that would reward exactly the padding this gate exists to prevent. You are not judging whether a test *semantically* covers the change; that call belongs to `test-author`. `DEFERRED` only when you cannot tell which paths are source.
    - **typecheck + test** — always
@@ -35,9 +35,10 @@ Executes the verification checklist from `.brain/recipes/99-verify-done.md`. Ret
 ```
 Verify-done report — <branch> @ <short-sha>
 
-[1] tests pin change  : N/A (no source touched) | PASS — <n> unit-tested paths
+[1] tests pin change  : N/A (no source touched) | PASS — <n> floor-checked paths
     new/updated tests in diff        : <paths>
     existing coverage (unchanged, verify): <paths>
+    suite-level coverage (no per-file floor): <paths under app/services, app/trpc, workers, scripts>
     covered elsewhere (see [4]/[6])  : <paths outside the unit-tested roots>
                       | FAIL — no test file exists for: <paths>; test-author must run
                       | DEFERRED — cannot determine which paths are source: <why>
