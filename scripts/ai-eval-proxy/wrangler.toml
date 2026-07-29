@@ -1,0 +1,8 @@
+name = "ai-eval-proxy"
+main = "index.js"
+compatibility_date = "2025-03-25"
+workers_dev = false
+preview_urls = false
+
+[ai]
+binding = "AI"

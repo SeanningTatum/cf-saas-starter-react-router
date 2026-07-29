@@ -1,0 +1,88 @@
+{
+  "response_format": {
+    "type": "json_schema",
+    "json_schema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "type": "object",
+      "required": [
+        "headline",
+        "trends",
+        "suggestedActions",
+        "dataQuality"
+      ],
+      "properties": {
+        "headline": {
+          "type": "string",
+          "description": "a string at most 200 character(s) long",
+          "title": "maxLength(200)",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "trends": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "label",
+              "direction",
+              "detail"
+            ],
+            "properties": {
+              "label": {
+                "type": "string",
+                "description": "a string at most 60 character(s) long",
+                "title": "maxLength(60)",
+                "minLength": 1,
+                "maxLength": 60
+              },
+              "direction": {
+                "type": "string",
+                "enum": [
+                  "up",
+                  "down",
+                  "flat"
+                ]
+              },
+              "detail": {
+                "type": "string",
+                "description": "a string at most 240 character(s) long",
+                "title": "maxLength(240)",
+                "minLength": 1,
+                "maxLength": 240
+              }
+            },
+            "additionalProperties": false
+          },
+          "description": "an array of at most 5 item(s)",
+          "title": "maxItems(5)",
+          "minItems": 1,
+          "maxItems": 5
+        },
+        "suggestedActions": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "description": "a string at most 240 character(s) long",
+            "title": "maxLength(240)",
+            "minLength": 1,
+            "maxLength": 240
+          },
+          "description": "an array of at most 4 item(s)",
+          "title": "maxItems(4)",
+          "minItems": 1,
+          "maxItems": 4
+        },
+        "dataQuality": {
+          "type": "string",
+          "enum": [
+            "sufficient",
+            "sparse"
+          ]
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "max_tokens": 4000,
+  "reasoning_effort": "low"
+}

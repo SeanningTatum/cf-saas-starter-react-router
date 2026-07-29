@@ -32,6 +32,7 @@ export const generateAdminInsights = (
       ],
       jsonSchema: outputJsonSchema,
       maxTokens: prompt.maxTokens,
+      reasoningEffort: prompt.effort,
     });
 
     if (raw === undefined || raw === null || raw === "") {

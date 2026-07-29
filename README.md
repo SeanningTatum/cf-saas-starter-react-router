@@ -347,8 +347,9 @@ bun run hooks:install         # Re-install pre-commit gate
 bun run setup                 # First-time wizard
 bun run teardown              # Tear down Cloudflare resources
 
-# Prompt evals (live, needs CLOUDFLARE_ACCOUNT_ID + CLOUDFLARE_API_TOKEN)
-npx promptfoo eval -c app/lib/ai/prompts/admin-insights/promptfooconfig.yaml
+# Prompt evals (live — boots a local Workers AI proxy; needs wrangler login
+# and Node >= 22.22 for promptfoo, see PROMPTFOO_NODE in the script)
+./scripts/eval-admin-insights.sh
 ```
 
 ---
@@ -371,7 +372,7 @@ README.md            # contract: in/out, failure modes ↔ case ids, version bum
 **Two test layers, on purpose:**
 
 - **Deterministic (CI, free, hermetic)** — `bun run test` covers the graders plus golden-set integrity gates (≥20 cases, ≥5 adversarial, every input/expected decodes, every `must_not` parses). No model calls. The ladder is cheapest-first: schema validity → field equality → programmatic invariants → `must_not` adversarial guards.
-- **Live gate (manual, paid)** — `npx promptfoo eval -c <promptfooconfig.yaml>` replays the golden set against the real model (Workers AI, `@cf/moonshotai/kimi-k2.5`) using the *same* graders. Run it before shipping any prompt version bump; an adversarial regression is a hard fail.
+- **Live gate (manual, paid)** — `./scripts/eval-admin-insights.sh` replays the golden set against the real model (Workers AI, `@cf/moonshotai/kimi-k2.5`) using the *same* graders. It boots a local proxy worker (`scripts/ai-eval-proxy/`) so the eval drives the actual binding with the current schema — no API token, just `wrangler login`. Run it before shipping any prompt version bump; an adversarial regression is a hard fail. Baselines are committed to the module's `evals/` directory.
 
 **Rules that are not negotiable here:** the model never writes its own labels and never grades its own output; the model id is pinned in the module (a swap is a version bump); no sampling parameters (`temperature` & co.) — reproducibility comes from the pinned model, the locked schema, and the frozen golden set; outputs are schema-locked via Workers AI JSON Mode *and* decoded with Effect Schema on the way out.
 

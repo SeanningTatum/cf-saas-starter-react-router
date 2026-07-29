@@ -1,5 +1,7 @@
 import { JSONSchema, Schema } from "effect";
-import { UserGrowthPoint, UserStats } from "@/lib/schemas/analytics";
+// Relative (not the usual `@/` alias) so promptfoo's TS loader resolves it
+// too — eval tooling loads this file outside the app build.
+import { UserGrowthPoint, UserStats } from "../../../schemas/analytics";
 
 /**
  * Prompt module: admin-insights
@@ -59,7 +61,8 @@ const SYSTEM = `You summarize SaaS user analytics for an admin dashboard.
 Rules:
 - Use ONLY the numbers in the snapshot. Never invent causes, campaigns, or events.
 - "direction" compares the recent half of the growth series to the earlier half; use "flat" when the difference is noise (±10%).
-- If the product is young or totals are near zero, set dataQuality to "sparse" and keep claims modest.
+- Set dataQuality to "sparse" ONLY when the snapshot cannot support any trustworthy trend: fewer than 10 total users, or internally inconsistent data (e.g., negative counts, or verified/banned/admin counts exceeding totalUsers). An empty growth series for an established product is a flat zero trend, not sparse data. Otherwise it is "sufficient" — small numbers are still analyzable; keep claims modest when they are.
+- Answer directly with the JSON object. Do not deliberate at length; the schema constrains the shape, so keep reasoning brief.
 - Trends describe what happened; suggestedActions are concrete next steps an admin can take.
 - Be concise. No markdown, no caveats about being an AI.`;
 
@@ -67,9 +70,12 @@ export const prompt = {
   id: "admin-insights",
   version: 1, // bump on any behavior change (see README.md rules)
   model: "@cf/moonshotai/kimi-k2.5", // pinned: a model swap is a new version
-  // kimi-k2.5 reasons before answering and `reasoning_content` counts against
-  // max_tokens (verified live 2026-07-29: 100 tokens → finish_reason "length"
-  // with truncated content). 4000 leaves room for reasoning + full output.
+  // kimi-k2.5 is a reasoning model: reasoning_content counts against
+  // max_tokens and is unbounded by default — on some inputs it consumes the
+  // entire budget and returns EMPTY content (finish_reason "length"), or
+  // hits the upstream ~60s timeout. reasoning_effort "low" keeps answers
+  // within budget (verified live 2026-07-29); 4000 is headroom, not a target.
+  effort: "low" as const,
   maxTokens: 4000,
   system: SYSTEM,
   render: (input: AdminInsightsInput) => [

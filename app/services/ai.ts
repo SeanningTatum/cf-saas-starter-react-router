@@ -10,6 +10,8 @@ export interface WorkersAiRunInput {
   readonly messages: readonly { role: "system" | "user"; content: string }[];
   readonly jsonSchema: Record<string, unknown>;
   readonly maxTokens?: number;
+  /** Workers AI reasoning effort ("low" | "medium" | "high") for reasoning models like kimi-k2.5. */
+  readonly reasoningEffort?: string;
 }
 
 export interface WorkersAiShape {
@@ -52,11 +54,12 @@ export const WorkersAiLive = Layer.effect(
               {
                 messages: [...input.messages],
                 max_tokens: input.maxTokens,
+                reasoning_effort: input.reasoningEffort,
                 response_format: {
                   type: "json_schema",
                   json_schema: input.jsonSchema,
                 },
-              }
+              } as Parameters<Ai["run"]>[1]
             )) as
               | string
               | {

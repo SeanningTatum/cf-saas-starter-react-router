@@ -21,6 +21,14 @@
 
 ---
 
+## 2026-07-29 — PR #19 opened for feat-007 ai-admin-insights via /create-pr-with-review: 4 commits (skills install, feature, brain docs, Greptile fixes 1a1d420). Greptile pre-PR review: 5 findings, 4 auto-fixed (silent-502 logging, client-message leak, date pattern, not_contains semantics), 1 escalated (rate limiting → user deferred as follow-up). Browser verification: 3 independent PASS runs agreed.
+- branch: `beaver/283411c1`
+- in-progress feature: none
+- run note: none
+- next: CI on PR #19; then live promptfoo baseline; rate-limit follow-up PR
+
+---
+
 ## 2026-07-29 — feat-007 ai-admin-insights SHIPPED. ai-toolkit skills (from marketplace#15) installed via skills-lock.json; first prompt module app/lib/ai/prompts/admin-insights/ on pinned @cf/moonshotai/kimi-k2.5 via AI binding (JSON Mode, Effect Schema contract, 23 golden cases, deterministic grader ladder on Vitest, promptfoo live-gate config as devDependency). WorkersAi service + AiOutputError→502 + analytics.getAiInsights admin mutation + AiInsightsCard (en+zh, testids). Verifier caught a real bug: kimi returns OpenAI chat.completion (choices[0].message.content), not {response} — fixed normalization + maxTokens 4000 (reasoning counts against budget); re-verified PASS against live model. All gates green: typecheck, 298 tests, build, e2e 2/2, harness-check 10/10.
 - branch: `beaver/283411c1`
 - in-progress feature: none

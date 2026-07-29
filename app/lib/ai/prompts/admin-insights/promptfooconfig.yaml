@@ -1,15 +1,17 @@
 # yaml-language-server: $schema=https://promptfoo.dev/config-schema.json
-# Eval-only config — never bundled into the Worker. Run:
-#   CLOUDFLARE_ACCOUNT_ID=... CLOUDFLARE_API_TOKEN=... \
-#     npx promptfoo eval -c app/lib/ai/prompts/admin-insights/promptfooconfig.yaml
+# Live eval for the admin-insights prompt module — run via
+# scripts/eval-admin-insights.sh, which boots a local proxy worker exposing
+# the Workers AI binding as an OpenAI-compatible endpoint (no API token
+# needed, just wrangler login) and regenerates the response_format schema.
 # Verify `config` keys against the installed promptfoo version — its schema moves.
 description: admin-insights v1
 providers:
-  # Workers AI OpenAI-compatible endpoint; the pinned model id matches prompt.ts.
+  # Pinned model id must match prompt.ts. The proxy injects
+  # response_format from the module's Effect Schema (see gen-schema.ts).
   - id: openai:chat:@cf/moonshotai/kimi-k2.5
     config:
-      apiBaseUrl: https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/ai/v1
-      apiKeyEnvar: CLOUDFLARE_API_TOKEN
+      apiBaseUrl: http://127.0.0.1:8790/v1
+      apiKey: local-eval-proxy
 prompts:
   - file://prompt.ts:renderForPromptfoo
 tests: file://tests.ts
