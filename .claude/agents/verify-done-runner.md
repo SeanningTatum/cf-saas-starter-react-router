@@ -13,7 +13,15 @@ Executes the verification checklist from `.brain/recipes/99-verify-done.md`. Ret
 
 1. Read `.brain/recipes/99-verify-done.md` to get the latest checklist (do not memorise — it changes).
 2. Determine which steps apply:
-   - **tests pin the change** (§1) — you cannot spawn sub-agents, so check the mechanical floor only: for every changed source path (anything outside `.md` / comments / config / `__tests__/`), does a co-located `__tests__/<name>.test.ts` **exist on disk**? Missing → `FAIL`, naming the paths (that is non-negotiable #4, and it is decidable without judgment). Present but untouched by the diff → still `PASS`, listed under "existing coverage (unchanged)" so the main thread can sanity-check it. **Do not FAIL a path just because the diff adds no test** — `test-author` deliberately declines to add duplicate coverage when an existing test already pins the change, and blocking on that would reward exactly the padding this gate exists to prevent. You are not judging whether a test *semantically* covers the change; that call belongs to `test-author`. `DEFERRED` only when you cannot tell which paths are source.
+   - **tests pin the change** (§1) — you cannot spawn sub-agents, so check the mechanical floor only, and **only for the categories that own unit tests**:
+
+     `app/lib/**` · `app/repositories/**` · `app/services/**` · `app/trpc/**` · `workers/**` · `scripts/**`
+
+     Non-negotiable #4 is the hard floor there (helpers + repositories); the other four are included because they already carry co-located suites, so a missing one is a regression rather than a new policy. For a changed path under those roots (excluding `.md` / comments / config / `__tests__/` itself), does a co-located `__tests__/<name>.test.ts` **exist on disk**? Missing → `FAIL`, naming the paths — decidable without judgment. Present but untouched by the diff → still `PASS`, listed under "existing coverage (unchanged)" so the main thread can sanity-check it.
+
+     **Changed source outside those roots never FAILs here.** `app/routes/`, `app/components/`, `app/hooks/`, `app/db/`, `app/models/`, `app/i18n/`, `app/auth/` have no co-located unit suites by design — they are proved by `[4] e2e smoke` and `[6] feature verification`, which are their gate. List them under "covered elsewhere (see [4]/[6])" and move on; demanding a unit test there would reject a compliant change outright.
+
+     **Do not FAIL a path just because the diff adds no test** — `test-author` deliberately declines to add duplicate coverage when an existing test already pins the change, and blocking on that would reward exactly the padding this gate exists to prevent. You are not judging whether a test *semantically* covers the change; that call belongs to `test-author`. `DEFERRED` only when you cannot tell which paths are source.
    - **typecheck + test** — always
    - **e2e smoke** (`bun run test:e2e`) — only if diff touches a route + procedure + repo + UI / auth / forms / migration
    - **build** — only if diff touches `wrangler.jsonc`, bindings, workflows, runtime composition, or `workers/`
@@ -27,9 +35,10 @@ Executes the verification checklist from `.brain/recipes/99-verify-done.md`. Ret
 ```
 Verify-done report — <branch> @ <short-sha>
 
-[1] tests pin change  : N/A (no source touched) | PASS — <n> source paths
+[1] tests pin change  : N/A (no source touched) | PASS — <n> unit-tested paths
     new/updated tests in diff        : <paths>
     existing coverage (unchanged, verify): <paths>
+    covered elsewhere (see [4]/[6])  : <paths outside the unit-tested roots>
                       | FAIL — no test file exists for: <paths>; test-author must run
                       | DEFERRED — cannot determine which paths are source: <why>
 
