@@ -6,7 +6,19 @@ Run this before declaring a task complete. Externalises the "am I finished?" jud
 
 Agents tend to stop at "code compiles" or "tests pass without re-running them." This list forces an actual end-to-end pass + brain-coherence check before handoff.
 
-## 1. Code health
+## 1. Tests that pin the change (if source changed)
+
+Before running the suite, make sure the change is actually *pinned* by a test — a green run of tests that never exercised the new behaviour proves nothing.
+
+Spawn the [`test-author`](../../.claude/agents/test-author.md) sub-agent with the changed paths (or `"my branch"`). It writes to `**/__tests__/**` only, applies the gate — every test must name the specific regression it would catch — and prunes redundant tests rather than stacking near-clones next to them. Test count going *down* is a valid outcome.
+
+Non-negotiable #4 is the floor: every helper in `app/lib/` and every repository in `app/repositories/` has a co-located test. Above that floor the question is not "did coverage go up?" but **"would this suite fail if someone reverted the fix?"**
+
+If `test-author` reports a source defect instead of writing a test, that is the expected behaviour — it does not edit app code. Fix the defect, then re-run it.
+
+**Skip only when** the diff touches no source: brain docs / `.md`, comments, config, or a test-only change. Note the skip in the run note.
+
+## 2. Code health
 
 ```bash
 bun run typecheck
@@ -15,7 +27,7 @@ bun run test
 
 Both must be green **on the post-change tree**, not from memory of an earlier run.
 
-## 2. Regression smoke — e2e specs (default ON)
+## 3. Regression smoke — e2e specs (default ON)
 
 ```bash
 bun run test:e2e
@@ -23,7 +35,7 @@ bun run test:e2e
 
 **Default: run.** These are the thin, stable [`e2e/`](../../e2e) specs (auth + other critical paths) that CI re-runs on every PR. They are the automated regression net — the only layer that catches real wiring breakage on future changes. Skipping is the single biggest source of premature "done."
 
-> We do **not** write a new spec per feature anymore. Feature-level proof is §4 (feature verification). Only add/extend an `e2e/` spec when a flow is critical enough to guard against future regressions in CI.
+> We do **not** write a new spec per feature anymore. Feature-level proof is §5 (feature verification). Only add/extend an `e2e/` spec when a flow is critical enough to guard against future regressions in CI.
 
 **Opt-out only when** the diff is purely:
 - a tagged-error definition + `tagToTRPC` case (no procedure/repo touched)
@@ -33,7 +45,7 @@ bun run test:e2e
 
 If you opt out, append a one-line justification to your run note (`runs/<date>-<slug>.md`) under "Skipped checks". No silent skips.
 
-## 3. Build (if cloudflare-touching)
+## 4. Build (if cloudflare-touching)
 
 If you changed `wrangler.jsonc`, bindings, workflows, runtime composition, or anything in `workers/`:
 
@@ -43,7 +55,7 @@ bun run build
 
 This catches Workers-specific compat issues that local dev hides.
 
-## 4. Feature verification (if UI)
+## 5. Feature verification (if UI)
 
 If a user-visible flow changed, produce browser evidence — **do not claim UI works without a browser walk.**
 
@@ -54,7 +66,7 @@ Spawn the [`feature-verifier`](../../.claude/agents/feature-verifier.md) sub-age
 
 For a trivial UI tweak (copy, spacing) a manual `bun run dev` walk noted in the run note is enough — the verifier is for feature-level flows.
 
-## 5. Brain coherence
+## 6. Brain coherence
 
 Look at your diff (`git diff --stat`). For every changed path, ask:
 
@@ -77,7 +89,7 @@ Look at your diff (`git diff --stat`). For every changed path, ask:
 
 (Same table the `brain-reminder.sh` hook prints at commit time — front-loading it.)
 
-## 6. Five non-negotiables sweep
+## 7. Five non-negotiables sweep
 
 Grep your diff:
 
@@ -92,7 +104,7 @@ Any hit = re-read [`.brain/codebase/effect-ts.md`](../codebase/effect-ts.md). Li
 - `from "zod"` → use Effect Schema
 - bare `try {}` → use `Effect.tryPromise`
 
-## 7. Harness invariants
+## 8. Harness invariants
 
 ```bash
 ./scripts/harness-check.sh
@@ -100,17 +112,18 @@ Any hit = re-read [`.brain/codebase/effect-ts.md`](../codebase/effect-ts.md). Li
 
 Runs `brain check` (brain-state invariants) + the repo supplement (sync rule, sub-agent frontmatter, dead links). Must exit zero.
 
-## 8. Close the run note + checkpoint
+## 9. Close the run note + checkpoint
 
 If you opened one, append a final entry via `brain runs append <slug> --step "verify-done" --observed "<result tails>"` (or the flat run note), then `brain progress add --summary "..." --next "..."`: what shipped, what is left, what surprised you. Future you will read this.
 
 ## Definition of done
 
+- [ ] Change is pinned by a test (if source changed — via `test-author`, per §1)
 - [ ] `typecheck` green
 - [ ] `test` green
-- [ ] `test:e2e` smoke green (default — opt-out only with run-note justification per §2)
+- [ ] `test:e2e` smoke green (default — opt-out only with run-note justification per §3)
 - [ ] `build` green (if CF-touching)
-- [ ] Feature verification doc PASS (if UI feature — via `feature-verifier`, per §4)
+- [ ] Feature verification doc PASS (if UI feature — via `feature-verifier`, per §5)
 - [ ] `./scripts/harness-check.sh` green (`brain check` brain-state invariants + repo supplement: sync rule, sub-agent frontmatter, dead links)
 - [ ] Every diffed path → owning brain doc updated
 - [ ] No five-non-negotiables grep hits

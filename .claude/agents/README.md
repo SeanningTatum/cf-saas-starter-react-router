@@ -8,6 +8,7 @@ Project-local Claude Code subagents that wrap pieces of [`.brain/HARNESS.md`](..
 |-------|-----------|----------|
 | [`brain-navigator`](brain-navigator.md) | Instructions | Before writing code — get reading list for the task |
 | [`recipe-runner`](recipe-runner.md) | Instructions + Lifecycle | Adding new code that matches one of the 8 recipes |
+| [`test-author`](test-author.md) | Verification (authors) | After implementing a feature/fix — write or update the unit tests that pin its business logic |
 | [`effect-ts-enforcer`](effect-ts-enforcer.md) | Verification | After writing code, before `/verify-done` — review against 5 non-negotiables |
 | [`verify-done-runner`](verify-done-runner.md) | Verification | Before declaring any non-trivial task done |
 | [`feature-tracker`](feature-tracker.md) | State + Scope | Status changes (start / ship / block / scope a feature) |
@@ -17,9 +18,10 @@ Project-local Claude Code subagents that wrap pieces of [`.brain/HARNESS.md`](..
 ```
 1. brain-navigator     →  "what do I read?"
 2. recipe-runner       →  applies the recipe (or main thread codes from rule file)
-3. effect-ts-enforcer  →  reviews the diff
-4. verify-done-runner  →  runs the full checklist
-5. feature-tracker     →  flips status + appends to progress.md
+3. test-author         →  writes the tests that pin the new logic
+4. effect-ts-enforcer  →  reviews the diff
+5. verify-done-runner  →  runs the full checklist
+6. feature-tracker     →  flips status + appends to progress.md
 ```
 
 ## Plugin-provided agents (complementary, not replaced)
@@ -42,7 +44,7 @@ These come from shared plugins enabled in `.claude/settings.json`. They cover *g
 - Sub-agents are markdown files with YAML frontmatter (`name`, `description`, `tools`, `model`).
 - Description should match the schema's expected pattern (single short paragraph) — Claude Code uses it to decide when to spawn the agent.
 - Tools: minimal set. Read-only agents (`brain-navigator`, `effect-ts-enforcer`, `verify-done-runner`) explicitly omit `Edit` / `Write`.
-- Model: `sonnet` is the default for harness operators (cost / quality balance).
+- Model: `sonnet` is the default for harness operators (cost / quality balance). Exception: `test-author` runs `opus` — deciding *which* tests are worth writing is judgment work, and a cheap model defaults to coverage padding.
 
 ## When to add a new sub-agent
 

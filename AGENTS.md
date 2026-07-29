@@ -43,7 +43,7 @@ Thin wrappers that sequence `brain` CLI commands with repo-specific steps (basel
 | Command | Purpose |
 |---------|---------|
 | [`/start-task`](.claude/commands/start-task.md) | Kickoff — `init.sh --baseline` + brain read (`brain`/`brain progress`/`brain docs`/`brain search`) + framing + run note + `brain progress add`. Refuses if scope policy violated. |
-| [`/verify-done`](.claude/commands/verify-done.md) | Full verification — typecheck/test/e2e smoke/build/feature-verification/brain coherence/non-negotiables + `brain check`. |
+| [`/verify-done`](.claude/commands/verify-done.md) | Full verification — `test-author` (tests that pin the change)/typecheck/test/e2e smoke/build/feature-verification/brain coherence/non-negotiables + `brain check`. |
 | [`/ship-feature`](.claude/commands/ship-feature.md) | Close out — verify-done + `brain ship <slug> --evidence` (flips `feature_list.json`, checkpoints, runs `brain check`) + update feature MD + close run note. |
 | [`/harness-check`](.claude/commands/harness-check.md) | Validate harness invariants via [`scripts/harness-check.sh`](scripts/harness-check.sh) = `brain check` + repo supplement (sync rule, sub-agent frontmatter, dead links, hook wiring + hook tests). Deterministic, no LLM, exits non-zero on drift. |
 
