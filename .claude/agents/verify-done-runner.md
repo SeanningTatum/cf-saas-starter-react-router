@@ -13,15 +13,15 @@ Executes the verification checklist from `.brain/recipes/99-verify-done.md`. Ret
 
 1. Read `.brain/recipes/99-verify-done.md` to get the latest checklist (do not memorise — it changes).
 2. Determine which steps apply:
-   - **tests pin the change** (§1) — you cannot spawn sub-agents, so check the mechanical floor only, and the floor is exactly non-negotiable #4:
+   - **tests pin the change** (§1) — the recipe makes `test-author` mandatory for every source-changing diff, and you cannot spawn sub-agents, so you may PASS this step **only on evidence you can actually observe**. Three tiers:
 
-     `app/lib/**` · `app/repositories/**`
+     **Tier 1 — the floor, exactly non-negotiable #4: `app/lib/**` · `app/repositories/**`.** For a changed path under these two roots (excluding `.md` / comments / config / `__tests__/` itself), does a co-located `__tests__/<name>.test.ts` **exist on disk**? Missing → `FAIL`, naming the paths — decidable without judgment, and winnable: `test-author` writes the missing test. Present but untouched by the diff → still `PASS`, listed under "existing coverage (unchanged)" so the main thread can sanity-check it.
 
-     For a changed path under those two roots (excluding `.md` / comments / config / `__tests__/` itself), does a co-located `__tests__/<name>.test.ts` **exist on disk**? Missing → `FAIL`, naming the paths — decidable without judgment, and winnable: `test-author` writes the missing test. Present but untouched by the diff → still `PASS`, listed under "existing coverage (unchanged)" so the main thread can sanity-check it.
+     **Tier 2 — observable evidence, any root.** New or updated test files **in the diff** → `PASS` for the paths they pin; list them. An existing test file is evidence — never manufacture a `FAIL` out of an untouched one.
 
-     **Changed source outside those two roots never FAILs here.** `app/services/`, `app/trpc/`, `workers/`, `scripts/` carry suites but not per-file coverage (`workers/` has no unit tests at all), so a missing identically-named test there is the norm, not a regression — list them under "suite-level coverage (no per-file floor)". `app/routes/`, `app/components/`, `app/hooks/`, `app/db/`, `app/models/`, `app/i18n/`, `app/auth/` have no co-located unit suites by design — they are proved by `[4] e2e smoke` and `[6] feature verification`, which are their gate: list them under "covered elsewhere (see [4]/[6])". For anything outside the floor, whether a test *semantically* pins the change is `test-author`'s call, not yours — demanding an identically-named file there would reject compliant changes outright.
+     **Tier 3 — no observable evidence → `DEFERRED`, never PASS.** Changed source outside the floor (`app/services/`, `app/trpc/`, `workers/`, `scripts/`, `app/routes/`, `app/components/`, …) with no test changes in the diff and no matching test on disk means `test-author`'s verdict — write, prune, or "existing coverage already pins it" — is not observable to you, and these roots carry suites without per-file coverage (`workers/` has none), so absence of a same-named file proves nothing either way. Per your hard rules this `DEFERRED` forces `DO NOT SHIP — [1] unproven`: the main thread must run `test-author` (it can spawn sub-agents; you cannot) and cite its report. When `test-author` already ran this session, its report **is** the evidence — `PASS`, quoting the verdict. Route/UI paths are additionally gated by `[4] e2e smoke` and `[6] feature verification` — note "also covered by [4]/[6]", but that does not discharge §1.
 
-     **Do not FAIL a path just because the diff adds no test** — `test-author` deliberately declines to add duplicate coverage when an existing test already pins the change, and blocking on that would reward exactly the padding this gate exists to prevent. You are not judging whether a test *semantically* covers the change; that call belongs to `test-author`. `DEFERRED` only when you cannot tell which paths are source.
+     **Do not FAIL a path just because the diff adds no test** — `test-author` deliberately declines to add duplicate coverage when an existing test already pins the change, and blocking on that would reward exactly the padding this gate exists to prevent. You are not judging whether a test *semantically* covers the change; that call belongs to `test-author`.
    - **typecheck + test** — always
    - **e2e smoke** (`bun run test:e2e`) — only if diff touches a route + procedure + repo + UI / auth / forms / migration
    - **build** — only if diff touches `wrangler.jsonc`, bindings, workflows, runtime composition, or `workers/`
@@ -35,12 +35,12 @@ Executes the verification checklist from `.brain/recipes/99-verify-done.md`. Ret
 ```
 Verify-done report — <branch> @ <short-sha>
 
-[1] tests pin change  : N/A (no source touched) | PASS — <n> floor-checked paths
+[1] tests pin change  : N/A (no source touched) | PASS — <evidence: tests in diff | existing test on disk | test-author report, quoted>
     new/updated tests in diff        : <paths>
     existing coverage (unchanged, verify): <paths>
-    suite-level coverage (no per-file floor): <paths under app/services, app/trpc, workers, scripts>
-    covered elsewhere (see [4]/[6])  : <paths outside the unit-tested roots>
-                      | FAIL — no test file exists for: <paths>; test-author must run
+    also covered by [4]/[6]          : <route/UI paths — does not discharge §1>
+                      | FAIL — floor root (app/lib, app/repositories) with no test file: <paths>; test-author must run
+                      | DEFERRED — test-author verdict not observable for: <paths>; main thread must run it and cite the report
                       | DEFERRED — cannot determine which paths are source: <why>
 
 [2] typecheck         : PASS | FAIL
