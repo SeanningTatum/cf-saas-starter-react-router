@@ -21,6 +21,14 @@
 
 ---
 
+## 2026-07-29 — Released v1.4.0 'Every Test Names Its Victim' (squash 067bfc2, tag v1.4.0): #18 test-author + verify-done gate hardening via 6-round greploop (3/5 → 5/5), #17 tRPC isDev production fix. CHANGELOG + progress updated; preview.yml red is the known placeholder-IDs issue.
+- branch: `main`
+- in-progress feature: none
+- run note: none
+- next: Open follow-up from 2026-07-27 decision: gate deploy.yml/preview.yml behind a real-IDs check so they skip cleanly in the template repo.
+
+---
+
 ## 2026-07-27 — All 3 tRPC isDev PRs green: template#17, home-karaoke#14, portfolio-v3#6. Fixed a self-inflicted CI regression along the way — the non-negotiables sweep greps added lines for process.env with no comment carve-out, so comments DOCUMENTING the trap tripped the gate. Exempted leading-comment lines only (stricter than the adjacent throw-new rule's bare grep -vE '//'), applied as a targeted one-rule edit in each repo since downstream ci.yml files have legit divergence (no brain-axi install; portfolio-v3 has NODE_OPTIONS for a runner OOM + a throw-new-Response allowance).
 - branch: `fix/trpc-isdev-production`
 - in-progress feature: none
