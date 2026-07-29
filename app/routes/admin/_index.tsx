@@ -5,6 +5,7 @@ import {
   TimeSeriesChart,
   DistributionChart,
   InsightsCard,
+  AiInsightsCard,
 } from "@/components/analytics";
 import { buildUserInsights } from "@/lib/insights";
 import { Users, ShieldCheck, UserX, Shield } from "lucide-react";
@@ -122,6 +123,11 @@ export default function AdminHome({ loaderData }: Route.ComponentProps) {
                   insights={insights}
                 />
               </div>
+            </div>
+
+            {/* Third Row: AI Insights */}
+            <div className="px-4 lg:px-6">
+              <AiInsightsCard />
             </div>
           </div>
         </div>

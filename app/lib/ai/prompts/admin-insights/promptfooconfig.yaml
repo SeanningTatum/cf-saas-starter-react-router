@@ -1,0 +1,15 @@
+# yaml-language-server: $schema=https://promptfoo.dev/config-schema.json
+# Eval-only config — never bundled into the Worker. Run:
+#   CLOUDFLARE_ACCOUNT_ID=... CLOUDFLARE_API_TOKEN=... \
+#     npx promptfoo eval -c app/lib/ai/prompts/admin-insights/promptfooconfig.yaml
+# Verify `config` keys against the installed promptfoo version — its schema moves.
+description: admin-insights v1
+providers:
+  # Workers AI OpenAI-compatible endpoint; the pinned model id matches prompt.ts.
+  - id: openai:chat:@cf/moonshotai/kimi-k2.5
+    config:
+      apiBaseUrl: https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/ai/v1
+      apiKeyEnvar: CLOUDFLARE_API_TOKEN
+prompts:
+  - file://prompt.ts:renderForPromptfoo
+tests: file://tests.ts

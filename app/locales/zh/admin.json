@@ -30,6 +30,17 @@
     "admins_managing": "{{count}} 位管理员在管理平台",
     "recent_signups": "过去 7 天有 {{count}} 位新用户"
   },
+  "ai_insights": {
+    "title": "AI 洞察",
+    "description": "由 AI 模型按需生成的数据分析摘要",
+    "generate": "生成洞察",
+    "regenerate": "重新生成",
+    "generating": "生成中…",
+    "empty": "生成一份近期注册动态的 AI 摘要。",
+    "error": "无法生成洞察,请重试。",
+    "sparse_data": "数据有限",
+    "suggested_actions": "建议操作"
+  },
   "users": {
     "title": "用户"
   },

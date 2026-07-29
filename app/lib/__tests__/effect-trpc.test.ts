@@ -27,6 +27,7 @@ import {
   BucketValidationError,
 } from "@/models/errors/bucket";
 import { WorkflowTriggerError } from "@/models/errors/workflow";
+import { AiOutputError } from "@/models/errors/ai";
 
 const failExit = <E>(e: E) => Effect.exit(tagToTRPC(Effect.fail(e)));
 
@@ -165,6 +166,15 @@ describe("tagToTRPC error mapping", () => {
         new WorkflowTriggerError({ name: "EXAMPLE_WORKFLOW" })
       );
       expectTRPC(exit, "INTERNAL_SERVER_ERROR");
+    })
+  );
+
+  it.effect("AiOutputError → BAD_GATEWAY", () =>
+    Effect.gen(function* () {
+      const exit = yield* failExit(
+        new AiOutputError({ promptId: "admin-insights", reason: "schema_violation" })
+      );
+      expectTRPC(exit, "BAD_GATEWAY");
     })
   );
 

@@ -30,6 +30,17 @@
     "admins_managing": "{{count}} admin(s) managing the platform",
     "recent_signups": "{{count}} new user(s) in the last 7 days"
   },
+  "ai_insights": {
+    "title": "AI Insights",
+    "description": "On-demand summary of your analytics by an AI model",
+    "generate": "Generate insights",
+    "regenerate": "Regenerate",
+    "generating": "Generating…",
+    "empty": "Generate an AI summary of your recent signup activity.",
+    "error": "Could not generate insights. Please try again.",
+    "sparse_data": "Limited data",
+    "suggested_actions": "Suggested actions"
+  },
   "users": {
     "title": "Users"
   },
