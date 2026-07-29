@@ -72,7 +72,7 @@ Externalises "am I done?" so the agent does not declare victory on a half-built 
 
 | Tool | Purpose |
 |------|---------|
-| [`recipes/99-verify-done.md`](recipes/99-verify-done.md) | Full checklist: typecheck → test → **e2e smoke (default ON)** → build (if CF-touching) → **feature verification** (if UI, via `feature-verifier`) → harness-check → brain coherence |
+| [`recipes/99-verify-done.md`](recipes/99-verify-done.md) | Full checklist: **tests that pin the change** (if source touched, via `test-author`) → typecheck → test → **e2e smoke (default ON)** → build (if CF-touching) → **feature verification** (if UI, via `feature-verifier`) → harness-check → brain coherence |
 | [`features/<slug>/verifications/`](features/index.md) | Browser-walk evidence per feature (screenshots + verdict), produced by the `feature-verifier` sub-agent — the feature-level proof layer, co-located in each feature's folder |
 | [`/verify-done`](../.claude/commands/verify-done.md) slash command | Same checklist, runnable mid-conversation |
 | [`init.sh --baseline`](../init.sh) | Captures pre-change baseline (typecheck + test + harness-check) so post-change failures aren't blamed on you |
@@ -83,7 +83,7 @@ Externalises "am I done?" so the agent does not declare victory on a half-built 
 | [`.claude/hooks/rule-router.sh`](../.claude/hooks/rule-router.sh) | Pre-edit hook injecting the [`rules/`](rules/) layer doc for the touched path — moves "did you read the rule?" off agent discipline (deterministic, no LLM, never blocks) |
 | [`app/lib/effect-trpc.ts`](../app/lib/effect-trpc.ts) `appErrorToTRPC` | Compile-time exhaustiveness on tagged-error → HTTP code via `assertNever`. New tagged error w/o case = TS error. |
 
-**Verification rule**: green typecheck + green tests is *necessary, not sufficient*. UI features need a `feature-verifier` browser walk with a PASS verdict doc. CF-binding changes need `bun run build`. E2E smoke specs are default-on (opt-out only with run-note justification — see `99-verify-done.md` §2). Skipping is the single biggest source of premature "done."
+**Verification rule**: green typecheck + green tests is *necessary, not sufficient* — and a green suite that never exercised the change proves nothing, which is why `test-author` runs first (`99-verify-done.md` §1). UI features need a `feature-verifier` browser walk with a PASS verdict doc. CF-binding changes need `bun run build`. E2E smoke specs are default-on (opt-out only with run-note justification — see `99-verify-done.md` §3). Skipping is the single biggest source of premature "done."
 
 ---
 
@@ -137,6 +137,7 @@ Custom subagents in [`.claude/agents/`](../.claude/agents/) wrap pieces of the h
 |-------|----------|
 | `brain-navigator` | Read-only locator. Returns "what to read for X task" by walking the brain indexes. |
 | `effect-ts-enforcer` | Reviews a diff for the 5 non-negotiables (no `throw`, no Zod, tagged errors mapped, repo/service patterns, no `process.env`). |
+| `test-author` | Writes the unit tests that pin a change (`99-verify-done.md` §1). Every test must name the regression it catches; prunes redundant ones. Writes to `**/__tests__/**` only. Runs `opus` — picking which tests are worth writing is judgment work. |
 | `verify-done-runner` | Runs the full `99-verify-done.md` checklist and reports pass/fail per step. |
 | `feature-verifier` | Drives a feature's golden + error path through the live app with the Playwright CLI (throwaway headless script run via `bun`), screenshots each step, writes a verdict doc to `verifications/`. The feature-level proof layer. |
 | `feature-tracker` | Updates `feature_list.json` + `features/<slug>/<slug>.md` on status change. Refuses to touch code. |

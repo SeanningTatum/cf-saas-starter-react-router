@@ -46,7 +46,7 @@ Run [add-route.md](add-route.md) for each page. Auth-gate at the loader level.
 
 ## 7. Tests + verification
 
-- **Unit** (required): every new schema, helper, repository, service. See [`.brain/codebase/testing.md`](../codebase/testing.md)
+- **Unit** (required): every new schema, helper, repository, service. Delegate to the [`test-author`](../../.claude/agents/test-author.md) sub-agent rather than hand-rolling — it applies the gate (every test names the regression it catches) and prunes redundant ones. See [`.brain/codebase/testing.md`](../codebase/testing.md) and [`99-verify-done.md`](99-verify-done.md) §1
 - **Feature verification** (required for user-visible features): spawn the [`feature-verifier`](../../.claude/agents/feature-verifier.md) sub-agent with the feature slug + golden path + one error path. It walks the live app with the Playwright CLI (throwaway headless script run via `bun`), screenshots each step, and writes `.brain/features/<slug>/verifications/<date>.md` (see [`features/index.md`](../features/index.md)). Verdict must be PASS. Link the doc from `features/<slug>/<slug>.md`.
 - **E2E smoke** (only if critical-path): if this flow is important enough to guard against future regressions in CI, add/extend a thin spec in [`e2e/`](../../e2e/). Not one-per-feature — CI runs these on every PR.
 

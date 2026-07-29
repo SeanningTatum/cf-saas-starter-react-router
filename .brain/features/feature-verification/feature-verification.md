@@ -10,7 +10,7 @@ Feature-level proof that a user-visible flow actually works, without maintaining
 
 - Shipping a new user-visible feature (`recipes/add-feature.md` §7)
 - Changing an existing feature's golden path or error handling
-- `/verify-done` §4 flags a UI flow with no current verification doc
+- `/verify-done` §5 flags a UI flow with no current verification doc
 - Entry point: spawn the `feature-verifier` sub-agent with a feature slug + golden path + one error path
 
 ## How It Works
@@ -43,7 +43,7 @@ Verified against itself: [`authentication/verifications/2026-07-13.md`](../authe
 |------|------|
 | [`.claude/agents/feature-verifier.md`](../../../.claude/agents/feature-verifier.md) | The sub-agent — CLI script author + verdict-doc writer |
 | [`.brain/features/_VERIFICATION_TEMPLATE.md`](../_VERIFICATION_TEMPLATE.md) | Verdict-doc template |
-| [`.brain/recipes/99-verify-done.md`](../../recipes/99-verify-done.md) | §2 smoke + §4 feature verification |
+| [`.brain/recipes/99-verify-done.md`](../../recipes/99-verify-done.md) | §3 smoke + §5 feature verification |
 | [`.brain/recipes/add-feature.md`](../../recipes/add-feature.md) | §7 tests + verification |
 | [`.brain/rules/library.md`](../../rules/library.md) / [`frontend.md`](../../rules/frontend.md) | Playwright CLI + verification convention |
 | [`e2e/auth.spec.ts`](../../../e2e/auth.spec.ts) | The retained CI smoke spec (regression net) |

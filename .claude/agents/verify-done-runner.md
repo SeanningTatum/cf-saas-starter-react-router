@@ -13,6 +13,7 @@ Executes the verification checklist from `.brain/recipes/99-verify-done.md`. Ret
 
 1. Read `.brain/recipes/99-verify-done.md` to get the latest checklist (do not memorise — it changes).
 2. Determine which steps apply:
+   - **tests pin the change** (§1) — flag for the main thread: you cannot spawn sub-agents. If the diff touches source (anything outside `.md` / comments / config / `__tests__/`), report that `test-author` must run and list the changed source paths that have no corresponding `__tests__/` entry in the diff.
    - **typecheck + test** — always
    - **e2e smoke** (`bun run test:e2e`) — only if diff touches a route + procedure + repo + UI / auth / forms / migration
    - **build** — only if diff touches `wrangler.jsonc`, bindings, workflows, runtime composition, or `workers/`
@@ -26,21 +27,23 @@ Executes the verification checklist from `.brain/recipes/99-verify-done.md`. Ret
 ```
 Verify-done report — <branch> @ <short-sha>
 
-[1] typecheck         : PASS | FAIL
+[1] tests pin change  : N/A (no source touched) | DEFERRED — test-author must cover: <source paths with no test in the diff>
+
+[2] typecheck         : PASS | FAIL
     <verbatim tail>
 
-[2] test              : PASS | FAIL
+[3] test              : PASS | FAIL
     <verbatim tail>
 
-[3] e2e smoke         : SKIPPED (not cross-component) | PASS | FAIL
+[4] e2e smoke         : SKIPPED (not cross-component) | PASS | FAIL
     <verbatim tail>
 
-[4] build             : SKIPPED (no CF surface touched) | PASS | FAIL
+[5] build             : SKIPPED (no CF surface touched) | PASS | FAIL
     <verbatim tail>
 
-[5] feature verification : DEFERRED — feature-verifier must walk: <feature slug + URL paths if UI changed>; existing doc: <path or none>
+[6] feature verification : DEFERRED — feature-verifier must walk: <feature slug + URL paths if UI changed>; existing doc: <path or none>
 
-[6] brain coherence   : <list of .brain/ files that should be updated based on diff>
+[7] brain coherence   : <list of .brain/ files that should be updated based on diff>
     OK | NEEDS UPDATE: <files>
 
 Verdict: SHIP | DO NOT SHIP — <one-line reason>
