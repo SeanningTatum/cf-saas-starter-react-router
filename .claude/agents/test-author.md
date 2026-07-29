@@ -67,6 +67,7 @@ Files: <path> (new|extended, +N tests)
 
 Skipped (and why):
 - <branch> — <reason it isn't worth a test>
+- <source path> — already pinned by <existing test path::name>, no new test written
 
 Deleted (redundant):
 - <path::name> — superseded by <name>
