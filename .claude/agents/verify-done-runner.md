@@ -13,15 +13,15 @@ Executes the verification checklist from `.brain/recipes/99-verify-done.md`. Ret
 
 1. Read `.brain/recipes/99-verify-done.md` to get the latest checklist (do not memorise — it changes).
 2. Determine which steps apply:
-   - **tests pin the change** (§1) — the recipe makes `test-author` mandatory for every source-changing diff, and you cannot spawn sub-agents, so you may PASS this step **only on evidence you can actually observe**. Three tiers:
+   - **tests pin the change** (§1) — the recipe makes `test-author` mandatory for every source-changing diff, and only `test-author` judges whether the changed behaviour is genuinely pinned. You cannot spawn sub-agents, so you can never discharge this step from the filesystem alone. Exactly four outcomes:
 
-     **Tier 1 — the floor, exactly non-negotiable #4: `app/lib/**` · `app/repositories/**`.** For a changed path under these two roots (excluding `.md` / comments / config / `__tests__/` itself), does a co-located `__tests__/<name>.test.ts` **exist on disk**? Missing → `FAIL`, naming the paths — decidable without judgment, and winnable: `test-author` writes the missing test. Present but untouched by the diff → still `PASS`, listed under "existing coverage (unchanged)" so the main thread can sanity-check it.
+     **N/A** — the diff touches no source (`.md` / comments / config / `__tests__/`-only).
 
-     **Tier 2 — observable evidence, any root.** New or updated test files **in the diff** → `PASS` for the paths they pin; list them. An existing test file is evidence — never manufacture a `FAIL` out of an untouched one.
+     **FAIL** — the mechanical floor, exactly non-negotiable #4: `app/lib/**` · `app/repositories/**`. For a changed path under these two roots (excluding `.md` / comments / config / `__tests__/` itself), does a co-located `__tests__/<name>.test.ts` **exist on disk**? Missing → `FAIL`, naming the paths — decidable without judgment, and winnable: `test-author` writes the missing test. An untouched existing test never produces a `FAIL` — `test-author` deliberately declines duplicate coverage when an existing test already pins the change, and blocking on that would reward exactly the padding this gate exists to prevent.
 
-     **Tier 3 — no observable evidence → `DEFERRED`, never PASS.** Changed source outside the floor (`app/services/`, `app/trpc/`, `workers/`, `scripts/`, `app/routes/`, `app/components/`, …) with no test changes in the diff and no matching test on disk means `test-author`'s verdict — write, prune, or "existing coverage already pins it" — is not observable to you, and these roots carry suites without per-file coverage (`workers/` has none), so absence of a same-named file proves nothing either way. Per your hard rules this `DEFERRED` forces `DO NOT SHIP — [1] unproven`: the main thread must run `test-author` (it can spawn sub-agents; you cannot) and cite its report. When `test-author` already ran this session, its report **is** the evidence — `PASS`, quoting the verdict. Route/UI paths are additionally gated by `[4] e2e smoke` and `[6] feature verification` — note "also covered by [4]/[6]", but that does not discharge §1.
+     **PASS** — only when your invocation context includes `test-author`'s report from this session (the main thread ran it first, per the recipe). Quote its verdict — "wrote X", "pruned Y", or "existing test Z already pins this" — and list the supporting evidence you can see (tests in the diff, existing tests on disk) so the main thread can sanity-check it. Test edits in the diff and existing files on disk are *supporting* evidence only: they show tests exist, not that `test-author` judged the change pinned.
 
-     **Do not FAIL a path just because the diff adds no test** — `test-author` deliberately declines to add duplicate coverage when an existing test already pins the change, and blocking on that would reward exactly the padding this gate exists to prevent. You are not judging whether a test *semantically* covers the change; that call belongs to `test-author`.
+     **DEFERRED** — source changed but no `test-author` report in context. Per your hard rules this forces `DO NOT SHIP — [1] unproven`: the main thread must run `test-author` (it can spawn sub-agents; you cannot) and re-invoke you with the report. Also `DEFERRED` when you cannot tell which paths are source.
    - **typecheck + test** — always
    - **e2e smoke** (`bun run test:e2e`) — only if diff touches a route + procedure + repo + UI / auth / forms / migration
    - **build** — only if diff touches `wrangler.jsonc`, bindings, workflows, runtime composition, or `workers/`
@@ -35,12 +35,11 @@ Executes the verification checklist from `.brain/recipes/99-verify-done.md`. Ret
 ```
 Verify-done report — <branch> @ <short-sha>
 
-[1] tests pin change  : N/A (no source touched) | PASS — <evidence: tests in diff | existing test on disk | test-author report, quoted>
-    new/updated tests in diff        : <paths>
-    existing coverage (unchanged, verify): <paths>
+[1] tests pin change  : N/A (no source touched) | PASS — test-author report: "<quoted verdict>"
+    supporting evidence (tests in diff / existing on disk): <paths>
     also covered by [4]/[6]          : <route/UI paths — does not discharge §1>
                       | FAIL — floor root (app/lib, app/repositories) with no test file: <paths>; test-author must run
-                      | DEFERRED — test-author verdict not observable for: <paths>; main thread must run it and cite the report
+                      | DEFERRED — source changed, no test-author report in context: <paths>; main thread must run test-author and re-invoke with its report
                       | DEFERRED — cannot determine which paths are source: <why>
 
 [2] typecheck         : PASS | FAIL
@@ -70,6 +69,6 @@ Verdict: SHIP | DO NOT SHIP — <one-line reason>
 - **Quote output verbatim.** Do not paraphrase test output. Tail to last 10–15 lines max.
 - **Do not fix failures.** Diagnostic only. If a test fails, report it and stop.
 - **Do not skip e2e to make verdict green.** If criteria say e2e applies, run it.
-- **Never green-light a step you did not observe.** A `FAIL` **or** `DEFERRED` on `[1] tests pin change` or `[6] feature verification` forces `DO NOT SHIP — <step> unproven`. You cannot spawn sub-agents or drive a browser, so those two steps are only ever `PASS` on evidence you can actually see in the diff or on disk. Absence of evidence is not a pass — but an *existing* test file is evidence, so do not manufacture a `FAIL` out of an untouched one.
+- **Never green-light a step you did not observe.** A `FAIL` **or** `DEFERRED` on `[1] tests pin change` or `[6] feature verification` forces `DO NOT SHIP — <step> unproven`. You cannot spawn sub-agents or drive a browser, so `[1]` is only ever `PASS` on a `test-author` report from this session quoted in your context, and `[6]` only on a verification doc on disk. Absence of evidence is not a pass — but an *existing* test file is still evidence against a `FAIL`, so do not manufacture one out of an untouched one.
 - **Brain coherence check is mandatory.** Even if all green, if brain docs need update, verdict is `DO NOT SHIP — update brain first`.
 - If pre-existing failures exist (compare to `init.sh --baseline`): report them but mark as `pre-existing` so they don't block this task.
