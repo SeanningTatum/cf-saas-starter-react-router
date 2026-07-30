@@ -10,6 +10,7 @@ How we write code in this repo. Code-level patterns, conventions, helpers, test 
 | [`testing.md`](testing.md) | Vitest + @effect/vitest, `makeTestDatabase` stub layer, repository test pattern | Writing any helper or repository test |
 | [`i18n.md`](i18n.md) | remix-i18next setup, key files, namespaces, conventions, adding new language | Adding/editing UI strings or supporting a new locale |
 | [`api.md`](api.md) | tRPC routes, auth endpoints, file upload API, procedure types, context object | Adding/calling a tRPC route |
+| [`observability.md`](observability.md) | Structured logs + tracing spans: OTLP export, span naming, traceId↔log correlation, MCP-based trace debugging | Adding any endpoint/service/repo method; debugging a failing request |
 | [`features.md`](features.md) | Authentication, Admin Dashboard, Documentation, File Upload, Analytics — feature-level overview | Onboarding to a feature area before drilling into code |
 | [`design-system.md`](design-system.md) | Visual language for the public marketing surface (home, login/sign-up, dashboard entry) — refero-synthesized tokens, components, do/don't | Touching home, login, sign-up, or dashboard entry; before adding a marketing-facing page |
 | [`llms-txt.md`](llms-txt.md) | Library `llms.txt` catalog — Better Auth, Effect TS, Cloudflare. How to fetch (context7 MCP preferred, WebFetch fallback) and when not to | Reaching for library docs — recall feels stale, version-specific behavior, non-trivial library API |

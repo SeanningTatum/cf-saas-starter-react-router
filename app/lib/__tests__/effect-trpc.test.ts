@@ -1,8 +1,10 @@
 import { describe, expect } from "vitest";
 import { it } from "@effect/vitest";
-import { Effect, Exit, Cause, Layer, ManagedRuntime } from "effect";
+import { Effect, Exit, Cause, Layer, ManagedRuntime, Option } from "effect";
 import { TRPCError } from "@trpc/server";
 import { tagToTRPC, runProcedure } from "../effect-trpc";
+import { tryQuery } from "../effect-utils";
+import { makeOtlpTracer, makeSpanBuffer } from "@/services/tracing";
 import { Database, DatabaseLive } from "@/services/database";
 import { CloudflareEnv } from "@/services/cloudflare";
 import type { AppServices } from "@/runtime";
@@ -272,6 +274,83 @@ describe("runProcedure", () => {
       code: "INTERNAL_SERVER_ERROR",
       message: "Configuration error for Database (DATABASE)",
     });
+    await runtime.dispose();
+  });
+});
+
+describe("runProcedure span option", () => {
+  // A runtime whose tracer records every ended span, so the root-span wiring is
+  // observable without a collector.
+  const tracingRuntime = () => {
+    const buffer = makeSpanBuffer();
+    const runtime = ManagedRuntime.make(
+      Layer.setTracer(makeOtlpTracer(buffer))
+    ) as unknown as ManagedRuntime.ManagedRuntime<AppServices, AppError>;
+    return { buffer, runtime };
+  };
+
+  it("runs the effect inside a server-kind span named by options.span", async () => {
+    // Catches: dropping the withSpan wiring or emitting the wrong kind — every
+    // trace would lose its root and the db.* spans would be orphaned.
+    const { buffer, runtime } = tracingRuntime();
+
+    const result = await runProcedure(runtime, Effect.succeed(42), {
+      span: "trpc.user.getUsers",
+    });
+
+    expect(result).toBe(42);
+    expect(buffer.spans.map((s) => s.name)).toEqual(["trpc.user.getUsers"]);
+    expect(buffer.spans[0].kind).toBe("server");
+    await runtime.dispose();
+  });
+
+  it("creates no span when options is omitted", async () => {
+    // Catches: unconditionally wrapping in a span (e.g. a hardcoded default
+    // name), which would bury every procedure under one bogus span name.
+    const { buffer, runtime } = tracingRuntime();
+
+    await runProcedure(runtime, Effect.succeed(42));
+
+    expect(buffer.spans).toHaveLength(0);
+    await runtime.dispose();
+  });
+
+  it("makes db spans children of the procedure span, sharing its traceId", async () => {
+    // Catches: wrapping the span outside runPromiseExit / around the wrong
+    // effect, which would put the db call in its own trace and break the
+    // log↔trace correlation the feature exists for.
+    const { buffer, runtime } = tracingRuntime();
+
+    await runProcedure(
+      runtime,
+      tryQuery("widget", async () => 1),
+      { span: "trpc.user.getUsers" }
+    );
+
+    const root = buffer.spans.find((s) => s.name === "trpc.user.getUsers");
+    const child = buffer.spans.find((s) => s.name === "db.query widget");
+    expect(root).toBeDefined();
+    expect(child).toBeDefined();
+    expect(child!.traceId).toBe(root!.traceId);
+    expect(
+      Option.isSome(child!.parent) ? child!.parent.value.spanId : undefined
+    ).toBe(root!.spanId);
+    await runtime.dispose();
+  });
+
+  it("still maps a tagged-error failure to a TRPCError when a span is given", async () => {
+    // Catches: the span pipe short-circuiting the Exit.match error mapping.
+    const { buffer, runtime } = tracingRuntime();
+
+    await expect(
+      runProcedure(
+        runtime,
+        Effect.fail(new NotFoundError({ entity: "user", identifier: "u1" })),
+        { span: "trpc.user.getUser" }
+      )
+    ).rejects.toMatchObject({ code: "NOT_FOUND" });
+
+    expect(buffer.spans.map((s) => s.name)).toEqual(["trpc.user.getUser"]);
     await runtime.dispose();
   });
 });

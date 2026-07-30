@@ -1,4 +1,13 @@
-import { HashMap, Logger, LogLevel } from "effect";
+import {
+  Context,
+  FiberRef,
+  FiberRefs,
+  HashMap,
+  Logger,
+  LogLevel,
+  Option,
+  Tracer,
+} from "effect";
 import { emitLog, isDev, type LogLevel as AppLogLevel } from "@/lib/log-format";
 
 export const toAppLevel = (level: LogLevel.LogLevel): AppLogLevel => {
@@ -29,8 +38,22 @@ export const stringify = (message: unknown): string => {
   return typeof message === "string" ? message : JSON.stringify(message);
 };
 
-const customLogger = Logger.make(({ logLevel, message, annotations }) => {
-  const ann: Record<string, unknown> = {};
+/**
+ * Reads the active tracer span (set by `Effect.withSpan`) out of the log
+ * event's fiber context, so every log emitted inside a span automatically
+ * carries `traceId`/`spanId` — the correlation key between logs and traces.
+ */
+export const currentSpanAnnotations = (
+  context: FiberRefs.FiberRefs
+): Record<string, string> => {
+  const fiberContext = FiberRefs.getOrDefault(context, FiberRef.currentContext);
+  const span = Context.getOption(fiberContext, Tracer.ParentSpan);
+  if (Option.isNone(span)) return {};
+  return { traceId: span.value.traceId, spanId: span.value.spanId };
+};
+
+const customLogger = Logger.make(({ logLevel, message, annotations, context }) => {
+  const ann: Record<string, unknown> = currentSpanAnnotations(context);
   HashMap.forEach(annotations, (value, key) => {
     ann[key] = value;
   });

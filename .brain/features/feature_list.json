@@ -1,6 +1,6 @@
 {
   "$schema": "Machine-readable feature state tracker. Source of truth for status; per-feature MD docs are source of truth for design/runtime.",
-  "updated": "2026-07-13",
+  "updated": "2026-07-29",
   "policy": {
     "one_in_progress_at_a_time": true,
     "definition_of_done": "implementation complete + verify-done passed + feature MD updated + brain coherent"
@@ -15,7 +15,9 @@
       "dependencies": [],
       "status": "shipped",
       "evidence": "shipped 2026-05-07; tests: app/repositories/__tests__/user.test.ts; e2e gap noted",
-      "owners": ["sean"]
+      "owners": [
+        "sean"
+      ]
     },
     {
       "id": "feat-002",
@@ -23,10 +25,14 @@
       "slug": "admin-dashboard",
       "doc": ".brain/features/admin-dashboard/admin-dashboard.md",
       "description": "Admin-only area at /admin/* for user management and analytics; data-side gating via adminProcedure.",
-      "dependencies": ["feat-001"],
+      "dependencies": [
+        "feat-001"
+      ],
       "status": "shipped",
       "evidence": "shipped 2026-05-07; known gap: layout has no loader auth gate (data-side only)",
-      "owners": ["sean"]
+      "owners": [
+        "sean"
+      ]
     },
     {
       "id": "feat-003",
@@ -37,7 +43,9 @@
       "dependencies": [],
       "status": "shipped",
       "evidence": "shipped 2026-05-07; tests: app/repositories/__tests__/bucket.test.ts",
-      "owners": ["sean"]
+      "owners": [
+        "sean"
+      ]
     },
     {
       "id": "feat-004",
@@ -45,10 +53,15 @@
       "slug": "analytics",
       "doc": ".brain/features/analytics/analytics.md",
       "description": "Read-only admin analytics at /admin: user growth, role + verification distribution, recent signups.",
-      "dependencies": ["feat-001", "feat-002"],
+      "dependencies": [
+        "feat-001",
+        "feat-002"
+      ],
       "status": "shipped",
       "evidence": "shipped 2026-05-07; AnalyticsRepository runs queries with Effect.all unbounded concurrency",
-      "owners": ["sean"]
+      "owners": [
+        "sean"
+      ]
     },
     {
       "id": "feat-005",
@@ -59,7 +72,9 @@
       "dependencies": [],
       "status": "shipped",
       "evidence": "shipped 2026-07-11; live-verified: per-PR D1 (pr-999 binding test), alias URL auth signup 200 on pr-test, prod signup 200; run note .brain/features/preview-deployments/runs/2026-07-10-preview-deployments.md; workflows .github/workflows/preview.yml + preview-cleanup.yml",
-      "owners": ["sean"]
+      "owners": [
+        "sean"
+      ]
     },
     {
       "id": "feat-006",
@@ -67,10 +82,27 @@
       "slug": "feature-verification",
       "doc": ".brain/features/feature-verification/feature-verification.md",
       "description": "feature-verifier sub-agent drives the live app via the Playwright CLI (throwaway headless script), screenshots the golden + one error path, and writes a per-feature verdict doc. Replaces per-feature e2e specs; thin CI smoke specs remain the regression net.",
-      "dependencies": ["feat-001"],
+      "dependencies": [
+        "feat-001"
+      ],
       "status": "shipped",
       "evidence": "shipped 2026-07-13; self-verified: .brain/features/authentication/verifications/2026-07-13.md (PASS); harness-check 11/11; hardened clean-browser launch after dry-run extension artifact; agent .claude/agents/feature-verifier.md",
-      "owners": ["sean"]
+      "owners": [
+        "sean"
+      ]
+    },
+    {
+      "id": "feat-007",
+      "name": "OpenTelemetry Span Tracing",
+      "slug": "otel-tracing",
+      "doc": ".brain/features/otel-tracing/otel-tracing.md",
+      "description": "Effect span tracing across tRPC procedures, repositories, and services. Custom Effect Tracer exports OTLP JSON via fetch to an env-configured endpoint (OTEL_EXPORTER_OTLP_ENDPOINT + OTEL_EXPORTER_OTLP_HEADERS + OTEL_SERVICE_NAME); complete no-op when endpoint unset. Logger auto-annotates every log with traceId/spanId from the current span so logs and traces correlate. Includes a span-instrumenter sub-agent + rules/recipe updates so every new endpoint/repo method gets instrumented, and docs for MCP-based trace debugging by local agents.",
+      "dependencies": [],
+      "status": "shipped",
+      "evidence": "verify-done full pass: typecheck PASS, 301/301 unit tests, e2e smoke 2/2 (isolated port — stray unrelated dev server on 5173), production build PASS, non-negotiables sweep clean, effect-ts-enforcer 0 findings, harness-check 10/10. Live verification: real OTLP trace captured from dev server (root trpc.admin.getUsers server span + 2 db.query user client child spans, one POST on runtime.dispose) — .brain/features/otel-tracing/verifications/2026-07-29.md",
+      "owners": [
+        "sean"
+      ]
     }
   ]
 }

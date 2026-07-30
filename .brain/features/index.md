@@ -50,6 +50,7 @@ features/
 | Analytics | [`analytics/analytics.md`](analytics/analytics.md) | shipped | — |
 | Preview Deployments | [`preview-deployments/preview-deployments.md`](preview-deployments/preview-deployments.md) | shipped | — |
 | Feature Verification | [`feature-verification/feature-verification.md`](feature-verification/feature-verification.md) | shipped | [2026-07-13 ✅ PASS (self-verified via authentication)](authentication/verifications/2026-07-13.md) |
+| OpenTelemetry Span Tracing | [`otel-tracing/otel-tracing.md`](otel-tracing/otel-tracing.md) | in-progress | — |
 
 ## Update trigger
 

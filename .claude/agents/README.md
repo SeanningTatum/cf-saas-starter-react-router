@@ -9,6 +9,7 @@ Project-local Claude Code subagents that wrap pieces of [`.brain/HARNESS.md`](..
 | [`brain-navigator`](brain-navigator.md) | Instructions | Before writing code — get reading list for the task |
 | [`recipe-runner`](recipe-runner.md) | Instructions + Lifecycle | Adding new code that matches one of the 8 recipes |
 | [`test-author`](test-author.md) | Verification (authors) | After implementing a feature/fix — write or update the unit tests that pin its business logic |
+| [`span-instrumenter`](span-instrumenter.md) | Verification (observability) | After adding an endpoint / repo method / service call — add or audit tracing spans per convention |
 | [`effect-ts-enforcer`](effect-ts-enforcer.md) | Verification | After writing code, before `/verify-done` — review against 5 non-negotiables |
 | [`verify-done-runner`](verify-done-runner.md) | Verification | Before declaring any non-trivial task done |
 | [`feature-tracker`](feature-tracker.md) | State + Scope | Status changes (start / ship / block / scope a feature) |
@@ -19,9 +20,10 @@ Project-local Claude Code subagents that wrap pieces of [`.brain/HARNESS.md`](..
 1. brain-navigator     →  "what do I read?"
 2. recipe-runner       →  applies the recipe (or main thread codes from rule file)
 3. test-author         →  writes the tests that pin the new logic
-4. effect-ts-enforcer  →  reviews the diff
-5. verify-done-runner  →  runs the full checklist
-6. feature-tracker     →  flips status + appends to progress.md
+4. span-instrumenter   →  adds/audits tracing spans on the new code paths
+5. effect-ts-enforcer  →  reviews the diff
+6. verify-done-runner  →  runs the full checklist
+7. feature-tracker     →  flips status + appends to progress.md
 ```
 
 ## Plugin-provided agents (complementary, not replaced)

@@ -33,6 +33,8 @@ Add a binding:
 
 **Never `process.env`.** Three valid paths:
 
+> Tracing secrets: `OTEL_EXPORTER_OTLP_ENDPOINT` / `OTEL_EXPORTER_OTLP_HEADERS` / `OTEL_SERVICE_NAME` are optional (`wrangler secret put` in prod, `.dev.vars` locally). They never appear in the generated `Env` type — `app/services/tracing.ts` reads them defensively. Unset = tracing export off. See [`.brain/codebase/observability.md`](../codebase/observability.md).
+
 ### A. `Env` type (auto-generated)
 
 ```typescript

@@ -101,7 +101,8 @@ Each schema gets a `*.test.ts` covering happy decode + at least one rejection pe
 ```typescript
 import { tryQuery, tryUpdate, tryCreate, tryDelete, requireFound, requireFoundOrFail } from "@/lib/effect-utils";
 
-// Drizzle calls — wraps thrown Promise into a tagged error
+// Drizzle calls — wraps thrown Promise into a tagged error AND emits a
+// `db.<op> <entity>` client tracing span (see .brain/codebase/observability.md)
 const rows = yield* tryQuery("widget", () => db.select().from(widget).limit(1));
 yield* tryUpdate("widget", () => db.update(widget).set({...}).where(eq(widget.id, id)));
 
