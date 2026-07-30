@@ -45,9 +45,13 @@ It reads as a themed novelty and it ages badly.
 Litmus: if the page's central move can be described as "it looks like a real \<physical thing\>",
 stop and use the concept as direction instead of scenery.
 
-## 4. Build the craft. These are the moves, concretely
+## 4. Build the craft — delegate to `ui-builder`
 
-This is the part that separates the accepted pass from the four before it.
+Hand the build to [`ui-builder`](../../.claude/agents/ui-builder.md) with the reference lock, the
+brief, and the route. It already carries everything below plus the repo's frontend rules and the
+a11y floor, and it will not return until `design:audit` has no HARD failures. The moves it applies,
+so you can check its report against them — this is the part that separates the accepted pass from
+the four before it:
 
 **Show the product.** For software, the hero visual is the product's own UI, rendered as a real
 panel — window chrome, real columns, real rows, hover states, a live value. Not a screenshot pasted

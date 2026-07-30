@@ -122,6 +122,17 @@ Exception: gray scale OK for subtle layout (`border-gray-200 dark:border-gray-80
 - **Avatar initials** — `getInitials` from `@/lib/utils`, not per-component copies.
 - **Dates** — always through `app/lib/date-utils.ts` `formatDate` + `useTranslation().i18n.language`; never raw `toLocaleDateString("en-US", ...)` (breaks `zh`).
 
+## Who builds UI
+
+Delegate user-visible work to [`ui-builder`](../../.claude/agents/ui-builder.md) — it carries this
+rule file, the craft moves, the anti-slop tells and the a11y floor, and it self-measures with
+`bun run design:audit` before returning. That is the point: the mistakes should not be made, rather
+than made and then caught.
+
+[`design-critic`](../../.claude/agents/design-critic.md) is the **backstop** that judges the render
+afterwards, from screenshots only. It is not the quality mechanism — a critic at the end means the
+same defects get built, found and reworked every time.
+
 ## Design intelligence — never design from training-data taste
 
 Two tools, two jobs. Pick by **how much visual invention the task needs**, and run [`/design-research`](../../.claude/commands/design-research.md) for anything in tier 2.

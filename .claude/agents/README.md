@@ -7,6 +7,8 @@ Project-local Claude Code subagents that wrap pieces of [`.brain/HARNESS.md`](..
 | Agent | Subsystem | Use when |
 |-------|-----------|----------|
 | [`brain-navigator`](brain-navigator.md) | Instructions | Before writing code — get reading list for the task |
+| [`ui-builder`](ui-builder.md) | Instructions + Verification (builds) | **Any user-visible work** — routes, components, marketing surfaces, forms, states. Carries the frontend rules, craft moves and anti-slop tells so the mistakes are not made, and self-measures with `design:audit` |
+| [`design-critic`](design-critic.md) | Verification (judges) | After UI work — judges the *render* against the tells + craft, from screenshots only. P0/P1 block. Backstop, not the method |
 | [`recipe-runner`](recipe-runner.md) | Instructions + Lifecycle | Adding new code that matches one of the 8 recipes |
 | [`test-author`](test-author.md) | Verification (authors) | After implementing a feature/fix — write or update the unit tests that pin its business logic |
 | [`span-instrumenter`](span-instrumenter.md) | Verification (observability) | After adding an endpoint / repo method / service call — add or audit tracing spans per convention |
@@ -25,6 +27,22 @@ Project-local Claude Code subagents that wrap pieces of [`.brain/HARNESS.md`](..
 6. verify-done-runner  →  runs the full checklist
 7. feature-tracker     →  flips status + appends to progress.md
 ```
+
+### UI work has its own loop
+
+```
+0. /design-research    →  tier 2 only: references → three directions → reference lock
+1. ui-builder          →  builds it with the rules already loaded, then measures itself
+                          (bun run design:audit — HARD failures fixed before returning)
+2. design-critic       →  judges the render from screenshots; P0/P1 block
+3. feature-verifier    →  proves the flow works in the live app
+4. test-author         →  pins the design's intent (live figure source, status in words,
+                          scoped tokens do not leak)
+```
+
+**The split matters.** The critic is a backstop. Quality comes from `ui-builder` knowing the rules
+before the first edit — the alternative is making the same mistakes, catching them, and reworking,
+which is what four rejected rebuilds of `/demo` cost.
 
 ## Plugin-provided agents (complementary, not replaced)
 
