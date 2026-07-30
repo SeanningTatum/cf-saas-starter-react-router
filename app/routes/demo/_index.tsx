@@ -1,25 +1,15 @@
 import type { Route } from "./+types/_index";
 import { Link } from "react-router";
 import { useTranslation } from "react-i18next";
-import {
-  IconArrowLeft,
-  IconArrowRight,
-  IconClockExclamation,
-  IconFileInvoice,
-  IconLayoutList,
-} from "@tabler/icons-react";
 
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { ThemeToggle } from "@/components/theme-toggle";
-import { LanguageSwitcher } from "@/components/language-switcher";
+import { useFetcher } from "react-router";
+import { supportedLngs } from "@/i18n";
 import { cn } from "@/lib/utils";
 import { i18nServer } from "@/i18n/i18n.server";
 import "./loadline-theme.css";
 import {
   BOARD_ROWS,
   STATUS_DOT,
-  boardFilters,
   isStaleCheckCall,
   type BoardRow,
 } from "./board-data";
@@ -29,34 +19,27 @@ export const handle = { i18n: ["demo"] };
 /**
  * Sample marketing surface for a fictional freight-dispatch SaaS ("Loadline").
  *
- * This surface runs its OWN design system, scoped to `[data-surface="loadline"]` and defined in
- * `./loadline-theme.css` — Andercore's dark control-panel language (refero style `15fd028d`)
- * rather than the starter's monochrome Linear/Cursor direction. The structure below is
- * reference-locked to Orderful (`9c657624`): alternating section bands, a framed product-UI
- * panel as the hero's evidence, accent reserved for the primary CTA.
+ * Reference lock: 19–86 (refero style `7a8c99db`), "architectural blueprint on white marble" —
+ * pure black on white, 1px rules as the only structural device, ONE weight at every size, and a
+ * monumental figure standing in for the usual product screenshot. Freight runs on documents, so
+ * the page is typeset as one: masthead, monument, manifest, ledger, sequence, sign-off.
  *
- * Because the scoped stylesheet redefines the same token NAMES the rest of the app uses, every
- * class here stays semantic (`bg-card`, `text-muted-foreground`, `bg-primary`) and every
- * untouched ShadCN component restyles itself. No literal colour appears in this file.
+ * Things deliberately absent, each an anti-slop tell an earlier version of this surface failed
+ * (`refero-design/references/anti-ai-slop.md`):
+ *   · no cards — the reference has none, and nothing here is an interactive container
+ *   · no hero with copy left and a product panel right
+ *   · no accent colour, and therefore no decorative one-word colour highlight
+ *   · no heading + subtitle + grid-of-three band, repeated six times
+ *   · no `font-semibold` anywhere: weight 400 at every size is the reference's signature
  *
- * Full decision ledger, including what was rejected and why the scope is dark in both app
- * themes: `.brain/features/sample-saas-landing/sample-saas-landing.md`.
- */
-/**
- * `<title>` and `<meta name="description">` render outside the React tree, so `useTranslation`
- * cannot reach them — without a loader they would stay English for a `zh` visitor and for every
- * crawler. Threading them through `loaderData` is the only way to translate them.
- *
- * The route is public and deliberately does NOT call `redirectIfAuthenticated`: a signed-in
- * user following a link to the demo should see the demo, not get bounced to `/dashboard`.
+ * Marketing copy lives *inside* the manifest as marginalia on the row it describes, which is
+ * why there is no feature section. Decision ledger and rejected directions:
+ * `.brain/features/sample-saas-landing/sample-saas-landing.md`.
  */
 export async function loader({ request }: Route.LoaderArgs) {
   const t = await i18nServer.getFixedT(request, "demo");
   return {
-    meta: {
-      title: t("meta.title"),
-      description: t("meta.description"),
-    },
+    meta: { title: t("meta.title"), description: t("meta.description") },
   };
 }
 
@@ -67,481 +50,417 @@ export function meta({ data }: Route.MetaArgs) {
   ];
 }
 
+/**
+ * Locale switch in the surface's own idiom: two ruled text links, no select, no shadow, no
+ * weight above 400. Posts to the same `/api/set-locale` action the app-wide `LanguageSwitcher`
+ * uses, so the cookie and root revalidation behave identically — only the styling differs.
+ *
+ * The app's `ThemeToggle` is deliberately absent: this surface pins itself light in both themes
+ * (see `loadline-theme.css`), so offering a toggle that visibly does nothing here would be a lie.
+ */
+function LocaleRule() {
+  const { i18n } = useTranslation();
+  const fetcher = useFetcher();
+  const labels: Record<string, string> = { en: "EN", zh: "中文" };
+
+  return (
+    <span className="flex items-center gap-3">
+      {supportedLngs.map((lng) => {
+        const active = i18n.language === lng;
+        return (
+          <button
+            key={lng}
+            type="button"
+            data-testid={`demo-locale-${lng}`}
+            aria-current={active ? "true" : undefined}
+            disabled={active || fetcher.state !== "idle"}
+            onClick={() =>
+              fetcher.submit(
+                { lng },
+                { method: "post", action: "/api/set-locale" }
+              )
+            }
+            className={cn(
+              "border-b text-[11px] uppercase tracking-[0.14em] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-foreground",
+              active
+                ? "border-foreground text-foreground"
+                : "border-transparent text-muted-foreground hover:border-muted-foreground hover:text-foreground"
+            )}
+          >
+            {labels[lng] ?? lng}
+          </button>
+        );
+      })}
+    </span>
+  );
+}
+
+/** Uppercase micro-label — borrowed from mono.frm.fm for column heads and captions. */
+function Label({
+  children,
+  className,
+}: {
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <span
+      className={cn(
+        "text-[11px] uppercase leading-none tracking-[0.14em] text-muted-foreground",
+        className
+      )}
+    >
+      {children}
+    </span>
+  );
+}
+
+/**
+ * The reference's only interactive treatment is a text link, so CTAs are ruled text rather than
+ * filled buttons. Kept as a real link with a generous hit area and a visible focus outline —
+ * `focus-visible:outline` rather than a ring, because the app-wide ring defect
+ * (`.brain/runs/2026-07-30-focus-ring-defect.md`) means rings never paint.
+ */
+function RuledLink({
+  to,
+  children,
+  emphasis = false,
+  testId,
+}: {
+  to: string;
+  children: React.ReactNode;
+  emphasis?: boolean;
+  testId: string;
+}) {
+  return (
+    <Link
+      to={to}
+      data-testid={testId}
+      className={cn(
+        "inline-flex min-h-11 items-center border-b py-2 text-base leading-none transition-colors",
+        "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-foreground",
+        emphasis
+          ? "border-foreground text-foreground"
+          : "border-transparent text-muted-foreground hover:border-muted-foreground hover:text-foreground"
+      )}
+    >
+      {children}
+    </Link>
+  );
+}
+
 export default function DemoLanding() {
   return (
     <div
       data-surface="loadline"
       className="min-h-svh bg-background text-foreground"
     >
-      <TopBar />
+      <Masthead />
       <main>
-        <Hero />
-        <CostBand />
-        <FeatureBand feature="board" icon={<IconLayoutList className="size-5" />} />
-        <FeatureBand
-          feature="invoicing"
-          icon={<IconFileInvoice className="size-5" />}
-          reversed
-        />
-        <NextBand />
-        <CtaBand />
+        <Monument />
+        <Manifest />
+        <Ledger />
+        <Sequence />
+        <Signoff />
       </main>
-      <Footer />
     </div>
   );
 }
 
-function TopBar() {
+/** Document header: wordmark, one rule, nothing else competing. */
+function Masthead() {
   const { t } = useTranslation("demo");
 
   return (
-    <header className="sticky top-0 z-30 border-b border-border bg-background/85 backdrop-blur">
-      <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-6 py-3">
-        <div className="flex items-center gap-2.5">
-          <span className="text-sm font-semibold tracking-tight">
-            {t("brand")}
-          </span>
-          {/* Chip and the sign-in link drop below `sm` — four controls plus the wordmark
-              overflow a 390px viewport, and the hero already carries a sign-in CTA. */}
-          <span className="hidden rounded-full border border-border bg-muted/40 px-2 py-0.5 font-mono text-[10px] uppercase tracking-wider text-muted-foreground sm:inline">
-            {t("topbar.chip")}
-          </span>
+    <header className="border-b border-border">
+      <div className="flex flex-wrap items-baseline justify-between gap-x-8 gap-y-3 px-6 py-4 sm:px-10">
+        <div className="flex items-baseline gap-3">
+          <span className="text-base leading-none">{t("brand")}</span>
+          <Label>{t("masthead.chip")}</Label>
         </div>
 
-        <div className="flex items-center gap-1">
-          <Button
-            asChild
-            variant="ghost"
-            size="sm"
-            className="hidden sm:inline-flex"
+        <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
+          <Link
+            to="/"
+            data-testid="demo-topbar-back"
+            className="hidden text-[11px] uppercase tracking-[0.14em] text-muted-foreground hover:text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-foreground sm:inline"
           >
-            <Link to="/" data-testid="demo-topbar-back">
-              <IconArrowLeft className="size-4" />
-              {t("topbar.back")}
-            </Link>
-          </Button>
-          <Button
-            asChild
-            variant="ghost"
-            size="sm"
-            className="hidden sm:inline-flex"
+            {t("masthead.back")}
+          </Link>
+          <Link
+            to="/login"
             data-testid="demo-topbar-sign-in"
+            className="text-[11px] uppercase tracking-[0.14em] text-muted-foreground hover:text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-foreground"
           >
-            <Link to="/login">{t("topbar.sign_in")}</Link>
-          </Button>
-          <Button asChild size="sm" data-testid="demo-topbar-cta">
-            <Link to="/sign-up">{t("topbar.cta")}</Link>
-          </Button>
-          <LanguageSwitcher compact />
-          <ThemeToggle />
+            {t("masthead.sign_in")}
+          </Link>
+          <Link
+            to="/sign-up"
+            data-testid="demo-topbar-cta"
+            className="border-b border-foreground text-[11px] uppercase tracking-[0.14em] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-foreground"
+          >
+            {t("masthead.cta")}
+          </Link>
+          <LocaleRule />
         </div>
       </div>
     </header>
   );
 }
 
-function Hero() {
+/**
+ * The monument. The reference's hero is a single oversized figure in the same light weight as
+ * body copy — scale without weight — so the page opens on the number that costs money rather
+ * than on a screenshot of the product.
+ */
+function Monument() {
   const { t } = useTranslation("demo");
-  const metrics = ["loads", "carriers", "lanes"] as const;
 
   return (
-    <section
-      className={cn(
-        "relative overflow-hidden border-b border-border",
-        // Borrowed from default.com (8bc1389b) as a decorative texture only — the dot colour
-        // is the scoped border token (Ghostly Gray), so it adds no new colour.
-        "bg-[radial-gradient(var(--border)_1px,transparent_1px)] [background-size:18px_18px]"
-      )}
-    >
-      <div className="mx-auto grid max-w-6xl gap-12 px-6 py-20 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] lg:items-center lg:py-24">
-        <div className="flex flex-col items-start gap-6">
-          <span className="inline-flex items-center gap-2 rounded-full border border-border bg-card px-3 py-1 font-mono text-[11px] uppercase tracking-wider text-muted-foreground">
-            <span className="size-1.5 rounded-full bg-primary" />
-            {t("hero.eyebrow")}
-          </span>
+    <section className="border-b border-border px-6 pt-10 pb-8 sm:px-10">
+      <p
+        className="text-[clamp(6rem,26vw,22rem)] leading-[0.82] tracking-[-0.04em]"
+        data-testid="demo-monument-figure"
+      >
+        {t("monument.figure")}
+      </p>
+      <Label className="mt-2 block text-foreground">
+        {t("monument.caption")}
+      </Label>
 
-          <h1 className="text-balance text-4xl font-semibold tracking-tight sm:text-5xl lg:text-6xl">
-            {t("hero.title_lead")}
-            <span className="text-primary">{t("hero.title_accent")}</span>
-            {t("hero.title_trail")}
-          </h1>
-
-          <p className="max-w-xl text-pretty text-base text-muted-foreground sm:text-lg">
-            {t("hero.description")}
-          </p>
-
-          <div className="flex flex-wrap items-center gap-3">
-            <Button asChild size="lg" data-testid="demo-hero-cta">
-              <Link to="/sign-up">
-                {t("hero.cta_primary")}
-                <IconArrowRight className="ml-1 size-4" />
-              </Link>
-            </Button>
-            <Button
-              asChild
-              size="lg"
-              variant="outline"
-              data-testid="demo-hero-sign-in"
-            >
-              <Link to="/login">{t("hero.cta_secondary")}</Link>
-            </Button>
+      <div className="mt-10 grid gap-x-16 gap-y-6 border-t border-border pt-6 md:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
+        <p className="max-w-2xl text-xl leading-[1.35] md:text-2xl">
+          {t("monument.statement")}
+        </p>
+        <div className="flex flex-col items-start gap-1">
+          <div className="flex flex-wrap items-center gap-x-8">
+            <RuledLink to="/sign-up" emphasis testId="demo-hero-cta">
+              {t("monument.cta")}
+            </RuledLink>
+            <RuledLink to="/login" testId="demo-hero-sign-in">
+              {t("monument.cta_secondary")}
+            </RuledLink>
           </div>
-
-          <p className="text-sm text-muted-foreground">
-            {t("hero.reassurance")}
-          </p>
-
-          <dl className="flex flex-wrap items-center gap-x-6 gap-y-2 border-t border-border pt-5 font-mono text-[11px] uppercase tracking-wider text-muted-foreground">
-            {metrics.map((metric) => (
-              <div key={metric} className="flex items-center gap-2">
-                <span className="size-1 rounded-full bg-muted-foreground" />
-                <dt className="sr-only">{t(`hero.metrics.${metric}`)}</dt>
-                <dd>{t(`hero.metrics.${metric}`)}</dd>
-              </div>
-            ))}
-          </dl>
+          <Label>{t("monument.terms")}</Label>
         </div>
-
-        <DispatchBoard />
       </div>
     </section>
   );
 }
 
 /**
- * The page's memorable move: the product's actual working surface, rendered as real DOM
- * inside an inverted frame. Orderful's hero pairs the headline with a dark product panel;
- * Andercore's industrial photography was the closer logistics reference but is unbuildable
- * here, and faking it is forbidden — so this is a code-native primitive instead.
- *
- * Static by design. The filter pills are `<span>`s, not buttons, so nothing advertises
- * interactivity the demo does not have.
+ * The manifest is the page, not an illustration of it: full-bleed, hairline-ruled, tabular.
+ * Three rows carry an annotation — the marketing argument stated where its evidence is, instead
+ * of in a separate feature section.
  */
-function DispatchBoard() {
+function Manifest() {
   const { t } = useTranslation("demo");
-  const filters = boardFilters();
+  const columns = [
+    "ref",
+    "lane",
+    "driver",
+    "status",
+    "check_call",
+    "margin",
+  ] as const;
 
   return (
-    <div className="min-w-0 overflow-hidden rounded-none border border-border bg-card text-card-foreground">
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-4 py-3">
-        <div className="flex flex-col">
-          <span className="text-sm font-medium">{t("board.title")}</span>
-          <span className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
-            {t("board.subtitle")}
-          </span>
-        </div>
-        <div className="flex flex-wrap items-center gap-1.5">
-          {filters.map((filter, index) => (
-            <span
-              key={filter.key}
-              data-testid={`demo-filter-${filter.key}`}
-              className={cn(
-                "rounded-full px-2.5 py-1 font-mono text-[10px] uppercase tracking-wider",
-                index === 0
-                  // Crimson is CTA-only per the reference lock, so the active pill uses the
-                  // neutral raised surface instead of the accent.
-                  ? "bg-accent text-accent-foreground"
-                  : "border border-border text-muted-foreground"
-              )}
-            >
-              {t(`board.filters.${filter.key}`)} {filter.count}
-            </span>
-          ))}
-        </div>
+    <section className="border-b border-border px-6 py-10 sm:px-10">
+      <div className="flex flex-wrap items-baseline justify-between gap-x-8 gap-y-2">
+        <h2 className="text-xl">{t("manifest.title")}</h2>
+        <Label>{t("manifest.meta")}</Label>
       </div>
 
-      {/* min-w-0 is load-bearing: without it the table's min-width escapes the grid track
-          and the whole page scrolls sideways on a phone instead of the board scrolling. */}
-      <div className="min-w-0 overflow-x-auto">
-        <table
-          className="w-full min-w-[34rem] border-collapse text-left"
-          aria-label={t("board.aria_label")}
-          data-testid="demo-dispatch-board"
-        >
-          <thead>
-            <tr className="border-b border-border font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
-              <th scope="col" className="px-4 py-2 font-normal">
-                {t("board.columns.ref")}
+      <table
+        className="mt-6 w-full border-collapse text-left align-baseline"
+        data-testid="demo-dispatch-board"
+      >
+        <thead>
+          <tr>
+            {columns.map((column) => (
+              <th
+                key={column}
+                scope="col"
+                className={cn(
+                  "rule-head font-normal",
+                  column === "driver" && "hidden sm:table-cell",
+                  (column === "check_call" || column === "margin") &&
+                    "text-right",
+                  column === "margin" && "hidden sm:table-cell"
+                )}
+              >
+                <Label>{t(`manifest.columns.${column}`)}</Label>
               </th>
-              <th scope="col" className="px-4 py-2 font-normal">
-                {t("board.columns.lane")}
-              </th>
-              <th scope="col" className="hidden px-4 py-2 font-normal sm:table-cell">
-                {t("board.columns.driver")}
-              </th>
-              <th scope="col" className="px-4 py-2 font-normal">
-                {t("board.columns.status")}
-              </th>
-              <th scope="col" className="px-4 py-2 text-right font-normal">
-                {t("board.columns.check_call")}
-              </th>
-              <th scope="col" className="hidden px-4 py-2 text-right font-normal sm:table-cell">
-                {t("board.columns.margin")}
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {BOARD_ROWS.map((row) => (
-              <BoardRowCells key={row.ref} row={row} />
             ))}
-          </tbody>
-        </table>
-      </div>
+          </tr>
+        </thead>
+        <tbody>
+          {BOARD_ROWS.map((row) => (
+            <ManifestRow key={row.ref} row={row} />
+          ))}
+        </tbody>
+      </table>
 
-      <p className="border-t border-border px-4 py-3 font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
-        {t("board.footer")}
-      </p>
-    </div>
+      <Label className="mt-4 block">{t("manifest.footer")}</Label>
+    </section>
   );
 }
 
-function BoardRowCells({ row }: { row: BoardRow }) {
+function ManifestRow({ row }: { row: BoardRow }) {
   const { t } = useTranslation("demo");
   const stale = isStaleCheckCall(row);
 
   return (
-    <tr className="border-b border-border last:border-0 text-sm">
-      <td className="px-4 py-3 font-mono text-xs">{row.ref}</td>
-      <td className="px-4 py-3">{row.lane}</td>
-      <td className="hidden px-4 py-3 text-muted-foreground sm:table-cell">
-        {row.driver}
-      </td>
-      <td className="px-4 py-3">
-        {/* Dot + label: the dot never carries the meaning on its own. */}
-        <span
-          className="inline-flex items-center gap-2 whitespace-nowrap"
-          data-testid="demo-board-status"
-        >
+    <>
+      <tr>
+        <td className="rule-row pr-4 text-sm">{row.ref}</td>
+        <td className="rule-row pr-4 text-base">{row.lane}</td>
+        <td className="rule-row hidden pr-4 text-base text-muted-foreground sm:table-cell">
+          {row.driver}
+        </td>
+        <td className="rule-row pr-4 text-base">
+          {/* The dot is achromatic; the label always carries the meaning. */}
           <span
-            className={cn("size-1.5 rounded-full", STATUS_DOT[row.status])}
-            aria-hidden="true"
-          />
-          {t(`board.status.${row.status}`)}
-        </span>
-      </td>
-      <td
-        className={cn(
-          "px-4 py-3 text-right font-mono text-xs",
-          stale ? "text-foreground" : "text-muted-foreground"
-        )}
-      >
-        {t("board.check_call_minutes", { count: row.checkCallAgeMinutes })}
-        {/* `title` is never exposed on touch and is ignored by most screen readers on a
-            non-interactive cell, so the stale explanation ships as visually-hidden copy. */}
-        {stale ? (
-          <span className="sr-only"> — {t("board.stale_hint")}</span>
-        ) : null}
-      </td>
-      <td className="hidden px-4 py-3 text-right font-mono text-xs sm:table-cell">
-        ${row.marginUsd}
-      </td>
-    </tr>
-  );
-}
-
-/** Neutral band — the cost of the current process, before any feature talk. */
-function CostBand() {
-  const { t } = useTranslation("demo");
-  const cards = ["calls", "tabs", "invoice"] as const;
-
-  return (
-    <section className="border-b border-border bg-muted/40">
-      <div className="mx-auto max-w-6xl px-6 py-16 lg:py-20">
-        <div className="mb-8 flex flex-col gap-2">
-          <h2 className="text-xl font-semibold tracking-tight sm:text-2xl">
-            {t("cost.title")}
-          </h2>
-          <p className="max-w-2xl text-sm text-muted-foreground">
-            {t("cost.subtitle")}
-          </p>
-        </div>
-
-        <div className="grid gap-4 md:grid-cols-3">
-          {cards.map((card) => (
-            <Card key={card} className="h-full rounded-none shadow-none">
-              <CardHeader className="gap-1.5">
-                <span className="font-mono text-3xl font-semibold tracking-tight">
-                  {t(`cost.cards.${card}.value`)}
-                </span>
-                <CardTitle className="font-mono text-[11px] font-normal uppercase tracking-wider text-muted-foreground">
-                  {t(`cost.cards.${card}.label`)}
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="text-sm leading-relaxed text-muted-foreground">
-                {t(`cost.cards.${card}.description`)}
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      </div>
-    </section>
-  );
-}
-
-/**
- * Orderful's alternating two-column feature rhythm: copy on one side, a small framed panel of
- * product evidence on the other, flipping sides between rows.
- */
-function FeatureBand({
-  feature,
-  icon,
-  reversed = false,
-}: {
-  feature: "board" | "invoicing";
-  icon: React.ReactNode;
-  reversed?: boolean;
-}) {
-  const { t } = useTranslation("demo");
-  const points = t(`features.${feature}.points`, {
-    returnObjects: true,
-  }) as string[];
-  const rows = t(`features.${feature}.panel.rows`, {
-    returnObjects: true,
-  }) as string[];
-
-  return (
-    <section
-      className={cn(
-        "border-b border-border",
-        reversed ? "bg-muted/40" : "bg-background"
-      )}
-    >
-      <div className="mx-auto grid max-w-6xl items-center gap-10 px-6 py-16 lg:grid-cols-2 lg:py-20">
-        <div
+            className="inline-flex items-center gap-2 whitespace-nowrap"
+            data-testid="demo-board-status"
+          >
+            <span
+              className={cn("size-1.5 shrink-0", STATUS_DOT[row.status])}
+              aria-hidden="true"
+            />
+            {t(`manifest.status.${row.status}`)}
+          </span>
+        </td>
+        <td
           className={cn(
-            "flex flex-col items-start gap-4",
-            reversed && "lg:order-2"
+            "rule-row text-right text-base",
+            stale ? "text-foreground" : "text-muted-foreground"
           )}
         >
-          <span className="flex size-9 items-center justify-center rounded-none border border-border bg-card text-foreground">
-            {icon}
-          </span>
-          <span className="font-mono text-[11px] uppercase tracking-wider text-muted-foreground">
-            {t(`features.${feature}.eyebrow`)}
-          </span>
-          <h2 className="text-balance text-xl font-semibold tracking-tight sm:text-2xl">
-            {t(`features.${feature}.title`)}
-          </h2>
-          <p className="text-pretty text-base text-muted-foreground">
-            {t(`features.${feature}.description`)}
-          </p>
-          <ul className="flex flex-col gap-2 text-sm text-muted-foreground">
-            {points.map((point) => (
-              <li key={point} className="flex items-start gap-2.5">
-                <span className="mt-1.5 size-1.5 shrink-0 rounded-full bg-muted-foreground" />
-                {point}
-              </li>
-            ))}
-          </ul>
-        </div>
+          {t("manifest.check_call_minutes", { count: row.checkCallAgeMinutes })}
+          {stale ? (
+            <span className="sr-only"> — {t("manifest.stale_hint")}</span>
+          ) : null}
+        </td>
+        <td className="rule-row hidden text-right text-base sm:table-cell">
+          ${row.marginUsd}
+        </td>
+      </tr>
 
-        <div className={cn("w-full", reversed && "lg:order-1")}>
-          <div className="overflow-hidden rounded-none border border-border bg-card text-card-foreground">
-            <div className="flex items-center gap-2 border-b border-border px-4 py-3">
-              <IconClockExclamation className="size-4 text-muted-foreground" />
-              <span className="text-sm font-medium">
-                {t(`features.${feature}.panel.title`)}
+      {row.annotation ? (
+        <tr>
+          <td colSpan={6} className="rule-row">
+            <span className="block max-w-2xl pt-1 text-base leading-snug text-muted-foreground">
+              {t(`manifest.annotations.${row.annotation}`)}
+            </span>
+          </td>
+        </tr>
+      ) : null}
+    </>
+  );
+}
+
+/** Three figures as ruled ledger columns, split by hairline verticals. Not cards. */
+function Ledger() {
+  const { t } = useTranslation("demo");
+  const rows = ["calls", "tabs", "invoice"] as const;
+
+  return (
+    <section className="border-b border-border px-6 py-10 sm:px-10">
+      <h2 className="text-xl">{t("ledger.title")}</h2>
+
+      <dl className="mt-8 grid gap-y-8 sm:grid-cols-3 sm:gap-y-0">
+        {rows.map((row, index) => (
+          <div
+            key={row}
+            className={cn(
+              "flex flex-col gap-2 sm:px-8",
+              index === 0 && "sm:pl-0",
+              index > 0 && "sm:border-l sm:border-border",
+              index === rows.length - 1 && "sm:pr-0"
+            )}
+          >
+            <dt className="flex items-baseline gap-2">
+              <span className="text-6xl leading-none tracking-[-0.03em] sm:text-7xl">
+                {t(`ledger.rows.${row}.figure`)}
               </span>
-            </div>
-            <ul className="divide-y divide-border">
-              {rows.map((row) => (
-                <li
-                  key={row}
-                  className="px-4 py-3 font-mono text-xs text-muted-foreground"
-                >
-                  {row}
-                </li>
-              ))}
-            </ul>
+              <Label>{t(`ledger.rows.${row}.unit`)}</Label>
+            </dt>
+            <dd className="flex flex-col gap-1">
+              <span className="text-base">{t(`ledger.rows.${row}.label`)}</span>
+              <span className="max-w-xs text-base leading-snug text-muted-foreground">
+                {t(`ledger.rows.${row}.note`)}
+              </span>
+            </dd>
           </div>
-        </div>
-      </div>
+        ))}
+      </dl>
     </section>
   );
 }
 
-/** Sequenced from the flows layer: marketing → create account → import → work the board. */
-function NextBand() {
+/** Numbered ruled rows, in the same table language as the manifest. */
+function Sequence() {
   const { t } = useTranslation("demo");
   const steps = ["account", "import", "dispatch"] as const;
 
   return (
-    <section className="border-b border-border bg-background">
-      <div className="mx-auto max-w-6xl px-6 py-16 lg:py-20">
-        <div className="mb-8 flex flex-col gap-2">
-          <h2 className="text-xl font-semibold tracking-tight sm:text-2xl">
-            {t("next.title")}
-          </h2>
-          <p className="text-sm text-muted-foreground">{t("next.subtitle")}</p>
-        </div>
+    <section className="border-b border-border px-6 py-10 sm:px-10">
+      <h2 className="text-xl">{t("sequence.title")}</h2>
 
-        <ol className="grid gap-4 md:grid-cols-3">
-          {steps.map((step) => (
-            <li
-              key={step}
-              className="flex flex-col gap-2 rounded-none border border-border bg-card p-6"
-            >
-              {/* Step numerals stay neutral — the reference reserves crimson for the CTA. */}
-              <span className="font-mono text-[11px] uppercase tracking-wider text-muted-foreground">
-                {t(`next.steps.${step}.index`)}
-              </span>
-              <span className="text-base font-medium">
-                {t(`next.steps.${step}.title`)}
-              </span>
-              <span className="text-sm leading-relaxed text-muted-foreground">
-                {t(`next.steps.${step}.description`)}
-              </span>
-            </li>
-          ))}
-        </ol>
-      </div>
+      <ol className="mt-6">
+        {steps.map((step) => (
+          <li
+            key={step}
+            // Real columns, not a flex row: the reference's language is tabular, and ragged
+            // notes beside variable-width titles read as a list pretending to be a table.
+            className="rule-row grid grid-cols-[2rem_1fr] items-baseline gap-x-8 gap-y-1 sm:grid-cols-[2rem_14rem_1fr]"
+          >
+            <Label>{t(`sequence.steps.${step}.index`)}</Label>
+            <span className="text-base">
+              {t(`sequence.steps.${step}.title`)}
+            </span>
+            <span className="col-start-2 text-base text-muted-foreground sm:col-start-3">
+              {t(`sequence.steps.${step}.note`)}
+            </span>
+          </li>
+        ))}
+      </ol>
     </section>
   );
 }
 
-function CtaBand() {
+/** Closing statement, the CTA repeated once, and the honesty note. */
+function Signoff() {
   const { t } = useTranslation("demo");
 
   return (
-    <section className="bg-muted/40">
-      <div className="mx-auto flex max-w-6xl flex-col items-start gap-5 px-6 py-16 lg:py-20">
-        <h2 className="text-balance text-2xl font-semibold tracking-tight sm:text-3xl">
-          {t("cta.title")}
-        </h2>
-        <p className="max-w-2xl text-pretty text-base text-muted-foreground">
-          {t("cta.description")}
-        </p>
-        <div className="flex flex-wrap items-center gap-3">
-          <Button asChild size="lg" data-testid="demo-cta-primary">
-            <Link to="/sign-up">
-              {t("cta.primary")}
-              <IconArrowRight className="ml-1 size-4" />
-            </Link>
-          </Button>
-          <Button asChild size="lg" variant="outline" data-testid="demo-cta-sign-in">
-            <Link to="/login">{t("cta.secondary")}</Link>
-          </Button>
-        </div>
+    <section className="px-6 py-10 sm:px-10">
+      <p className="max-w-3xl text-3xl leading-[1.15] tracking-[-0.03em] sm:text-4xl">
+        {t("signoff.statement")}
+      </p>
+
+      <div className="mt-8 flex flex-wrap items-center gap-x-8">
+        <RuledLink to="/sign-up" emphasis testId="demo-cta-primary">
+          {t("signoff.cta")}
+        </RuledLink>
+        <RuledLink to="/login" testId="demo-cta-sign-in">
+          {t("signoff.cta_secondary")}
+        </RuledLink>
       </div>
-    </section>
-  );
-}
 
-function Footer() {
-  const { t } = useTranslation("demo");
-
-  return (
-    <footer className="border-t border-border">
-      <div className="mx-auto flex max-w-6xl flex-col gap-3 px-6 py-8 text-sm text-muted-foreground sm:flex-row sm:items-start sm:justify-between">
-        <p className="max-w-3xl text-pretty">{t("footer.disclaimer")}</p>
+      <div className="mt-12 grid gap-x-16 gap-y-3 border-t border-border pt-6 md:grid-cols-[minmax(0,3fr)_minmax(0,1fr)]">
+        <Label className="block max-w-3xl leading-relaxed">
+          {t("signoff.disclaimer")}
+        </Label>
         <Link
           to="/"
-          className="shrink-0 rounded-md font-mono text-xs uppercase tracking-wider underline-offset-4 hover:text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
           data-testid="demo-footer-back"
+          className="justify-self-start border-b border-foreground text-[11px] uppercase tracking-[0.14em] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-foreground"
         >
-          {t("footer.back")}
+          {t("signoff.back")}
         </Link>
       </div>
-    </footer>
+    </section>
   );
 }

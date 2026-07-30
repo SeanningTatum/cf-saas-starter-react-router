@@ -4,44 +4,51 @@ import { test, expect } from "@playwright/test";
 import demoEn from "../app/locales/en/demo.json" with { type: "json" };
 
 /**
- * `/demo` — the sample SaaS landing surface (Loadline).
+ * `/demo` — the sample SaaS marketing surface (Loadline, "Waybill" direction).
  *
- * The page is static marketing, so this spec guards the three things that can actually
- * break and that a unit test cannot see:
- *   1. The route renders and the dispatch board reaches the browser with derived filter
- *      counts (the board is the page's whole argument — an empty frame is a broken page).
- *   2. Status meaning survives without colour — every row shows a text label.
- *   3. The primary CTA reaches the real `/sign-up` route, and the page does not scroll
- *      sideways on a phone (the defect the pre-merge browser walk actually caught).
+ * The page is static marketing, so this spec guards the things a unit test cannot see and that
+ * would quietly gut the design if they broke:
+ *   1. The manifest reaches the browser, with status stated in words (colour is never the only
+ *      carrier — and on this surface there is no colour at all).
+ *   2. The marketing copy is *inside* the manifest as row annotations. If those disappear, the
+ *      page has silently reverted to a separate feature section.
+ *   3. The scoped design system applies and does not leak into the rest of the app.
+ *   4. The CTA reaches the real sign-up route, and the page never scrolls sideways on a phone.
  *
- * Design constraints these assertions encode live in `.brain/rules/frontend.md` and
- * `.brain/features/sample-saas-landing/sample-saas-landing.md`.
+ * Constraints these encode: `.brain/rules/frontend.md` (design gate + scoped design systems)
+ * and `.brain/features/sample-saas-landing/sample-saas-landing.md` (the reference lock).
  */
 test.describe("Demo landing (/demo)", () => {
-  test("board renders with derived counts and labelled statuses", async ({ page }) => {
+  test("manifest renders with status stated in words", async ({ page }) => {
     await page.goto("/demo");
 
     const board = page.getByTestId("demo-dispatch-board");
     await expect(board).toBeVisible();
 
-    const rows = board.locator("tbody tr");
-    await expect(rows).toHaveCount(5);
+    // The monument is the page's opening argument, not a decorative number.
+    await expect(page.getByTestId("demo-monument-figure")).toHaveText(
+      demoEn.monument.figure
+    );
 
-    // Filter pills are derived from the rows, not hardcoded — "All" must equal the row
-    // count, and the per-status pills must sum to it.
-    await expect(page.getByTestId("demo-filter-all")).toContainText("5");
-    await expect(page.getByTestId("demo-filter-rolling")).toContainText("3");
-    await expect(page.getByTestId("demo-filter-late")).toContainText("1");
-    await expect(page.getByTestId("demo-filter-delivered")).toContainText("1");
-
-    // Colour must never be the only carrier of status: each row states it in words. Labels come
-    // from the locale file rather than being hardcoded here, so a mis-rendered or missing
-    // translation fails the assertion instead of slipping past an English-only regex.
-    const labels = Object.values(demoEn.board.status);
+    const labels = Object.values(demoEn.manifest.status);
     const statuses = page.getByTestId("demo-board-status");
     await expect(statuses).toHaveCount(5);
     for (const status of await statuses.allInnerTexts()) {
       expect(labels).toContain(status.trim());
+    }
+  });
+
+  test("marketing copy lives inside the manifest as row annotations", async ({
+    page,
+  }) => {
+    // Regression guard for the composition itself: an earlier version of this page put its
+    // argument in a separate feature-card section, which is the generic pattern the rebuild
+    // removed. If these lines are no longer in the table, that regression happened.
+    await page.goto("/demo");
+
+    const board = page.getByTestId("demo-dispatch-board");
+    for (const annotation of Object.values(demoEn.manifest.annotations)) {
+      await expect(board.getByText(annotation, { exact: false })).toBeVisible();
     }
   });
 
@@ -56,52 +63,49 @@ test.describe("Demo landing (/demo)", () => {
     page,
   }) => {
     // The surface overrides the same token names the rest of the app uses, scoped to
-    // [data-surface="loadline"]. Two things must stay true: the scope really applies, and
-    // nothing escapes it. A stray token in app.css would break the second half silently.
+    // [data-surface="loadline"]. Two things must hold: the scope applies, and nothing escapes.
     await page.goto("/demo");
     const scoped = await page.evaluate(() => {
       const el = document.querySelector('[data-surface="loadline"]');
       if (!el) return null;
       const s = getComputedStyle(el);
       return {
-        background: s.getPropertyValue("--background").trim(),
-        primary: s.getPropertyValue("--primary").trim(),
+        border: s.getPropertyValue("--border").trim(),
         radius: s.getPropertyValue("--radius").trim(),
+        letterSpacing: s.letterSpacing,
       };
     });
     expect(scoped).not.toBeNull();
-    expect(scoped!.background).toBe("oklch(0.121 0.017 7.8)");
-    expect(scoped!.primary).toBe("oklch(0.592 0.219 24.2)");
-    expect(scoped!.radius).toBe("0.375rem");
+    // Black hairline rules are the surface's only structural device.
+    expect(scoped!.border).toBe("oklch(0 0 0)");
+    expect(scoped!.radius).toBe("0rem");
 
-    // The reference this surface is locked to forbids light backgrounds, so the scope opts out
-    // of the app's theme toggle: its tokens must not change when `.dark` is applied.
+    // The reference is a light system, so the scope must ignore the app's dark theme rather
+    // than inherit a canvas the lock rejects.
     await page.evaluate(() => document.documentElement.classList.add("dark"));
     const afterDark = await page.evaluate(() =>
-      getComputedStyle(
-        document.querySelector('[data-surface="loadline"]')!
-      ).getPropertyValue("--background").trim()
+      getComputedStyle(document.querySelector('[data-surface="loadline"]')!)
+        .getPropertyValue("--background")
+        .trim()
     );
-    expect(afterDark).toBe(scoped!.background);
+    expect(afterDark).toBe("oklch(1 0 0)");
 
     // ...and the starter's own surfaces keep the starter's tokens.
     await page.goto("/");
     const root = await page.evaluate(() => {
       const s = getComputedStyle(document.documentElement);
       return {
-        background: s.getPropertyValue("--background").trim(),
         radius: s.getPropertyValue("--radius").trim(),
+        border: s.getPropertyValue("--border").trim(),
         scopedElements: document.querySelectorAll("[data-surface]").length,
       };
     });
-    expect(root.background).toBe("oklch(1 0 0)");
     expect(root.radius).toBe("0.625rem");
+    expect(root.border).not.toBe("oklch(0 0 0)");
     expect(root.scopedElements).toBe(0);
   });
 
   test("does not scroll sideways on a phone viewport", async ({ page }) => {
-    // Regression guard: the header's control cluster overflowed a 390px viewport before
-    // the chip and sign-in link were hidden below `sm`.
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto("/demo");
 
@@ -110,8 +114,6 @@ test.describe("Demo landing (/demo)", () => {
       clientWidth: document.documentElement.clientWidth,
     }));
     expect(scrollWidth).toBe(clientWidth);
-
-    // The board itself is allowed — and expected — to scroll inside its own container.
     await expect(page.getByTestId("demo-dispatch-board")).toBeVisible();
   });
 });

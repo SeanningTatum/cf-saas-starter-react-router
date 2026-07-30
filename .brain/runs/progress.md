@@ -21,6 +21,14 @@
 
 ---
 
+## 2026-07-30 — Opened PR #21 (feat/design-intelligence): two-tier design gate (ui-ux-pro-max + refero MCP + /design-research) + /demo sample SaaS surface running its OWN scoped design system (Andercore tokens under [data-surface=loadline], zero leakage, e2e-pinned). Greptile 3/5 pre-PR, 3 findings fixed. Open follow-up: app-wide focus rings never paint (runs/2026-07-30-focus-ring-defect.md).
+- branch: `feat/design-intelligence`
+- in-progress feature: none
+- run note: none
+- next: Watch PR #21 CI; then the focus-ring fix PR
+
+---
+
 ## 2026-07-30 — feat/design-intelligence ready for PR: design gate (ui-ux-pro-max + refero MCP + /design-research) + /demo sample SaaS surface. Pre-PR Greptile 3/5: 3 findings all fixed (i18n meta via loader, sr-only stale hint, locale-derived e2e assertion). 2 independent browser workers disagreed on focus visibility — the failing one was right; app-wide focus rings never paint (reproduces on / too), escalated and deferred to its own PR per user decision.
 - branch: `feat/design-intelligence`
 - in-progress feature: none

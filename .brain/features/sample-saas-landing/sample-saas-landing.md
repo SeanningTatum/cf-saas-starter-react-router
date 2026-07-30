@@ -4,9 +4,11 @@ _Last updated: 2026-07-30_
 
 ## Purpose
 
-A second public marketing surface at `/demo` that shows what the starter's design pipeline produces for a **product that is not this repo** — a fictional freight dispatch / carrier-ops SaaS called **Loadline**. It exists as the working proof of the two-tier design gate in [`rules/frontend.md`](../../rules/frontend.md): every visual decision on the page traces to a named Refero reference, and every one of them is expressed with the repo's existing `app/app.css` semantic tokens. Zero new colors, zero hardcoded hex.
+A second public marketing surface at `/demo` that shows what the starter's design pipeline produces for a **product that is not this repo** — a fictional freight dispatch / carrier-ops SaaS called **Loadline**. It exists as the working proof of the two-tier design gate in [`rules/frontend.md`](../../rules/frontend.md): every visual decision on the page traces to a named Refero reference, and the surface runs its **own scoped design system** rather than borrowing the starter's tokens — because reusing them proved only that the guardrail works, not that the pipeline can produce a design. No literal colour appears in the route.
 
-It is explicitly labelled as a demo surface in the UI (eyebrow chip + footer) so nobody mistakes it for a real product or for a feature of the starter itself — the "Honest" pillar in [`codebase/design-system.md`](../../codebase/design-system.md).
+It took three passes to get there, and the first two are kept on the record below because the failure is more instructive than the result: see [`runs/2026-07-30-design-slop-postmortem.md`](../../runs/2026-07-30-design-slop-postmortem.md).
+
+It is explicitly labelled as a sample surface in the UI (masthead label + sign-off note) so nobody mistakes it for a real product or for a feature of the starter itself — the "Honest" pillar in [`codebase/design-system.md`](../../codebase/design-system.md).
 
 ## When It's Used
 
@@ -14,7 +16,9 @@ It is explicitly labelled as a demo surface in the UI (eyebrow chip + footer) so
 - A `:lng`-prefixed variant (`/:lng/demo`) exists for SEO parity with `/` and `/login`
 - Regression surface for the tokens-win guardrail: if someone lands a hardcoded hex or a second accent, this page is where it shows first
 
-## Design research (tier 2 — `/design-research`, 2026-07-30)
+## Design research — passes one and two (SUPERSEDED, kept as the record)
+
+> **This lock no longer governs the surface.** It is the direction that shipped slop and was rebuilt; the current lock is in "Third pass" below. Read this section for what went wrong — particularly "Why Orderful over the closer-looking candidates", which is the exact reasoning the postmortem identifies as the root cause: the strongest reference was demoted for being hard to build, and the easiest one was promoted.
 
 MCP: `refero` (`.mcp.json`). Layers used: styles → screens → flows. Tier-1 `ui-ux-pro-max` ran as the a11y/pattern cross-check only.
 
@@ -57,9 +61,51 @@ Reject: Orderful's #e42b0c + orange gradient · telegraf/Montserrat · 8px radiu
 | "What happens next" 3-step strip instead of a fake signup wizard | Flows layer (Mercury 11018, Square 1952) | Marketing landing → create account → credentials → onboarding checklist | Both reference flows front-load a single "get started" and show progress. The strip previews that sequence honestly without shipping a fake funnel |
 | Friction-reducer line under the CTAs | Flows layer | "no credit card required"-class reassurance at the entry point | Directly answers the migration-risk objection at the moment of the click |
 
-## The scoped design system (added after the first pass)
+## Third pass — the rebuild that actually tested the pipeline
 
-**The first pass was not a real test of the pipeline.** It reused the starter's tokens, so Loadline came out looking like the starter — which proves the guardrail works, and proves nothing about whether the research can produce a *design system*. The surface now runs its own, defined in [`app/routes/demo/loadline-theme.css`](../../../app/routes/demo/loadline-theme.css) and scoped to `[data-surface="loadline"]`.
+**The first two passes were both wrong, in different ways.** Pass one reused the starter's tokens, so the surface looked like the starter. Pass two gave it Andercore's tokens, which changed the colour but left the *composition* untouched — and the composition was the generic stack: hero with copy left and a product panel right, then six identical heading → subtitle → grid-of-three bands, with cards as the default container. Scored against the `refero-design` skill's own `references/anti-ai-slop.md` (a file the process never required anyone to open) it failed six checks. Full postmortem, including the three structural holes that let it through: [`runs/2026-07-30-design-slop-postmortem.md`](../../runs/2026-07-30-design-slop-postmortem.md).
+
+### Reference lock (current)
+
+```text
+Primary: 19–86 (7a8c99db) — "architectural blueprint on white marble"
+Preserve: pure black on pure white, achromatic only (Ash Gray for secondary) ·
+          1px solid black rules as THE structural device ·
+          ONE family, ONE weight (400) at every size — scale without weight ·
+          tabular/list structure as the page's layout, full-bleed, no max-width container ·
+          zero radius, zero shadow, zero gradient · -0.02em tracking
+Borrow only: mono.frm.fm (4b3c372c) — condensed uppercase micro-labels, wide tracking
+Media: none required. The reference has no imagery; text is the carrier, so nothing is faked.
+Reject: cards · dark canvas · any hue · hero-left/product-right · one-word colour highlight ·
+        heading+subtitle+grid-of-three bands · shadows · rounded corners · weights above 400
+```
+
+**Why this reference.** Freight runs on documents — bills of lading, rate confirmations, manifests. A system built from hairline rules, tabular alignment and monumental light-weight type is the visual language of the artefact the product replaces. It is also the direction the user chose from three offered, which is the skill's own workflow for a landing page and a step the earlier passes skipped.
+
+### Composition — the part that changed
+
+| Section | What it is | Why it is not the default |
+|---|---|---|
+| Masthead | Wordmark, ruled links, locale switch | One rule, nothing competing. No sticky blurred bar. |
+| **Monument** | A 352px figure — *214, minutes since LL-4818 last checked in* — in the same weight as body copy | The page opens on the number that costs money, not on a screenshot of the app. Scale without weight is the reference's signature. |
+| **Manifest** | Full-bleed hairline-ruled table of tonight's loads | The product's working surface *is* the page. Not a framed panel beside the copy. |
+| Annotations | Three marketing lines rendered **inside** the table, on the rows that prove them | This is why there is no feature section. The claim sits next to its evidence. |
+| Ledger | Three figures as ruled columns split by hairline verticals | The same content that used to be three cards, with the cards removed. |
+| Sequence | Numbered ruled rows in the manifest's own column language | Not a three-card "how it works". |
+| Sign-off | Statement, CTA repeated once, honesty note | No newsletter, no fake pricing, no FAQ. |
+
+### Two removals worth recording
+
+- **`LanguageSwitcher` and `ThemeToggle` are gone from this surface.** They dragged in a shadow, a radius and `font-weight: 500` — three traits the lock forbids — and a theme toggle on a surface that pins itself light is dishonest UI. Locale switching is two ruled text buttons posting to the same `/api/set-locale` action, so cookie + revalidation behaviour is unchanged.
+- **`boardFilters` was deleted**, not left dangling, when the pill row went.
+
+### Automated slop probe (counts, not opinions)
+
+Measured in-browser on the render: **0** chromatic elements · **0** radii above zero · **0** shadows · **0** font weights above 400 · **58** hairline rules · monument at 352px · no horizontal page scroll at 390px · no JS or network errors.
+
+## The scoped design system (superseded values — technique unchanged)
+
+The scoping **technique** below still stands and is now a documented convention (`rules/frontend.md` "Scoped design systems"); only the values changed when the direction did. `app/routes/demo/loadline-theme.css` now carries the Waybill palette (white paper, black ink, Ash Gray secondary, `--radius: 0`). The Andercore table that follows is kept as the worked example of the technique and as the record of what pass two committed to.
 
 Direction: **Andercore** (`15fd028d`) — "dark control panel, sharp red accent" — the logistics reference originally rejected as *primary* because its photography is unbuildable here. Its **token system** is buildable, so it owns colour, shape and density while Orderful keeps owning structure (band rhythm, framed product panel, alternating feature rows). Each source has a bounded job; neither was averaged into the other.
 
