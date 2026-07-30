@@ -14,6 +14,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { LanguageSwitcher } from "@/components/language-switcher";
 import { cn } from "@/lib/utils";
+import { i18nServer } from "@/i18n/i18n.server";
 import {
   BOARD_ROWS,
   STATUS_DOT,
@@ -36,14 +37,28 @@ export const handle = { i18n: ["demo"] };
  * frame is an inverted surface (`bg-foreground`/`text-background`) rather than a literal dark
  * colour, so it flips correctly in dark mode.
  */
-export function meta(_: Route.MetaArgs) {
-  return [
-    { title: "Loadline — dispatch, check-calls and invoicing on one board" },
-    {
-      name: "description",
-      content:
-        "Sample SaaS marketing surface built inside the Cloudflare SaaS Starter, demonstrating the design pipeline on a fictional freight dispatch product.",
+/**
+ * `<title>` and `<meta name="description">` render outside the React tree, so `useTranslation`
+ * cannot reach them — without a loader they would stay English for a `zh` visitor and for every
+ * crawler. Threading them through `loaderData` is the only way to translate them.
+ *
+ * The route is public and deliberately does NOT call `redirectIfAuthenticated`: a signed-in
+ * user following a link to the demo should see the demo, not get bounced to `/dashboard`.
+ */
+export async function loader({ request }: Route.LoaderArgs) {
+  const t = await i18nServer.getFixedT(request, "demo");
+  return {
+    meta: {
+      title: t("meta.title"),
+      description: t("meta.description"),
     },
+  };
+}
+
+export function meta({ data }: Route.MetaArgs) {
+  return [
+    { title: data?.meta.title },
+    { name: "description", content: data?.meta.description },
   ];
 }
 
@@ -299,9 +314,13 @@ function BoardRowCells({ row }: { row: BoardRow }) {
           "px-4 py-3 text-right font-mono text-xs",
           stale ? "text-background" : "text-background/70"
         )}
-        title={stale ? t("board.stale_hint") : undefined}
       >
         {t("board.check_call_minutes", { count: row.checkCallAgeMinutes })}
+        {/* `title` is never exposed on touch and is ignored by most screen readers on a
+            non-interactive cell, so the stale explanation ships as visually-hidden copy. */}
+        {stale ? (
+          <span className="sr-only"> — {t("board.stale_hint")}</span>
+        ) : null}
       </td>
       <td className="hidden px-4 py-3 text-right font-mono text-xs sm:table-cell">
         ${row.marginUsd}

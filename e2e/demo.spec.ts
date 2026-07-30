@@ -1,4 +1,7 @@
 import { test, expect } from "@playwright/test";
+// Import attribute is required: Playwright runs specs as native ESM, which rejects a bare
+// JSON import.
+import demoEn from "../app/locales/en/demo.json" with { type: "json" };
 
 /**
  * `/demo` — the sample SaaS landing surface (Loadline).
@@ -31,11 +34,14 @@ test.describe("Demo landing (/demo)", () => {
     await expect(page.getByTestId("demo-filter-late")).toContainText("1");
     await expect(page.getByTestId("demo-filter-delivered")).toContainText("1");
 
-    // Colour must never be the only carrier of status: each row states it in words.
+    // Colour must never be the only carrier of status: each row states it in words. Labels come
+    // from the locale file rather than being hardcoded here, so a mis-rendered or missing
+    // translation fails the assertion instead of slipping past an English-only regex.
+    const labels = Object.values(demoEn.board.status);
     const statuses = page.getByTestId("demo-board-status");
     await expect(statuses).toHaveCount(5);
     for (const status of await statuses.allInnerTexts()) {
-      expect(status.trim()).toMatch(/^(Rolling|Late|Delivered)$/);
+      expect(labels).toContain(status.trim());
     }
   });
 

@@ -21,6 +21,14 @@
 
 ---
 
+## 2026-07-30 — feat/design-intelligence ready for PR: design gate (ui-ux-pro-max + refero MCP + /design-research) + /demo sample SaaS surface. Pre-PR Greptile 3/5: 3 findings all fixed (i18n meta via loader, sr-only stale hint, locale-derived e2e assertion). 2 independent browser workers disagreed on focus visibility — the failing one was right; app-wide focus rings never paint (reproduces on / too), escalated and deferred to its own PR per user decision.
+- branch: `feat/design-intelligence`
+- in-progress feature: none
+- run note: none
+- next: Open the PR, then do the focus-ring follow-up from runs/2026-07-30-focus-ring-defect.md
+
+---
+
 ## 2026-07-30 — shipped sample-saas-landing: verify-done full pass 2026-07-30: typecheck PASS, 269/269 unit tests (6 new pinning board dataset invariants + the no-ra
 - branch: `feat/design-intelligence`
 - in-progress feature: none
