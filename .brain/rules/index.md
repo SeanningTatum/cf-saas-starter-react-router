@@ -14,7 +14,7 @@ Domain-specific lint-style rules organized by **architecture layer**. Each rule 
 
 | # | Rule | Touches | Read when |
 |---|------|---------|-----------|
-| 1 | [`frontend.md`](frontend.md) | `app/components/**`, `app/routes/**/*.tsx`, `app/app.css` | Building UI, forms (Effect Schema + `effectResolver`), modals, Tailwind / CSS variables, AI prompts in UI, Playwright manual verification |
+| 1 | [`frontend.md`](frontend.md) | `app/components/**`, `app/routes/**/*.tsx`, `app/app.css` | Building UI, forms (Effect Schema + `effectResolver`), modals, Tailwind / CSS variables, AI prompts in UI, `ui-ux-pro-max` design lookup, Playwright manual verification |
 | 2 | [`cloudflare.md`](cloudflare.md) | `wrangler.jsonc`, `worker-configuration.d.ts`, `workers/**`, `workflows/**` | Adding bindings, env vars, secrets, Workflows definition, anything Workers-runtime-specific |
 | 3 | [`repository.md`](repository.md) | `app/repositories/**`, `app/db/schema.ts` | Writing or modifying an `Effect.Service` repository, Drizzle schema, repo input schemas |
 | 4 | [`services.md`](services.md) | `app/services/**`, `app/auth/**` | Adding a new external client / Effect service, wiring Better Auth, Workflows, Session, Logger |

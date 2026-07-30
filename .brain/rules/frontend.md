@@ -122,6 +122,60 @@ Exception: gray scale OK for subtle layout (`border-gray-200 dark:border-gray-80
 - **Avatar initials** — `getInitials` from `@/lib/utils`, not per-component copies.
 - **Dates** — always through `app/lib/date-utils.ts` `formatDate` + `useTranslation().i18n.language`; never raw `toLocaleDateString("en-US", ...)` (breaks `zh`).
 
+## Design intelligence — never design from training-data taste
+
+Two tools, two jobs. Pick by **how much visual invention the task needs**, and run [`/design-research`](../../.claude/commands/design-research.md) for anything in tier 2.
+
+| Task | Tool | Why |
+|------|------|-----|
+| Reusing existing patterns — another modal, another table, another form, a spacing/a11y fix, a chart | **`ui-ux-pro-max`** (tier 1, default) | Offline rule lookup. Cheap, no network. Answers "what is the correct pattern here". |
+| Net-new surface with real visual ambition — a new marketing/landing section, a new product surface, a redesign, a multi-step journey, "make this beautiful/premium" | **Refero MCP + `refero-design` skill** (tier 2) | Real-product references. Answers "what should this *feel* like" with named evidence instead of averaged AI taste. |
+| Anything touching color, type, radius, elevation | [`../codebase/design-system.md`](../codebase/design-system.md) + `app/app.css` tokens | Committed visual language. **Wins over both tools.** |
+
+### Tier 1 — `ui-ux-pro-max`
+
+Installed as a plugin skill (`ui-ux-pro-max@ui-ux-pro-max-skill`, enabled in [`.claude/settings.json`](../../.claude/settings.json)) — Claude Code loads it automatically via the `ui-ux-pro-max` Skill; other tools invoke the script directly.
+
+```bash
+# stack for this repo is always react + tailwind + shadcn
+python3 "$UUPM/scripts/search.py" "<query>" --domain <style|color|typography|ux|chart|product|gsap|icon>
+python3 "$UUPM/scripts/search.py" "<query>" --stack shadcn      # component-level guidance
+# $UUPM = ${CLAUDE_PLUGIN_ROOT}/.claude/skills/ui-ux-pro-max (plugin-provided env var)
+```
+
+**What to take from it:**
+
+| Take | Ignore |
+|------|--------|
+| UX / accessibility rules (contrast, 44×44 touch targets, focus rings, labels, reduced-motion) | Its raw hex palettes — see guardrail below |
+| Layout + responsive patterns, grid/spacing structure, navigation patterns | Its font recommendations when they conflict with `design-system.md` |
+| Chart type + legend/tooltip rules (feed `--chart-{1..5}`) | `--persist` / `--design-system` scaffolding — this project already has a design system |
+| Form / feedback / empty-state / loading patterns | Style categories that fight the "restrained, technical" direction |
+
+### Tier 2 — Refero MCP (complex / net-new visual work)
+
+For anything where the answer is a *look*, not a rule. Server declared in [`.mcp.json`](../../.mcp.json) (`refero`, HTTP, token via `REFERO_MCP_TOKEN` — never commit the token). Methodology lives in the `refero-design` skill; **invoke the skill, don't freestyle the tools** — its non-negotiables (research before design, don't copy one reference, don't average references into a safe middle, don't change token meanings, validate the render against the locked reference) are the point.
+
+Three research layers — combine them, don't pick one:
+
+| Layer | Tools | Use for |
+|-------|-------|---------|
+| **Styles** — visual direction / taste | `refero_search_styles` → `refero_get_style` | Look and feel, typography system, section rhythm, elevation, imagery strategy. Web marketing/product pages only — no in-app screens. |
+| **Screens** — concrete UI decisions | `refero_search_screens` (`platform: "web"`) → `refero_get_screen`, `refero_get_similar_screens`, `refero_get_screen_image` | Page structure, component choice, content hierarchy, copy, empty/error/loading states. Search by what is literally on screen ("pricing toggle", "delete account modal"), not by adjective. |
+| **Flows** — journey logic | `refero_search_flows` → `refero_get_flow` | Multi-step sequences: onboarding, sign-up, upload, cancellation. Step count, decision points, recovery paths. |
+
+Rules for this repo:
+
+- **Synthesize, then map to tokens.** Refero references carry their own palettes; this repo's tokens still win (guardrail below). Take structure, rhythm, hierarchy, motion intent, copy strategy, imagery role — then express them with `app/app.css` semantics. A reference's accent color becomes `--primary`, not a new hex.
+- **Direction is already locked** for the public surface: [`../codebase/design-system.md`](../codebase/design-system.md) (Cursor + Linear). Extending that surface = research *within* the locked direction. Only a deliberate redesign re-opens the lock, and that updates `design-system.md` in the same PR.
+- **Record the evidence.** Named references + the concrete decisions taken from each go in the feature doc (`.brain/features/<slug>/<slug>.md`, "Design research" section) — or in `design-system.md` when the direction itself moves. A design decision with no named reference is vibe memory, which this rule exists to prevent.
+- **Every tier-2 change still ends in a browser walk** — see Verification below. Refero research is not proof.
+- If `REFERO_MCP_TOKEN` is unset the MCP tools are absent: fall back to the `refero-design` skill's bundled craft references + tier 1, and say so in the run note. Don't silently design from memory.
+
+**Guardrail — tokens win over both tools.** This repo already has a committed visual language: [`../codebase/design-system.md`](../codebase/design-system.md) (refero-derived Linear/Cursor direction) + the semantic CSS variables in `app/app.css`. `ui-ux-pro-max` and Refero output are **advisory on structure and behavior, never on raw color values**. Map every recommendation onto existing semantic tokens; if a genuinely new color is needed, add it via the "Adding a new color" steps above. Hardcoding a hex a tool printed is still an anti-pattern.
+
+**One design authority.** The generic `frontend-design` plugin was removed from [`.claude/settings.json`](../../.claude/settings.json) on purpose — three overlapping design skills means whichever fires first wins, and the generic one averages back toward default AI styling (`refero-design` forbids running it as a parallel authority). Tier 1 + tier 2 + the tokens are the whole stack.
+
 ## Verification (browser proof before done)
 
 For frontend changes, **verify in a browser before declaring done** — never claim UI works from reading code.

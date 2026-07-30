@@ -50,7 +50,7 @@ case "$REL" in app/models/errors/*|app/lib/effect-trpc.ts) add errors ;; esac
 
 why_for() {
   case "$1" in
-    frontend)   echo "UI, forms (Effect Schema + effectResolver — no Zod), modals, Tailwind / CSS variables" ;;
+    frontend)   echo "UI, forms (Effect Schema + effectResolver — no Zod), modals, Tailwind / CSS variables, design intelligence (ui-ux-pro-max rules · Refero MCP for net-new surfaces via /design-research)" ;;
     cloudflare) echo "bindings, env vars, secrets, Workflows declaration, Workers-runtime specifics" ;;
     repository) echo "Effect.Service repositories, Drizzle schema, repo input schemas" ;;
     services)   echo "Effect Tags + Layers, Better Auth, Workflows, Session, Logger" ;;

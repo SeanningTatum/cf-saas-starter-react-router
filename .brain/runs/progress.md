@@ -21,6 +21,22 @@
 
 ---
 
+## 2026-07-30 — otel-tracing shipped as PR #20 (feat/otel-tracing, commits 1508573 + 8858b01). Pre-PR Greptile review confidence 4/5: 2 P2 findings — dropped-count-on-export-failure auto-fixed, try/catch simplification declined (violates no-try/catch non-negotiable + CI sweep). Live OTLP trace evidence in verifications/2026-07-29.md. User's uncommitted ui-ux-pro-max brain edits left out of the PR.
+- branch: `feat/otel-tracing`
+- in-progress feature: none
+- run note: none
+- next: Merge PR #20 when review lands; then pick an OTLP collector for the reference deployment + wire its MCP server for agent trace debugging.
+
+---
+
+## 2026-07-30 — Wired ui-ux-pro-max design skill into the harness: enabled ui-ux-pro-max@ui-ux-pro-max-skill plugin + extraKnownMarketplaces in .claude/settings.json, new 'Design intelligence' section in rules/frontend.md (tokens-win guardrail), rule-router frontend pointer names the skill, cross-links in rules/index.md + codebase/design-system.md + AGENTS.md, CHANGELOG entry. harness-check 10/10, rule-router 38/38, brain-reminder 20/20.
+- branch: `feat/design-intelligence`
+- in-progress feature: none
+- run note: none
+- next: Restart the Claude Code session so the plugin's skills load; first net-new UI task should exercise the search.py lookup.
+
+---
+
 ## 2026-07-29 — Released v1.4.0 'Every Test Names Its Victim' (squash 067bfc2, tag v1.4.0): #18 test-author + verify-done gate hardening via 6-round greploop (3/5 → 5/5), #17 tRPC isDev production fix. CHANGELOG + progress updated; preview.yml red is the known placeholder-IDs issue.
 - branch: `main`
 - in-progress feature: none
