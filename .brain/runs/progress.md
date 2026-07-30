@@ -21,11 +21,66 @@
 
 ---
 
+## 2026-07-30 — Stripped /demo before merge (route, theme, board data, locales, i18n registration, e2e spec); feat-008 marked cut. Harness kept: ui-builder, design-critic, design-audit, add-premium-surface recipe, /build-feature workflow, scoped-design-systems convention, postmortem, screenshots. Gates green: typecheck, 301 unit/26 files, build, e2e (1 flake passed on retry), harness 10/10.
+- branch: `feat/design-intelligence`
+- in-progress feature: none
+- run note: none
+- next: Merge PR #21 and cut the release
+
+---
+
+## 2026-07-30 — Opened PR #21 (feat/design-intelligence): two-tier design gate (ui-ux-pro-max + refero MCP + /design-research) + /demo sample SaaS surface running its OWN scoped design system (Andercore tokens under [data-surface=loadline], zero leakage, e2e-pinned). Greptile 3/5 pre-PR, 3 findings fixed. Open follow-up: app-wide focus rings never paint (runs/2026-07-30-focus-ring-defect.md).
+- branch: `feat/design-intelligence`
+- in-progress feature: none
+- run note: none
+- next: Watch PR #21 CI; then the focus-ring fix PR
+
+---
+
+## 2026-07-30 — feat/design-intelligence ready for PR: design gate (ui-ux-pro-max + refero MCP + /design-research) + /demo sample SaaS surface. Pre-PR Greptile 3/5: 3 findings all fixed (i18n meta via loader, sr-only stale hint, locale-derived e2e assertion). 2 independent browser workers disagreed on focus visibility — the failing one was right; app-wide focus rings never paint (reproduces on / too), escalated and deferred to its own PR per user decision.
+- branch: `feat/design-intelligence`
+- in-progress feature: none
+- run note: none
+- next: Open the PR, then do the focus-ring follow-up from runs/2026-07-30-focus-ring-defect.md
+
+---
+
+## 2026-07-30 — shipped sample-saas-landing: verify-done full pass 2026-07-30: typecheck PASS, 269/269 unit tests (6 new pinning board dataset invariants + the no-ra
+- branch: `feat/design-intelligence`
+- in-progress feature: none
+- run note: none
+
+---
+
+## 2026-07-30 — otel-tracing shipped as PR #20 (feat/otel-tracing, commits 1508573 + 8858b01). Pre-PR Greptile review confidence 4/5: 2 P2 findings — dropped-count-on-export-failure auto-fixed, try/catch simplification declined (violates no-try/catch non-negotiable + CI sweep). Live OTLP trace evidence in verifications/2026-07-29.md. User's uncommitted ui-ux-pro-max brain edits left out of the PR.
+- branch: `feat/otel-tracing`
+- in-progress feature: none
+- run note: none
+- next: Merge PR #20 when review lands; then pick an OTLP collector for the reference deployment + wire its MCP server for agent trace debugging.
+
+---
+
+## 2026-07-30 — Wired ui-ux-pro-max design skill into the harness: enabled ui-ux-pro-max@ui-ux-pro-max-skill plugin + extraKnownMarketplaces in .claude/settings.json, new 'Design intelligence' section in rules/frontend.md (tokens-win guardrail), rule-router frontend pointer names the skill, cross-links in rules/index.md + codebase/design-system.md + AGENTS.md, CHANGELOG entry. harness-check 10/10, rule-router 38/38, brain-reminder 20/20.
+- branch: `feat/design-intelligence`
+- in-progress feature: none
+- run note: none
+- next: Restart the Claude Code session so the plugin's skills load; first net-new UI task should exercise the search.py lookup.
+
+---
+
 ## 2026-07-30 — Released v1.5.0 'The Request Explains Itself' (squash 0ae0796, tag v1.5.0): PR #20 otel-tracing — env-driven OTLP span export (no OTel SDK), traceId-correlated logs, db spans free via effect-utils, span-instrumenter sub-agent, MCP debug recipe. Tests 262 → 301. CHANGELOG + progress updated.
 - branch: `main`
 - in-progress feature: none
 - run note: none
 - next: pick an OTLP collector for the reference deployment (wrangler secret put OTEL_*) + wire its MCP server for agent trace debugging; the deploy.yml/preview.yml real-IDs gating follow-up from 2026-07-27 still open.
+
+---
+
+## 2026-07-29 — Released v1.4.0 'Every Test Names Its Victim' (squash 067bfc2, tag v1.4.0): #18 test-author + verify-done gate hardening via 6-round greploop (3/5 → 5/5), #17 tRPC isDev production fix. CHANGELOG + progress updated; preview.yml red is the known placeholder-IDs issue.
+- branch: `main`
+- in-progress feature: none
+- run note: none
+- next: Open follow-up from 2026-07-27 decision: gate deploy.yml/preview.yml behind a real-IDs check so they skip cleanly in the template repo.
 
 ---
 
@@ -41,14 +96,6 @@
 - in-progress feature: feat-007 (otel-tracing)
 - run note: none yet
 - next: registered in `feature_list.json` + `.brain/features/otel-tracing/otel-tracing.md` created; begin design of custom Effect Tracer (OTLP JSON export via fetch, no-op when endpoint unset) + logger traceId/spanId correlation.
-
----
-
-## 2026-07-29 — Released v1.4.0 'Every Test Names Its Victim' (squash 067bfc2, tag v1.4.0): #18 test-author + verify-done gate hardening via 6-round greploop (3/5 → 5/5), #17 tRPC isDev production fix. CHANGELOG + progress updated; preview.yml red is the known placeholder-IDs issue.
-- branch: `main`
-- in-progress feature: none
-- run note: none
-- next: Open follow-up from 2026-07-27 decision: gate deploy.yml/preview.yml behind a real-IDs check so they skip cleanly in the template repo.
 
 ---
 

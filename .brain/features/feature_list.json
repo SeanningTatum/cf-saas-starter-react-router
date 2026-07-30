@@ -1,6 +1,6 @@
 {
   "$schema": "Machine-readable feature state tracker. Source of truth for status; per-feature MD docs are source of truth for design/runtime.",
-  "updated": "2026-07-29",
+  "updated": "2026-07-30",
   "policy": {
     "one_in_progress_at_a_time": true,
     "definition_of_done": "implementation complete + verify-done passed + feature MD updated + brain coherent"
@@ -99,7 +99,20 @@
       "description": "Effect span tracing across tRPC procedures, repositories, and services. Custom Effect Tracer exports OTLP JSON via fetch to an env-configured endpoint (OTEL_EXPORTER_OTLP_ENDPOINT + OTEL_EXPORTER_OTLP_HEADERS + OTEL_SERVICE_NAME); complete no-op when endpoint unset. Logger auto-annotates every log with traceId/spanId from the current span so logs and traces correlate. Includes a span-instrumenter sub-agent + rules/recipe updates so every new endpoint/repo method gets instrumented, and docs for MCP-based trace debugging by local agents.",
       "dependencies": [],
       "status": "shipped",
-      "evidence": "verify-done full pass: typecheck PASS, 301/301 unit tests, e2e smoke 2/2 (isolated port — stray unrelated dev server on 5173), production build PASS, non-negotiables sweep clean, effect-ts-enforcer 0 findings, harness-check 10/10. Live verification: real OTLP trace captured from dev server (root trpc.admin.getUsers server span + 2 db.query user client child spans, one POST on runtime.dispose) — .brain/features/otel-tracing/verifications/2026-07-29.md",
+      "evidence": "verify-done full pass: typecheck PASS, 301/301 unit tests, e2e smoke 2/2 (isolated port \u2014 stray unrelated dev server on 5173), production build PASS, non-negotiables sweep clean, effect-ts-enforcer 0 findings, harness-check 10/10. Live verification: real OTLP trace captured from dev server (root trpc.admin.getUsers server span + 2 db.query user client child spans, one POST on runtime.dispose) \u2014 .brain/features/otel-tracing/verifications/2026-07-29.md",
+      "owners": [
+        "sean"
+      ]
+    },
+    {
+      "id": "feat-008",
+      "name": "Sample SaaS Landing (Loadline)",
+      "slug": "sample-saas-landing",
+      "doc": ".brain/features/sample-saas-landing/sample-saas-landing.md",
+      "description": "Throwaway proof surface for the design gate (/demo, fictional freight product). Built, rebuilt five times, then removed before merge by design \u2014 the harness it produced is the deliverable. Kept as the record of what four rejections taught.",
+      "dependencies": [],
+      "status": "cut",
+      "evidence": "cut 2026-07-30: route + locales + specs removed before merge, deliberately. What it produced and what survives: ui-builder, design-critic, scripts/design-audit.ts, recipes/add-premium-surface.md, the scoped-design-systems convention, and runs/2026-07-30-design-slop-postmortem.md. Screenshots retained as evidence.",
       "owners": [
         "sean"
       ]

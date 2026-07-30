@@ -161,8 +161,29 @@ Welcome row keeps `Welcome back, {name}!` but adds a one-line subtitle that poin
 - Don't add new colors or radius tokens to `app.css` for this pass — reuse existing.
 - Don't put emojis in the UI.
 
+## A surface with its own design system
+
+This document governs the **starter's** surfaces. A surface that markets a different product (or a white-label skin) may run its own visual language through a **scoped token override** — same variable names, new values, under a `[data-surface="…"]` selector, in a stylesheet next to its route. Rules and the non-leakage requirement: [`../rules/frontend.md`](../rules/frontend.md) "Scoped design systems".
+
+Worked example: the `/demo` surface (removed before merge — see [`features/sample-saas-landing/sample-saas-landing.md`](../features/sample-saas-landing/sample-saas-landing.md)) ran a complete dark product-page system of its own — its own canvas, panels, accent, type pairing and radius scale — while `/` and every other route kept the tokens above, verified unchanged in the same browser session and pinned by an e2e test in both directions. The technique and its rules are in [`../rules/frontend.md`](../rules/frontend.md) "Scoped design systems"; the recipe that uses it is [`../recipes/add-premium-surface.md`](../recipes/add-premium-surface.md).
+
+## Re-running the research
+
+This direction came from Refero. To extend it (new marketing section, new surface) or re-open it (deliberate redesign), run [`/design-research`](../../.claude/commands/design-research.md) — it drives the `refero-design` skill across the three Refero layers (styles → screens → flows), cross-checks a11y with `ui-ux-pro-max`, and writes a decision ledger before any JSX. Requires the `refero` MCP server ([`.mcp.json`](../../.mcp.json), `REFERO_MCP_TOKEN`).
+
+Locked reference set for this surface — pass these UUIDs to `refero_get_style` rather than re-searching from scratch:
+
+| Reference | Style UUID | Traits taken |
+|---|---|---|
+| Cursor | `4e3b4717-84c8-4599-baaf-a343c3d619b6` | Warm light surface, mono accents, multi-layer shadow, deliberate type |
+| Linear | `90ce5883-bb24-4466-93f7-801cd617b0d1` | 4px spacing unit, 6px radius, dense type, restrained palette |
+
+Adjacent references worth studying for a *technical, monochrome, dev-audience* surface (dominant-direction candidates — do not blend them): `ui.shadcn.com` `c14c0a94-1037-449e-bf5b-4cb972656ac7` (component-showcase grid, typographic authority), `sst.dev` `7b6c53c7-7145-476e-aed8-f2367eef3adb` (code block as the hero motif), `linear.app/changelog` `11d3e58a-87d7-4a9a-bbf5-720f4fd3ffc6` (dark restrained changelog rhythm).
+
 ## References
 
+- `ui-ux-pro-max` skill — offline design-rule database (styles, layouts, UX/a11y checks, chart rules) queried before net-new UI. Advisory on **structure and behavior only**; the tokens above win on color/type. Invocation + guardrail: [`../rules/frontend.md`](../rules/frontend.md) "Design intelligence".
+- Refero MCP + `refero-design` skill — reference research for complex/net-new surfaces (tier 2 in `frontend.md`). Same guardrail: structure and behavior, never raw color.
 - Refero — Cursor `DESIGN.md` (warm light, mono-accented, multi-layer shadow, deliberate type).
 - Refero — Linear `DESIGN.md` (4px spacing unit, 6px radius, dense type, restrained palette).
 - `.brain/rules/frontend.md` — repo-wide frontend conventions (Tailwind tokens, `cn`, ShadCN forms, `data-testid`).
