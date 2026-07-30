@@ -298,12 +298,20 @@ export const flushSpans = (
               )
             : Effect.void
           : Effect.logWarning("tracing.export_failed").pipe(
-              Effect.annotateLogs({ status: res.status, spanCount: spans.length })
+              Effect.annotateLogs({
+                status: res.status,
+                spanCount: spans.length,
+                dropped,
+              })
             )
       ),
       Effect.catchAll((cause) =>
         Effect.logWarning("tracing.export_failed").pipe(
-          Effect.annotateLogs({ cause: String(cause), spanCount: spans.length })
+          Effect.annotateLogs({
+            cause: String(cause),
+            spanCount: spans.length,
+            dropped,
+          })
         )
       )
     );
