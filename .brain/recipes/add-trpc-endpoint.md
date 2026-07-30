@@ -53,7 +53,8 @@ myProcedure: protectedProcedure   // or publicProcedure / adminProcedure
       Effect.gen(function* () {
         const repo = yield* UserRepository;
         return yield* repo.myMethod(input);
-      })
+      }),
+      { span: "trpc.<router>.myProcedure" }   // tracing root span — see .brain/codebase/observability.md
     )
   ),
 ```
@@ -91,6 +92,7 @@ bun run test
 - [ ] Schema in `app/lib/schemas/`
 - [ ] Schema unit test passes
 - [ ] Procedure uses `runProcedure` + Effect.gen (no `.then`, no bare `throw`)
+- [ ] `runProcedure` gets `{ span: "trpc.<router>.<procedure>" }` matching the router registration (audit with `span-instrumenter` sub-agent)
 - [ ] Auth level correct (admin = `adminProcedure`)
 - [ ] Errors flow through `tagToTRPC` (no manual `TRPCError` throws inside gen)
 - [ ] Repo test passes (if added)

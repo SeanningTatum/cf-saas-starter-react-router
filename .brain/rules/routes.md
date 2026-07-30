@@ -52,6 +52,7 @@ export const widgetRouter = createTRPCRouter({
   - `adminProcedure` — extends `protectedProcedure` + checks `user.role === "admin"`, throws `FORBIDDEN` otherwise
 - **Domain pre-conditions** (e.g. "can't delete self"): `Effect.fail(new ValidationError(...))` inside the gen — runtime maps to `BAD_REQUEST`
 - **Don't** call `runtime.runPromise(...)` directly — use `runProcedure` so errors map correctly
+- **Every procedure passes a tracing span**: `runProcedure(ctx.runtime, effect, { span: "trpc.<router>.<procedure>" })` — name must match the router registration. DB spans come free from effect-utils helpers. Convention + debugging flow: [`.brain/codebase/observability.md`](../codebase/observability.md); audit with the `span-instrumenter` sub-agent.
 - **Register** the new router in `app/trpc/router.ts`
 - **Never expose a full row on an unauthenticated or under-scoped procedure.** The root `user.getUsers` (`app/trpc/router.ts`) used to be a `publicProcedure` returning full `user` rows (email, role, ban reason, verification status) with no auth check. It's now `protectedProcedure` and returns a safe projection only — `{ id, name, image, createdAt }` — mapped explicitly from the repo result rather than spreading the row. If a procedure only ever needs a subset of columns, project it down at the procedure layer instead of trusting the client not to read the extra fields.
 

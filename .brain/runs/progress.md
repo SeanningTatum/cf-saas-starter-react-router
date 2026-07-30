@@ -60,11 +60,34 @@
 
 ---
 
+## 2026-07-30 — Released v1.5.0 'The Request Explains Itself' (squash 0ae0796, tag v1.5.0): PR #20 otel-tracing — env-driven OTLP span export (no OTel SDK), traceId-correlated logs, db spans free via effect-utils, span-instrumenter sub-agent, MCP debug recipe. Tests 262 → 301. CHANGELOG + progress updated.
+- branch: `main`
+- in-progress feature: none
+- run note: none
+- next: pick an OTLP collector for the reference deployment (wrangler secret put OTEL_*) + wire its MCP server for agent trace debugging; the deploy.yml/preview.yml real-IDs gating follow-up from 2026-07-27 still open.
+
+---
+
 ## 2026-07-29 — Released v1.4.0 'Every Test Names Its Victim' (squash 067bfc2, tag v1.4.0): #18 test-author + verify-done gate hardening via 6-round greploop (3/5 → 5/5), #17 tRPC isDev production fix. CHANGELOG + progress updated; preview.yml red is the known placeholder-IDs issue.
 - branch: `main`
 - in-progress feature: none
 - run note: none
 - next: Open follow-up from 2026-07-27 decision: gate deploy.yml/preview.yml behind a real-IDs check so they skip cleanly in the template repo.
+
+---
+
+## 2026-07-29 — shipped otel-tracing: verify-done full pass: typecheck PASS, 301/301 unit tests, e2e smoke 2/2 (isolated port — stray unrelated dev server on 
+- branch: `main`
+- in-progress feature: none
+- run note: none
+
+---
+
+## 2026-07-29 — feat-007 otel-tracing added to feature_list.json (in-progress)
+- branch: `main`
+- in-progress feature: feat-007 (otel-tracing)
+- run note: none yet
+- next: registered in `feature_list.json` + `.brain/features/otel-tracing/otel-tracing.md` created; begin design of custom Effect Tracer (OTLP JSON export via fetch, no-op when endpoint unset) + logger traceId/spanId correlation.
 
 ---
 

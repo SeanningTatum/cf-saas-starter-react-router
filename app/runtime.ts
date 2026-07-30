@@ -5,6 +5,7 @@ import { BucketLive, type Bucket } from "@/services/bucket";
 import { AuthApiLive, type AuthApi as AuthApiTag } from "@/services/auth";
 import { WorkflowsLive, type Workflows } from "@/services/workflows";
 import { LoggerLive, MinLogLevelLive } from "@/services/logger";
+import { TracingLayer } from "@/services/tracing";
 import { UserRepository } from "@/repositories/user";
 import { AnalyticsRepository } from "@/repositories/analytics";
 import { BucketRepository } from "@/repositories/bucket";
@@ -37,7 +38,11 @@ export const makeAppRuntime = (env: Env, baseURL?: string) => {
   const layer = reposLayer
     .pipe(Layer.provideMerge(baseLayer))
     .pipe(Layer.provide(CloudflareEnvLive(env)))
-    .pipe(Layer.provideMerge(Layer.merge(LoggerLive, MinLogLevelLive)));
+    .pipe(
+      Layer.provideMerge(
+        Layer.mergeAll(LoggerLive, MinLogLevelLive, TracingLayer(env))
+      )
+    );
   return ManagedRuntime.make(layer);
 };
 

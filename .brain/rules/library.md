@@ -101,7 +101,8 @@ Each schema gets a `*.test.ts` covering happy decode + at least one rejection pe
 ```typescript
 import { tryQuery, tryUpdate, tryCreate, tryDelete, requireFound, requireFoundOrFail } from "@/lib/effect-utils";
 
-// Drizzle calls — wraps thrown Promise into a tagged error
+// Drizzle calls — wraps thrown Promise into a tagged error AND emits a
+// `db.<op> <entity>` client tracing span (see .brain/codebase/observability.md)
 const rows = yield* tryQuery("widget", () => db.select().from(widget).limit(1));
 yield* tryUpdate("widget", () => db.update(widget).set({...}).where(eq(widget.id, id)));
 
@@ -257,6 +258,8 @@ If drizzle is hard to stub (joins, transactions): extract pure logic into a top-
 ## Playwright (e2e smoke specs — CI regression net)
 
 Lives in `e2e/*.spec.ts`. Use `@playwright/test`. CI (`.github/workflows/ci.yml`) re-runs these on every PR.
+
+> **Remote bindings**: `vite.config.ts` sets `remoteBindings: !process.env.CI` because Workers AI has no local simulation. When Cloudflare's `edge-preview` API is unavailable the dev server **fails to boot at all** (`Failed to start the remote proxy session`), which takes `bun run dev`, `bun run test:e2e` and `bun run design:audit` down with it. Run them as `CI=1 bun run …` to skip the remote session — that is the same path CI uses, and it is a Cloudflare-side outage, not a repo defect.
 
 > **Port pinning**: `playwright.config.ts` starts the dev server with `--strictPort` and reads `E2E_PORT` (default 5173). If 5173 is occupied by another project's dev server, run `E2E_PORT=5199 bun run test:e2e` — without `--strictPort`, Vite silently bumps ports and e2e runs against the wrong app (this happened; symptom: forms submit natively via GET, specs time out).
 

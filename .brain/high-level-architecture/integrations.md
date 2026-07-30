@@ -108,6 +108,14 @@ remix-i18next + i18next + react-i18next with `/:lng/` URL prefix. Locales live i
 
 ---
 
+## OTLP trace export (optional, backend-agnostic)
+
+- **What**: `app/services/tracing.ts` exports Effect tracer spans as one OTLP/HTTP JSON POST per request (flushed in the `runtime.dispose()` finalizer inside `ctx.waitUntil`).
+- **Enable**: set `OTEL_EXPORTER_OTLP_ENDPOINT` (+ optional `OTEL_EXPORTER_OTLP_HEADERS`, `OTEL_SERVICE_NAME`) via `wrangler secret put` / `.dev.vars`. Unset = no-op layer, zero cost.
+- **Works with**: any OTLP collector — Jaeger, Grafana Tempo, Honeycomb, Axiom, Logfire, otel-tui. Agents debug traces via the chosen backend's MCP server.
+- **Gotchas**: export failures are logged (`tracing.export_failed`) and swallowed; span buffer caps at 1000/request; span attributes must not contain PII.
+- Full doc: [`.brain/codebase/observability.md`](../codebase/observability.md)
+
 ## Integration checklist
 
 When adding a new integration:

@@ -16,7 +16,8 @@ export const analyticsRouter = createTRPCRouter({
         Effect.gen(function* () {
           const repo = yield* AnalyticsRepository;
           return yield* repo.getUserGrowth(input);
-        })
+        }),
+        { span: "trpc.analytics.getUserGrowth" }
       )
     ),
 
@@ -26,7 +27,8 @@ export const analyticsRouter = createTRPCRouter({
       Effect.gen(function* () {
         const repo = yield* AnalyticsRepository;
         return yield* repo.getUserStats;
-      })
+      }),
+      { span: "trpc.analytics.getUserStats" }
     )
   ),
 
@@ -36,7 +38,8 @@ export const analyticsRouter = createTRPCRouter({
       Effect.gen(function* () {
         const repo = yield* AnalyticsRepository;
         return yield* repo.getRoleDistribution;
-      })
+      }),
+      { span: "trpc.analytics.getRoleDistribution" }
     )
   ),
 
@@ -46,7 +49,8 @@ export const analyticsRouter = createTRPCRouter({
       Effect.gen(function* () {
         const repo = yield* AnalyticsRepository;
         return yield* repo.getVerificationDistribution;
-      })
+      }),
+      { span: "trpc.analytics.getVerificationDistribution" }
     )
   ),
 
@@ -58,7 +62,8 @@ export const analyticsRouter = createTRPCRouter({
         Effect.gen(function* () {
           const repo = yield* AnalyticsRepository;
           return yield* repo.getRecentSignupsCount(input);
-        })
+        }),
+        { span: "trpc.analytics.getRecentSignupsCount" }
       )
     ),
 });
