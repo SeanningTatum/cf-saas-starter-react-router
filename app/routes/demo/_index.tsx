@@ -1,15 +1,16 @@
 import type { Route } from "./+types/_index";
-import { Link } from "react-router";
+import { useEffect, useState } from "react";
+import { Link, useFetcher } from "react-router";
 import { useTranslation } from "react-i18next";
 
-import { useFetcher } from "react-router";
 import { supportedLngs } from "@/i18n";
 import { cn } from "@/lib/utils";
 import { i18nServer } from "@/i18n/i18n.server";
 import "./loadline-theme.css";
 import {
   BOARD_ROWS,
-  STATUS_DOT,
+  DARK_LOAD_REF,
+  DARK_LOAD_START_MINUTES,
   isStaleCheckCall,
   type BoardRow,
 } from "./board-data";
@@ -19,21 +20,17 @@ export const handle = { i18n: ["demo"] };
 /**
  * Sample marketing surface for a fictional freight-dispatch SaaS ("Loadline").
  *
- * Reference lock: 19–86 (refero style `7a8c99db`), "architectural blueprint on white marble" —
- * pure black on white, 1px rules as the only structural device, ONE weight at every size, and a
- * monumental figure standing in for the usual product screenshot. Freight runs on documents, so
- * the page is typeset as one: masthead, monument, manifest, ledger, sequence, sign-off.
+ * Reference lock: EVOKE (refero `1e802d79`) for billboard clarity — oversized type on saturated
+ * flat panels, full-bleed sections, 0px radius, no gradients — with the palette taken from the
+ * MUTCD, the actual specification for US highway signage. incident.io (`3fcc8a86`) contributes one
+ * rule: a vivid accent belongs to genuine urgency and nothing else.
  *
- * Things deliberately absent, each an anti-slop tell an earlier version of this surface failed
- * (`refero-design/references/anti-ai-slop.md`):
- *   · no cards — the reference has none, and nothing here is an interactive container
- *   · no hero with copy left and a product panel right
- *   · no accent colour, and therefore no decorative one-word colour highlight
- *   · no heading + subtitle + grid-of-three band, repeated six times
- *   · no `font-semibold` anywhere: weight 400 at every size is the reference's signature
+ * The idea: dispatch is the road. A dispatcher's night is destinations, distances and one truck
+ * that has gone quiet, which is what highway signage exists to communicate to someone with three
+ * seconds to read it. So the page opens as a guide sign, not as a hero — and the minutes on it
+ * climb while you watch, because a board that does not move is not a board.
  *
- * Marketing copy lives *inside* the manifest as marginalia on the row it describes, which is
- * why there is no feature section. Decision ledger and rejected directions:
+ * Full decision ledger, and the three directions this replaced:
  * `.brain/features/sample-saas-landing/sample-saas-landing.md`.
  */
 export async function loader({ request }: Route.LoaderArgs) {
@@ -51,12 +48,117 @@ export function meta({ data }: Route.MetaArgs) {
 }
 
 /**
- * Locale switch in the surface's own idiom: two ruled text links, no select, no shadow, no
- * weight above 400. Posts to the same `/api/set-locale` action the app-wide `LanguageSwitcher`
- * uses, so the cookie and root revalidation behave identically — only the styling differs.
+ * The dark load's age, climbing in real time.
  *
- * The app's `ThemeToggle` is deliberately absent: this surface pins itself light in both themes
- * (see `loadline-theme.css`), so offering a toggle that visibly does nothing here would be a lie.
+ * Starts from the server-rendered value so there is no hydration mismatch, then increments once a
+ * minute — the real cadence of the thing it measures, not a fake fast ticker. Visitors who asked
+ * for reduced motion get the static figure.
+ */
+function useClimbingMinutes(from: number): number {
+  const [minutes, setMinutes] = useState(from);
+
+  useEffect(() => {
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    const id = window.setInterval(() => setMinutes((m) => m + 1), 60_000);
+    return () => window.clearInterval(id);
+  }, []);
+
+  return minutes;
+}
+
+/** Small uppercase sign legend. */
+function Legend({
+  children,
+  className,
+}: {
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <span
+      className={cn(
+        "text-[11px] font-bold uppercase leading-none tracking-[0.16em]",
+        className
+      )}
+    >
+      {children}
+    </span>
+  );
+}
+
+const FOCUS =
+  "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-current";
+
+export default function DemoLanding() {
+  return (
+    <div
+      data-surface="loadline"
+      className="min-h-svh bg-background text-foreground"
+    >
+      <Masthead />
+      <main>
+        <GuideSign />
+        <Board />
+        <Ledger />
+        <Sequence />
+        <Signoff />
+      </main>
+    </div>
+  );
+}
+
+function Masthead() {
+  const { t } = useTranslation("demo");
+
+  return (
+    <header className="border-b-4 border-border bg-background">
+      <div className="flex flex-wrap items-center justify-between gap-x-8 gap-y-3 px-5 py-4 sm:px-8">
+        <span className="text-lg font-extrabold uppercase tracking-[0.04em]">
+          {t("brand")}
+        </span>
+
+        <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
+          <Link
+            to="/"
+            data-testid="demo-topbar-back"
+            className={cn(
+              "hidden text-[11px] font-bold uppercase tracking-[0.16em] text-muted-foreground hover:text-foreground sm:inline",
+              FOCUS
+            )}
+          >
+            {t("masthead.back")}
+          </Link>
+          <Link
+            to="/login"
+            data-testid="demo-topbar-sign-in"
+            className={cn(
+              "text-[11px] font-bold uppercase tracking-[0.16em] text-muted-foreground hover:text-foreground",
+              FOCUS
+            )}
+          >
+            {t("masthead.sign_in")}
+          </Link>
+          <Link
+            to="/sign-up"
+            data-testid="demo-topbar-cta"
+            className={cn(
+              "sign sign-type px-4 py-2.5 text-[11px] tracking-[0.16em]",
+              FOCUS
+            )}
+          >
+            {t("masthead.cta")}
+          </Link>
+          <LocaleRule />
+        </div>
+      </div>
+    </header>
+  );
+}
+
+/**
+ * Locale switch as two sign legends. Posts to the same `/api/set-locale` action the app-wide
+ * `LanguageSwitcher` uses; only the styling differs. The app's `ThemeToggle` is deliberately
+ * absent — this surface pins itself light, so a toggle that did nothing here would be a lie.
  */
 function LocaleRule() {
   const { i18n } = useTranslation();
@@ -81,10 +183,11 @@ function LocaleRule() {
               )
             }
             className={cn(
-              "border-b text-[11px] uppercase tracking-[0.14em] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-foreground",
+              "text-[11px] font-bold uppercase tracking-[0.16em]",
               active
-                ? "border-foreground text-foreground"
-                : "border-transparent text-muted-foreground hover:border-muted-foreground hover:text-foreground"
+                ? "text-foreground"
+                : "text-muted-foreground hover:text-foreground",
+              FOCUS
             )}
           >
             {labels[lng] ?? lng}
@@ -95,153 +198,84 @@ function LocaleRule() {
   );
 }
 
-/** Uppercase micro-label — borrowed from mono.frm.fm for column heads and captions. */
-function Label({
-  children,
-  className,
-}: {
-  children: React.ReactNode;
-  className?: string;
-}) {
-  return (
-    <span
-      className={cn(
-        "text-[11px] uppercase leading-none tracking-[0.14em] text-muted-foreground",
-        className
-      )}
-    >
-      {children}
-    </span>
-  );
-}
-
 /**
- * The reference's only interactive treatment is a text link, so CTAs are ruled text rather than
- * filled buttons. Kept as a real link with a generous hit area and a visible focus outline —
- * `focus-visible:outline` rather than a ring, because the app-wide ring defect
- * (`.brain/runs/2026-07-30-focus-ring-defect.md`) means rings never paint.
+ * The hero is a guide sign: exit tab, destination, and a mile-marker figure that climbs. Under it,
+ * a safety-orange hazard placard states what the number means — the two are adjacent by design, so
+ * a non-dispatcher never has to work out why 214 is alarming.
  */
-function RuledLink({
-  to,
-  children,
-  emphasis = false,
-  testId,
-}: {
-  to: string;
-  children: React.ReactNode;
-  emphasis?: boolean;
-  testId: string;
-}) {
-  return (
-    <Link
-      to={to}
-      data-testid={testId}
-      className={cn(
-        "inline-flex min-h-11 items-center border-b py-2 text-base leading-none transition-colors",
-        "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-foreground",
-        emphasis
-          ? "border-foreground text-foreground"
-          : "border-transparent text-muted-foreground hover:border-muted-foreground hover:text-foreground"
-      )}
-    >
-      {children}
-    </Link>
-  );
-}
-
-export default function DemoLanding() {
-  return (
-    <div
-      data-surface="loadline"
-      className="min-h-svh bg-background text-foreground"
-    >
-      <Masthead />
-      <main>
-        <Monument />
-        <Manifest />
-        <Ledger />
-        <Sequence />
-        <Signoff />
-      </main>
-    </div>
-  );
-}
-
-/** Document header: wordmark, one rule, nothing else competing. */
-function Masthead() {
+function GuideSign() {
   const { t } = useTranslation("demo");
+  const minutes = useClimbingMinutes(DARK_LOAD_START_MINUTES);
 
   return (
-    <header className="border-b border-border">
-      <div className="flex flex-wrap items-baseline justify-between gap-x-8 gap-y-3 px-6 py-4 sm:px-10">
-        <div className="flex items-baseline gap-3">
-          <span className="text-base leading-none">{t("brand")}</span>
-          <Label>{t("masthead.chip")}</Label>
+    <section>
+      <div className="px-5 pt-6 sm:px-8">
+        {/* Exit tab sits on the shoulder of the panel, as it does on the road. */}
+        <div className="sign sign-type inline-block px-5 py-2 text-[11px] tracking-[0.16em]">
+          {t("sign.tab")}
         </div>
 
-        <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
+        <div className="sign relative overflow-hidden px-6 py-8 sm:px-10 sm:py-10">
+          <div className="flex flex-wrap items-end justify-between gap-x-10 gap-y-6">
+            <div className="flex flex-col gap-3">
+              <Legend className="opacity-80">{t("sign.origin")}</Legend>
+              <p className="sign-type text-4xl leading-[0.95] sm:text-6xl lg:text-7xl">
+                {t("sign.destination")}
+              </p>
+            </div>
+
+            <div className="flex items-end gap-4">
+              <span
+                className="marker text-[clamp(7rem,22vw,14rem)] leading-[0.78]"
+                data-testid="demo-monument-figure"
+                data-base-minutes={DARK_LOAD_START_MINUTES}
+              >
+                {minutes}
+              </span>
+              <Legend className="pb-3 sm:pb-5">{t("sign.unit")}</Legend>
+            </div>
+          </div>
+        </div>
+
+        {/* Hazard placard: the only orange on the page, and it is an actual alarm. */}
+        <div
+          className="sign-hazard sign-type flex flex-wrap items-center gap-x-4 gap-y-2 px-6 py-4 text-sm tracking-[0.08em] sm:px-10"
+          data-testid="demo-hazard"
+        >
+          <span aria-hidden="true" className="is-dark-load text-lg leading-none">
+            ▲
+          </span>
+          {t("sign.hazard")}
+        </div>
+      </div>
+
+      <div className="centre-line mt-8" aria-hidden="true" />
+
+      <div className="flex flex-wrap items-center justify-between gap-x-12 gap-y-6 border-b-4 border-border px-5 py-8 sm:px-8">
+        <p className="max-w-2xl text-2xl font-bold leading-[1.15] tracking-[-0.02em] sm:text-4xl">
+          {t("sign.statement")}
+        </p>
+        <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
           <Link
-            to="/"
-            data-testid="demo-topbar-back"
-            className="hidden text-[11px] uppercase tracking-[0.14em] text-muted-foreground hover:text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-foreground sm:inline"
+            to="/sign-up"
+            data-testid="demo-hero-cta"
+            className={cn(
+              "sign sign-type px-7 py-4 text-sm tracking-[0.12em]",
+              FOCUS
+            )}
           >
-            {t("masthead.back")}
+            {t("sign.cta")}
           </Link>
           <Link
             to="/login"
-            data-testid="demo-topbar-sign-in"
-            className="text-[11px] uppercase tracking-[0.14em] text-muted-foreground hover:text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-foreground"
+            data-testid="demo-hero-sign-in"
+            className={cn(
+              "border-b-2 border-border pb-1 text-sm font-bold uppercase tracking-[0.12em]",
+              FOCUS
+            )}
           >
-            {t("masthead.sign_in")}
+            {t("sign.cta_secondary")}
           </Link>
-          <Link
-            to="/sign-up"
-            data-testid="demo-topbar-cta"
-            className="border-b border-foreground text-[11px] uppercase tracking-[0.14em] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-foreground"
-          >
-            {t("masthead.cta")}
-          </Link>
-          <LocaleRule />
-        </div>
-      </div>
-    </header>
-  );
-}
-
-/**
- * The monument. The reference's hero is a single oversized figure in the same light weight as
- * body copy — scale without weight — so the page opens on the number that costs money rather
- * than on a screenshot of the product.
- */
-function Monument() {
-  const { t } = useTranslation("demo");
-
-  return (
-    <section className="border-b border-border px-6 pt-10 pb-8 sm:px-10">
-      <p
-        className="text-[clamp(6rem,26vw,22rem)] leading-[0.82] tracking-[-0.04em]"
-        data-testid="demo-monument-figure"
-      >
-        {t("monument.figure")}
-      </p>
-      <Label className="mt-2 block text-foreground">
-        {t("monument.caption")}
-      </Label>
-
-      <div className="mt-10 grid gap-x-16 gap-y-6 border-t border-border pt-6 md:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
-        <p className="max-w-2xl text-xl leading-[1.35] md:text-2xl">
-          {t("monument.statement")}
-        </p>
-        <div className="flex flex-col items-start gap-1">
-          <div className="flex flex-wrap items-center gap-x-8">
-            <RuledLink to="/sign-up" emphasis testId="demo-hero-cta">
-              {t("monument.cta")}
-            </RuledLink>
-            <RuledLink to="/login" testId="demo-hero-sign-in">
-              {t("monument.cta_secondary")}
-            </RuledLink>
-          </div>
-          <Label>{t("monument.terms")}</Label>
         </div>
       </div>
     </section>
@@ -249,11 +283,11 @@ function Monument() {
 }
 
 /**
- * The manifest is the page, not an illustration of it: full-bleed, hairline-ruled, tabular.
- * Three rows carry an annotation — the marketing argument stated where its evidence is, instead
- * of in a separate feature section.
+ * Tonight's board. Road-marking rules, uppercase column legends, and the dark load carried on an
+ * orange placard row rather than a coloured dot. Three rows carry an annotation — the marketing
+ * argument stated where its evidence is, which is why there is no feature section.
  */
-function Manifest() {
+function Board() {
   const { t } = useTranslation("demo");
   const columns = [
     "ref",
@@ -265,14 +299,16 @@ function Manifest() {
   ] as const;
 
   return (
-    <section className="border-b border-border px-6 py-10 sm:px-10">
+    <section className="border-b-4 border-border px-5 py-10 sm:px-8">
       <div className="flex flex-wrap items-baseline justify-between gap-x-8 gap-y-2">
-        <h2 className="text-xl">{t("manifest.title")}</h2>
-        <Label>{t("manifest.meta")}</Label>
+        <h2 className="text-2xl font-extrabold uppercase tracking-[0.02em]">
+          {t("manifest.title")}
+        </h2>
+        <Legend className="text-muted-foreground">{t("manifest.meta")}</Legend>
       </div>
 
       <table
-        className="mt-6 w-full border-collapse text-left align-baseline"
+        className="mt-6 w-full border-collapse text-left"
         data-testid="demo-dispatch-board"
       >
         <thead>
@@ -282,75 +318,97 @@ function Manifest() {
                 key={column}
                 scope="col"
                 className={cn(
-                  "rule-head font-normal",
+                  "lane-head pr-3 pb-2 font-normal last:pr-0 sm:pr-4",
                   column === "driver" && "hidden sm:table-cell",
-                  (column === "check_call" || column === "margin") &&
-                    "text-right",
-                  column === "margin" && "hidden sm:table-cell"
+                  (column === "check_call" || column === "margin") && "text-right"
                 )}
               >
-                <Label>{t(`manifest.columns.${column}`)}</Label>
+                <Legend className="text-muted-foreground">
+                  {t(`manifest.columns.${column}`)}
+                </Legend>
               </th>
             ))}
           </tr>
         </thead>
         <tbody>
           {BOARD_ROWS.map((row) => (
-            <ManifestRow key={row.ref} row={row} />
+            <BoardRowCells key={row.ref} row={row} />
           ))}
         </tbody>
       </table>
 
-      <Label className="mt-4 block">{t("manifest.footer")}</Label>
+      <Legend className="mt-4 block text-muted-foreground">
+        {t("manifest.footer")}
+      </Legend>
     </section>
   );
 }
 
-function ManifestRow({ row }: { row: BoardRow }) {
+/** Which column each annotation argues for — the note's right edge lands under it. */
+const ANNOTATION_TARGET: Record<NonNullable<BoardRow["annotation"]>, number> = {
+  delivered: 4,
+  late: 5,
+  margin: 6,
+};
+
+function BoardRowCells({ row }: { row: BoardRow }) {
   const { t } = useTranslation("demo");
   const stale = isStaleCheckCall(row);
+  const dark = row.ref === DARK_LOAD_REF;
+  const minutes = useClimbingMinutes(row.checkCallAgeMinutes);
+  const annotated = Boolean(row.annotation);
 
   return (
     <>
-      <tr>
-        <td className="rule-row pr-4 text-sm">{row.ref}</td>
-        <td className="rule-row pr-4 text-base">{row.lane}</td>
-        <td className="rule-row hidden pr-4 text-base text-muted-foreground sm:table-cell">
-          {row.driver}
+      <tr
+        className={cn(
+          annotated && "[&>td]:border-b-0",
+          dark && "sign-hazard sign-type [&>td]:px-2 [&>td:first-child]:pl-4 [&>td:last-child]:pr-4"
+        )}
+      >
+        <td className="lane-row whitespace-nowrap py-3 pr-3 text-sm font-bold sm:pr-4">
+          {row.ref}
         </td>
-        <td className="rule-row pr-4 text-base">
-          {/* The dot is achromatic; the label always carries the meaning. */}
-          <span
-            className="inline-flex items-center gap-2 whitespace-nowrap"
-            data-testid="demo-board-status"
-          >
-            <span
-              className={cn("size-1.5 shrink-0", STATUS_DOT[row.status])}
-              aria-hidden="true"
-            />
-            {t(`manifest.status.${row.status}`)}
-          </span>
+        <td className="lane-row py-3 pr-3 text-sm font-bold uppercase tracking-[0.04em] sm:pr-4 sm:text-base">
+          <span className="sm:hidden">{row.shortLane}</span>
+          <span className="hidden sm:inline">{row.lane}</span>
         </td>
         <td
           className={cn(
-            "rule-row text-right text-base",
-            stale ? "text-foreground" : "text-muted-foreground"
+            "lane-row hidden py-3 pr-3 text-base sm:table-cell sm:pr-4",
+            dark ? "" : "text-muted-foreground"
           )}
         >
-          {t("manifest.check_call_minutes", { count: row.checkCallAgeMinutes })}
+          {row.driver}
+        </td>
+        <td className="lane-row py-3 pr-3 text-xs font-bold uppercase tracking-[0.04em] sm:pr-4 sm:text-sm sm:tracking-[0.08em]">
+          {t(`manifest.status.${row.status}`)}
+        </td>
+        <td
+          className={cn(
+            "lane-row marker whitespace-nowrap py-3 pr-3 text-right text-sm sm:pr-0 sm:text-base",
+            dark ? "text-lg" : stale ? "" : "text-muted-foreground"
+          )}
+        >
+          {t("manifest.check_call_minutes", { count: minutes })}
           {stale ? (
             <span className="sr-only"> — {t("manifest.stale_hint")}</span>
           ) : null}
         </td>
-        <td className="rule-row hidden text-right text-base sm:table-cell">
+        <td className="lane-row marker whitespace-nowrap py-3 text-right text-sm sm:text-base">
           ${row.marginUsd}
         </td>
       </tr>
 
       {row.annotation ? (
         <tr>
-          <td colSpan={6} className="rule-row">
-            <span className="block max-w-2xl pt-1 text-base leading-snug text-muted-foreground">
+          <td colSpan={6} className="lane-row pb-3">
+            {/* Right-padding places the note's right edge under the column it argues for, without
+                the short rule that reads as a broken table edge. */}
+            <span
+              className="block text-right text-sm leading-snug text-muted-foreground sm:text-base"
+              style={{ paddingRight: `var(--annot-pad-${row.annotation}, 0)` }}
+            >
               {t(`manifest.annotations.${row.annotation}`)}
             </span>
           </td>
@@ -360,64 +418,70 @@ function ManifestRow({ row }: { row: BoardRow }) {
   );
 }
 
-/** Three figures as ruled ledger columns, split by hairline verticals. Not cards. */
+/** The cost of a shift, on warning-yellow panels: three figures at mile-marker scale. */
 function Ledger() {
   const { t } = useTranslation("demo");
   const rows = ["calls", "tabs", "invoice"] as const;
 
   return (
-    <section className="border-b border-border px-6 py-10 sm:px-10">
-      <h2 className="text-xl">{t("ledger.title")}</h2>
+    <section className="border-b-4 border-border">
+      <div className="px-5 pt-10 sm:px-8">
+        <h2 className="text-2xl font-extrabold uppercase tracking-[0.02em]">
+          {t("ledger.title")}
+        </h2>
+      </div>
 
-      <dl className="mt-8 grid gap-y-8 sm:grid-cols-3 sm:gap-y-0">
+      <div className="mt-8 grid sm:grid-cols-3">
         {rows.map((row, index) => (
           <div
             key={row}
             className={cn(
-              "flex flex-col gap-2 sm:px-8",
-              index === 0 && "sm:pl-0",
-              index > 0 && "sm:border-l sm:border-border",
-              index === rows.length - 1 && "sm:pr-0"
+              "sign-warning flex flex-col justify-between gap-6 px-5 py-8 sm:px-8",
+              index > 0 && "border-t-4 border-border sm:border-t-0 sm:border-l-4"
             )}
           >
-            <dt className="flex items-baseline gap-2">
-              <span className="text-6xl leading-none tracking-[-0.03em] sm:text-7xl">
+            <div className="flex items-end gap-3">
+              <span className="marker text-6xl leading-none sm:text-7xl">
                 {t(`ledger.rows.${row}.figure`)}
               </span>
-              <Label>{t(`ledger.rows.${row}.unit`)}</Label>
-            </dt>
-            <dd className="flex flex-col gap-1">
-              <span className="text-base">{t(`ledger.rows.${row}.label`)}</span>
-              <span className="max-w-xs text-base leading-snug text-muted-foreground">
+              <Legend className="pb-2">{t(`ledger.rows.${row}.unit`)}</Legend>
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <span className="text-base font-bold uppercase tracking-[0.06em]">
+                {t(`ledger.rows.${row}.label`)}
+              </span>
+              <span className="text-base leading-snug">
                 {t(`ledger.rows.${row}.note`)}
               </span>
-            </dd>
+            </div>
           </div>
         ))}
-      </dl>
+      </div>
     </section>
   );
 }
 
-/** Numbered ruled rows, in the same table language as the manifest. */
+/** Mile markers: numbered rows in the board's own language. */
 function Sequence() {
   const { t } = useTranslation("demo");
   const steps = ["account", "import", "dispatch"] as const;
 
   return (
-    <section className="border-b border-border px-6 py-10 sm:px-10">
-      <h2 className="text-xl">{t("sequence.title")}</h2>
+    <section className="border-b-4 border-border px-5 py-10 sm:px-8">
+      <h2 className="text-2xl font-extrabold uppercase tracking-[0.02em]">
+        {t("sequence.title")}
+      </h2>
 
       <ol className="mt-6">
         {steps.map((step) => (
           <li
             key={step}
-            // Real columns, not a flex row: the reference's language is tabular, and ragged
-            // notes beside variable-width titles read as a list pretending to be a table.
-            className="rule-row grid grid-cols-[2rem_1fr] items-baseline gap-x-8 gap-y-1 sm:grid-cols-[2rem_14rem_1fr]"
+            className="lane-row grid grid-cols-[3rem_1fr] items-baseline gap-x-6 gap-y-1 py-4 sm:grid-cols-[3rem_16rem_1fr]"
           >
-            <Label>{t(`sequence.steps.${step}.index`)}</Label>
-            <span className="text-base">
+            <span className="marker text-2xl leading-none">
+              {t(`sequence.steps.${step}.index`)}
+            </span>
+            <span className="text-base font-bold uppercase tracking-[0.06em]">
               {t(`sequence.steps.${step}.title`)}
             </span>
             <span className="col-start-2 text-base text-muted-foreground sm:col-start-3">
@@ -430,33 +494,51 @@ function Sequence() {
   );
 }
 
-/** Closing statement, the CTA repeated once, and the honesty note. */
+/** Closing guide sign: the destination, one more time. */
 function Signoff() {
   const { t } = useTranslation("demo");
 
   return (
-    <section className="px-6 py-10 sm:px-10">
-      <p className="max-w-3xl text-3xl leading-[1.15] tracking-[-0.03em] sm:text-4xl">
-        {t("signoff.statement")}
-      </p>
-
-      <div className="mt-8 flex flex-wrap items-center gap-x-8">
-        <RuledLink to="/sign-up" emphasis testId="demo-cta-primary">
-          {t("signoff.cta")}
-        </RuledLink>
-        <RuledLink to="/login" testId="demo-cta-sign-in">
-          {t("signoff.cta_secondary")}
-        </RuledLink>
+    <section>
+      <div className="sign px-6 py-12 sm:px-10 sm:py-16">
+        <p className="sign-type max-w-4xl text-3xl leading-[1.05] sm:text-5xl lg:text-6xl">
+          {t("signoff.statement")}
+        </p>
+        <div className="mt-10 flex flex-wrap items-center gap-x-6 gap-y-3">
+          <Link
+            to="/sign-up"
+            data-testid="demo-cta-primary"
+            className={cn(
+              "sign-type bg-white px-7 py-4 text-sm tracking-[0.12em] text-[color:var(--sign-green)]",
+              FOCUS
+            )}
+          >
+            {t("signoff.cta")}
+          </Link>
+          <Link
+            to="/login"
+            data-testid="demo-cta-sign-in"
+            className={cn(
+              "border-b-2 border-current pb-1 text-sm font-bold uppercase tracking-[0.12em]",
+              FOCUS
+            )}
+          >
+            {t("signoff.cta_secondary")}
+          </Link>
+        </div>
       </div>
 
-      <div className="mt-12 grid gap-x-16 gap-y-3 border-t border-border pt-6 md:grid-cols-[minmax(0,3fr)_minmax(0,1fr)]">
-        <Label className="block max-w-3xl leading-relaxed">
+      <div className="flex flex-wrap items-start justify-between gap-x-12 gap-y-4 px-5 py-8 sm:px-8">
+        <Legend className="max-w-3xl leading-relaxed text-muted-foreground">
           {t("signoff.disclaimer")}
-        </Label>
+        </Legend>
         <Link
           to="/"
           data-testid="demo-footer-back"
-          className="justify-self-start border-b border-foreground text-[11px] uppercase tracking-[0.14em] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-foreground"
+          className={cn(
+            "border-b-2 border-border pb-1 text-[11px] font-bold uppercase tracking-[0.16em]",
+            FOCUS
+          )}
         >
           {t("signoff.back")}
         </Link>

@@ -1,9 +1,9 @@
 import { describe, it, expect } from "vitest";
 import {
   BOARD_ROWS,
-  LOAD_STATUSES,
+  DARK_LOAD_REF,
+  DARK_LOAD_START_MINUTES,
   STALE_CHECK_CALL_MINUTES,
-  STATUS_DOT,
   isStaleCheckCall,
   type BoardRow,
 } from "../board-data";
@@ -14,35 +14,26 @@ import {
  * tokens without leaking. These tests pin the parts of that claim code can break.
  */
 
-describe("STATUS_DOT", () => {
-  // Catches: a new status added without a mark, which renders an invisible indicator.
-  it("maps every declared status", () => {
-    for (const status of LOAD_STATUSES) {
-      expect(STATUS_DOT[status]).toBeTruthy();
-    }
+describe("DARK_LOAD_REF", () => {
+  // Catches the hero sign losing its subject: the sign, the hazard placard and the ticking figure
+  // are all about one specific load, so that load must exist on the board.
+  it("names a load that is actually on the board", () => {
+    const row = BOARD_ROWS.find((r) => r.ref === DARK_LOAD_REF);
+    expect(row).toBeDefined();
+    expect(row!.status).toBe("late");
   });
 
-  // Catches the guardrail this surface demonstrates: a literal colour reaching the markup.
-  it("uses token utilities only — never a raw colour", () => {
-    for (const className of Object.values(STATUS_DOT)) {
-      expect(className).not.toMatch(/#|rgb|oklch|hsl/);
-      for (const part of className.split(" ")) {
-        expect(part).toMatch(/^(bg|border|text)(-[a-z-]+)?$/);
-      }
-    }
+  // Catches the hero figure and the board row disagreeing — they must start from the same number,
+  // because the client ticks both up from the server-rendered value.
+  it("starts the climbing figure from that load's own check-call age", () => {
+    const row = BOARD_ROWS.find((r) => r.ref === DARK_LOAD_REF)!;
+    expect(DARK_LOAD_START_MINUTES).toBe(row.checkCallAgeMinutes);
   });
 
-  // Catches a return to a traffic-light table. The surface's reference lock (19–86) is strictly
-  // achromatic, so status must be encoded by weight — filled / ash / hollow — not by hue. A
-  // `bg-destructive` or `bg-chart-*` creeping back in is the regression.
-  it("encodes status without hue", () => {
-    expect(STATUS_DOT.late).toBe("bg-foreground");
-    expect(STATUS_DOT.delivered).toBe("bg-muted-foreground");
-    expect(STATUS_DOT.rolling).toBe("border border-foreground");
-
-    for (const className of Object.values(STATUS_DOT)) {
-      expect(className).not.toMatch(/destructive|chart-|primary/);
-    }
+  // Catches a dark load that is not actually stale, which would make the hazard placard a lie.
+  it("is stale by the page's own threshold", () => {
+    const row = BOARD_ROWS.find((r) => r.ref === DARK_LOAD_REF)!;
+    expect(isStaleCheckCall(row)).toBe(true);
   });
 });
 
@@ -50,6 +41,7 @@ describe("isStaleCheckCall", () => {
   const row = (checkCallAgeMinutes: number): BoardRow => ({
     ref: "T-1",
     lane: "A → B",
+    shortLane: "A → B",
     driver: "X",
     status: "rolling",
     checkCallAgeMinutes,

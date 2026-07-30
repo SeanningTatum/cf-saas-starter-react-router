@@ -1,141 +1,190 @@
 /**
- * Loadline — "Waybill": a scoped design system for the `/demo` surface.
+ * Loadline — "Guide Sign": a scoped design system for the `/demo` surface.
  *
  * WHY THIS FILE EXISTS
- *   `/demo` markets a product that is not this repo. Dressing it in the starter's own
- *   monochrome Linear/Cursor language proved only that the tokens were reused, so this file
- *   gives the surface its own visual language — without forking `app/app.css`. Mechanics of
- *   the technique and its rules: `.brain/rules/frontend.md` "Scoped design systems".
+ *   `/demo` markets a product that is not this repo, so it runs its own visual language without
+ *   forking `app/app.css`. Technique and rules: `.brain/rules/frontend.md` "Scoped design
+ *   systems". Nothing here escapes `[data-surface="loadline"]`; an e2e test pins that.
  *
- * HOW IT WORKS
- *   `app/app.css` declares `@theme inline { --color-background: var(--background); … }`, so
- *   every Tailwind colour utility resolves through a CSS variable at use time. Redefining the
- *   same variable NAMES under a scope selector restyles everything inside the scope. Nothing
- *   leaks past `[data-surface="loadline"]`, which an e2e test pins in both directions.
+ * THE IDEA
+ *   Dispatch is the road. A dispatcher's night is destinations, distances, and one truck that has
+ *   gone quiet — which is exactly what highway signage was invented to communicate, at speed, to
+ *   someone who has three seconds to read it. So the page is built from the road's own visual
+ *   system: guide-sign green panels with reflective white type, exit tabs, safety-orange hazard
+ *   placards, and figures the size of mile markers.
  *
- * SOURCE (reference lock — chosen for distinctiveness, not for being easy to build)
- *   Refero style `7a8c99db-5ce7-4fa4-b491-8f1fcac18991` — 19–86, "architectural blueprint on
- *   white marble". Freight runs on documents: bills of lading, rate confirmations, manifests.
- *   A system built from hairline rules, tabular alignment and monumental light-weight type is
- *   the visual language of the artefact the product actually replaces.
+ * PALETTE — from the MUTCD, not from taste
+ *   These are the specified colours of US road signage. They are given in hex because that is how
+ *   the spec defines them, and this file is the token layer — the one place a literal colour
+ *   belongs.
  *
- *     Obsidian Black  #000000  text, rules, dots — every structural line on the page
- *     Pure White      #FFFFFF  the only surface; there is no second surface level
- *     Ash Gray        #8C8C8C  inactive links, annotations, secondary labels
+ *     Guide-sign green  #046A38   destination panels — the surface's dominant field
+ *     Reflective white  #FFFFFF   sign type, sign borders
+ *     Safety orange     #FF6A13   HAZARD ONLY. The load that has gone dark. Nothing else.
+ *     Warning yellow    #FFCC00   the cost figures — a warning, not decoration
+ *     Asphalt           #101010   body type on white, road-marking rules
  *
- *   Traits preserved verbatim from the reference's do/don't list:
- *     · achromatic only — no hue anywhere, no "brand accent"
- *     · 1px solid black rules as the structural device, never a border-box or a card
- *     · one family, ONE weight (400) at every size, including the monument. Scale without weight.
- *     · -0.02em letter-spacing on everything
- *     · zero radius, zero shadow, zero gradient
- *     · no page max-width — content is full-bleed with strong internal alignment
+ * SOURCES
+ *   EVOKE (refero `1e802d79`) — "vibrant billboard clarity": oversized type on saturated flat
+ *   panels, full-bleed sections, 0px radius, no gradients, no soft edges, type as the whole show.
+ *   incident.io (refero `3fcc8a86`) — one vivid accent reserved for genuine urgency, alert state
+ *   as its own panel. Borrowed for the hazard placard only.
  *
- * DELIBERATE DEVIATIONS FROM THE REPO'S NORMS, AND WHY
- *   1. The surface is LIGHT IN BOTH APP THEMES. The reference is a light system ("prioritize
- *      Obsidian Black text on Pure White backgrounds"), and inverting it to satisfy a theme
- *      toggle would destroy the trait that carries it. It re-asserts under `.dark` for the
- *      same reason the previous direction re-asserted its darkness: a lock is a lock.
- *   2. `--radius: 0`. The reference's shape language is a single value: none.
- *   3. Inter is kept (the reference substitutes Montserrat; Inter is closer to the original's
- *      neutral grotesque and already loaded). No webfont, no external request.
- *   4. Weight 400 only. That is why nothing on this surface uses `font-semibold` or `font-bold`
- *      — a heavier headline would read as a different, safer design.
+ * DELIBERATE DEVIATIONS
+ *   1. Light, and pinned light in both app themes — highway signage is a daylight system, and the
+ *      theme toggle is absent from this surface rather than offered and ignored.
+ *   2. Heavy weights are correct here. Signage shouts; the previous direction's one-weight rule
+ *      belonged to a different lock and does not apply to this one.
+ *   3. Uppercase with positive tracking on every sign element — that is how the FHWA series is
+ *      set, and it is what makes a panel read as a sign rather than a coloured box.
  */
 
 [data-surface="loadline"] {
-  /* One surface. White is not a "background colour" here, it is the paper. */
-  --background: oklch(1 0 0);
-  --foreground: oklch(0 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0 0 0);
+  --sign-green: #046a38;
+  --sign-white: #ffffff;
+  --hazard: #ff6a13;
+  --warning: #ffcc00;
+  --asphalt: #101010;
 
-  /* No accent exists in this system. "Primary" is simply ink. */
-  --primary: oklch(0 0 0);
-  --primary-foreground: oklch(1 0 0);
-  --secondary: oklch(1 0 0);
-  --secondary-foreground: oklch(0 0 0);
+  --background: #ffffff;
+  --foreground: var(--asphalt);
+  --card: var(--sign-green);
+  --card-foreground: #ffffff;
+  --popover: #ffffff;
+  --popover-foreground: var(--asphalt);
 
-  /* Ash Gray carries every piece of secondary information. */
-  --muted: oklch(1 0 0);
-  --muted-foreground: oklch(0.64 0 0);
-  --accent: oklch(1 0 0);
-  --accent-foreground: oklch(0 0 0);
+  --primary: var(--sign-green);
+  --primary-foreground: #ffffff;
+  --secondary: var(--warning);
+  --secondary-foreground: var(--asphalt);
+  --muted: #f2f2f0;
+  --muted-foreground: #5c5c58;
+  --accent: var(--hazard);
+  --accent-foreground: #ffffff;
+  --destructive: var(--hazard);
 
-  /* Rules are black and 1px. This is the only structural device on the surface. */
-  --border: oklch(0 0 0);
-  --input: oklch(0 0 0);
-  --ring: oklch(0 0 0);
-
-  /*
-   * Status is achromatic: a filled black dot for the one row that needs attention, ash for
-   * settled rows, and the text label always present. The reference permits black "accent
-   * dots" and forbids saturated colour outright, so hue is not available as an encoding —
-   * which is stricter, and better, than the usual traffic-light table.
-   */
-  --destructive: oklch(0 0 0);
-  --chart-1: oklch(0 0 0);
-  --chart-2: oklch(0.64 0 0);
-  --chart-3: oklch(0.64 0 0);
-  --chart-4: oklch(0 0 0);
-  --chart-5: oklch(0.64 0 0);
+  --border: var(--asphalt);
+  --input: var(--asphalt);
+  --ring: var(--hazard);
 
   --radius: 0rem;
-
-  letter-spacing: -0.02em;
   color-scheme: light;
-  font-variant-numeric: tabular-nums; /* a manifest's numbers must align in columns */
 }
 
-/*
- * The scope is light regardless of the app theme — see deviation 1. Without re-asserting here,
- * `app/app.css`'s `.dark` block wins and the surface would inherit a dark canvas the reference
- * explicitly rejects.
- */
 .dark [data-surface="loadline"],
 [data-surface="loadline"].dark {
-  --background: oklch(1 0 0);
-  --foreground: oklch(0 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0 0 0);
-  --primary: oklch(0 0 0);
-  --primary-foreground: oklch(1 0 0);
-  --secondary: oklch(1 0 0);
-  --secondary-foreground: oklch(0 0 0);
-  --muted: oklch(1 0 0);
-  --muted-foreground: oklch(0.64 0 0);
-  --accent: oklch(1 0 0);
-  --accent-foreground: oklch(0 0 0);
-  --border: oklch(0 0 0);
-  --input: oklch(0 0 0);
-  --ring: oklch(0 0 0);
-  --destructive: oklch(0 0 0);
-  --chart-1: oklch(0 0 0);
-  --chart-2: oklch(0.64 0 0);
-  --chart-3: oklch(0.64 0 0);
-  --chart-4: oklch(0 0 0);
-  --chart-5: oklch(0.64 0 0);
+  --background: #ffffff;
+  --foreground: #101010;
+  --card: #046a38;
+  --card-foreground: #ffffff;
+  --muted: #f2f2f0;
+  --muted-foreground: #5c5c58;
+  --border: #101010;
+  --destructive: #ff6a13;
   --radius: 0rem;
   color-scheme: light;
 }
 
-/*
- * The reference's signature component is a ruled row: 5px top padding, 8px bottom, a 1px black
- * bottom border, nothing else. Expressed once here so the route does not repeat the recipe on
- * every row, and so the trait cannot drift row by row.
+/* ---------------------------------------------------------------------------------------------
+ * Sign anatomy
+ * ------------------------------------------------------------------------------------------- */
+
+/**
+ * A guide sign is a coloured field with a reflective border inset from its edge. That inset is the
+ * single detail separating "a sign" from "a coloured div", so it is defined once, here.
  */
-[data-surface="loadline"] .rule-row {
-  border-bottom: 1px solid var(--border);
-  padding-top: 0.3125rem; /* 5px, per the reference */
-  padding-bottom: 0.5rem; /* 8px, per the reference */
+[data-surface="loadline"] .sign {
+  background: var(--sign-green);
+  color: var(--sign-white);
+  box-shadow:
+    inset 0 0 0 4px var(--sign-green),
+    inset 0 0 0 7px var(--sign-white);
 }
 
-/* Column heads: 12px bottom padding + the same 1px rule, per the reference's header cell. */
-[data-surface="loadline"] .rule-head {
-  border-bottom: 1px solid var(--border);
-  padding-bottom: 0.75rem;
+[data-surface="loadline"] .sign-hazard {
+  background: var(--hazard);
+  color: var(--asphalt);
+  box-shadow:
+    inset 0 0 0 4px var(--hazard),
+    inset 0 0 0 7px var(--asphalt);
+}
+
+[data-surface="loadline"] .sign-warning {
+  background: var(--warning);
+  color: var(--asphalt);
+}
+
+/** Sign lettering: the FHWA series is set in caps with open tracking. */
+[data-surface="loadline"] .sign-type {
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  font-weight: 700;
+}
+
+/** Mile-marker figures: tabular, so a ticking number never reflows the layout. */
+[data-surface="loadline"] .marker {
+  font-variant-numeric: tabular-nums;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+}
+
+/** Manifest rows: road-marking rules, not hairlines. */
+[data-surface="loadline"] .lane-row {
+  border-bottom: 2px solid var(--asphalt);
+}
+
+/**
+ * How far each annotation's right edge sits from the table's right edge, so the note lands under
+ * the column it argues for. Set here rather than in the route because they are measurements of
+ * this table's geometry, not props of a row.
+ */
+[data-surface="loadline"] {
+  --annot-pad-margin: 0px;
+  --annot-pad-late: 5.5rem;
+  --annot-pad-delivered: 13rem;
+}
+
+@media (max-width: 640px) {
+  [data-surface="loadline"] {
+    --annot-pad-late: 3.5rem;
+    --annot-pad-delivered: 7.5rem;
+  }
+}
+
+[data-surface="loadline"] .lane-head {
+  border-bottom: 4px solid var(--asphalt);
+}
+
+/**
+ * The dashed centre line, used once — under the hero — as the transition from sign to road.
+ * Decorative, and it stays decorative: it never encodes state.
+ */
+[data-surface="loadline"] .centre-line {
+  height: 8px;
+  background-image: repeating-linear-gradient(
+    to right,
+    var(--asphalt) 0 44px,
+    transparent 44px 80px
+  );
+}
+
+/** A load that has gone dark pulses — slowly, and never when the visitor asked for less motion. */
+@keyframes loadline-dark-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+[data-surface="loadline"] .is-dark-load {
+  animation: loadline-dark-pulse 2.4s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-surface="loadline"] .is-dark-load {
+    animation: none;
+  }
 }

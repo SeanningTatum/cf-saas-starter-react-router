@@ -1,25 +1,16 @@
 {
   "meta": {
-    "title": "Loadline — 看板、位置确认、单据",
+    "title": "Loadline — 一块看板管住整晚",
     "description": "构建于 Cloudflare SaaS Starter 之内的示例营销页面。Loadline 是一个虚构的货运调度产品，用于演示本模板的设计流程。"
   },
   "brand": "Loadline",
   "masthead": {
-    "chip": "示例产品",
     "back": "模板首页",
     "sign_in": "登录",
     "cta": "开通账户"
   },
-  "monument": {
-    "figure": "214",
-    "caption": "分钟没有收到 LL-4818 的位置确认",
-    "statement": "Loadline 用一块看板管住每一票货、每一次位置确认和每一张发票。没人需要把车在哪里问两遍。",
-    "cta": "开通账户",
-    "cta_secondary": "登录",
-    "terms": "示例数据 · 无需银行卡 · 无需迁移"
-  },
   "manifest": {
-    "title": "今晚的货单",
+    "title": "今晚的看板",
     "meta": "42 票货 · 18 家承运商 · 6 条线路",
     "columns": {
       "ref": "货单",
@@ -31,17 +22,17 @@
     },
     "status": {
       "rolling": "在途",
-      "late": "延误",
+      "late": "失联",
       "delivered": "已送达"
     },
     "check_call_minutes": "{{count}} 分钟",
     "stale_hint": "超过 90 分钟没有位置确认",
     "annotations": {
-      "late": "三个小时失联。在表格里，这一行和其他行看起来毫无区别。",
-      "delivered": "提单随送达一起到账，发票自动生成了草稿。",
-      "margin": "毛利就摆在这一行上，而不是等月末报表。"
+      "late": "三个小时失联，而且没人发现。",
+      "delivered": "提单随车一起到了，发票自动生成了草稿。",
+      "margin": "还在决策时就看得到，而不是等月末。"
     },
-    "footer": "示例数据——这张货单是静态演示，并非已接入的功能。"
+    "footer": "示例数据——这块看板是静态演示，并非已接入的功能。"
   },
   "ledger": {
     "title": "现在一个班次的代价",
@@ -92,5 +83,15 @@
     "cta_secondary": "登录",
     "disclaimer": "Loadline 是一个虚构产品。本页面是 Cloudflare SaaS Starter 内的示例营销页面，用于演示其设计流程。",
     "back": "返回模板首页"
+  },
+  "sign": {
+    "tab": "货单 LL-4818",
+    "destination": "亚利桑那 凤凰城",
+    "origin": "加州 方塔纳",
+    "unit": "分钟失联",
+    "hazard": "自 00:41 起没有位置确认。没有人发现。",
+    "statement": "一块看板，管住每一票货、每一次位置确认、每一张发票。",
+    "cta": "开通账户",
+    "cta_secondary": "登录"
   }
 }

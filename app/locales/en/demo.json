@@ -1,47 +1,48 @@
 {
   "meta": {
-    "title": "Loadline — the board, the check-calls, the paperwork",
+    "title": "Loadline — one board for the whole night",
     "description": "Sample SaaS marketing surface built inside the Cloudflare SaaS Starter. Loadline is a fictional freight dispatch product used to demonstrate the starter's design pipeline."
   },
   "brand": "Loadline",
   "masthead": {
-    "chip": "Sample product",
     "back": "The starter",
     "sign_in": "Sign in",
     "cta": "Open an account"
   },
-  "monument": {
-    "figure": "214",
-    "caption": "minutes since LL-4818 last checked in",
-    "statement": "Loadline is one board for every load, every check-call and every invoice. Nobody has to ask where a truck is twice.",
+  "sign": {
+    "tab": "Load LL-4818",
+    "destination": "Phoenix AZ",
+    "origin": "Fontana CA",
+    "unit": "min dark",
+    "hazard": "No check-call since 00:41. Nobody has noticed.",
+    "statement": "One board for every load, every check-call, every invoice.",
     "cta": "Open an account",
-    "cta_secondary": "Sign in",
-    "terms": "Demo data · no card · nothing to migrate"
+    "cta_secondary": "Sign in"
   },
   "manifest": {
-    "title": "Tonight's manifest",
+    "title": "Tonight's board",
     "meta": "42 loads · 18 carriers · 6 lanes",
     "columns": {
       "ref": "Load",
       "lane": "Lane",
       "driver": "Driver",
       "status": "Status",
-      "check_call": "Checked in",
+      "check_call": "Checked",
       "margin": "Margin"
     },
     "status": {
       "rolling": "Rolling",
-      "late": "Late",
+      "late": "Dark",
       "delivered": "Delivered"
     },
     "check_call_minutes": "{{count}} min",
     "stale_hint": "Over 90 minutes without a check-call",
     "annotations": {
-      "late": "Three hours dark. On a spreadsheet this row looks exactly like the others.",
-      "delivered": "Bill of lading came in with the delivery. The invoice drafted itself.",
-      "margin": "Margin sits on the row while you are still deciding, not in a month-end report."
+      "late": "Three hours dark, and nobody has called it.",
+      "delivered": "Bill of lading arrived with the truck. The invoice drafted itself.",
+      "margin": "Visible while you are still deciding, not at month end."
     },
-    "footer": "Sample data — this manifest is a static demo, not a wired feature."
+    "footer": "Sample data — this board is a static demo, not a wired feature."
   },
   "ledger": {
     "title": "What a shift costs today",

@@ -4,7 +4,7 @@ import { test, expect } from "@playwright/test";
 import demoEn from "../app/locales/en/demo.json" with { type: "json" };
 
 /**
- * `/demo` — the sample SaaS marketing surface (Loadline, "Waybill" direction).
+ * `/demo` — the sample SaaS marketing surface (Loadline, "Guide Sign" direction).
  *
  * The page is static marketing, so this spec guards the things a unit test cannot see and that
  * would quietly gut the design if they broke:
@@ -25,16 +25,25 @@ test.describe("Demo landing (/demo)", () => {
     const board = page.getByTestId("demo-dispatch-board");
     await expect(board).toBeVisible();
 
-    // The monument is the page's opening argument, not a decorative number.
-    await expect(page.getByTestId("demo-monument-figure")).toHaveText(
-      demoEn.monument.figure
+    // The hero sign opens on the dark load's climbing age, not on a decorative number, and the
+    // hazard placard next to it says what the number means.
+    await expect(page.getByTestId("demo-monument-figure")).toHaveText(/^\d+$/);
+    await expect(page.getByTestId("demo-hazard")).toContainText(
+      demoEn.sign.hazard
     );
 
-    const labels = Object.values(demoEn.manifest.status);
-    const statuses = page.getByTestId("demo-board-status");
-    await expect(statuses).toHaveCount(5);
-    for (const status of await statuses.allInnerTexts()) {
-      expect(labels).toContain(status.trim());
+    // Status is stated in words on every row — the surface has no colour-only encoding, and the
+    // dark load's row is orange *and* labelled.
+    const labels = Object.values(demoEn.manifest.status).map((l) =>
+      l.toUpperCase()
+    );
+    const rows = board.locator("tbody tr");
+    const statuses = (await rows.locator("td:nth-child(4)").allInnerTexts())
+      .map((s) => s.trim())
+      .filter(Boolean);
+    expect(statuses.length).toBe(5);
+    for (const status of statuses) {
+      expect(labels).toContain(status.toUpperCase());
     }
   });
 
@@ -76,8 +85,8 @@ test.describe("Demo landing (/demo)", () => {
       };
     });
     expect(scoped).not.toBeNull();
-    // Black hairline rules are the surface's only structural device.
-    expect(scoped!.border).toBe("oklch(0 0 0)");
+    // Asphalt road-marking rules and square corners are the surface's structure.
+    expect(scoped!.border.toLowerCase()).toBe("#101010");
     expect(scoped!.radius).toBe("0rem");
 
     // The reference is a light system, so the scope must ignore the app's dark theme rather
@@ -88,7 +97,7 @@ test.describe("Demo landing (/demo)", () => {
         .getPropertyValue("--background")
         .trim()
     );
-    expect(afterDark).toBe("oklch(1 0 0)");
+    expect(afterDark.toLowerCase()).toBe("#ffffff");
 
     // ...and the starter's own surfaces keep the starter's tokens.
     await page.goto("/");
@@ -101,7 +110,7 @@ test.describe("Demo landing (/demo)", () => {
       };
     });
     expect(root.radius).toBe("0.625rem");
-    expect(root.border).not.toBe("oklch(0 0 0)");
+    expect(root.border.toLowerCase()).not.toBe("#101010");
     expect(root.scopedElements).toBe(0);
   });
 
