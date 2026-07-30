@@ -211,6 +211,7 @@ function DispatchBoard() {
           {filters.map((filter, index) => (
             <span
               key={filter.key}
+              data-testid={`demo-filter-${filter.key}`}
               className={cn(
                 "rounded-full px-2.5 py-1 font-mono text-[10px] uppercase tracking-wider",
                 index === 0
@@ -282,7 +283,10 @@ function BoardRowCells({ row }: { row: BoardRow }) {
       </td>
       <td className="px-4 py-3">
         {/* Dot + label: the dot never carries the meaning on its own. */}
-        <span className="inline-flex items-center gap-2 whitespace-nowrap">
+        <span
+          className="inline-flex items-center gap-2 whitespace-nowrap"
+          data-testid="demo-board-status"
+        >
           <span
             className={cn("size-1.5 rounded-full", STATUS_DOT[row.status])}
             aria-hidden="true"
