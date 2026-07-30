@@ -40,6 +40,25 @@ Project-local Claude Code subagents that wrap pieces of [`.brain/HARNESS.md`](..
                           scoped tokens do not leak)
 ```
 
+### Or fan them out — `/build-feature`
+
+For a feature spanning more than one layer, [`/build-feature`](../commands/build-feature.md) runs the
+same operators concurrently via [`.claude/workflows/build-feature.js`](../workflows/build-feature.js):
+
+```
+Orient    brain-navigator ‖ nearest-feature trace ‖ UI tier check      (3 in parallel, read-only)
+Contract  architect fixes the interface → one writer lands it          (the only sequential step)
+Build     data ‖ api ‖ ui ‖ e2e — each fenced to disjoint paths        (up to 5 in parallel)
+Verify    verify-done-runner ‖ effect-ts-enforcer ‖ span-instrumenter
+          ‖ feature-verifier ‖ design-critic                           (5 in parallel)
+Close     synthesis: what is true, what blocks, what a human must decide
+```
+
+The insight is that most of a feature's apparent ordering is a **compile** dependency, not an
+**information** dependency: once the interface is fixed, the server lane and the UI lane need nothing
+from each other. The cost is that parallel writers must own **disjoint paths** — that constraint is
+enforced in every lane prompt, and a reported lane collision is a P0.
+
 **The split matters.** The critic is a backstop. Quality comes from `ui-builder` knowing the rules
 before the first edit — the alternative is making the same mistakes, catching them, and reworking,
 which is what four rejected rebuilds of `/demo` cost.
