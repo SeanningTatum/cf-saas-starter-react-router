@@ -218,13 +218,19 @@ function GuideSign() {
         <div className="sign relative overflow-hidden px-6 py-8 sm:px-10 sm:py-10">
           <div className="flex flex-wrap items-end justify-between gap-x-10 gap-y-6">
             <div className="flex flex-col gap-3">
-              <Legend className="opacity-80">{t("sign.origin")}</Legend>
-              <p className="sign-type text-4xl leading-[0.95] sm:text-6xl lg:text-7xl">
+              <Legend className="text-[color:var(--sign-white)]/85">
+                {t("sign.origin")}
+              </Legend>
+              <p className="sign-type flex items-center gap-4 text-4xl leading-[0.95] sm:text-6xl lg:text-7xl">
                 {t("sign.destination")}
+                <span aria-hidden="true" className="text-[0.8em] leading-none">
+                  →
+                </span>
               </p>
             </div>
 
-            <div className="flex items-end gap-4">
+            {/* The distance field: a reflective rule closes it off, as it does on the road. */}
+            <div className="flex items-end gap-4 border-[color:var(--sign-white)] sm:border-l-4 sm:pl-8">
               <span
                 className="marker text-[clamp(7rem,22vw,14rem)] leading-[0.78]"
                 data-testid="demo-monument-figure"
@@ -239,10 +245,13 @@ function GuideSign() {
 
         {/* Hazard placard: the only orange on the page, and it is an actual alarm. */}
         <div
-          className="sign-hazard sign-type flex flex-wrap items-center gap-x-4 gap-y-2 px-6 py-4 text-sm tracking-[0.08em] sm:px-10"
+          className="sign-hazard sign-type flex items-start gap-3 px-6 py-4 text-sm tracking-[0.08em] sm:items-center sm:gap-4 sm:px-10"
           data-testid="demo-hazard"
         >
-          <span aria-hidden="true" className="is-dark-load text-lg leading-none">
+          <span
+            aria-hidden="true"
+            className="is-dark-load shrink-0 text-lg leading-none"
+          >
             ▲
           </span>
           {t("sign.hazard")}
@@ -318,13 +327,24 @@ function Board() {
                 key={column}
                 scope="col"
                 className={cn(
-                  "lane-head pr-3 pb-2 font-normal last:pr-0 sm:pr-4",
+                  "lane-head pr-2 pb-2 font-normal last:pr-0 sm:pr-4",
                   column === "driver" && "hidden sm:table-cell",
                   (column === "check_call" || column === "margin") && "text-right"
                 )}
               >
                 <Legend className="text-muted-foreground">
-                  {t(`manifest.columns.${column}`)}
+                  {column === "check_call" ? (
+                    <>
+                      <span className="sm:hidden">
+                        {t("manifest.columns.check_call_short")}
+                      </span>
+                      <span className="hidden sm:inline">
+                        {t("manifest.columns.check_call")}
+                      </span>
+                    </>
+                  ) : (
+                    t(`manifest.columns.${column}`)
+                  )}
                 </Legend>
               </th>
             ))}
@@ -367,10 +387,13 @@ function BoardRowCells({ row }: { row: BoardRow }) {
         )}
       >
         <td className="lane-row whitespace-nowrap py-3 pr-3 text-sm font-bold sm:pr-4">
-          {row.ref}
+          <span className="sm:hidden">{row.ref.replace("LL-", "")}</span>
+          <span className="hidden sm:inline">{row.ref}</span>
         </td>
         <td className="lane-row py-3 pr-3 text-sm font-bold uppercase tracking-[0.04em] sm:pr-4 sm:text-base">
-          <span className="sm:hidden">{row.shortLane}</span>
+          <span className="whitespace-nowrap text-[11px] sm:hidden">
+            {row.shortLane}
+          </span>
           <span className="hidden sm:inline">{row.lane}</span>
         </td>
         <td
@@ -381,12 +404,12 @@ function BoardRowCells({ row }: { row: BoardRow }) {
         >
           {row.driver}
         </td>
-        <td className="lane-row py-3 pr-3 text-xs font-bold uppercase tracking-[0.04em] sm:pr-4 sm:text-sm sm:tracking-[0.08em]">
+        <td className="lane-row py-3 pr-2 text-[11px] font-bold uppercase tracking-normal sm:pr-4 sm:text-sm sm:tracking-[0.08em]">
           {t(`manifest.status.${row.status}`)}
         </td>
         <td
           className={cn(
-            "lane-row marker whitespace-nowrap py-3 pr-3 text-right text-sm sm:pr-0 sm:text-base",
+            "lane-row marker whitespace-nowrap py-3 pr-2 text-right text-[11px] sm:pr-0 sm:text-base",
             dark ? "text-lg" : stale ? "" : "text-muted-foreground"
           )}
         >
@@ -395,7 +418,7 @@ function BoardRowCells({ row }: { row: BoardRow }) {
             <span className="sr-only"> — {t("manifest.stale_hint")}</span>
           ) : null}
         </td>
-        <td className="lane-row marker whitespace-nowrap py-3 text-right text-sm sm:text-base">
+        <td className="lane-row marker whitespace-nowrap py-3 text-right text-[11px] sm:text-base">
           ${row.marginUsd}
         </td>
       </tr>
@@ -406,7 +429,7 @@ function BoardRowCells({ row }: { row: BoardRow }) {
             {/* Right-padding places the note's right edge under the column it argues for, without
                 the short rule that reads as a broken table edge. */}
             <span
-              className="block text-right text-sm leading-snug text-muted-foreground sm:text-base"
+              className="block text-right text-sm font-medium leading-snug text-foreground sm:text-base"
               style={{ paddingRight: `var(--annot-pad-${row.annotation}, 0)` }}
             >
               {t(`manifest.annotations.${row.annotation}`)}
@@ -436,7 +459,7 @@ function Ledger() {
           <div
             key={row}
             className={cn(
-              "sign-warning flex flex-col justify-between gap-6 px-5 py-8 sm:px-8",
+              "sign-warning flex flex-col justify-between gap-4 px-5 py-5 sm:gap-6 sm:px-8 sm:py-8",
               index > 0 && "border-t-4 border-border sm:border-t-0 sm:border-l-4"
             )}
           >
@@ -476,12 +499,12 @@ function Sequence() {
         {steps.map((step) => (
           <li
             key={step}
-            className="lane-row grid grid-cols-[3rem_1fr] items-baseline gap-x-6 gap-y-1 py-4 sm:grid-cols-[3rem_16rem_1fr]"
+            className="lane-row grid grid-cols-[3.5rem_1fr] items-baseline gap-x-6 gap-y-1 py-6 sm:grid-cols-[5rem_22rem_1fr]"
           >
-            <span className="marker text-2xl leading-none">
+            <span className="marker text-4xl leading-none sm:text-6xl">
               {t(`sequence.steps.${step}.index`)}
             </span>
-            <span className="text-base font-bold uppercase tracking-[0.06em]">
+            <span className="text-lg font-bold uppercase tracking-[0.06em] sm:text-xl">
               {t(`sequence.steps.${step}.title`)}
             </span>
             <span className="col-start-2 text-base text-muted-foreground sm:col-start-3">
@@ -510,6 +533,7 @@ function Signoff() {
             data-testid="demo-cta-primary"
             className={cn(
               "sign-type bg-white px-7 py-4 text-sm tracking-[0.12em] text-[color:var(--sign-green)]",
+              "shadow-[inset_0_0_0_4px_#ffffff,inset_0_0_0_7px_var(--sign-green)]",
               FOCUS
             )}
           >

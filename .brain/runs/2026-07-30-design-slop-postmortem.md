@@ -45,6 +45,16 @@ Two things the rebuild removed that were not obvious:
 
 Automated slop probe on the render (in-browser, counts rather than opinions): 0 chromatic elements, 0 radii above zero, 0 shadows, 0 font weights above 400, 58 hairline rules.
 
+## The anti-slop checklist is a floor
+
+Pass three (Waybill) scored clean on every tell and the human verdict was "lame and boring as hell". The critic had already said it politely — the system "transfers to any data-heavy B2B product without changing one rule", "the bottom 47% of the page is still forgettable" — and the checklist could not fail it, because the checklist only measures ways to be *bad*.
+
+Three additions to how tier 2 gets run, all now in [`rules/frontend.md`](../rules/frontend.md) and [`/design-research`](../../.claude/commands/design-research.md):
+
+1. **A clean checklist is not a passing grade.** Ask the memorability and identity questions *before* implementation, not after: what will a viewer recall tomorrow, and could this belong to another company or another category?
+2. **Distinctive is not the same as appropriate.** An archival architecture portfolio was a genuinely distinctive reference and completely wrong for a product about trucks going dark at 3am. Check the reference against the *domain's own visual world* — freight has DOT guide signs, reflective tape, hazard placards, dot-matrix rate cons — before reaching for a design-canon reference.
+3. **Consider motion.** Three passes shipped a still page for a product whose whole nature is that it moves. If the subject changes over time, the design has a time dimension and ignoring it is a decision, not a default.
+
 ## What to carry forward
 
 - A functional gate cannot catch a design defect. If you want design quality, something must judge pixels and be allowed to say no.

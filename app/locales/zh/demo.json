@@ -18,7 +18,8 @@
       "driver": "司机",
       "status": "状态",
       "check_call": "已确认",
-      "margin": "毛利"
+      "margin": "毛利",
+      "check_call_short": "时长"
     },
     "status": {
       "rolling": "在途",

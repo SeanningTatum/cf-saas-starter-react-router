@@ -47,6 +47,8 @@ Steps:
 
 13. **Run the [`design-critic`](../agents/design-critic.md) sub-agent on the render — mandatory.** Screenshot the implemented surface at desktop and mobile (plus any state that matters), then spawn `design-critic` with the paths, the reference lock and the one-line brief. It judges pixels against the anti-slop checklist and the litmus tests, and it never reads the route source. **Any P0 or P1 it returns must be fixed and re-critiqued before the work is called done** — a `DO NOT SHIP` verdict is not advisory. Paste its verdict block into the verification doc.
 
+    Ask the critic explicitly for the memorability and identity verdicts, and treat "clean checklist but forgettable" as a P1. A surface that passed every anti-slop tell was still rejected by the human reviewer as boring; the checklist only measures ways to be bad. Three questions belong in step 2's brief, not in the post-mortem: what will a viewer recall tomorrow, is this reference *appropriate* to the domain as well as distinctive, and does the subject change over time (if so, the design has a time dimension).
+
     The functional gates cannot catch this class of defect: typecheck, unit tests, e2e and the browser walk all pass happily on a templated page. This step is the only one that fails a design for being generic, so it is not optional and not self-assessed.
 
 Refuse to continue past step 5 if research returned nothing usable — report that instead of inventing a direction.

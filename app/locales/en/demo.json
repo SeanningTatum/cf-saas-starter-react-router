@@ -28,7 +28,8 @@
       "driver": "Driver",
       "status": "Status",
       "check_call": "Checked",
-      "margin": "Margin"
+      "margin": "Margin",
+      "check_call_short": "Age"
     },
     "status": {
       "rolling": "Rolling",

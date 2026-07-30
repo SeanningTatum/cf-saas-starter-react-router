@@ -61,11 +61,50 @@ Reject: Orderful's #e42b0c + orange gradient · telegraf/Montserrat · 8px radiu
 | "What happens next" 3-step strip instead of a fake signup wizard | Flows layer (Mercury 11018, Square 1952) | Marketing landing → create account → credentials → onboarding checklist | Both reference flows front-load a single "get started" and show progress. The strip previews that sequence honestly without shipping a fake funnel |
 | Friction-reducer line under the CTAs | Flows layer | "no credit card required"-class reassurance at the entry point | Directly answers the migration-risk objection at the moment of the click |
 
-## Third pass — the rebuild that actually tested the pipeline
+## Fourth pass — "Guide Sign" (CURRENT)
+
+**Why there was a fourth.** Pass three (Waybill) passed the whole anti-slop checklist and the human verdict was still "lame and boring as hell". The critic had said the same thing more politely: the visual system "transfers to any data-heavy B2B product without changing one rule", and "the bottom 47% of the page is still forgettable". The lesson is in [`runs/2026-07-30-design-slop-postmortem.md`](../../runs/2026-07-30-design-slop-postmortem.md#the-anti-slop-checklist-is-a-floor): **passing the checklist is not the objective.** Removing every way to be bad — no cards, no hue, one weight, no radius — removes every reason to look, too. Two further errors: an archival architecture portfolio is the wrong reference for a product about trucks going dark at 3am (distinctive ≠ appropriate), and the page was *static* for a product whose entire nature is that it moves.
+
+### Reference lock (current)
+
+```text
+Primary: EVOKE (refero 1e802d79) — "vibrant billboard clarity"
+Preserve: oversized type on saturated flat panels · full-bleed sections · 0px radius ·
+          no gradients, no soft edges · type is the show
+Borrowed: incident.io (3fcc8a86) — one vivid accent belongs to genuine urgency, nothing else
+Palette: the MUTCD — the actual US highway signage specification, not a taste choice
+          #046A38 guide-sign green   destination panels, CTAs
+          #FFFFFF reflective white   sign type + the inset sign border
+          #FF6A13 safety orange      HAZARD ONLY — the load that has gone dark
+          #FFCC00 warning yellow     the cost-of-a-shift panels
+          #101010 asphalt            body type, 2px road-marking rules
+Idea: dispatch is the road. Signage exists to tell someone with three seconds where they are
+      going and what is wrong — the dispatcher's problem exactly.
+Motion: the dark load's minutes climb once a minute (the real cadence, not a fake ticker); the
+      hazard triangle pulses. Both stop under prefers-reduced-motion.
+Reject: cards · dark canvas · any hue outside the MUTCD set · accent used decoratively ·
+      heading+subtitle+grid-of-three · rounded corners · gradients · a still page
+```
+
+### The move
+
+`LL-4818` is one object rendered three ways down the page — exit tab and destination sign at the top, orange hazard placard bolted under it, then the same load as the single orange row inside an otherwise black-on-white board. The critic's words: *"that is a structural idea rather than volume"*, and it is what carries the board section past "transfers to any data-heavy B2B product".
+
+Signage solutions used as design solutions, not compromises: lanes abbreviate to `LRD → MEM` below `sm` and the constant `LL-` prefix drops, because abbreviating for limited space at speed is what signs do — which is also what made five columns fit a 390px viewport.
+
+### Critic verdict (`design-critic`, 4th pass)
+
+`DO NOT SHIP` → P1 fixed (the abbreviated lane was breaking across three lines on mobile with the arrow orphaned, defeating the lock's own named mobile move). Substantive P2s fixed in the same pass: the hero figure now sits in a distance field closed by a reflective rule with a directional arrow (it was "an infographic figure on a green ground"); the value claims are no longer the quietest text on the page; the steps band got the signage system instead of staying in the rejected direction; mobile yellow area reduced so the warning hue no longer outweighs the hazard.
+
+Measured on the render: palette is exactly the five MUTCD values plus one secondary gray, zero gradients, zero radii; orange appears in exactly two regions per viewport; contrast — white on green 6.72:1, asphalt on orange 6.64:1, asphalt on yellow 12.59:1, origin legend on green 4.90:1, secondary gray on white 6.72:1. All clear AA.
+
+Open, recorded, not blocking: the closing band and the cost band are still two consecutive three-item groups (different paint, same closing rhythm), and the positioning line "One board for every load, every check-call, every invoice" is the one category-agnostic sentence on the page.
+
+## Third pass — Waybill (SUPERSEDED)
 
 **The first two passes were both wrong, in different ways.** Pass one reused the starter's tokens, so the surface looked like the starter. Pass two gave it Andercore's tokens, which changed the colour but left the *composition* untouched — and the composition was the generic stack: hero with copy left and a product panel right, then six identical heading → subtitle → grid-of-three bands, with cards as the default container. Scored against the `refero-design` skill's own `references/anti-ai-slop.md` (a file the process never required anyone to open) it failed six checks. Full postmortem, including the three structural holes that let it through: [`runs/2026-07-30-design-slop-postmortem.md`](../../runs/2026-07-30-design-slop-postmortem.md).
 
-### Reference lock (current)
+### Reference lock (superseded by Guide Sign)
 
 ```text
 Primary: 19–86 (7a8c99db) — "architectural blueprint on white marble"
