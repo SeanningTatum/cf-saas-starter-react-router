@@ -20,6 +20,7 @@
 | [add-feature.md](add-feature.md) | Scoping and shipping a new product feature |
 | [add-route.md](add-route.md) | Adding a React Router page (loader/action/UI) |
 | [add-service.md](add-service.md) | Wrapping a new external client as an Effect service |
+| [`add-premium-surface.md`](add-premium-surface.md) | Building a high-visibility surface — landing/marketing page or redesign — that looks shipped rather than generated: category benchmark, reference lock, the craft moves (product panel, surface levels, depth, type pairing, accent economy, motion), `design:audit`, then `design-critic` |
 
 ## Decision trees
 

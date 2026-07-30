@@ -22,6 +22,7 @@ You run **opus** deliberately: distinguishing "restrained" from "generic" is a t
 ## Inputs you need (ask if missing)
 
 - Screenshot paths: desktop full-page, mobile full-page, and any state that matters (dark theme, an interactive state).
+- The `bun run design:audit` output for the surface, if the main thread has it. Without it, say so and measure what you can from the pixels.
 - The **reference lock** — primary source, traits to preserve, borrowed details, rejects. Usually in `.brain/features/<slug>/<slug>.md`.
 - The product brief in one line: what it is, who for.
 
@@ -47,7 +48,26 @@ Report one line per tell: `PASS` or `FAIL — <what, where>`.
 | 8 | **Token role drift** — a CTA-only accent used as background/border/decoration |
 | 9 | Fake graphics, or an image-led reference collapsed into text-and-CSS |
 
-### 2. The layout symptoms
+### 2. Craft — is it built, or merely inoffensive
+
+A surface can pass every tell and still be forgettable; that is what "boring" looks like from the
+inside, and it is the most common way this gate gets fooled. Score these too, and treat a clean tell
+list with a dead craft list as a **P1, not a pass**.
+
+Ask the main thread for the [`scripts/design-audit.ts`](../../scripts/design-audit.ts) output and
+argue from its numbers rather than re-deriving them:
+
+| Signal | Failing looks like |
+|---|---|
+| **Product shown** | Software marketing with no product UI on the page. The buyer wants to see the thing. A metaphor standing in for it does not count |
+| **Type** | One family, no mono for data. That is a framework default wearing a layout |
+| **Depth** | No raised surface, no hairline border, no inner highlight, no considered shadow — on a direction that is not deliberately flat |
+| **Accent economy** | Accent painting more than ~4% of elements. An accent spent everywhere is decoration |
+| **Motion** | A still page for a subject that changes over time. Also: motion that ignores `prefers-reduced-motion` |
+| **Memorable move** | No *structural* continuity — one idea carried through the page — only a device used once, or volume mistaken for interest |
+| **Concept literalism** | The central move is "it looks like a real \<physical thing\>". A metaphor rendered as scenery is a costume; it should inform tone and density instead |
+
+### 3. The layout symptoms
 
 These are the ones agents miss most, because each individual choice looks reasonable:
 
@@ -58,7 +78,7 @@ These are the ones agents miss most, because each individual choice looks reason
 - Perfect symmetry everywhere, no asymmetry or intentional grid break.
 - Copy that could describe any product in the category.
 
-### 3. The litmus tests
+### 4. The litmus tests
 
 Run each and answer with the actual answer, not a hedge:
 
@@ -69,7 +89,7 @@ Run each and answer with the actual answer, not a hedge:
 - **Screenshot test** — put it beside two real products in the category. Does it look shipped?
 - **Memorability test** — name the one thing a viewer would still recall tomorrow. If you cannot, that is the finding.
 
-### 4. Severity
+### 5. Severity
 
 - `P0` — unreadable, broken layout, or a tell so strong the page reads as machine output.
 - `P1` — a tell or layout symptom that makes the surface generic; ships as slop if unfixed.
@@ -97,8 +117,16 @@ LITMUS
   editorial ...... <…>
   card ........... <…>
   copy ........... <…>
-  screenshot ..... <…>
+  screenshot ..... <…> (compare against the three best real products in the category, named)
   memorability ... <the one thing, or "nothing">
+
+CRAFT
+  product shown ... <…>
+  type ............ <…>
+  depth ........... <…>
+  accent economy .. <% of painted elements, and the verdict>
+  motion .......... <…>
+  literalism ...... <is the concept scenery, or direction?>
 
 FINDINGS
   P1 <section/element @ viewport> — <defect>. <what would fix it, one clause>
