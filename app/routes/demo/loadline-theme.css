@@ -1,190 +1,194 @@
+/* Display + data faces. A distinctive grotesque and a real mono are most of what separates a
+   premium product site from a Tailwind default; this is a demo surface, so the webfont request is
+   acceptable here and nowhere else in the app. */
+@import url("https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap");
+
 /**
- * Loadline — "Guide Sign": a scoped design system for the `/demo` surface.
+ * Loadline — a scoped design system for the `/demo` surface.
  *
  * WHY THIS FILE EXISTS
  *   `/demo` markets a product that is not this repo, so it runs its own visual language without
- *   forking `app/app.css`. Technique and rules: `.brain/rules/frontend.md` "Scoped design
- *   systems". Nothing here escapes `[data-surface="loadline"]`; an e2e test pins that.
+ *   forking `app/app.css`. Technique + rules: `.brain/rules/frontend.md` "Scoped design systems".
+ *   Nothing escapes `[data-surface="loadline"]`; an e2e test pins that in both directions.
  *
- * THE IDEA
- *   Dispatch is the road. A dispatcher's night is destinations, distances, and one truck that has
- *   gone quiet — which is exactly what highway signage was invented to communicate, at speed, to
- *   someone who has three seconds to read it. So the page is built from the road's own visual
- *   system: guide-sign green panels with reflective white type, exit tabs, safety-orange hazard
- *   placards, and figures the size of mile markers.
+ * WHAT THIS IS
+ *   A night-shift instrument. Dispatch happens at 2am under sodium light, so the surface is a deep
+ *   neutral canvas with layered panels, one amber signal used only where something is actually
+ *   wrong, and the product's own board rendered as the hero — because in this category the buyer
+ *   wants to see the board, and every previous pass of this page refused to show it.
  *
- * PALETTE — from the MUTCD, not from taste
- *   These are the specified colours of US road signage. They are given in hex because that is how
- *   the spec defines them, and this file is the token layer — the one place a literal colour
- *   belongs.
- *
- *     Guide-sign green  #046A38   destination panels — the surface's dominant field
- *     Reflective white  #FFFFFF   sign type, sign borders
- *     Safety orange     #FF6A13   HAZARD ONLY. The load that has gone dark. Nothing else.
- *     Warning yellow    #FFCC00   the cost figures — a warning, not decoration
- *     Asphalt           #101010   body type on white, road-marking rules
- *
- * SOURCES
- *   EVOKE (refero `1e802d79`) — "vibrant billboard clarity": oversized type on saturated flat
- *   panels, full-bleed sections, 0px radius, no gradients, no soft edges, type as the whole show.
- *   incident.io (refero `3fcc8a86`) — one vivid accent reserved for genuine urgency, alert state
- *   as its own panel. Borrowed for the hazard placard only.
- *
- * DELIBERATE DEVIATIONS
- *   1. Light, and pinned light in both app themes — highway signage is a daylight system, and the
- *      theme toggle is absent from this surface rather than offered and ignored.
- *   2. Heavy weights are correct here. Signage shouts; the previous direction's one-weight rule
- *      belonged to a different lock and does not apply to this one.
- *   3. Uppercase with positive tracking on every sign element — that is how the FHWA series is
- *      set, and it is what makes a panel read as a sign rather than a coloured box.
+ *   The craft is in the layering: hairline borders at low alpha, a 1px inner highlight on raised
+ *   surfaces, one soft ambient glow behind the product panel, and type with actual personality.
+ *   Those are the things that read as "shipped" rather than "generated".
  */
 
 [data-surface="loadline"] {
-  --sign-green: #046a38;
-  --sign-white: #ffffff;
-  --hazard: #ff6a13;
-  --warning: #ffcc00;
-  --asphalt: #101010;
+  /* Canvas + surfaces. Three levels, each a small step, never a hard black. */
+  --ink-0: #08090a; /* page */
+  --ink-1: #0e1013; /* raised panel */
+  --ink-2: #14171b; /* panel header / inset rows */
+  --line: rgba(255, 255, 255, 0.08);
+  --line-strong: rgba(255, 255, 255, 0.14);
 
-  --background: #ffffff;
-  --foreground: var(--asphalt);
-  --card: var(--sign-green);
-  --card-foreground: #ffffff;
-  --popover: #ffffff;
-  --popover-foreground: var(--asphalt);
+  --text-hi: #f3f4f6;
+  --text-lo: #9aa1a9;
 
-  --primary: var(--sign-green);
-  --primary-foreground: #ffffff;
-  --secondary: var(--warning);
-  --secondary-foreground: var(--asphalt);
-  --muted: #f2f2f0;
-  --muted-foreground: #5c5c58;
-  --accent: var(--hazard);
-  --accent-foreground: #ffffff;
-  --destructive: var(--hazard);
+  /* One signal. Amber = sodium light, night work, and the only thing on the page that alarms. */
+  --signal: #ffb02e;
+  --signal-ink: #0b0c0e;
 
-  --border: var(--asphalt);
-  --input: var(--asphalt);
-  --ring: var(--hazard);
+  --background: var(--ink-0);
+  --foreground: var(--text-hi);
+  --card: var(--ink-1);
+  --card-foreground: var(--text-hi);
+  --popover: var(--ink-1);
+  --popover-foreground: var(--text-hi);
+  --primary: var(--signal);
+  --primary-foreground: var(--signal-ink);
+  --secondary: var(--ink-2);
+  --secondary-foreground: var(--text-hi);
+  --muted: var(--ink-2);
+  --muted-foreground: var(--text-lo);
+  --accent: var(--ink-2);
+  --accent-foreground: var(--text-hi);
+  --destructive: var(--signal);
+  --border: var(--line);
+  --input: var(--line);
+  --ring: var(--signal);
+  --radius: 0.75rem;
 
-  --radius: 0rem;
-  color-scheme: light;
+  color-scheme: dark;
+  font-family: "Instrument Sans", ui-sans-serif, system-ui, sans-serif;
+  background-color: var(--ink-0);
+  color: var(--text-hi);
+  -webkit-font-smoothing: antialiased;
 }
 
+/* The surface keeps its own theme whichever way the app toggle is set. */
 .dark [data-surface="loadline"],
 [data-surface="loadline"].dark {
-  --background: #ffffff;
-  --foreground: #101010;
-  --card: #046a38;
-  --card-foreground: #ffffff;
-  --muted: #f2f2f0;
-  --muted-foreground: #5c5c58;
-  --border: #101010;
-  --destructive: #ff6a13;
-  --radius: 0rem;
-  color-scheme: light;
+  --background: #08090a;
+  --foreground: #f3f4f6;
+  --card: #0e1013;
+  --muted-foreground: #9aa1a9;
+  --border: rgba(255, 255, 255, 0.08);
+  --primary: #ffb02e;
+  --primary-foreground: #0b0c0e;
+  --radius: 0.75rem;
 }
 
-/* ---------------------------------------------------------------------------------------------
- * Sign anatomy
- * ------------------------------------------------------------------------------------------- */
-
-/**
- * A guide sign is a coloured field with a reflective border inset from its edge. That inset is the
- * single detail separating "a sign" from "a coloured div", so it is defined once, here.
- */
-[data-surface="loadline"] .sign {
-  background: var(--sign-green);
-  color: var(--sign-white);
-  box-shadow:
-    inset 0 0 0 4px var(--sign-green),
-    inset 0 0 0 7px var(--sign-white);
+[data-surface="loadline"] .font-display {
+  font-family: "Instrument Sans", ui-sans-serif, system-ui, sans-serif;
+  letter-spacing: -0.028em;
 }
 
-[data-surface="loadline"] .sign-hazard {
-  background: var(--hazard);
-  color: var(--asphalt);
-  box-shadow:
-    inset 0 0 0 4px var(--hazard),
-    inset 0 0 0 7px var(--asphalt);
-}
-
-[data-surface="loadline"] .sign-warning {
-  background: var(--warning);
-  color: var(--asphalt);
-}
-
-/** Sign lettering: the FHWA series is set in caps with open tracking. */
-[data-surface="loadline"] .sign-type {
-  text-transform: uppercase;
-  letter-spacing: 0.02em;
-  font-weight: 700;
-}
-
-/** Mile-marker figures: tabular, so a ticking number never reflows the layout. */
-[data-surface="loadline"] .marker {
+[data-surface="loadline"] .font-data {
+  font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
   font-variant-numeric: tabular-nums;
-  font-weight: 800;
-  letter-spacing: -0.03em;
+  letter-spacing: -0.01em;
 }
 
-/** Manifest rows: road-marking rules, not hairlines. */
-[data-surface="loadline"] .lane-row {
-  border-bottom: 2px solid var(--asphalt);
-}
+/* --------------------------------------------------------------------------------------------
+ * Depth
+ * ------------------------------------------------------------------------------------------ */
 
 /**
- * How far each annotation's right edge sits from the table's right edge, so the note lands under
- * the column it argues for. Set here rather than in the route because they are measurements of
- * this table's geometry, not props of a row.
+ * A raised surface: hairline border, a 1px inner highlight along the top edge where light would
+ * catch it, and a shadow deep enough to separate it from the canvas without looking like a card
+ * template. This one recipe carries the whole page's sense of physicality.
  */
-[data-surface="loadline"] {
-  --annot-pad-margin: 0px;
-  --annot-pad-late: 5.5rem;
-  --annot-pad-delivered: 13rem;
+[data-surface="loadline"] .raised {
+  background: linear-gradient(180deg, #12151a 0%, #0e1013 60%);
+  border: 1px solid var(--line);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    0 1px 2px rgba(0, 0, 0, 0.4),
+    0 24px 60px -20px rgba(0, 0, 0, 0.8);
 }
 
-@media (max-width: 640px) {
-  [data-surface="loadline"] {
-    --annot-pad-late: 3.5rem;
-    --annot-pad-delivered: 7.5rem;
-  }
-}
-
-[data-surface="loadline"] .lane-head {
-  border-bottom: 4px solid var(--asphalt);
-}
-
-/**
- * The dashed centre line, used once — under the hero — as the transition from sign to road.
- * Decorative, and it stays decorative: it never encodes state.
- */
-[data-surface="loadline"] .centre-line {
-  height: 8px;
-  background-image: repeating-linear-gradient(
-    to right,
-    var(--asphalt) 0 44px,
-    transparent 44px 80px
+/** The ambient glow behind the product panel. Decorative, and the only glow on the page. */
+[data-surface="loadline"] .ambient::before {
+  content: "";
+  position: absolute;
+  inset: -20% -10% auto -10%;
+  height: 70%;
+  background: radial-gradient(
+    60% 60% at 60% 0%,
+    rgba(255, 176, 46, 0.16) 0%,
+    rgba(255, 176, 46, 0) 70%
   );
+  pointer-events: none;
+  z-index: 0;
 }
 
-/** A load that has gone dark pulses — slowly, and never when the visitor asked for less motion. */
-@keyframes loadline-dark-pulse {
+/** Fine grid, barely visible, to keep large dark areas from reading as flat void. */
+[data-surface="loadline"] .grid-field {
+  background-image:
+    linear-gradient(to right, rgba(255, 255, 255, 0.035) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.035) 1px, transparent 1px);
+  background-size: 72px 72px;
+}
+
+/* --------------------------------------------------------------------------------------------
+ * The board
+ * ------------------------------------------------------------------------------------------ */
+
+[data-surface="loadline"] .board-row {
+  border-top: 1px solid var(--line);
+  transition: background-color 160ms ease;
+}
+
+[data-surface="loadline"] .board-row:hover {
+  background: rgba(255, 255, 255, 0.025);
+}
+
+/** The one row that is in trouble: a signal rule down its leading edge and a warmed ground. */
+[data-surface="loadline"] .board-row-alert {
+  background: linear-gradient(
+    90deg,
+    rgba(255, 176, 46, 0.14) 0%,
+    rgba(255, 176, 46, 0.03) 40%,
+    transparent 100%
+  );
+  box-shadow: inset 2px 0 0 var(--signal);
+}
+
+/** Live indicator. Slow, small, and it stops when asked. */
+@keyframes loadline-beacon {
   0%,
   100% {
     opacity: 1;
+    transform: scale(1);
   }
   50% {
-    opacity: 0.5;
+    opacity: 0.35;
+    transform: scale(0.82);
   }
 }
 
-[data-surface="loadline"] .is-dark-load {
-  animation: loadline-dark-pulse 2.4s ease-in-out infinite;
+[data-surface="loadline"] .beacon {
+  animation: loadline-beacon 2s ease-in-out infinite;
+}
+
+/** Content lifts in on load — 8px and 400ms, enough to feel handled, not enough to notice. */
+@keyframes loadline-rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+[data-surface="loadline"] .rise {
+  animation: loadline-rise 500ms cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  [data-surface="loadline"] .is-dark-load {
+  [data-surface="loadline"] .beacon,
+  [data-surface="loadline"] .rise {
     animation: none;
   }
 }

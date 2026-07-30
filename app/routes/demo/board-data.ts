@@ -15,9 +15,6 @@ export const LOAD_STATUSES = ["rolling", "late", "delivered"] as const;
 
 export type LoadStatus = (typeof LOAD_STATUSES)[number];
 
-/** i18n key suffix under `manifest.annotations`, rendered as a ruled note under the row. */
-export type BoardAnnotation = "late" | "delivered" | "margin";
-
 export interface BoardRow {
   /** Load reference as an ops person would read it. */
   readonly ref: string;
@@ -36,12 +33,6 @@ export interface BoardRow {
   readonly checkCallAgeMinutes: number;
   /** Margin on the load, in whole dollars. */
   readonly marginUsd: number;
-  /**
-   * Marketing copy lives *inside* the manifest as marginalia on the row it is talking about,
-   * rather than in a separate feature section beside it. Only three rows carry one — an
-   * annotation on every row would be a feature grid wearing a table's clothes.
-   */
-  readonly annotation?: BoardAnnotation;
 }
 
 export const BOARD_ROWS: readonly BoardRow[] = [
@@ -53,7 +44,6 @@ export const BOARD_ROWS: readonly BoardRow[] = [
     status: "rolling",
     checkCallAgeMinutes: 12,
     marginUsd: 640,
-    annotation: "margin",
   },
   {
     ref: "LL-4818",
@@ -63,7 +53,6 @@ export const BOARD_ROWS: readonly BoardRow[] = [
     status: "late",
     checkCallAgeMinutes: 214,
     marginUsd: 180,
-    annotation: "late",
   },
   {
     ref: "LL-4809",
@@ -82,7 +71,6 @@ export const BOARD_ROWS: readonly BoardRow[] = [
     status: "delivered",
     checkCallAgeMinutes: 6,
     marginUsd: 720,
-    annotation: "delivered",
   },
   {
     ref: "LL-4790",

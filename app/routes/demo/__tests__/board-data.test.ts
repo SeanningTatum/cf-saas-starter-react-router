@@ -64,38 +64,3 @@ describe("isStaleCheckCall", () => {
     ]);
   });
 });
-
-describe("annotations", () => {
-  const annotated = BOARD_ROWS.filter((row) => row.annotation);
-
-  // Catches the drift back toward a feature section: annotations are marginalia on specific
-  // rows, so if every row carries one the manifest has become a feature grid in a table.
-  it("annotates a minority of rows, never all of them", () => {
-    expect(annotated.length).toBeGreaterThan(0);
-    expect(annotated.length).toBeLessThan(BOARD_ROWS.length / 2 + 1);
-  });
-
-  // Catches a duplicated annotation key, which would render the same marketing line twice.
-  it("uses each annotation at most once", () => {
-    const keys = annotated.map((row) => row.annotation);
-    expect(new Set(keys).size).toBe(keys.length);
-  });
-
-  // Catches an annotation landing on a row that does not support its claim — the "late" note
-  // talks about a truck being dark, so it must sit on the row that actually is.
-  it("attaches the late annotation to a stale row", () => {
-    const lateRow = BOARD_ROWS.find((row) => row.annotation === "late");
-    expect(lateRow).toBeDefined();
-    expect(lateRow!.status).toBe("late");
-    expect(isStaleCheckCall(lateRow!)).toBe(true);
-  });
-
-  // Catches the same for the delivered note, which claims paperwork arrived with the delivery.
-  it("attaches the delivered annotation to a delivered row", () => {
-    const deliveredRow = BOARD_ROWS.find(
-      (row) => row.annotation === "delivered"
-    );
-    expect(deliveredRow).toBeDefined();
-    expect(deliveredRow!.status).toBe("delivered");
-  });
-});

@@ -4,7 +4,7 @@ import { test, expect } from "@playwright/test";
 import demoEn from "../app/locales/en/demo.json" with { type: "json" };
 
 /**
- * `/demo` — the sample SaaS marketing surface (Loadline, "Guide Sign" direction).
+ * `/demo` — the sample SaaS marketing surface (Loadline).
  *
  * The page is static marketing, so this spec guards the things a unit test cannot see and that
  * would quietly gut the design if they broke:
@@ -25,39 +25,36 @@ test.describe("Demo landing (/demo)", () => {
     const board = page.getByTestId("demo-dispatch-board");
     await expect(board).toBeVisible();
 
-    // The hero sign opens on the dark load's climbing age, not on a decorative number, and the
-    // hazard placard next to it says what the number means.
+    // The page leads with the product's own board, and the dark load's age is a live figure.
     await expect(page.getByTestId("demo-monument-figure")).toHaveText(/^\d+$/);
-    await expect(page.getByTestId("demo-hazard")).toContainText(
-      demoEn.sign.hazard
-    );
 
     // Status is stated in words on every row — the surface has no colour-only encoding, and the
     // dark load's row is orange *and* labelled.
     const labels = Object.values(demoEn.manifest.status).map((l) =>
       l.toUpperCase()
     );
-    const rows = board.locator("tbody tr");
-    const statuses = (await rows.locator("td:nth-child(4)").allInnerTexts())
-      .map((s) => s.trim())
-      .filter(Boolean);
-    expect(statuses.length).toBe(5);
-    for (const status of statuses) {
-      expect(labels).toContain(status.toUpperCase());
+    // Select by testid rather than column index: the panel's column count is a design decision
+    // and this assertion is about status always being stated in words.
+    const statusCells = board.getByTestId("demo-board-status");
+    await expect(statusCells).toHaveCount(5);
+    for (const status of await statusCells.allInnerTexts()) {
+      expect(labels).toContain(status.trim().toUpperCase());
     }
   });
 
-  test("marketing copy lives inside the manifest as row annotations", async ({
+  test("shows real product surfaces, not marketing illustrations", async ({
     page,
   }) => {
-    // Regression guard for the composition itself: an earlier version of this page put its
-    // argument in a separate feature-card section, which is the generic pattern the rebuild
-    // removed. If these lines are no longer in the table, that regression happened.
+    // Regression guard for the composition: this page argues by showing the product. Earlier
+    // versions argued in feature cards with no product visual at all, which is the generic
+    // pattern. If these event lines vanish, that regression happened.
     await page.goto("/demo");
 
-    const board = page.getByTestId("demo-dispatch-board");
-    for (const annotation of Object.values(demoEn.manifest.annotations)) {
-      await expect(board.getByText(annotation, { exact: false })).toBeVisible();
+    for (const line of demoEn.detail.checkcall.lines) {
+      await expect(page.getByText(line, { exact: false })).toBeVisible();
+    }
+    for (const line of demoEn.detail.invoice.lines) {
+      await expect(page.getByText(line, { exact: false })).toBeVisible();
     }
   });
 
@@ -85,19 +82,18 @@ test.describe("Demo landing (/demo)", () => {
       };
     });
     expect(scoped).not.toBeNull();
-    // Asphalt road-marking rules and square corners are the surface's structure.
-    expect(scoped!.border.toLowerCase()).toBe("#101010");
-    expect(scoped!.radius).toBe("0rem");
+    // Hairline borders at low alpha and a soft radius are this surface's own language.
+    expect(scoped!.border).toContain("rgba(255, 255, 255");
+    expect(scoped!.radius).toBe("0.75rem");
 
-    // The reference is a light system, so the scope must ignore the app's dark theme rather
-    // than inherit a canvas the lock rejects.
+    // The surface keeps its own theme whichever way the app toggle is set.
     await page.evaluate(() => document.documentElement.classList.add("dark"));
     const afterDark = await page.evaluate(() =>
       getComputedStyle(document.querySelector('[data-surface="loadline"]')!)
         .getPropertyValue("--background")
         .trim()
     );
-    expect(afterDark.toLowerCase()).toBe("#ffffff");
+    expect(afterDark.toLowerCase()).toBe("#08090a");
 
     // ...and the starter's own surfaces keep the starter's tokens.
     await page.goto("/");
@@ -110,7 +106,7 @@ test.describe("Demo landing (/demo)", () => {
       };
     });
     expect(root.radius).toBe("0.625rem");
-    expect(root.border.toLowerCase()).not.toBe("#101010");
+    expect(root.border).not.toContain("rgba(255, 255, 255");
     expect(root.scopedElements).toBe(0);
   });
 

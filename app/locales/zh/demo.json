@@ -1,13 +1,13 @@
 {
   "meta": {
-    "title": "Loadline — 一块看板管住整晚",
+    "title": "Loadline — 替你盯着整晚的看板",
     "description": "构建于 Cloudflare SaaS Starter 之内的示例营销页面。Loadline 是一个虚构的货运调度产品，用于演示本模板的设计流程。"
   },
   "brand": "Loadline",
   "masthead": {
     "back": "模板首页",
     "sign_in": "登录",
-    "cta": "开通账户"
+    "cta": "免费开始"
   },
   "manifest": {
     "title": "今晚的看板",
@@ -58,41 +58,59 @@
       }
     }
   },
-  "sequence": {
-    "title": "注册之后",
-    "steps": {
-      "account": {
-        "index": "01",
-        "title": "开通账户",
-        "note": "邮箱和密码，没有演示电话。"
-      },
-      "import": {
-        "index": "02",
-        "title": "粘贴今晚的运价确认书",
-        "note": "或者上传你本来就在维护的表格。"
-      },
-      "dispatch": {
-        "index": "03",
-        "title": "开始用看板",
-        "note": "派车、记录确认、送达结单。"
-      }
-    }
-  },
   "signoff": {
     "statement": "用 Loadline 跑今晚这块看板。",
-    "cta": "开通账户",
+    "cta": "免费开始",
     "cta_secondary": "登录",
     "disclaimer": "Loadline 是一个虚构产品。本页面是 Cloudflare SaaS Starter 内的示例营销页面，用于演示其设计流程。",
     "back": "返回模板首页"
   },
-  "sign": {
-    "tab": "货单 LL-4818",
-    "destination": "亚利桑那 凤凰城",
-    "origin": "加州 方塔纳",
-    "unit": "分钟失联",
-    "hazard": "自 00:41 起没有位置确认。没有人发现。",
-    "statement": "一块看板，管住每一票货、每一次位置确认、每一张发票。",
-    "cta": "开通账户",
-    "cta_secondary": "登录"
+  "hero": {
+    "eyebrow": "实时 · 今晚 42 票货",
+    "title": "在客户开口之前，先知道哪辆车没了声音。",
+    "body": "Loadline 用一块看板管住每一票货、每一次位置确认和每一张发票。它替你盯着你看不到的空档——司机一停止回应，这一行就会亮起来。",
+    "cta": "免费开始",
+    "cta_secondary": "登录",
+    "trust": "示例数据 · 无需银行卡 · 无需迁移"
+  },
+  "panel": {
+    "title": "看板 — 今晚",
+    "meta": "42 票货 · 18 家承运商",
+    "filters": {
+      "all": "全部",
+      "rolling": "在途",
+      "late": "失联"
+    },
+    "footer": "示例数据——静态演示，并非已接入的功能"
+  },
+  "cost": {
+    "figure_unit": "分钟失联 · LL-4818",
+    "figure_note": "三个小时没有位置确认。在表格里，这一行和其他行看起来毫无区别。"
+  },
+  "detail": {
+    "checkcall": {
+      "eyebrow": "位置确认",
+      "title": "每一次通话都记录在这票货上。",
+      "body": "电话、短信还是 App——每一次确认都带时间戳落在这一行上。看板按“沉默时长”排序，最久没消息的那辆车会自己浮到最上面。",
+      "panel": "LL-4818 — 事件",
+      "panel_meta": "3小时34分",
+      "lines": [
+        "00:41  电话   无人接听  — 已升级",
+        "23:58  短信   已到发货方",
+        "22:14  App    已离开方塔纳"
+      ]
+    },
+    "invoice": {
+      "eyebrow": "结单",
+      "title": "单据结的是这一票货，不是这一周。",
+      "body": "运价确认书自动生成发票草稿，提单在送达时自行挂上，这票货在送达的同一班次内结清。",
+      "panel": "LL-4794 — 结单",
+      "panel_meta": "就绪",
+      "lines": [
+        "运价确认书  $2,150   已匹配",
+        "提单        14:22    已上传",
+        "发票        草稿     待发送"
+      ]
+    }
   }
 }

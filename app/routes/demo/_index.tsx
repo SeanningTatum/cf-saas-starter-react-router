@@ -20,17 +20,14 @@ export const handle = { i18n: ["demo"] };
 /**
  * Sample marketing surface for a fictional freight-dispatch SaaS ("Loadline").
  *
- * Reference lock: EVOKE (refero `1e802d79`) for billboard clarity — oversized type on saturated
- * flat panels, full-bleed sections, 0px radius, no gradients — with the palette taken from the
- * MUTCD, the actual specification for US highway signage. incident.io (`3fcc8a86`) contributes one
- * rule: a vivid accent belongs to genuine urgency and nothing else.
+ * A night-shift instrument: deep neutral canvas, layered panels, one amber signal spent only where
+ * something is actually wrong, and the product's own board shown as the hero — because in this
+ * category the buyer wants to see the board, and the earlier passes of this page refused to.
  *
- * The idea: dispatch is the road. A dispatcher's night is destinations, distances and one truck
- * that has gone quiet, which is what highway signage exists to communicate to someone with three
- * seconds to read it. So the page opens as a guide sign, not as a hero — and the minutes on it
- * climb while you watch, because a board that does not move is not a board.
- *
- * Full decision ledger, and the three directions this replaced:
+ * The craft lives in `loadline-theme.css`: hairline borders at low alpha, a 1px inner highlight on
+ * raised surfaces, one ambient glow, a barely-there grid field, and real display + mono faces.
+ * Scoped design system rules: `.brain/rules/frontend.md`. Decision history, including the three
+ * directions this replaced and why each was rejected:
  * `.brain/features/sample-saas-landing/sample-saas-landing.md`.
  */
 export async function loader({ request }: Route.LoaderArgs) {
@@ -47,13 +44,7 @@ export function meta({ data }: Route.MetaArgs) {
   ];
 }
 
-/**
- * The dark load's age, climbing in real time.
- *
- * Starts from the server-rendered value so there is no hydration mismatch, then increments once a
- * minute — the real cadence of the thing it measures, not a fake fast ticker. Visitors who asked
- * for reduced motion get the static figure.
- */
+/** The dark load's age, climbing at the real cadence. Static under reduced motion. */
 function useClimbingMinutes(from: number): number {
   const [minutes, setMinutes] = useState(from);
 
@@ -66,7 +57,10 @@ function useClimbingMinutes(from: number): number {
   return minutes;
 }
 
-/** Small uppercase sign legend. */
+const FOCUS =
+  "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[color:var(--signal)]";
+
+/** Small caps label, mono, for instrument legends. */
 function Legend({
   children,
   className,
@@ -77,7 +71,7 @@ function Legend({
   return (
     <span
       className={cn(
-        "text-[11px] font-bold uppercase leading-none tracking-[0.16em]",
+        "font-data text-[10px] uppercase leading-none tracking-[0.18em] text-[color:var(--text-lo)]",
         className
       )}
     >
@@ -86,43 +80,46 @@ function Legend({
   );
 }
 
-const FOCUS =
-  "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-current";
-
 export default function DemoLanding() {
   return (
     <div
       data-surface="loadline"
-      className="min-h-svh bg-background text-foreground"
+      className="min-h-svh bg-[color:var(--ink-0)] text-[color:var(--text-hi)] antialiased"
     >
-      <Masthead />
+      <Nav />
       <main>
-        <GuideSign />
+        <Hero />
         <Board />
-        <Ledger />
-        <Sequence />
-        <Signoff />
+        <Detail />
+        <Close />
       </main>
+      <Footer />
     </div>
   );
 }
 
-function Masthead() {
+function Nav() {
   const { t } = useTranslation("demo");
 
   return (
-    <header className="border-b-4 border-border bg-background">
-      <div className="flex flex-wrap items-center justify-between gap-x-8 gap-y-3 px-5 py-4 sm:px-8">
-        <span className="text-lg font-extrabold uppercase tracking-[0.04em]">
-          {t("brand")}
-        </span>
+    <header className="sticky top-0 z-30 border-b border-[color:var(--line)] bg-[color:var(--ink-0)]/80 backdrop-blur-xl">
+      <div className="mx-auto flex max-w-[76rem] items-center justify-between gap-6 px-6 py-4">
+        <div className="flex items-center gap-2.5">
+          <span
+            className="beacon size-1.5 rounded-full bg-[color:var(--signal)]"
+            aria-hidden="true"
+          />
+          <span className="font-display text-[15px] font-semibold">
+            {t("brand")}
+          </span>
+        </div>
 
-        <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
+        <div className="flex items-center gap-1.5">
           <Link
             to="/"
             data-testid="demo-topbar-back"
             className={cn(
-              "hidden text-[11px] font-bold uppercase tracking-[0.16em] text-muted-foreground hover:text-foreground sm:inline",
+              "hidden rounded-md px-3 py-2 text-[13px] text-[color:var(--text-lo)] transition-colors hover:text-[color:var(--text-hi)] sm:inline-block",
               FOCUS
             )}
           >
@@ -132,7 +129,7 @@ function Masthead() {
             to="/login"
             data-testid="demo-topbar-sign-in"
             className={cn(
-              "text-[11px] font-bold uppercase tracking-[0.16em] text-muted-foreground hover:text-foreground",
+              "rounded-md px-3 py-2 text-[13px] text-[color:var(--text-lo)] transition-colors hover:text-[color:var(--text-hi)]",
               FOCUS
             )}
           >
@@ -142,13 +139,13 @@ function Masthead() {
             to="/sign-up"
             data-testid="demo-topbar-cta"
             className={cn(
-              "sign sign-type px-4 py-2.5 text-[11px] tracking-[0.16em]",
+              "rounded-md bg-[color:var(--signal)] px-3.5 py-2 text-[13px] font-semibold text-[color:var(--signal-ink)] transition-opacity hover:opacity-90",
               FOCUS
             )}
           >
             {t("masthead.cta")}
           </Link>
-          <LocaleRule />
+          <LocaleSwitch />
         </div>
       </div>
     </header>
@@ -156,17 +153,17 @@ function Masthead() {
 }
 
 /**
- * Locale switch as two sign legends. Posts to the same `/api/set-locale` action the app-wide
- * `LanguageSwitcher` uses; only the styling differs. The app's `ThemeToggle` is deliberately
- * absent — this surface pins itself light, so a toggle that did nothing here would be a lie.
+ * Locale switch. Posts to the same `/api/set-locale` action the app-wide `LanguageSwitcher` uses.
+ * The app's `ThemeToggle` is deliberately absent: this surface pins its own theme, so offering a
+ * toggle that did nothing here would be a lie.
  */
-function LocaleRule() {
+function LocaleSwitch() {
   const { i18n } = useTranslation();
   const fetcher = useFetcher();
   const labels: Record<string, string> = { en: "EN", zh: "中文" };
 
   return (
-    <span className="flex items-center gap-3">
+    <span className="ml-1 flex items-center gap-1">
       {supportedLngs.map((lng) => {
         const active = i18n.language === lng;
         return (
@@ -183,10 +180,10 @@ function LocaleRule() {
               )
             }
             className={cn(
-              "text-[11px] font-bold uppercase tracking-[0.16em]",
+              "font-data rounded px-1.5 py-1 text-[11px] transition-colors",
               active
-                ? "text-foreground"
-                : "text-muted-foreground hover:text-foreground",
+                ? "text-[color:var(--text-hi)]"
+                : "text-[color:var(--text-lo)] hover:text-[color:var(--text-hi)]",
               FOCUS
             )}
           >
@@ -198,342 +195,336 @@ function LocaleRule() {
   );
 }
 
-/**
- * The hero is a guide sign: exit tab, destination, and a mile-marker figure that climbs. Under it,
- * a safety-orange hazard placard states what the number means — the two are adjacent by design, so
- * a non-dispatcher never has to work out why 214 is alarming.
- */
-function GuideSign() {
+function Hero() {
   const { t } = useTranslation("demo");
   const minutes = useClimbingMinutes(DARK_LOAD_START_MINUTES);
 
   return (
-    <section>
-      <div className="px-5 pt-6 sm:px-8">
-        {/* Exit tab sits on the shoulder of the panel, as it does on the road. */}
-        <div className="sign sign-type inline-block px-5 py-2 text-[11px] tracking-[0.16em]">
-          {t("sign.tab")}
-        </div>
+    <section className="ambient grid-field relative overflow-hidden border-b border-[color:var(--line)]">
+      <div className="relative z-10 mx-auto grid max-w-[76rem] items-center gap-14 px-6 pt-20 pb-16 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)] lg:gap-10 lg:pt-28 lg:pb-24">
+        <div className="rise flex flex-col items-start gap-7">
+          <span className="inline-flex items-center gap-2 rounded-full border border-[color:var(--line-strong)] bg-[color:var(--ink-1)] py-1.5 pr-3.5 pl-2.5">
+            <span
+              className="beacon size-1.5 rounded-full bg-[color:var(--signal)]"
+              aria-hidden="true"
+            />
+            <Legend className="text-[color:var(--text-hi)]">
+              {t("hero.eyebrow")}
+            </Legend>
+          </span>
 
-        <div className="sign relative overflow-hidden px-6 py-8 sm:px-10 sm:py-10">
-          <div className="flex flex-wrap items-end justify-between gap-x-10 gap-y-6">
-            <div className="flex flex-col gap-3">
-              <Legend className="text-[color:var(--sign-white)]/85">
-                {t("sign.origin")}
-              </Legend>
-              <p className="sign-type flex items-center gap-4 text-4xl leading-[0.95] sm:text-6xl lg:text-7xl">
-                {t("sign.destination")}
-                <span aria-hidden="true" className="text-[0.8em] leading-none">
-                  →
-                </span>
-              </p>
-            </div>
+          <h1 className="font-display text-[2.75rem] font-semibold leading-[1.02] text-balance sm:text-[3.5rem] lg:text-[4rem]">
+            {t("hero.title")}
+          </h1>
 
-            {/* The distance field: a reflective rule closes it off, as it does on the road. */}
-            <div className="flex items-end gap-4 border-[color:var(--sign-white)] sm:border-l-4 sm:pl-8">
-              <span
-                className="marker text-[clamp(7rem,22vw,14rem)] leading-[0.78]"
-                data-testid="demo-monument-figure"
-                data-base-minutes={DARK_LOAD_START_MINUTES}
-              >
-                {minutes}
-              </span>
-              <Legend className="pb-3 sm:pb-5">{t("sign.unit")}</Legend>
-            </div>
+          <p className="max-w-xl text-[17px] leading-relaxed text-[color:var(--text-lo)]">
+            {t("hero.body")}
+          </p>
+
+          <div className="flex flex-wrap items-center gap-3">
+            <Link
+              to="/sign-up"
+              data-testid="demo-hero-cta"
+              className={cn(
+                "rounded-lg bg-[color:var(--signal)] px-5 py-3 text-[14px] font-semibold text-[color:var(--signal-ink)] shadow-[0_8px_24px_-8px_rgba(255,176,46,0.5)] transition-transform hover:-translate-y-px",
+                FOCUS
+              )}
+            >
+              {t("hero.cta")}
+            </Link>
+            <Link
+              to="/login"
+              data-testid="demo-hero-sign-in"
+              className={cn(
+                "rounded-lg border border-[color:var(--line-strong)] bg-[color:var(--ink-1)] px-5 py-3 text-[14px] font-medium text-[color:var(--text-hi)] transition-colors hover:border-[color:var(--text-lo)]",
+                FOCUS
+              )}
+            >
+              {t("hero.cta_secondary")}
+            </Link>
+          </div>
+
+          <div className="mt-1 flex flex-wrap items-center gap-x-6 gap-y-2">
+            <Legend>{t("hero.trust")}</Legend>
           </div>
         </div>
 
-        {/* Hazard placard: the only orange on the page, and it is an actual alarm. */}
-        <div
-          className="sign-hazard sign-type flex items-start gap-3 px-6 py-4 text-sm tracking-[0.08em] sm:items-center sm:gap-4 sm:px-10"
-          data-testid="demo-hazard"
-        >
-          <span
-            aria-hidden="true"
-            className="is-dark-load shrink-0 text-lg leading-none"
-          >
-            ▲
-          </span>
-          {t("sign.hazard")}
-        </div>
-      </div>
-
-      <div className="centre-line mt-8" aria-hidden="true" />
-
-      <div className="flex flex-wrap items-center justify-between gap-x-12 gap-y-6 border-b-4 border-border px-5 py-8 sm:px-8">
-        <p className="max-w-2xl text-2xl font-bold leading-[1.15] tracking-[-0.02em] sm:text-4xl">
-          {t("sign.statement")}
-        </p>
-        <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
-          <Link
-            to="/sign-up"
-            data-testid="demo-hero-cta"
-            className={cn(
-              "sign sign-type px-7 py-4 text-sm tracking-[0.12em]",
-              FOCUS
-            )}
-          >
-            {t("sign.cta")}
-          </Link>
-          <Link
-            to="/login"
-            data-testid="demo-hero-sign-in"
-            className={cn(
-              "border-b-2 border-border pb-1 text-sm font-bold uppercase tracking-[0.12em]",
-              FOCUS
-            )}
-          >
-            {t("sign.cta_secondary")}
-          </Link>
+        {/* The product, shown. It overflows the right edge on large screens so the page reads as a
+            window into a running app rather than a screenshot pasted into a column. */}
+        {/* Bleeds past the container so the page reads as a window into a running app — but only
+            as far as the last column can afford, because the age is the point. */}
+        <div className="rise relative lg:-mr-8 xl:-mr-14">
+          <BoardPanel minutes={minutes} />
         </div>
       </div>
     </section>
   );
 }
 
-/**
- * Tonight's board. Road-marking rules, uppercase column legends, and the dark load carried on an
- * orange placard row rather than a coloured dot. Three rows carry an annotation — the marketing
- * argument stated where its evidence is, which is why there is no feature section.
- */
-function Board() {
+/** The dispatch board as a product panel: window chrome, live filters, real rows. */
+function BoardPanel({ minutes }: { minutes: number }) {
   const { t } = useTranslation("demo");
-  const columns = [
-    "ref",
-    "lane",
-    "driver",
-    "status",
-    "check_call",
-    "margin",
-  ] as const;
 
   return (
-    <section className="border-b-4 border-border px-5 py-10 sm:px-8">
-      <div className="flex flex-wrap items-baseline justify-between gap-x-8 gap-y-2">
-        <h2 className="text-2xl font-extrabold uppercase tracking-[0.02em]">
-          {t("manifest.title")}
-        </h2>
-        <Legend className="text-muted-foreground">{t("manifest.meta")}</Legend>
+    <div className="raised overflow-hidden rounded-xl">
+      <div className="flex items-center justify-between gap-4 border-b border-[color:var(--line)] bg-[color:var(--ink-2)] px-4 py-3">
+        <div className="flex items-center gap-2.5">
+          <span
+            className="beacon size-1.5 rounded-full bg-[color:var(--signal)]"
+            aria-hidden="true"
+          />
+          <span className="font-data text-[11px] tracking-tight text-[color:var(--text-hi)]">
+            {t("panel.title")}
+          </span>
+        </div>
+        <Legend>{t("panel.meta")}</Legend>
+      </div>
+
+      <div className="flex items-center gap-1.5 border-b border-[color:var(--line)] px-4 py-2.5">
+        {(["all", "rolling", "late"] as const).map((key, index) => (
+          <span
+            key={key}
+            className={cn(
+              "font-data rounded-md px-2 py-1 text-[10px] uppercase tracking-[0.12em]",
+              index === 0
+                ? "bg-[color:var(--ink-2)] text-[color:var(--text-hi)]"
+                : "text-[color:var(--text-lo)]"
+            )}
+          >
+            {t(`panel.filters.${key}`)}
+          </span>
+        ))}
       </div>
 
       <table
-        className="mt-6 w-full border-collapse text-left"
+        className="w-full border-collapse text-left"
         data-testid="demo-dispatch-board"
       >
         <thead>
           <tr>
-            {columns.map((column) => (
+            {(["ref", "lane", "status", "check_call"] as const).map((column) => (
               <th
                 key={column}
                 scope="col"
                 className={cn(
-                  "lane-head pr-2 pb-2 font-normal last:pr-0 sm:pr-4",
-                  column === "driver" && "hidden sm:table-cell",
-                  (column === "check_call" || column === "margin") && "text-right"
+                  "px-3.5 pt-3 pb-2 text-left font-normal",
+                  column === "check_call" && "pr-4 text-right"
                 )}
               >
-                <Legend className="text-muted-foreground">
-                  {column === "check_call" ? (
-                    <>
-                      <span className="sm:hidden">
-                        {t("manifest.columns.check_call_short")}
-                      </span>
-                      <span className="hidden sm:inline">
-                        {t("manifest.columns.check_call")}
-                      </span>
-                    </>
-                  ) : (
-                    t(`manifest.columns.${column}`)
-                  )}
-                </Legend>
+                <Legend>{t(`manifest.columns.${column}`)}</Legend>
               </th>
             ))}
           </tr>
         </thead>
         <tbody>
           {BOARD_ROWS.map((row) => (
-            <BoardRowCells key={row.ref} row={row} />
+            <PanelRow key={row.ref} row={row} minutes={minutes} />
           ))}
         </tbody>
       </table>
 
-      <Legend className="mt-4 block text-muted-foreground">
-        {t("manifest.footer")}
-      </Legend>
-    </section>
+      <div className="border-t border-[color:var(--line)] px-4 py-3">
+        <Legend>{t("panel.footer")}</Legend>
+      </div>
+    </div>
   );
 }
 
-/** Which column each annotation argues for — the note's right edge lands under it. */
-const ANNOTATION_TARGET: Record<NonNullable<BoardRow["annotation"]>, number> = {
-  delivered: 4,
-  late: 5,
-  margin: 6,
-};
-
-function BoardRowCells({ row }: { row: BoardRow }) {
+function PanelRow({ row, minutes }: { row: BoardRow; minutes: number }) {
   const { t } = useTranslation("demo");
+  const alert = row.ref === DARK_LOAD_REF;
   const stale = isStaleCheckCall(row);
-  const dark = row.ref === DARK_LOAD_REF;
-  const minutes = useClimbingMinutes(row.checkCallAgeMinutes);
-  const annotated = Boolean(row.annotation);
+  const age = alert ? minutes : row.checkCallAgeMinutes;
 
   return (
-    <>
-      <tr
+    <tr className={cn("board-row", alert && "board-row-alert")}>
+      <td className="font-data px-3.5 py-3 text-[12px] whitespace-nowrap text-[color:var(--text-lo)]">
+        {row.ref}
+      </td>
+      <td className="px-3.5 py-3 text-[13px] whitespace-nowrap">
+        <span className="sm:hidden">{row.shortLane}</span>
+        <span className="hidden sm:inline">{row.lane}</span>
+      </td>
+      <td className="px-3.5 py-3">
+        <span
+          className={cn(
+            "inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[11px] whitespace-nowrap",
+            alert
+              ? "border-[color:var(--signal)]/40 bg-[color:var(--signal)]/10 text-[color:var(--signal)]"
+              : "border-[color:var(--line)] text-[color:var(--text-lo)]"
+          )}
+          data-testid="demo-board-status"
+        >
+          {alert ? (
+            <span
+              className="beacon size-1 rounded-full bg-[color:var(--signal)]"
+              aria-hidden="true"
+            />
+          ) : null}
+          {t(`manifest.status.${row.status}`)}
+        </span>
+      </td>
+      <td
         className={cn(
-          annotated && "[&>td]:border-b-0",
-          dark && "sign-hazard sign-type [&>td]:px-2 [&>td:first-child]:pl-4 [&>td:last-child]:pr-4"
+          "font-data px-3.5 py-3 pr-4 text-right text-[12px] whitespace-nowrap",
+          alert
+            ? "text-[color:var(--signal)]"
+            : stale
+              ? "text-[color:var(--text-hi)]"
+              : "text-[color:var(--text-lo)]"
         )}
       >
-        <td className="lane-row whitespace-nowrap py-3 pr-3 text-sm font-bold sm:pr-4">
-          <span className="sm:hidden">{row.ref.replace("LL-", "")}</span>
-          <span className="hidden sm:inline">{row.ref}</span>
-        </td>
-        <td className="lane-row py-3 pr-3 text-sm font-bold uppercase tracking-[0.04em] sm:pr-4 sm:text-base">
-          <span className="whitespace-nowrap text-[11px] sm:hidden">
-            {row.shortLane}
-          </span>
-          <span className="hidden sm:inline">{row.lane}</span>
-        </td>
-        <td
-          className={cn(
-            "lane-row hidden py-3 pr-3 text-base sm:table-cell sm:pr-4",
-            dark ? "" : "text-muted-foreground"
-          )}
-        >
-          {row.driver}
-        </td>
-        <td className="lane-row py-3 pr-2 text-[11px] font-bold uppercase tracking-normal sm:pr-4 sm:text-sm sm:tracking-[0.08em]">
-          {t(`manifest.status.${row.status}`)}
-        </td>
-        <td
-          className={cn(
-            "lane-row marker whitespace-nowrap py-3 pr-2 text-right text-[11px] sm:pr-0 sm:text-base",
-            dark ? "text-lg" : stale ? "" : "text-muted-foreground"
-          )}
-        >
-          {t("manifest.check_call_minutes", { count: minutes })}
-          {stale ? (
-            <span className="sr-only"> — {t("manifest.stale_hint")}</span>
-          ) : null}
-        </td>
-        <td className="lane-row marker whitespace-nowrap py-3 text-right text-[11px] sm:text-base">
-          ${row.marginUsd}
-        </td>
-      </tr>
-
-      {row.annotation ? (
-        <tr>
-          <td colSpan={6} className="lane-row pb-3">
-            {/* Right-padding places the note's right edge under the column it argues for, without
-                the short rule that reads as a broken table edge. */}
-            <span
-              className="block text-right text-sm font-medium leading-snug text-foreground sm:text-base"
-              style={{ paddingRight: `var(--annot-pad-${row.annotation}, 0)` }}
-            >
-              {t(`manifest.annotations.${row.annotation}`)}
-            </span>
-          </td>
-        </tr>
-      ) : null}
-    </>
+        {t("manifest.check_call_minutes", { count: age })}
+        {stale ? (
+          <span className="sr-only"> — {t("manifest.stale_hint")}</span>
+        ) : null}
+      </td>
+    </tr>
   );
 }
 
-/** The cost of a shift, on warning-yellow panels: three figures at mile-marker scale. */
-function Ledger() {
+/** The number that costs money, at scale, with the three figures that explain it. */
+function Board() {
   const { t } = useTranslation("demo");
   const rows = ["calls", "tabs", "invoice"] as const;
+  const minutes = useClimbingMinutes(DARK_LOAD_START_MINUTES);
 
   return (
-    <section className="border-b-4 border-border">
-      <div className="px-5 pt-10 sm:px-8">
-        <h2 className="text-2xl font-extrabold uppercase tracking-[0.02em]">
-          {t("ledger.title")}
-        </h2>
-      </div>
-
-      <div className="mt-8 grid sm:grid-cols-3">
-        {rows.map((row, index) => (
-          <div
-            key={row}
-            className={cn(
-              "sign-warning flex flex-col justify-between gap-4 px-5 py-5 sm:gap-6 sm:px-8 sm:py-8",
-              index > 0 && "border-t-4 border-border sm:border-t-0 sm:border-l-4"
-            )}
-          >
-            <div className="flex items-end gap-3">
-              <span className="marker text-6xl leading-none sm:text-7xl">
-                {t(`ledger.rows.${row}.figure`)}
-              </span>
-              <Legend className="pb-2">{t(`ledger.rows.${row}.unit`)}</Legend>
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <span className="text-base font-bold uppercase tracking-[0.06em]">
-                {t(`ledger.rows.${row}.label`)}
-              </span>
-              <span className="text-base leading-snug">
-                {t(`ledger.rows.${row}.note`)}
-              </span>
+    <section className="border-b border-[color:var(--line)]">
+      <div className="mx-auto max-w-[76rem] px-6 py-16 lg:py-20">
+        <div className="flex flex-col gap-10 lg:flex-row lg:items-end lg:justify-between">
+          <div className="flex items-end gap-5">
+            <span
+              className="font-display text-[color:var(--signal)] text-[5.5rem] leading-[0.85] font-semibold sm:text-[7rem]"
+              data-testid="demo-monument-figure"
+            >
+              {minutes}
+            </span>
+            <div className="flex flex-col gap-2 pb-2">
+              <Legend>{t("cost.figure_unit")}</Legend>
+              <p className="max-w-xs text-[15px] leading-snug text-[color:var(--text-hi)]">
+                {t("cost.figure_note")}
+              </p>
             </div>
           </div>
-        ))}
+
+          <dl className="grid gap-6 sm:grid-cols-3 lg:max-w-2xl lg:gap-8">
+            {rows.map((row) => (
+              <div
+                key={row}
+                className="flex flex-col gap-1.5 border-t border-[color:var(--line)] pt-4"
+              >
+                <dt className="font-display text-[1.75rem] leading-none font-semibold">
+                  {t(`ledger.rows.${row}.figure`)}
+                  <span className="ml-1.5 text-[13px] font-normal text-[color:var(--text-lo)]">
+                    {t(`ledger.rows.${row}.unit`)}
+                  </span>
+                </dt>
+                <dd className="text-[13px] leading-snug text-[color:var(--text-lo)]">
+                  <span className="block text-[color:var(--text-hi)]">
+                    {t(`ledger.rows.${row}.label`)}
+                  </span>
+                  {t(`ledger.rows.${row}.note`)}
+                </dd>
+              </div>
+            ))}
+          </dl>
+        </div>
       </div>
     </section>
   );
 }
 
-/** Mile markers: numbered rows in the board's own language. */
-function Sequence() {
+/** Two asymmetric rows, each pairing a claim with the piece of product that proves it. */
+function Detail() {
   const { t } = useTranslation("demo");
-  const steps = ["account", "import", "dispatch"] as const;
 
   return (
-    <section className="border-b-4 border-border px-5 py-10 sm:px-8">
-      <h2 className="text-2xl font-extrabold uppercase tracking-[0.02em]">
-        {t("sequence.title")}
-      </h2>
+    <section className="border-b border-[color:var(--line)]">
+      <div className="mx-auto flex max-w-[76rem] flex-col gap-16 px-6 py-16 lg:gap-24 lg:py-24">
+        <div className="grid items-center gap-10 lg:grid-cols-2 lg:gap-16">
+          <div className="flex flex-col items-start gap-4">
+            <Legend>{t("detail.checkcall.eyebrow")}</Legend>
+            <h2 className="font-display max-w-md text-[1.75rem] leading-tight font-semibold sm:text-[2.25rem]">
+              {t("detail.checkcall.title")}
+            </h2>
+            <p className="max-w-md text-[15px] leading-relaxed text-[color:var(--text-lo)]">
+              {t("detail.checkcall.body")}
+            </p>
+          </div>
+          <LedgerPanel kind="checkcall" />
+        </div>
 
-      <ol className="mt-6">
-        {steps.map((step) => (
-          <li
-            key={step}
-            className="lane-row grid grid-cols-[3.5rem_1fr] items-baseline gap-x-6 gap-y-1 py-6 sm:grid-cols-[5rem_22rem_1fr]"
-          >
-            <span className="marker text-4xl leading-none sm:text-6xl">
-              {t(`sequence.steps.${step}.index`)}
-            </span>
-            <span className="text-lg font-bold uppercase tracking-[0.06em] sm:text-xl">
-              {t(`sequence.steps.${step}.title`)}
-            </span>
-            <span className="col-start-2 text-base text-muted-foreground sm:col-start-3">
-              {t(`sequence.steps.${step}.note`)}
-            </span>
-          </li>
-        ))}
-      </ol>
+        <div className="grid items-center gap-10 lg:grid-cols-2 lg:gap-16">
+          <div className="flex flex-col items-start gap-4 lg:order-2">
+            <Legend>{t("detail.invoice.eyebrow")}</Legend>
+            <h2 className="font-display max-w-md text-[1.75rem] leading-tight font-semibold sm:text-[2.25rem]">
+              {t("detail.invoice.title")}
+            </h2>
+            <p className="max-w-md text-[15px] leading-relaxed text-[color:var(--text-lo)]">
+              {t("detail.invoice.body")}
+            </p>
+          </div>
+          <div className="lg:order-1">
+            <LedgerPanel kind="invoice" />
+          </div>
+        </div>
+      </div>
     </section>
   );
 }
 
-/** Closing guide sign: the destination, one more time. */
-function Signoff() {
+/** A small slice of real product UI: an event ledger, or an invoice draft. */
+function LedgerPanel({ kind }: { kind: "checkcall" | "invoice" }) {
+  const { t } = useTranslation("demo");
+  const lines = t(`detail.${kind}.lines`, { returnObjects: true }) as string[];
+
+  return (
+    <div className="raised overflow-hidden rounded-xl">
+      <div className="flex items-center justify-between border-b border-[color:var(--line)] bg-[color:var(--ink-2)] px-4 py-2.5">
+        <span className="font-data text-[11px] text-[color:var(--text-hi)]">
+          {t(`detail.${kind}.panel`)}
+        </span>
+        <Legend>{t(`detail.${kind}.panel_meta`)}</Legend>
+      </div>
+      <ul>
+        {lines.map((line, index) => (
+          <li
+            key={line}
+            className={cn(
+              "font-data flex items-baseline gap-3 px-4 py-3 text-[12px] leading-relaxed",
+              index > 0 && "border-t border-[color:var(--line)]",
+              index === 0 && kind === "checkcall"
+                ? "text-[color:var(--signal)]"
+                : "text-[color:var(--text-lo)]"
+            )}
+          >
+            <span className="text-[color:var(--text-lo)]/60">
+              {String(index + 1).padStart(2, "0")}
+            </span>
+            {line}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function Close() {
   const { t } = useTranslation("demo");
 
   return (
-    <section>
-      <div className="sign px-6 py-12 sm:px-10 sm:py-16">
-        <p className="sign-type max-w-4xl text-3xl leading-[1.05] sm:text-5xl lg:text-6xl">
+    <section className="ambient relative overflow-hidden">
+      <div className="relative z-10 mx-auto flex max-w-[76rem] flex-col items-start gap-7 px-6 py-20 lg:py-28">
+        <h2 className="font-display max-w-2xl text-[2.25rem] leading-[1.05] font-semibold text-balance sm:text-[3rem]">
           {t("signoff.statement")}
-        </p>
-        <div className="mt-10 flex flex-wrap items-center gap-x-6 gap-y-3">
+        </h2>
+        <div className="flex flex-wrap items-center gap-3">
           <Link
             to="/sign-up"
             data-testid="demo-cta-primary"
             className={cn(
-              "sign-type bg-white px-7 py-4 text-sm tracking-[0.12em] text-[color:var(--sign-green)]",
-              "shadow-[inset_0_0_0_4px_#ffffff,inset_0_0_0_7px_var(--sign-green)]",
+              "rounded-lg bg-[color:var(--signal)] px-5 py-3 text-[14px] font-semibold text-[color:var(--signal-ink)] shadow-[0_8px_24px_-8px_rgba(255,176,46,0.5)] transition-transform hover:-translate-y-px",
               FOCUS
             )}
           >
@@ -543,30 +534,39 @@ function Signoff() {
             to="/login"
             data-testid="demo-cta-sign-in"
             className={cn(
-              "border-b-2 border-current pb-1 text-sm font-bold uppercase tracking-[0.12em]",
+              "rounded-lg border border-[color:var(--line-strong)] bg-[color:var(--ink-1)] px-5 py-3 text-[14px] font-medium transition-colors hover:border-[color:var(--text-lo)]",
               FOCUS
             )}
           >
             {t("signoff.cta_secondary")}
           </Link>
         </div>
+        <Legend>{t("hero.trust")}</Legend>
       </div>
+    </section>
+  );
+}
 
-      <div className="flex flex-wrap items-start justify-between gap-x-12 gap-y-4 px-5 py-8 sm:px-8">
-        <Legend className="max-w-3xl leading-relaxed text-muted-foreground">
+function Footer() {
+  const { t } = useTranslation("demo");
+
+  return (
+    <footer className="border-t border-[color:var(--line)]">
+      <div className="mx-auto flex max-w-[76rem] flex-col gap-3 px-6 py-8 sm:flex-row sm:items-start sm:justify-between">
+        <p className="max-w-2xl text-[12px] leading-relaxed text-[color:var(--text-lo)]">
           {t("signoff.disclaimer")}
-        </Legend>
+        </p>
         <Link
           to="/"
           data-testid="demo-footer-back"
           className={cn(
-            "border-b-2 border-border pb-1 text-[11px] font-bold uppercase tracking-[0.16em]",
+            "font-data shrink-0 text-[11px] text-[color:var(--text-lo)] transition-colors hover:text-[color:var(--text-hi)]",
             FOCUS
           )}
         >
           {t("signoff.back")}
         </Link>
       </div>
-    </section>
+    </footer>
   );
 }
