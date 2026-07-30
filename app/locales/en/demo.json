@@ -1,0 +1,145 @@
+{
+  "meta": {
+    "title": "Loadline — dispatch, check-calls and invoicing on one board",
+    "description": "Sample SaaS marketing surface built inside the Cloudflare SaaS Starter. Loadline is a fictional freight dispatch product used to demonstrate the starter's design pipeline."
+  },
+  "brand": "Loadline",
+  "topbar": {
+    "chip": "Demo surface",
+    "back": "Back to the starter",
+    "sign_in": "Sign in",
+    "cta": "Create account"
+  },
+  "hero": {
+    "eyebrow": "Freight ops · sample product",
+    "title_lead": "Every load, every check-call, on ",
+    "title_accent": "one board",
+    "title_trail": ".",
+    "description": "Loadline pulls your load boards, driver check-calls and invoicing into a single dispatch view — so the 4pm scramble is a glance instead of nine browser tabs and a phone tree.",
+    "cta_primary": "Create account",
+    "cta_secondary": "Sign in",
+    "reassurance": "Demo data. No credit card, no carrier onboarding, nothing to migrate.",
+    "metrics": {
+      "loads": "42 loads tonight",
+      "carriers": "18 carriers",
+      "lanes": "6 lanes"
+    }
+  },
+  "board": {
+    "aria_label": "Tonight's dispatch board",
+    "title": "Tonight's board",
+    "subtitle": "Live check-call ages",
+    "filters": {
+      "all": "All",
+      "rolling": "Rolling",
+      "late": "Late",
+      "delivered": "Delivered"
+    },
+    "columns": {
+      "ref": "Load",
+      "lane": "Lane",
+      "driver": "Driver",
+      "status": "Status",
+      "check_call": "Last check-call",
+      "margin": "Margin"
+    },
+    "status": {
+      "rolling": "Rolling",
+      "late": "Late",
+      "delivered": "Delivered"
+    },
+    "check_call_minutes": "{{count}}m ago",
+    "stale_hint": "Over 90 minutes without a check-call",
+    "footer": "Sample data — this board is a static demo, not a wired feature."
+  },
+  "cost": {
+    "title": "Where the day actually goes",
+    "subtitle": "The three numbers dispatchers give when asked why the day ran long.",
+    "cards": {
+      "calls": {
+        "value": "3.5 hrs",
+        "label": "On check-calls",
+        "description": "Per dispatcher, per shift — most of it re-asking where a truck is because the last answer went into a notebook."
+      },
+      "tabs": {
+        "value": "9 tabs",
+        "label": "Open load boards",
+        "description": "Rates in one tab, tracking in another, the customer's portal in a third. Nothing agrees with anything."
+      },
+      "invoice": {
+        "value": "11 days",
+        "label": "To invoice",
+        "description": "Paperwork lands late, so cash lands later. The margin you booked is not the margin you keep."
+      }
+    }
+  },
+  "features": {
+    "board": {
+      "eyebrow": "Dispatch board",
+      "title": "The board is the product",
+      "description": "Lanes, drivers, ETAs and margin in one row each, sorted by the thing that actually goes wrong: how long it has been since anyone heard from the truck. Rows past 90 minutes surface themselves.",
+      "points": [
+        "One row per load — no drill-down to see status",
+        "Check-call age instead of a stale timestamp",
+        "Margin visible while you are still deciding"
+      ],
+      "panel": {
+        "title": "Check-call ledger",
+        "rows": [
+          "LL-4818 · voice · 214m ago · no answer",
+          "LL-4809 · SMS · 38m ago · at receiver",
+          "LL-4794 · app · 6m ago · delivered, BOL attached"
+        ]
+      }
+    },
+    "invoicing": {
+      "eyebrow": "Invoicing",
+      "title": "Paperwork closes the load, not the week",
+      "description": "The BOL is attached at delivery, the invoice drafts itself from the rate confirmation, and the load closes the same shift it delivered. No Friday reconciliation ritual.",
+      "points": [
+        "Rate confirmation becomes the invoice draft",
+        "BOL captured at delivery, attached to the load",
+        "Aging by customer, not by spreadsheet tab"
+      ],
+      "panel": {
+        "title": "Load close-out",
+        "rows": [
+          "Rate con · $2,150 · matched",
+          "BOL · attached at 14:22",
+          "Invoice · drafted · awaiting send"
+        ]
+      }
+    }
+  },
+  "next": {
+    "title": "What happens after you sign up",
+    "subtitle": "Three steps, same shift.",
+    "steps": {
+      "account": {
+        "index": "01",
+        "title": "Create the account",
+        "description": "Email and password. No sales call, no implementation window."
+      },
+      "import": {
+        "index": "02",
+        "title": "Import tonight's loads",
+        "description": "Paste a rate confirmation or upload the spreadsheet you already keep."
+      },
+      "dispatch": {
+        "index": "03",
+        "title": "Dispatch from the board",
+        "description": "Assign drivers, log check-calls, and close loads out as they deliver."
+      }
+    }
+  },
+  "cta": {
+    "title": "Run tonight's board on Loadline",
+    "description": "Start with the loads you already have. If it is not faster than your spreadsheet by the end of the shift, nothing was migrated.",
+    "primary": "Create account",
+    "secondary": "Sign in"
+  },
+  "footer": {
+    "disclaimer": "Loadline is a fictional product. This page is a sample marketing surface inside the Cloudflare SaaS Starter, built to demonstrate the design pipeline — every colour on it comes from the starter's existing tokens.",
+    "back": "Back to the starter"
+  }
+}

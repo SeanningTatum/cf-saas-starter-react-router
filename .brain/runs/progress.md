@@ -21,6 +21,13 @@
 
 ---
 
+## 2026-07-30 — shipped sample-saas-landing: verify-done full pass 2026-07-30: typecheck PASS, 269/269 unit tests (6 new pinning board dataset invariants + the no-ra
+- branch: `feat/design-intelligence`
+- in-progress feature: none
+- run note: none
+
+---
+
 ## 2026-07-30 — otel-tracing shipped as PR #20 (feat/otel-tracing, commits 1508573 + 8858b01). Pre-PR Greptile review confidence 4/5: 2 P2 findings — dropped-count-on-export-failure auto-fixed, try/catch simplification declined (violates no-try/catch non-negotiable + CI sweep). Live OTLP trace evidence in verifications/2026-07-29.md. User's uncommitted ui-ux-pro-max brain edits left out of the PR.
 - branch: `feat/otel-tracing`
 - in-progress feature: none
