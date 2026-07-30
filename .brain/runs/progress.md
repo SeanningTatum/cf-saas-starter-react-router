@@ -21,6 +21,14 @@
 
 ---
 
+## 2026-07-30 — Released v1.5.0 'The Request Explains Itself' (squash 0ae0796, tag v1.5.0): PR #20 otel-tracing — env-driven OTLP span export (no OTel SDK), traceId-correlated logs, db spans free via effect-utils, span-instrumenter sub-agent, MCP debug recipe. Tests 262 → 301. CHANGELOG + progress updated.
+- branch: `main`
+- in-progress feature: none
+- run note: none
+- next: pick an OTLP collector for the reference deployment (wrangler secret put OTEL_*) + wire its MCP server for agent trace debugging; the deploy.yml/preview.yml real-IDs gating follow-up from 2026-07-27 still open.
+
+---
+
 ## 2026-07-29 — shipped otel-tracing: verify-done full pass: typecheck PASS, 301/301 unit tests, e2e smoke 2/2 (isolated port — stray unrelated dev server on 
 - branch: `main`
 - in-progress feature: none
