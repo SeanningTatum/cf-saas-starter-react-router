@@ -21,6 +21,14 @@
 
 ---
 
+## 2026-07-29 — Live eval gate built + first baseline on PR #19 (b44d938): scripts/eval-admin-insights.sh + scripts/ai-eval-proxy (OpenAI-compatible proxy over the AI binding — no API token, wrangler login only; normalizes promptfoo's injected max_tokens 1024/temperature 0, strips reasoning_content). Live runs surfaced 3 real findings: (1) kimi-k2.5 reasoning unbounded → empty content/60s upstream timeout, fixed with reasoning_effort low now in production via prompt.effort; (2) promptfoo default injection; (3) sparse-rule label mismatches → system prompt tightened. evals/2026-07-29-baseline.json committed (14/7/2) as gate documentation — Cloudflare minor outage degraded the upstream all evening; clean re-run pending.
+- branch: `beaver/283411c1`
+- in-progress feature: none
+- run note: none
+- next: Clean baseline re-run when upstream recovers (./scripts/eval-admin-insights.sh --max-concurrency 2); then CI green check on PR #19
+
+---
+
 ## 2026-07-29 — PR #19 opened for feat-007 ai-admin-insights via /create-pr-with-review: 4 commits (skills install, feature, brain docs, Greptile fixes 1a1d420). Greptile pre-PR review: 5 findings, 4 auto-fixed (silent-502 logging, client-message leak, date pattern, not_contains semantics), 1 escalated (rate limiting → user deferred as follow-up). Browser verification: 3 independent PASS runs agreed.
 - branch: `beaver/283411c1`
 - in-progress feature: none

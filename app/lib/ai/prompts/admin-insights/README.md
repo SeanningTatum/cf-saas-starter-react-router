@@ -34,8 +34,8 @@ no model calls. The live gate replays the golden set against the real model
 through the *same* graders:
 
 ```bash
-./scripts/eval-admin-insights.sh                 # console table
-./scripts/eval-admin-insights.sh --output <file> # also write a baseline artifact
+./scripts/eval-prompt.sh admin-insights                 # console table
+./scripts/eval-prompt.sh admin-insights --output <file> # also write a baseline artifact
 ```
 
 Requirements: `wrangler login` (the script boots a local proxy worker,
@@ -64,10 +64,11 @@ gate working end-to-end, not as the accepted baseline:
   sparse rule was ambiguously worded; it has since been tightened in v1
   (inconsistent-snapshot clause; empty growth series = flat trend).
 - The 2 errors are upstream 60s timeouts — infra, not contract.
-- **Pending:** one clean full re-run (`./scripts/eval-admin-insights.sh
-  --output app/lib/ai/prompts/admin-insights/evals/<date>-baseline.json`,
-  `--max-concurrency 2`) once the upstream is healthy; use
-  `--filter-failing <prev-output.json>` to retry only non-passing cases.
+- **Pending:** one clean full re-run (`./scripts/eval-prompt.sh
+  admin-insights --max-concurrency 2 --output
+  app/lib/ai/prompts/admin-insights/evals/<date>-baseline.json`) once the
+  upstream is healthy; use `--filter-failing <prev-output.json>` to retry
+  only non-passing cases.
 
 ## Version changelog
 

@@ -1,0 +1,19 @@
+# yaml-language-server: $schema=https://promptfoo.dev/config-schema.json
+# Generic live-eval config for any prompt module — never run directly; use
+#   ./scripts/eval-prompt.sh <module-name>
+# which sets PROMPT_MODULE, regenerates the proxy's response_format from the
+# module's prompt.ts, and boots the local Workers AI proxy (no API token,
+# just wrangler login). Verify `config` keys against the installed promptfoo
+# version — its schema moves.
+description: prompt module live eval (${PROMPT_MODULE})
+providers:
+  # The proxy injects response_format / max_tokens / reasoning_effort from
+  # the module (see scripts/ai-eval-proxy/gen-schema.ts). The model id in
+  # each module's prompt.ts must match this id.
+  - id: openai:chat:@cf/moonshotai/kimi-k2.5
+    config:
+      apiBaseUrl: http://127.0.0.1:8790/v1
+      apiKey: local-eval-proxy
+prompts:
+  - file://prompt.ts
+tests: file://tests.ts
