@@ -1,0 +1,127 @@
+/**
+ * Loadline — a scoped design system for the `/demo` surface.
+ *
+ * WHY THIS FILE EXISTS
+ *   `/demo` markets a product that is not this repo, so dressing it in the starter's own
+ *   monochrome Linear/Cursor language proves nothing about the design pipeline — it only
+ *   proves the tokens were reused. This file is the honest test: a *different* visual
+ *   language, produced by the tier-2 research in
+ *   `.brain/features/sample-saas-landing/sample-saas-landing.md`, expressed without
+ *   forking `app/app.css`.
+ *
+ * HOW IT WORKS
+ *   `app/app.css` declares `@theme inline { --color-background: var(--background); ... }`,
+ *   so every Tailwind colour utility resolves through a CSS variable at use time. Redefining
+ *   those same variable NAMES under a scope selector therefore restyles everything inside
+ *   the scope — including untouched ShadCN components — with zero component edits and zero
+ *   risk to the rest of the app. Nothing here leaks past `[data-surface="loadline"]`.
+ *
+ * SOURCE (reference lock — do not average this back toward the starter's palette)
+ *   Refero style `15fd028d-c493-47a9-8e69-0a59c6fdb14b` — Andercore, "dark control panel,
+ *   sharp red accent". Values are that reference's palette converted from hex to oklch to
+ *   match the notation `app/app.css` already uses:
+ *
+ *     Midnight Void   #0b0405  canvas
+ *     Dark Shroud     #150e0f  raised surface
+ *     Ghostly Gray    #382e30  hairline borders + dividers
+ *     Pure White      #ffffff  primary text
+ *     Crimson Action  #e32735  primary CTA / urgent highlight — nothing else
+ *     Slate Text      #858182  secondary text and labels
+ *
+ * DELIBERATE DEVIATIONS FROM THE REPO'S NORMS, AND WHY
+ *   1. This surface is DARK IN BOTH APP THEMES. The reference's own do/don't list says
+ *      "avoid light backgrounds; the system is built for a dark interface, and light themes
+ *      will contradict the brand's atmosphere." Honouring a reference lock means honouring
+ *      that too, so the scope does not participate in the light/dark toggle. The toggle keeps
+ *      working for the rest of the app; only this one marketing surface opts out.
+ *   2. Radius drops to 4px for interactive elements and 0 for content containers, per the
+ *      reference. The starter's 6px `rounded-md` does not apply inside the scope.
+ *   3. Type keeps Inter — the reference names Inter as Archivo's substitute, so no webfont is
+ *      added and no external request is made. The trait that carries over is the tight
+ *      -0.02em tracking, applied below.
+ */
+
+[data-surface="loadline"] {
+  /* Surfaces */
+  --background: oklch(0.121 0.017 7.8); /* Midnight Void */
+  --foreground: oklch(1 0 0); /* Pure White */
+  --card: oklch(0.173 0.012 8.8); /* Dark Shroud */
+  --card-foreground: oklch(1 0 0);
+  --popover: oklch(0.173 0.012 8.8);
+  --popover-foreground: oklch(1 0 0);
+
+  /* Accent — CTA only. The reference is explicit: nothing else may use crimson. */
+  --primary: oklch(0.592 0.219 24.2); /* Crimson Action */
+  --primary-foreground: oklch(1 0 0);
+
+  /* Secondary + muted: the reference's ghost treatments, no new hue */
+  --secondary: oklch(0.173 0.012 8.8);
+  --secondary-foreground: oklch(1 0 0);
+  --muted: oklch(0.173 0.012 8.8);
+  --muted-foreground: oklch(0.607 0.005 0.1); /* Slate Text */
+  --accent: oklch(0.313 0.015 4.4);
+  --accent-foreground: oklch(1 0 0);
+
+  /* Lines. Ghostly Gray does all separation work — the reference forbids shadows. */
+  --border: oklch(0.313 0.015 4.4);
+  --input: oklch(0.313 0.015 4.4);
+  --ring: oklch(0.592 0.219 24.2);
+
+  /*
+   * Status encoding. The reference bans additional saturated colours, so a load's state is
+   * carried by LIGHTNESS (white → slate) plus its text label, and crimson is reserved for the
+   * one state that is genuinely urgent — which the reference itself sanctions as an "urgent
+   * highlight". `--chart-2` is deliberately achromatic here.
+   */
+  --destructive: oklch(0.592 0.219 24.2);
+  --chart-1: oklch(1 0 0);
+  --chart-2: oklch(0.92 0 0);
+  --chart-3: oklch(0.607 0.005 0.1);
+  --chart-4: oklch(0.607 0.005 0.1);
+  --chart-5: oklch(0.313 0.015 4.4);
+
+  /*
+   * Shape: the reference specifies 4px on interactive elements and 0 on containers. ShadCN
+   * buttons use `rounded-md`, which `app/app.css` derives as `--radius - 2px`, so --radius must
+   * be 6px for buttons to land on the reference's 4px. Containers get `rounded-none` in the
+   * route rather than relying on the scale.
+   */
+  --radius: 0.375rem;
+
+  /* Type trait carried over from Archivo: compact, engineered tracking. */
+  letter-spacing: -0.02em;
+  color-scheme: dark;
+}
+
+/*
+ * The scope is dark regardless of the app-level theme class, so re-assert the same values
+ * under `.dark`. Without this, the `.dark` block in `app/app.css` wins on specificity and the
+ * surface would drift back toward the starter's palette when the user flips the toggle.
+ */
+.dark [data-surface="loadline"],
+[data-surface="loadline"].dark {
+  --background: oklch(0.121 0.017 7.8);
+  --foreground: oklch(1 0 0);
+  --card: oklch(0.173 0.012 8.8);
+  --card-foreground: oklch(1 0 0);
+  --popover: oklch(0.173 0.012 8.8);
+  --popover-foreground: oklch(1 0 0);
+  --primary: oklch(0.592 0.219 24.2);
+  --primary-foreground: oklch(1 0 0);
+  --secondary: oklch(0.173 0.012 8.8);
+  --secondary-foreground: oklch(1 0 0);
+  --muted: oklch(0.173 0.012 8.8);
+  --muted-foreground: oklch(0.607 0.005 0.1);
+  --accent: oklch(0.313 0.015 4.4);
+  --accent-foreground: oklch(1 0 0);
+  --border: oklch(0.313 0.015 4.4);
+  --input: oklch(0.313 0.015 4.4);
+  --ring: oklch(0.592 0.219 24.2);
+  --destructive: oklch(0.592 0.219 24.2);
+  --chart-1: oklch(1 0 0);
+  --chart-2: oklch(0.92 0 0);
+  --chart-3: oklch(0.607 0.005 0.1);
+  --chart-4: oklch(0.607 0.005 0.1);
+  --chart-5: oklch(0.313 0.015 4.4);
+  --radius: 0.375rem;
+}

@@ -52,6 +52,53 @@ test.describe("Demo landing (/demo)", () => {
     await expect(page.getByTestId("signup-email")).toBeVisible();
   });
 
+  test("runs its own scoped design system without leaking into the app", async ({
+    page,
+  }) => {
+    // The surface overrides the same token names the rest of the app uses, scoped to
+    // [data-surface="loadline"]. Two things must stay true: the scope really applies, and
+    // nothing escapes it. A stray token in app.css would break the second half silently.
+    await page.goto("/demo");
+    const scoped = await page.evaluate(() => {
+      const el = document.querySelector('[data-surface="loadline"]');
+      if (!el) return null;
+      const s = getComputedStyle(el);
+      return {
+        background: s.getPropertyValue("--background").trim(),
+        primary: s.getPropertyValue("--primary").trim(),
+        radius: s.getPropertyValue("--radius").trim(),
+      };
+    });
+    expect(scoped).not.toBeNull();
+    expect(scoped!.background).toBe("oklch(0.121 0.017 7.8)");
+    expect(scoped!.primary).toBe("oklch(0.592 0.219 24.2)");
+    expect(scoped!.radius).toBe("0.375rem");
+
+    // The reference this surface is locked to forbids light backgrounds, so the scope opts out
+    // of the app's theme toggle: its tokens must not change when `.dark` is applied.
+    await page.evaluate(() => document.documentElement.classList.add("dark"));
+    const afterDark = await page.evaluate(() =>
+      getComputedStyle(
+        document.querySelector('[data-surface="loadline"]')!
+      ).getPropertyValue("--background").trim()
+    );
+    expect(afterDark).toBe(scoped!.background);
+
+    // ...and the starter's own surfaces keep the starter's tokens.
+    await page.goto("/");
+    const root = await page.evaluate(() => {
+      const s = getComputedStyle(document.documentElement);
+      return {
+        background: s.getPropertyValue("--background").trim(),
+        radius: s.getPropertyValue("--radius").trim(),
+        scopedElements: document.querySelectorAll("[data-surface]").length,
+      };
+    });
+    expect(root.background).toBe("oklch(1 0 0)");
+    expect(root.radius).toBe("0.625rem");
+    expect(root.scopedElements).toBe(0);
+  });
+
   test("does not scroll sideways on a phone viewport", async ({ page }) => {
     // Regression guard: the header's control cluster overflowed a 390px viewport before
     // the chip and sign-in link were hidden below `sm`.

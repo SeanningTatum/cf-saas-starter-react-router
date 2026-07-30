@@ -15,6 +15,7 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import { LanguageSwitcher } from "@/components/language-switcher";
 import { cn } from "@/lib/utils";
 import { i18nServer } from "@/i18n/i18n.server";
+import "./loadline-theme.css";
 import {
   BOARD_ROWS,
   STATUS_DOT,
@@ -28,14 +29,18 @@ export const handle = { i18n: ["demo"] };
 /**
  * Sample marketing surface for a fictional freight-dispatch SaaS ("Loadline").
  *
- * Reference-locked to Orderful (refero style 9c657624) — alternating neutral/white section
- * bands, a dark framed product-UI panel as the hero's evidence, and a single accent reserved
- * for the primary CTA. Full decision ledger, including what was deliberately rejected:
- * `.brain/features/sample-saas-landing/sample-saas-landing.md`.
+ * This surface runs its OWN design system, scoped to `[data-surface="loadline"]` and defined in
+ * `./loadline-theme.css` — Andercore's dark control-panel language (refero style `15fd028d`)
+ * rather than the starter's monochrome Linear/Cursor direction. The structure below is
+ * reference-locked to Orderful (`9c657624`): alternating section bands, a framed product-UI
+ * panel as the hero's evidence, accent reserved for the primary CTA.
  *
- * Everything here is expressed with existing `app/app.css` semantic tokens — the board's dark
- * frame is an inverted surface (`bg-foreground`/`text-background`) rather than a literal dark
- * colour, so it flips correctly in dark mode.
+ * Because the scoped stylesheet redefines the same token NAMES the rest of the app uses, every
+ * class here stays semantic (`bg-card`, `text-muted-foreground`, `bg-primary`) and every
+ * untouched ShadCN component restyles itself. No literal colour appears in this file.
+ *
+ * Full decision ledger, including what was rejected and why the scope is dark in both app
+ * themes: `.brain/features/sample-saas-landing/sample-saas-landing.md`.
  */
 /**
  * `<title>` and `<meta name="description">` render outside the React tree, so `useTranslation`
@@ -64,7 +69,10 @@ export function meta({ data }: Route.MetaArgs) {
 
 export default function DemoLanding() {
   return (
-    <div className="min-h-svh bg-background">
+    <div
+      data-surface="loadline"
+      className="min-h-svh bg-background text-foreground"
+    >
       <TopBar />
       <main>
         <Hero />
@@ -141,7 +149,7 @@ function Hero() {
       className={cn(
         "relative overflow-hidden border-b border-border",
         // Borrowed from default.com (8bc1389b) as a decorative texture only — the dot colour
-        // is the border token, so it inverts with the theme and adds no new colour.
+        // is the scoped border token (Ghostly Gray), so it adds no new colour.
         "bg-[radial-gradient(var(--border)_1px,transparent_1px)] [background-size:18px_18px]"
       )}
     >
@@ -214,11 +222,11 @@ function DispatchBoard() {
   const filters = boardFilters();
 
   return (
-    <div className="min-w-0 overflow-hidden rounded-md border border-border bg-foreground text-background shadow-sm">
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-background/15 px-4 py-3">
+    <div className="min-w-0 overflow-hidden rounded-none border border-border bg-card text-card-foreground">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-4 py-3">
         <div className="flex flex-col">
           <span className="text-sm font-medium">{t("board.title")}</span>
-          <span className="font-mono text-[10px] uppercase tracking-wider text-background/70">
+          <span className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
             {t("board.subtitle")}
           </span>
         </div>
@@ -230,8 +238,10 @@ function DispatchBoard() {
               className={cn(
                 "rounded-full px-2.5 py-1 font-mono text-[10px] uppercase tracking-wider",
                 index === 0
-                  ? "bg-background/20 text-background"
-                  : "border border-background/20 text-background/70"
+                  // Crimson is CTA-only per the reference lock, so the active pill uses the
+                  // neutral raised surface instead of the accent.
+                  ? "bg-accent text-accent-foreground"
+                  : "border border-border text-muted-foreground"
               )}
             >
               {t(`board.filters.${filter.key}`)} {filter.count}
@@ -249,7 +259,7 @@ function DispatchBoard() {
           data-testid="demo-dispatch-board"
         >
           <thead>
-            <tr className="border-b border-background/15 font-mono text-[10px] uppercase tracking-wider text-background/70">
+            <tr className="border-b border-border font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
               <th scope="col" className="px-4 py-2 font-normal">
                 {t("board.columns.ref")}
               </th>
@@ -278,7 +288,7 @@ function DispatchBoard() {
         </table>
       </div>
 
-      <p className="border-t border-background/15 px-4 py-3 font-mono text-[10px] uppercase tracking-wider text-background/70">
+      <p className="border-t border-border px-4 py-3 font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
         {t("board.footer")}
       </p>
     </div>
@@ -290,10 +300,10 @@ function BoardRowCells({ row }: { row: BoardRow }) {
   const stale = isStaleCheckCall(row);
 
   return (
-    <tr className="border-b border-background/10 last:border-0 text-sm">
+    <tr className="border-b border-border last:border-0 text-sm">
       <td className="px-4 py-3 font-mono text-xs">{row.ref}</td>
       <td className="px-4 py-3">{row.lane}</td>
-      <td className="hidden px-4 py-3 text-background/70 sm:table-cell">
+      <td className="hidden px-4 py-3 text-muted-foreground sm:table-cell">
         {row.driver}
       </td>
       <td className="px-4 py-3">
@@ -312,7 +322,7 @@ function BoardRowCells({ row }: { row: BoardRow }) {
       <td
         className={cn(
           "px-4 py-3 text-right font-mono text-xs",
-          stale ? "text-background" : "text-background/70"
+          stale ? "text-foreground" : "text-muted-foreground"
         )}
       >
         {t("board.check_call_minutes", { count: row.checkCallAgeMinutes })}
@@ -348,7 +358,7 @@ function CostBand() {
 
         <div className="grid gap-4 md:grid-cols-3">
           {cards.map((card) => (
-            <Card key={card} className="h-full">
+            <Card key={card} className="h-full rounded-none shadow-none">
               <CardHeader className="gap-1.5">
                 <span className="font-mono text-3xl font-semibold tracking-tight">
                   {t(`cost.cards.${card}.value`)}
@@ -403,7 +413,7 @@ function FeatureBand({
             reversed && "lg:order-2"
           )}
         >
-          <span className="flex size-9 items-center justify-center rounded-md border border-border bg-card text-foreground">
+          <span className="flex size-9 items-center justify-center rounded-none border border-border bg-card text-foreground">
             {icon}
           </span>
           <span className="font-mono text-[11px] uppercase tracking-wider text-muted-foreground">
@@ -418,7 +428,7 @@ function FeatureBand({
           <ul className="flex flex-col gap-2 text-sm text-muted-foreground">
             {points.map((point) => (
               <li key={point} className="flex items-start gap-2.5">
-                <span className="mt-1.5 size-1.5 shrink-0 rounded-full bg-primary" />
+                <span className="mt-1.5 size-1.5 shrink-0 rounded-full bg-muted-foreground" />
                 {point}
               </li>
             ))}
@@ -426,18 +436,18 @@ function FeatureBand({
         </div>
 
         <div className={cn("w-full", reversed && "lg:order-1")}>
-          <div className="overflow-hidden rounded-md border border-border bg-foreground text-background shadow-sm">
-            <div className="flex items-center gap-2 border-b border-background/15 px-4 py-3">
-              <IconClockExclamation className="size-4 text-background/70" />
+          <div className="overflow-hidden rounded-none border border-border bg-card text-card-foreground">
+            <div className="flex items-center gap-2 border-b border-border px-4 py-3">
+              <IconClockExclamation className="size-4 text-muted-foreground" />
               <span className="text-sm font-medium">
                 {t(`features.${feature}.panel.title`)}
               </span>
             </div>
-            <ul className="divide-y divide-background/10">
+            <ul className="divide-y divide-border">
               {rows.map((row) => (
                 <li
                   key={row}
-                  className="px-4 py-3 font-mono text-xs text-background/80"
+                  className="px-4 py-3 font-mono text-xs text-muted-foreground"
                 >
                   {row}
                 </li>
@@ -469,9 +479,10 @@ function NextBand() {
           {steps.map((step) => (
             <li
               key={step}
-              className="flex flex-col gap-2 rounded-md border border-border bg-card p-6"
+              className="flex flex-col gap-2 rounded-none border border-border bg-card p-6"
             >
-              <span className="font-mono text-[11px] uppercase tracking-wider text-primary">
+              {/* Step numerals stay neutral — the reference reserves crimson for the CTA. */}
+              <span className="font-mono text-[11px] uppercase tracking-wider text-muted-foreground">
                 {t(`next.steps.${step}.index`)}
               </span>
               <span className="text-base font-medium">

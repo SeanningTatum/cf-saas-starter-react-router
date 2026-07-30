@@ -57,6 +57,36 @@ Reject: Orderful's #e42b0c + orange gradient · telegraf/Montserrat · 8px radiu
 | "What happens next" 3-step strip instead of a fake signup wizard | Flows layer (Mercury 11018, Square 1952) | Marketing landing → create account → credentials → onboarding checklist | Both reference flows front-load a single "get started" and show progress. The strip previews that sequence honestly without shipping a fake funnel |
 | Friction-reducer line under the CTAs | Flows layer | "no credit card required"-class reassurance at the entry point | Directly answers the migration-risk objection at the moment of the click |
 
+## The scoped design system (added after the first pass)
+
+**The first pass was not a real test of the pipeline.** It reused the starter's tokens, so Loadline came out looking like the starter — which proves the guardrail works, and proves nothing about whether the research can produce a *design system*. The surface now runs its own, defined in [`app/routes/demo/loadline-theme.css`](../../../app/routes/demo/loadline-theme.css) and scoped to `[data-surface="loadline"]`.
+
+Direction: **Andercore** (`15fd028d`) — "dark control panel, sharp red accent" — the logistics reference originally rejected as *primary* because its photography is unbuildable here. Its **token system** is buildable, so it owns colour, shape and density while Orderful keeps owning structure (band rhythm, framed product panel, alternating feature rows). Each source has a bounded job; neither was averaged into the other.
+
+| Token | Value | Source role |
+|---|---|---|
+| `--background` | `oklch(0.121 0.017 7.8)` | Midnight Void `#0b0405` — page canvas |
+| `--card` | `oklch(0.173 0.012 8.8)` | Dark Shroud `#150e0f` — raised surface (board frame, cards) |
+| `--border` / `--input` | `oklch(0.313 0.015 4.4)` | Ghostly Gray `#382e30` — all separation; reference forbids shadows |
+| `--foreground` | `oklch(1 0 0)` | Pure White — primary text |
+| `--muted-foreground` | `oklch(0.607 0.005 0.1)` | Slate Text `#858182` — labels, secondary copy |
+| `--primary` / `--ring` | `oklch(0.592 0.219 24.2)` | Crimson Action `#e32735` — **CTA only** |
+| `--destructive` | `oklch(0.592 0.219 24.2)` | same crimson, in the reference's sanctioned "urgent highlight" role (the late dot) |
+| `--chart-1…5` | achromatic white → slate | reference bans additional saturated hues, so status is encoded by lightness + text label |
+| `--radius` | `0.375rem` | so ShadCN's `rounded-md` (`--radius - 2px`) lands on the reference's 4px; containers use `rounded-none` for its 0px |
+
+**Why this works with zero component edits.** `app/app.css` maps `@theme inline { --color-*: var(--*) }`, so utilities resolve through variables at use time. Redefining the same names inside the scope restyles untouched ShadCN components: the `Button` renders crimson at 4px radius without a single prop change.
+
+**Deviations from repo norms, each with its source rule:**
+
+1. **Dark in both app themes.** The reference's own do/don't list says "avoid light backgrounds; … light themes will contradict the brand's atmosphere." Honouring a lock means honouring that, so the scope re-asserts its values under `.dark` and opts out of the toggle. The toggle still works everywhere else.
+2. **Square containers, 4px controls** instead of the starter's uniform 6px `rounded-md`.
+3. **Inter retained** — the reference names Inter as Archivo's substitute, so no webfont and no external request; the surviving trait is its `-0.02em` tracking, applied on the scope.
+
+**Accent discipline was audited in the browser, not assumed.** A first render leaked crimson onto the active filter pill, the feature-list bullets and the step numerals. After the fix, crimson paints exactly six elements: three CTAs, the eyebrow brand dot, the late-status dot, and the single hero accent word.
+
+**Non-leakage is verified, not asserted:** loading `/` in the same session shows root `--background: oklch(1 0 0)`, `--primary: oklch(0.205 0 0)`, `--radius: 0.625rem` and zero `[data-surface]` elements.
+
 ## How It Works
 
 Static presentational route — no loader data, no tRPC, no DB. All copy comes from the `demo` i18n namespace (`en` + `zh`); the board rows are a module-level constant of demo data whose labels are i18n keys.

@@ -161,6 +161,12 @@ Welcome row keeps `Welcome back, {name}!` but adds a one-line subtitle that poin
 - Don't add new colors or radius tokens to `app.css` for this pass — reuse existing.
 - Don't put emojis in the UI.
 
+## A surface with its own design system
+
+This document governs the **starter's** surfaces. A surface that markets a different product (or a white-label skin) may run its own visual language through a **scoped token override** — same variable names, new values, under a `[data-surface="…"]` selector, in a stylesheet next to its route. Rules and the non-leakage requirement: [`../rules/frontend.md`](../rules/frontend.md) "Scoped design systems".
+
+Worked example in-repo: [`app/routes/demo/loadline-theme.css`](../../app/routes/demo/loadline-theme.css) — the `/demo` surface runs Andercore's dark control-panel system (crimson CTA, 4px/0px radii, Ghostly Gray hairlines) while `/` and every other route keep the tokens above, verified unchanged in the same browser session.
+
 ## Re-running the research
 
 This direction came from Refero. To extend it (new marketing section, new surface) or re-open it (deliberate redesign), run [`/design-research`](../../.claude/commands/design-research.md) — it drives the `refero-design` skill across the three Refero layers (styles → screens → flows), cross-checks a11y with `ui-ux-pro-max`, and writes a decision ledger before any JSX. Requires the `refero` MCP server ([`.mcp.json`](../../.mcp.json), `REFERO_MCP_TOKEN`).

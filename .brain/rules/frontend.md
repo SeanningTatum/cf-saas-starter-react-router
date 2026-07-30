@@ -172,7 +172,39 @@ Rules for this repo:
 - **Every tier-2 change still ends in a browser walk** — see Verification below. Refero research is not proof.
 - If `REFERO_MCP_TOKEN` is unset the MCP tools are absent: fall back to the `refero-design` skill's bundled craft references + tier 1, and say so in the run note. Don't silently design from memory.
 
-**Guardrail — tokens win over both tools.** This repo already has a committed visual language: [`../codebase/design-system.md`](../codebase/design-system.md) (refero-derived Linear/Cursor direction) + the semantic CSS variables in `app/app.css`. `ui-ux-pro-max` and Refero output are **advisory on structure and behavior, never on raw color values**. Map every recommendation onto existing semantic tokens; if a genuinely new color is needed, add it via the "Adding a new color" steps above. Hardcoding a hex a tool printed is still an anti-pattern.
+### Scoped design systems — when a surface needs its *own* visual language
+
+Tier 2 sometimes produces a direction that is genuinely not this app's: a surface marketing a different product, a white-label skin, a microsite. "Tokens win" would flatten it back into the starter's monochrome — which is not a guardrail, it is a straitjacket. The escape hatch is a **scoped token override**, and it is the only sanctioned way to introduce a second visual language.
+
+**How.** `app/app.css` declares `@theme inline { --color-background: var(--background); … }`, so every Tailwind colour utility resolves through a CSS variable *at use time*. Redefine the **same variable names** under a scope selector and everything inside restyles — including untouched ShadCN components, with zero component edits:
+
+```css
+/* app/routes/<surface>/<name>-theme.css */
+[data-surface="loadline"] {
+  --background: oklch(0.121 0.017 7.8);
+  --primary: oklch(0.592 0.219 24.2);
+  --border: oklch(0.313 0.015 4.4);
+  --radius: 0.375rem;          /* rounded-md derives as --radius - 2px */
+}
+/* Re-assert under .dark if the surface must ignore the app theme (see rule 4 below). */
+.dark [data-surface="loadline"] { /* … same values … */ }
+```
+
+```tsx
+import "./loadline-theme.css";
+<div data-surface="loadline" className="min-h-svh bg-background text-foreground">
+```
+
+**Rules.**
+
+1. **Same token names, new values.** Never invent parallel names (`--loadline-bg`) — the point is that existing components pick the theme up for free. JSX inside the scope stays semantic (`bg-card`, `text-muted-foreground`, `bg-primary`); a literal colour in JSX is still an anti-pattern, scope or no scope.
+2. **Scope with a `data-surface` attribute on the route root**, and keep the stylesheet next to the route that imports it — not in `app/app.css`. The app-wide tokens must be readable without knowing about the exception.
+3. **Prove non-leakage.** Load an unrelated route in the same browser session and assert the root tokens are unchanged and the scope attribute is absent. Do it in the browser walk, not by reading the CSS.
+4. **Document every deviation from repo norms in the stylesheet header, with the source rule that justifies it.** Loadline is dark in both app themes because its reference's own do/don't list forbids light backgrounds — honouring a reference lock means honouring that too. A deviation with no cited source is drift.
+5. **Audit accent discipline before declaring done.** If the reference says the accent is CTA-only, count the painted elements in the browser and fix the leaks — bullets, pills and step numerals attract accents silently. Worked example: `.brain/features/sample-saas-landing/`.
+6. **The starter's tokens remain the default.** This is for a surface with a genuinely separate identity, not a way to dodge `design-system.md` on an ordinary page.
+
+**Guardrail — tokens win over both tools (outside a declared scope).** This repo already has a committed visual language: [`../codebase/design-system.md`](../codebase/design-system.md) (refero-derived Linear/Cursor direction) + the semantic CSS variables in `app/app.css`. `ui-ux-pro-max` and Refero output are **advisory on structure and behavior, never on raw color values**. Map every recommendation onto existing semantic tokens; if a genuinely new color is needed, add it via the "Adding a new color" steps above. Hardcoding a hex a tool printed is still an anti-pattern.
 
 **One design authority.** The generic `frontend-design` plugin was removed from [`.claude/settings.json`](../../.claude/settings.json) on purpose — three overlapping design skills means whichever fires first wins, and the generic one averages back toward default AI styling (`refero-design` forbids running it as a parallel authority). Tier 1 + tier 2 + the tokens are the whole stack.
 
