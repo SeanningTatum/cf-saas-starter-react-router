@@ -21,6 +21,14 @@
 
 ---
 
+## 2026-07-30 — Released v1.6.0 'A Design Sub-Agent For Your Design Needs' (squash 7e9d5d6, PR #21 squash-merged, branch deleted). Ships ui-builder + design-critic + design-audit + add-premium-surface recipe + /design-research + /build-feature workflow + scoped-design-systems + ui-ux-pro-max/refero wiring. Demo surface cut before merge. Deploy preview red on the pre-existing D1:Edit token scope.
+- branch: `main`
+- in-progress feature: none
+- run note: none
+- next: Two open follow-ups: (1) app-wide focus rings never paint — runs/2026-07-30-focus-ring-defect.md, needs its own PR; (2) add D1:Edit to CLOUDFLARE_API_TOKEN so preview.yml stops failing at per-PR database provisioning.
+
+---
+
 ## 2026-07-30 — Stripped /demo before merge (route, theme, board data, locales, i18n registration, e2e spec); feat-008 marked cut. Harness kept: ui-builder, design-critic, design-audit, add-premium-surface recipe, /build-feature workflow, scoped-design-systems convention, postmortem, screenshots. Gates green: typecheck, 301 unit/26 files, build, e2e (1 flake passed on retry), harness 10/10.
 - branch: `feat/design-intelligence`
 - in-progress feature: none
