@@ -192,10 +192,20 @@ export const tagToTRPC = <A, E, R>(
 // clean, logged 500 instead of a raw rejection.
 export const runProcedure = <A, E, R extends AppServices = AppServices>(
   runtime: ManagedRuntime.ManagedRuntime<AppServices, AppError>,
-  effect: Effect.Effect<A, E, R>
+  effect: Effect.Effect<A, E, R>,
+  options?: { readonly span?: string }
 ): Promise<A> =>
   runtime
-    .runPromiseExit(tagToTRPC(effect).pipe(Effect.annotateLogs({ layer: "trpc" })))
+    .runPromiseExit(
+      tagToTRPC(effect).pipe(
+        Effect.annotateLogs({ layer: "trpc" }),
+        // Root span per procedure — every db.* child span and every log's
+        // traceId hang off this. Name convention: `trpc.<router>.<procedure>`.
+        options?.span
+          ? Effect.withSpan(options.span, { kind: "server" })
+          : (self) => self
+      )
+    )
     .then((exit) =>
       Exit.match(exit, {
         onSuccess: (value) => value,

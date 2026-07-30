@@ -70,6 +70,7 @@ Stub the underlying client. Test happy path + each failure path. Pattern from [`
 - [ ] Errors tagged + mapped
 - [ ] Layer merged in `runtime.ts` + added to `AppServices` union
 - [ ] Unit test green (happy + failure)
+- [ ] Outbound calls wrapped in `Effect.withSpan("<service>.<op>", { kind: "client" })` — see [`.brain/codebase/observability.md`](../codebase/observability.md)
 - [ ] `services.md` + `integrations.md` updated
 
 ## Anti-patterns

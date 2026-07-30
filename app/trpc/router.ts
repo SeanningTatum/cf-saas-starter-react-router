@@ -37,7 +37,8 @@ const userRouter = createTRPCRouter({
           image: u.image,
           createdAt: u.createdAt,
         }));
-      })
+      }),
+      { span: "trpc.user.getUsers" }
     )
   ),
 
@@ -61,7 +62,8 @@ const userRouter = createTRPCRouter({
             userId: input,
             currentUserId: ctx.auth.user.id,
           });
-        })
+        }),
+        { span: "trpc.user.deleteUser" }
       )
     ),
 
@@ -73,7 +75,8 @@ const userRouter = createTRPCRouter({
         Effect.gen(function* () {
           const wf = yield* Workflows;
           return yield* wf.triggerExample(input);
-        })
+        }),
+        { span: "trpc.user.createWorkflow" }
       )
     ),
 });

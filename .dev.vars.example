@@ -8,3 +8,10 @@
 #   cp .dev.vars.example .dev.vars
 
 BETTER_AUTH_SECRET=change-me-openssl-rand-hex-16
+
+# Optional — OTLP trace export (see .brain/codebase/observability.md).
+# Unset = tracing export off (logs still carry traceId). Local viewer:
+# `otel-tui` or Jaeger listen on http://localhost:4318.
+# OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318
+# OTEL_EXPORTER_OTLP_HEADERS=Authorization=Bearer%20<token>
+# OTEL_SERVICE_NAME=cf-saas-starter

@@ -46,6 +46,7 @@ The runtime composes services into a single Layer in `app/runtime.ts` via `makeA
 | `AuthApi` | `app/services/auth.ts` | `app/AuthApi` | `{ auth: Auth, api: Auth["api"] }` — Layer built via factory `AuthApiLive(baseURL?)`, not a bare Layer |
 | `Workflows` | `app/services/workflows.ts` | `app/Workflows` | `{ exampleWorkflow, triggerExample }` |
 | `Session` | `app/services/session.ts` | `app/Session` | `{ session, user }` — built ad-hoc via `SessionLive(headers)`, **not** in the global runtime |
+| Tracing | `app/services/tracing.ts` | — (no Tag; `Layer.setTracer` + flush finalizer) | `TracingLayer(env)` — env-driven OTLP span export, `Layer.empty` when `OTEL_EXPORTER_OTLP_ENDPOINT` unset. See [`.brain/codebase/observability.md`](../codebase/observability.md) |
 | `CloudflareEnv` | `app/services/cloudflare.ts` | `app/CloudflareEnv` | The raw `Env` |
 | `Logger` | `app/services/logger.ts` | — (no Tag) | `LoggerLive` + `MinLogLevelLive` Layers — replace Effect's default Logger |
 
@@ -265,6 +266,18 @@ export default {
   },
 } satisfies ExportedHandler<Env>;
 ```
+
+## Tracing — spans on outbound calls
+
+Any service method that leaves the process (fetch, R2, AI, Better Auth) wraps the call in a client span:
+
+```typescript
+Effect.tryPromise({ try: ..., catch: ... }).pipe(
+  Effect.withSpan("resend.send", { kind: "client" })
+)
+```
+
+Naming, attribute rules (no PII), and the full architecture live in [`.brain/codebase/observability.md`](../codebase/observability.md). Logs inside a span automatically carry `traceId`/`spanId` — never annotate them manually.
 
 ## Logging — Effect logger vs imperative `loggers.X`
 

@@ -26,6 +26,7 @@ function runBulkUserAction<E>(
   ctx: { runtime: AppRuntime; auth: { user: { id: string } } },
   userIds: readonly string[],
   logEvent: string,
+  span: string,
   performAction: (
     repo: UserRepository,
     validUserIds: string[]
@@ -57,7 +58,8 @@ function runBulkUserAction<E>(
           })
         )
       )
-    )
+    ),
+    { span }
   );
 }
 
@@ -70,7 +72,8 @@ export const adminRouter = createTRPCRouter({
         Effect.gen(function* () {
           const repo = yield* UserRepository;
           return yield* repo.getUsers(input);
-        })
+        }),
+        { span: "trpc.admin.getUsers" }
       )
     ),
 
@@ -82,7 +85,8 @@ export const adminRouter = createTRPCRouter({
         Effect.gen(function* () {
           const repo = yield* UserRepository;
           return yield* repo.getUser(input);
-        })
+        }),
+        { span: "trpc.admin.getUser" }
       )
     ),
 
@@ -97,7 +101,8 @@ export const adminRouter = createTRPCRouter({
             ...input,
             currentUserId: ctx.auth.user.id,
           });
-        })
+        }),
+        { span: "trpc.admin.updateUser" }
       )
     ),
 
@@ -112,7 +117,8 @@ export const adminRouter = createTRPCRouter({
             ...input,
             currentUserId: ctx.auth.user.id,
           });
-        })
+        }),
+        { span: "trpc.admin.banUser" }
       )
     ),
 
@@ -124,7 +130,8 @@ export const adminRouter = createTRPCRouter({
         Effect.gen(function* () {
           const repo = yield* UserRepository;
           return yield* repo.unbanUser(input);
-        })
+        }),
+        { span: "trpc.admin.unbanUser" }
       )
     ),
 
@@ -139,14 +146,15 @@ export const adminRouter = createTRPCRouter({
             ...input,
             currentUserId: ctx.auth.user.id,
           });
-        })
+        }),
+        { span: "trpc.admin.deleteUser" }
       )
     ),
 
   bulkBanUsers: adminProcedure
     .input(Schema.standardSchemaV1(BulkBanUsersInput))
     .mutation(({ ctx, input }) =>
-      runBulkUserAction(ctx, input.userIds, "users.bulk_banned", (repo, validUserIds) =>
+      runBulkUserAction(ctx, input.userIds, "users.bulk_banned", "trpc.admin.bulkBanUsers", (repo, validUserIds) =>
         repo.bulkBanUsers({
           userIds: validUserIds,
           reason: input.reason,
@@ -158,7 +166,7 @@ export const adminRouter = createTRPCRouter({
   bulkDeleteUsers: adminProcedure
     .input(Schema.standardSchemaV1(BulkDeleteUsersInput))
     .mutation(({ ctx, input }) =>
-      runBulkUserAction(ctx, input.userIds, "users.bulk_deleted", (repo, validUserIds) =>
+      runBulkUserAction(ctx, input.userIds, "users.bulk_deleted", "trpc.admin.bulkDeleteUsers", (repo, validUserIds) =>
         repo.bulkDeleteUsers({ userIds: validUserIds })
       )
     ),
@@ -170,6 +178,7 @@ export const adminRouter = createTRPCRouter({
         ctx,
         input.userIds,
         "users.bulk_role_updated",
+        "trpc.admin.bulkUpdateUserRoles",
         (repo, validUserIds) =>
           repo.bulkUpdateUserRoles({ userIds: validUserIds, role: input.role }),
         { role: input.role }

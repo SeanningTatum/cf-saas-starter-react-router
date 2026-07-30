@@ -21,6 +21,21 @@
 
 ---
 
+## 2026-07-29 — shipped otel-tracing: verify-done full pass: typecheck PASS, 301/301 unit tests, e2e smoke 2/2 (isolated port — stray unrelated dev server on 
+- branch: `main`
+- in-progress feature: none
+- run note: none
+
+---
+
+## 2026-07-29 — feat-007 otel-tracing added to feature_list.json (in-progress)
+- branch: `main`
+- in-progress feature: feat-007 (otel-tracing)
+- run note: none yet
+- next: registered in `feature_list.json` + `.brain/features/otel-tracing/otel-tracing.md` created; begin design of custom Effect Tracer (OTLP JSON export via fetch, no-op when endpoint unset) + logger traceId/spanId correlation.
+
+---
+
 ## 2026-07-29 — Released v1.4.0 'Every Test Names Its Victim' (squash 067bfc2, tag v1.4.0): #18 test-author + verify-done gate hardening via 6-round greploop (3/5 → 5/5), #17 tRPC isDev production fix. CHANGELOG + progress updated; preview.yml red is the known placeholder-IDs issue.
 - branch: `main`
 - in-progress feature: none
