@@ -106,7 +106,7 @@ function Nav() {
       <div className="mx-auto flex max-w-[76rem] items-center justify-between gap-6 px-6 py-4">
         <div className="flex items-center gap-2.5">
           <span
-            className="beacon size-1.5 rounded-full bg-[color:var(--signal)]"
+            className="beacon size-1.5 rounded-full bg-[color:var(--text-lo)]"
             aria-hidden="true"
           />
           <span className="font-display text-[15px] font-semibold">
@@ -205,7 +205,7 @@ function Hero() {
         <div className="rise flex flex-col items-start gap-7">
           <span className="inline-flex items-center gap-2 rounded-full border border-[color:var(--line-strong)] bg-[color:var(--ink-1)] py-1.5 pr-3.5 pl-2.5">
             <span
-              className="beacon size-1.5 rounded-full bg-[color:var(--signal)]"
+              className="beacon size-1.5 rounded-full bg-[color:var(--text-lo)]"
               aria-hidden="true"
             />
             <Legend className="text-[color:var(--text-hi)]">
@@ -270,7 +270,7 @@ function BoardPanel({ minutes }: { minutes: number }) {
       <div className="flex items-center justify-between gap-4 border-b border-[color:var(--line)] bg-[color:var(--ink-2)] px-4 py-3">
         <div className="flex items-center gap-2.5">
           <span
-            className="beacon size-1.5 rounded-full bg-[color:var(--signal)]"
+            className="beacon size-1.5 rounded-full bg-[color:var(--text-lo)]"
             aria-hidden="true"
           />
           <span className="font-data text-[11px] tracking-tight text-[color:var(--text-hi)]">
@@ -364,17 +364,20 @@ function PanelRow({ row, minutes }: { row: BoardRow; minutes: number }) {
           {t(`manifest.status.${row.status}`)}
         </span>
       </td>
-      <td
-        className={cn(
-          "font-data px-3.5 py-3 pr-4 text-right text-[12px] whitespace-nowrap",
-          alert
-            ? "text-[color:var(--signal)]"
-            : stale
-              ? "text-[color:var(--text-hi)]"
-              : "text-[color:var(--text-lo)]"
-        )}
-      >
-        {t("manifest.check_call_minutes", { count: age })}
+      {/* The signal sits on the figure, not on the cell: the alarming thing is the number, and
+          scoping it that way keeps the accent off everything that merely lives in the same cell. */}
+      <td className="font-data px-3.5 py-3 pr-4 text-right text-[12px] whitespace-nowrap text-[color:var(--text-lo)]">
+        <span
+          className={cn(
+            alert
+              ? "text-[color:var(--signal)]"
+              : stale
+                ? "text-[color:var(--text-hi)]"
+                : undefined
+          )}
+        >
+          {t("manifest.check_call_minutes", { count: age })}
+        </span>
         {stale ? (
           <span className="sr-only"> — {t("manifest.stale_hint")}</span>
         ) : null}
@@ -394,8 +397,11 @@ function Board() {
       <div className="mx-auto max-w-[76rem] px-6 py-16 lg:py-20">
         <div className="flex flex-col gap-10 lg:flex-row lg:items-end lg:justify-between">
           <div className="flex items-end gap-5">
+            {/* Scale, not hue. At 7rem this figure already dominates the section; painting it
+                amber too spent the signal on a number that is narrating, not alarming. The
+                through-line to the board row is the datum itself — same minutes, same climb. */}
             <span
-              className="font-display text-[color:var(--signal)] text-[5.5rem] leading-[0.85] font-semibold sm:text-[7rem]"
+              className="font-display text-[color:var(--text-hi)] text-[5.5rem] leading-[0.85] font-semibold sm:text-[7rem]"
               data-testid="demo-monument-figure"
             >
               {minutes}
@@ -494,8 +500,10 @@ function LedgerPanel({ kind }: { kind: "checkcall" | "invoice" }) {
             className={cn(
               "font-data flex items-baseline gap-3 px-4 py-3 text-[12px] leading-relaxed",
               index > 0 && "border-t border-[color:var(--line)]",
+              // The escalated line leads by brightness, not by hue — a log's newest entry is
+              // emphasis, and amber on this surface means a load is dark.
               index === 0 && kind === "checkcall"
-                ? "text-[color:var(--signal)]"
+                ? "text-[color:var(--text-hi)]"
                 : "text-[color:var(--text-lo)]"
             )}
           >

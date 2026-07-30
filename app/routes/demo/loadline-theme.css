@@ -33,7 +33,26 @@
   --text-hi: #f3f4f6;
   --text-lo: #9aa1a9;
 
-  /* One signal. Amber = sodium light, night work, and the only thing on the page that alarms. */
+  /**
+   * One signal. Amber = sodium light, night work, and the only thing on the page that alarms.
+   *
+   * SPEND IT ON EXACTLY TWO THINGS. An earlier pass wore amber in twelve places (7.3% of painted
+   * elements) — the wordmark, three "live" beacons, a 7rem figure, a log line — and at that
+   * density it had stopped being a signal and become brand paint. The budget is now:
+   *
+   *   1. the primary action  — the three `Start free` fills (masthead, hero, sign-off)
+   *   2. the one alarm       — LL-4818: the row's leading rule + warmed ground, its `Dark` pill,
+   *                            the pill's pulse, and the minute count that keeps climbing
+   *
+   * Everything else that used to be amber now separates by brightness (`--text-hi` over
+   * `--text-lo`) or by scale. Liveness that is *not* an alarm — the beacons — is neutral and
+   * carries its meaning in the pulse. Also amber but uncounted, and deliberately: the ambient
+   * glow (sodium light spilling off the hero and the sign-off) and the focus ring.
+   *
+   * If you add an amber element, remove one. Verify with
+   *   bun run design:audit -- --url …/demo --scope '[data-surface="loadline"]' --accent '#FFB02E'
+   * and keep `accent economy` under 4% of painted elements.
+   */
   --signal: #ffb02e;
   --signal-ink: #0b0c0e;
 
@@ -153,7 +172,13 @@
   box-shadow: inset 2px 0 0 var(--signal);
 }
 
-/** Live indicator. Slow, small, and it stops when asked. */
+/**
+ * Live indicator. Slow, small, and it stops when asked.
+ *
+ * Neutral by default — a beacon says "this is live", not "this is wrong", and hue is the wrong
+ * carrier for that. The pulse is what reads as liveness. Only the beacon inside the dark load's
+ * status pill is amber, because there the thing that is live is the alarm.
+ */
 @keyframes loadline-beacon {
   0%,
   100% {
