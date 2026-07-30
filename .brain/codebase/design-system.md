@@ -165,7 +165,7 @@ Welcome row keeps `Welcome back, {name}!` but adds a one-line subtitle that poin
 
 This document governs the **starter's** surfaces. A surface that markets a different product (or a white-label skin) may run its own visual language through a **scoped token override** — same variable names, new values, under a `[data-surface="…"]` selector, in a stylesheet next to its route. Rules and the non-leakage requirement: [`../rules/frontend.md`](../rules/frontend.md) "Scoped design systems".
 
-Worked example in-repo: [`app/routes/demo/loadline-theme.css`](../../app/routes/demo/loadline-theme.css) — the `/demo` surface runs Andercore's dark control-panel system (crimson CTA, 4px/0px radii, Ghostly Gray hairlines) while `/` and every other route keep the tokens above, verified unchanged in the same browser session.
+Worked example: the `/demo` surface (removed before merge — see [`features/sample-saas-landing/sample-saas-landing.md`](../features/sample-saas-landing/sample-saas-landing.md)) ran a complete dark product-page system of its own — its own canvas, panels, accent, type pairing and radius scale — while `/` and every other route kept the tokens above, verified unchanged in the same browser session and pinned by an e2e test in both directions. The technique and its rules are in [`../rules/frontend.md`](../rules/frontend.md) "Scoped design systems"; the recipe that uses it is [`../recipes/add-premium-surface.md`](../recipes/add-premium-surface.md).
 
 ## Re-running the research
 

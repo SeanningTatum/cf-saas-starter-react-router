@@ -4,12 +4,14 @@
  * The `design-critic` sub-agent judges taste. This script measures the mechanics taste sits on, so
  * the critic argues about the right things and nobody has to take "it looks premium" on faith.
  *
- * Five passes of `/demo` were rejected by a human reviewer. Every rejection traced to something on
- * this list: no real typeface, no depth, an accent spent everywhere, no product surface shown, or a
- * still page for a subject that moves. Those are all countable, so they get counted.
+ * Four passes of a sample surface were rejected by a human reviewer before one landed. Every rejection
+ * traced to something on this list: no real typeface, no depth, an accent spent everywhere, no product
+ * surface shown, or a still page for a subject that moves. Those are all countable, so they get
+ * counted. History: `.brain/runs/2026-07-30-design-slop-postmortem.md`.
  *
- *   bun run design:audit -- --url http://localhost:5173/demo --scope '[data-surface="loadline"]'
- *   bun run design:audit -- --url … --accent '#FFB02E'      # accent economy check
+ *   CI=1 bun run dev --port 5231     # CI=1 skips the Workers-AI remote-bindings proxy session
+ *   bun run design:audit -- --url http://localhost:5231/<route> --scope '[data-surface="<name>"]'
+ *   bun run design:audit -- --url … --accent '#RRGGBB'      # accent economy check
  *
  * Exit code is 0 unless a HARD check fails (horizontal overflow, contrast below AA, motion that
  * ignores prefers-reduced-motion). Everything else reports and lets the human decide — a low

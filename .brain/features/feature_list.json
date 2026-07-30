@@ -109,10 +109,10 @@
       "name": "Sample SaaS Landing (Loadline)",
       "slug": "sample-saas-landing",
       "doc": ".brain/features/sample-saas-landing/sample-saas-landing.md",
-      "description": "Public /demo marketing surface for a fictional freight dispatch SaaS \u2014 the working proof of the two-tier design gate (Refero reference lock + ui-ux-pro-max a11y cross-check, expressed only in existing app.css tokens).",
+      "description": "Throwaway proof surface for the design gate (/demo, fictional freight product). Built, rebuilt five times, then removed before merge by design \u2014 the harness it produced is the deliverable. Kept as the record of what four rejections taught.",
       "dependencies": [],
-      "status": "shipped",
-      "evidence": "verify-done full pass 2026-07-30: typecheck PASS, 269/269 unit tests (6 new pinning board dataset invariants + the no-raw-colour guardrail), build PASS, e2e 2/2 on E2E_PORT=5178 (5173 held by a stray process), browser walk PASS \u2014 verifications/2026-07-30.md: 7 steps across light/dark/zh/keyboard/mobile, contrast 4.74-19.80 on four critical pairs, zero JS+network errors, 2 defects found and fixed (mobile top-bar overflow, status-colour role).",
+      "status": "cut",
+      "evidence": "cut 2026-07-30: route + locales + specs removed before merge, deliberately. What it produced and what survives: ui-builder, design-critic, scripts/design-audit.ts, recipes/add-premium-surface.md, the scoped-design-systems convention, and runs/2026-07-30-design-slop-postmortem.md. Screenshots retained as evidence.",
       "owners": [
         "sean"
       ]

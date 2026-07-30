@@ -199,7 +199,8 @@ Tier 2 sometimes produces a direction that is genuinely not this app's: a surfac
 **How.** `app/app.css` declares `@theme inline { --color-background: var(--background); … }`, so every Tailwind colour utility resolves through a CSS variable *at use time*. Redefine the **same variable names** under a scope selector and everything inside restyles — including untouched ShadCN components, with zero component edits:
 
 ```css
-/* app/routes/<surface>/<name>-theme.css */
+/* app/routes/<surface>/<name>-theme.css — worked example: the removed /demo surface, see
+   features/sample-saas-landing/sample-saas-landing.md */
 [data-surface="loadline"] {
   --background: oklch(0.121 0.017 7.8);
   --primary: oklch(0.592 0.219 24.2);
@@ -221,7 +222,7 @@ import "./loadline-theme.css";
 2. **Scope with a `data-surface` attribute on the route root**, and keep the stylesheet next to the route that imports it — not in `app/app.css`. The app-wide tokens must be readable without knowing about the exception.
 3. **Prove non-leakage.** Load an unrelated route in the same browser session and assert the root tokens are unchanged and the scope attribute is absent. Do it in the browser walk, not by reading the CSS.
 4. **Document every deviation from repo norms in the stylesheet header, with the source rule that justifies it.** Loadline is dark in both app themes because its reference's own do/don't list forbids light backgrounds — honouring a reference lock means honouring that too. A deviation with no cited source is drift.
-5. **Audit accent discipline before declaring done.** If the reference says the accent is CTA-only, count the painted elements in the browser and fix the leaks — bullets, pills and step numerals attract accents silently. Worked example: `.brain/features/sample-saas-landing/`.
+5. **Audit accent discipline before declaring done.** If the reference says the accent is CTA-only, count the painted elements in the browser and fix the leaks — bullets, pills and step numerals attract accents silently. Worked example (surface removed, record kept): `.brain/features/sample-saas-landing/`.
 6. **The starter's tokens remain the default.** This is for a surface with a genuinely separate identity, not a way to dodge `design-system.md` on an ordinary page.
 
 **Guardrail — tokens win over both tools (outside a declared scope).** This repo already has a committed visual language: [`../codebase/design-system.md`](../codebase/design-system.md) (refero-derived Linear/Cursor direction) + the semantic CSS variables in `app/app.css`. `ui-ux-pro-max` and Refero output are **advisory on structure and behavior, never on raw color values**. Map every recommendation onto existing semantic tokens; if a genuinely new color is needed, add it via the "Adding a new color" steps above. Hardcoding a hex a tool printed is still an anti-pattern.

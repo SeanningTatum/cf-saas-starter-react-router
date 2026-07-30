@@ -90,16 +90,16 @@ anti-slop tell). Spend it on: the primary action, the one alarm state, live indi
 should too — a figure that climbs once a minute, a beacon that pulses, an 8px/400ms rise on load.
 Gate every one behind `prefers-reduced-motion`.
 
-**One memorable move, structural.** Not a device — a continuity. On `/demo` it is one load carried
-through three registers: hero panel row → the same row highlighted → its event ledger. Ask: what
-would a viewer describe tomorrow?
+**One memorable move, structural.** Not a device — a continuity. On the surface this recipe came from
+it was one datum carried through three registers: a row in the hero product panel → the same row
+highlighted as the alarm → its own event ledger. Ask: what would a viewer describe tomorrow?
 
 ## 5. Measure the mechanics before asking anyone's opinion
 
 ```bash
 CI=1 bun run dev --port 5231           # CI=1 skips the remote-bindings proxy session
 bun run design:audit -- --url http://localhost:5231/<route> \
-  --scope '[data-surface="<scope>"]' --accent '#FFB02E'
+  --scope '[data-surface="<scope>"]' --accent '#<your accent>'
 ```
 
 [`scripts/design-audit.ts`](../../scripts/design-audit.ts) reports surface levels, type faces,

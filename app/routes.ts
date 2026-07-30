@@ -17,14 +17,12 @@ export default [
   index("routes/home.tsx"),
   route("/login", "routes/authentication/login.tsx"),
   route("/sign-up", "routes/authentication/sign-up.tsx"),
-  route("/demo", "routes/demo/_index.tsx"),
 
   // Public routes with locale prefix (for SEO)
   ...prefix(":lng", [
     index("routes/home.tsx", { id: "lng-home" }),
     route("/login", "routes/authentication/login.tsx", { id: "lng-login" }),
     route("/sign-up", "routes/authentication/sign-up.tsx", { id: "lng-sign-up" }),
-    route("/demo", "routes/demo/_index.tsx", { id: "lng-demo" }),
   ]),
 
   // Dashboard routes — auth-protected, client-side i18n only

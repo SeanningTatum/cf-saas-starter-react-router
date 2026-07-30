@@ -1,6 +1,21 @@
-# Feature: Sample SaaS Landing (Loadline)
+# Feature: Sample SaaS Landing (Loadline) — CUT
 
 _Last updated: 2026-07-30_
+
+> **This surface no longer exists in the repo.** `/demo`, its route, theme, board data, locale files
+> and specs were removed before merge — deliberately, and from the start: it was a throwaway proof
+> that the design gate works, and every fork would otherwise have inherited a fictional freight
+> product plus two webfonts.
+>
+> **What it produced, and what survives:** [`ui-builder`](../../../.claude/agents/ui-builder.md) ·
+> [`design-critic`](../../../.claude/agents/design-critic.md) ·
+> [`scripts/design-audit.ts`](../../../scripts/design-audit.ts) ·
+> [`recipes/add-premium-surface.md`](../../recipes/add-premium-surface.md) · the scoped-design-systems
+> convention in [`rules/frontend.md`](../../rules/frontend.md) · and the lesson in
+> [`runs/2026-07-30-design-slop-postmortem.md`](../../runs/2026-07-30-design-slop-postmortem.md).
+> The screenshots in `screenshots/` are kept as the evidence trail for all five passes.
+>
+> Read the rest of this doc as history, not as documentation of live code.
 
 ## Purpose
 

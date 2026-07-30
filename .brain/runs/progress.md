@@ -21,6 +21,14 @@
 
 ---
 
+## 2026-07-30 — Stripped /demo before merge (route, theme, board data, locales, i18n registration, e2e spec); feat-008 marked cut. Harness kept: ui-builder, design-critic, design-audit, add-premium-surface recipe, /build-feature workflow, scoped-design-systems convention, postmortem, screenshots. Gates green: typecheck, 301 unit/26 files, build, e2e (1 flake passed on retry), harness 10/10.
+- branch: `feat/design-intelligence`
+- in-progress feature: none
+- run note: none
+- next: Merge PR #21 and cut the release
+
+---
+
 ## 2026-07-30 — Opened PR #21 (feat/design-intelligence): two-tier design gate (ui-ux-pro-max + refero MCP + /design-research) + /demo sample SaaS surface running its OWN scoped design system (Andercore tokens under [data-surface=loadline], zero leakage, e2e-pinned). Greptile 3/5 pre-PR, 3 findings fixed. Open follow-up: app-wide focus rings never paint (runs/2026-07-30-focus-ring-defect.md).
 - branch: `feat/design-intelligence`
 - in-progress feature: none
