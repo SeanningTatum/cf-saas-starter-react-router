@@ -398,9 +398,24 @@ function checkTaggedErrorsMapped() {
         if (isTagRef && ts.isStringLiteralLike(b)) mapped.add(b.text);
       }
     }
-    ts.forEachChild(n, collect);
+    // Do NOT descend into nested function bodies. Restricting the collector to
+    // the mapper's subtree only moved the dead-code plant site from file scope to
+    // an uncalled inner function; a branch inside one is still unreachable.
+    ts.forEachChild(n, (child) => {
+      const isNestedFn =
+        ts.isFunctionDeclaration(child) ||
+        ts.isFunctionExpression(child) ||
+        ts.isArrowFunction(child) ||
+        ts.isMethodDeclaration(child);
+      if (isNestedFn && !mapperSubtrees.includes(child)) return;
+      collect(child);
+    });
   };
-  for (const subtree of mapperSubtrees) collect(subtree);
+  for (const subtree of mapperSubtrees) {
+    // The mapper itself is a function — enter its body, then stop at any further
+    // function boundary.
+    ts.forEachChild(subtree, collect);
+  }
 
   for (const file of walkDir(errDir)) {
     if (isTestPath(file)) continue;
@@ -509,8 +524,56 @@ function checkTestParity() {
           });
           continue;
         }
-        // It must actually IMPORT the module it claims to test. A file of the
-        // right name testing something else satisfied the gate otherwise.
+        // AST, not text. Both of these were raw-regex checks, so `expect(` inside a
+        // comment or string satisfied them — and a file whose import AND assertion
+        // were both commented out passed rule 4 outright. That also made the
+        // "AST-swept" banner an overstatement, which is worse than the hole.
+        const testSf = ts.createSourceFile(found, testSrc, ts.ScriptTarget.Latest, true);
+        let importsSubjectAst = false;
+        let hasAssertionAst = false;
+        const scanTest = (n: ts.Node) => {
+          if (
+            (ts.isImportDeclaration(n) || ts.isExportDeclaration(n)) &&
+            n.moduleSpecifier &&
+            ts.isStringLiteralLike(n.moduleSpecifier) &&
+            new RegExp(`(^|/)${stem.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(\\.[jt]s)?$`).test(
+              n.moduleSpecifier.text
+            )
+          )
+            importsSubjectAst = true;
+          if (
+            ts.isCallExpression(n) &&
+            ts.isCallExpression(n) &&
+            n.arguments.length >= 0 &&
+            ((ts.isIdentifier(n.expression) && /^(expect|assert)$/.test(n.expression.text)) ||
+              (ts.isPropertyAccessExpression(n.expression) &&
+                ts.isIdentifier(n.expression.expression) &&
+                n.expression.expression.text === "assert"))
+          )
+            hasAssertionAst = true;
+          ts.forEachChild(n, scanTest);
+        };
+        scanTest(testSf);
+        if (!hasAssertionAst) {
+          violations.push({
+            rule: "4-unit-tests",
+            file: relative(ROOT, found),
+            line: 1,
+            detail: "no expect()/assert() call in the parsed source — a commented-out or assertion-free test is not coverage",
+          });
+          continue;
+        }
+        if (!importsSubjectAst) {
+          violations.push({
+            rule: "4-unit-tests",
+            file: relative(ROOT, found),
+            line: 1,
+            detail: `no import of "${stem}" in the parsed source — a test that does not load the module under test is not coverage`,
+          });
+          continue;
+        }
+
+        // Legacy text checks kept below as a cheap second opinion.
         const importsSubject = new RegExp(
           `(from|import)\\s*\\(?\\s*["'\`][^"'\`]*\\b${stem.replace(/[.*+?^\${}()|[\]\\]/g, "\\$&")}(\\.js|\\.ts)?["'\`]`
         ).test(testSrc);
