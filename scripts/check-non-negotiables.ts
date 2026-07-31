@@ -352,6 +352,32 @@ function checkTaggedErrorsMapped() {
    */
   const mapped = new Set<string>();
   const mapSf = ts.createSourceFile(mapFile, readFileSync(mapFile, "utf8"), ts.ScriptTarget.Latest, true);
+
+  /**
+   * Only branches INSIDE the mapper count. Collecting over the whole file meant a
+   * `case "X":` in an uncalled function satisfied the gate — presence of a branch
+   * is not reachability of a branch, and dead code is exactly what an evasion
+   * looks like.
+   */
+  const MAPPER_NAMES = new Set(["tagToTRPC", "appErrorToTRPC", "toTRPC"]);
+  const mapperSubtrees: ts.Node[] = [];
+  const findMappers = (n: ts.Node) => {
+    const named =
+      (ts.isFunctionDeclaration(n) && n.name && MAPPER_NAMES.has(n.name.text)) ||
+      (ts.isVariableDeclaration(n) && ts.isIdentifier(n.name) && MAPPER_NAMES.has(n.name.text));
+    if (named) mapperSubtrees.push(n);
+    ts.forEachChild(n, findMappers);
+  };
+  findMappers(mapSf);
+  if (mapperSubtrees.length === 0) {
+    violations.push({
+      rule: "3-tagged-errors",
+      file: relative(ROOT, mapFile),
+      line: 1,
+      detail: `no mapper function found (looked for ${[...MAPPER_NAMES].join(", ")}) — the tag mapping cannot be verified`,
+    });
+  }
+
   const collect = (n: ts.Node) => {
     if (ts.isCaseClause(n) && ts.isStringLiteralLike(n.expression)) mapped.add(n.expression.text);
     if (
@@ -374,7 +400,7 @@ function checkTaggedErrorsMapped() {
     }
     ts.forEachChild(n, collect);
   };
-  collect(mapSf);
+  for (const subtree of mapperSubtrees) collect(subtree);
 
   for (const file of walkDir(errDir)) {
     if (isTestPath(file)) continue;
@@ -488,6 +514,20 @@ function checkTestParity() {
         const importsSubject = new RegExp(
           `(from|import)\\s*\\(?\\s*["'\`][^"'\`]*\\b${stem.replace(/[.*+?^\${}()|[\]\\]/g, "\\$&")}(\\.js|\\.ts)?["'\`]`
         ).test(testSrc);
+        // A test that imports its subject, never calls it, and asserts nothing is
+        // not coverage — `void subject;` satisfied the import check alone.
+        if (importsSubject) {
+          const hasAssertion = /\bexpect\s*\(|\bassert(\.|\s*\()/.test(testSrc);
+          if (!hasAssertion) {
+            violations.push({
+              rule: "4-unit-tests",
+              file: relative(ROOT, found),
+              line: 1,
+              detail: "imports the module but contains no expect()/assert() — a test that asserts nothing is not coverage",
+            });
+            continue;
+          }
+        }
         if (!importsSubject) {
           violations.push({
             rule: "4-unit-tests",
