@@ -1,6 +1,12 @@
 # Design System — Boilerplate Surface
 
-> **Lock status: `ACTIVE`** — see [Lock status](#lock-status) before treating anything below as binding. This line is the single signal [`../rules/frontend.md`](../rules/frontend.md) reads; nothing else in the repo encodes it.
+> **Lock status — derive it, never assume it.** `ACTIVE` while `package.json` `name` is `cf-saas-starter-react-router`; **`NONE` under any other name**. One `grep` answers it:
+>
+> ```bash
+> grep -q '"name": "cf-saas-starter-react-router"' package.json && echo ACTIVE || echo NONE
+> ```
+>
+> Read [Lock status](#lock-status) before treating anything below as binding.
 
 > Visual language for the **public marketing surface** (home, login/sign-up, dashboard entry). Synthesized from refero `DESIGN.md` references for [Cursor](https://styles.refero.design/style/4e3b4717-84c8-4599-baaf-a343c3d619b6) and [Linear](https://styles.refero.design/style/90ce5883-bb24-4466-93f7-801cd617b0d1) — both target a developer audience and read as "credible, technical, polished."
 >
@@ -10,10 +16,14 @@
 
 This repo is a **template**. Apps are created from it (`/new-app`), which copies `.brain/` wholesale — so this file travels into products that have nothing to do with a developer-tooling boilerplate. The lock has to travel with a status, or every fork inherits Linear's palette for a product about restaurants.
 
-| Status | Means | Applies when |
+The status is **derived, not written down**, because a hardcoded word is exactly what a wholesale copy carries across unchanged. The discriminator is `package.json` `name`: the starter is `cf-saas-starter-react-router`, and `bun setup` rewrites that field to the new app's name on first run ([`scripts/first-time-setup.ts`](../../scripts/first-time-setup.ts), `updatePackageJsonName`). A fork therefore reads `NONE` without anyone remembering to flip anything.
+
+| Status | Means | Derived when |
 |---|---|---|
-| `ACTIVE` | The direction below is **binding**. Extending a surface = research *within* it. Only a deliberate redesign re-opens it, and that redesign updates this file in the same PR. | This repo — the starter itself (`package.json` name `cf-saas-starter-react-router`). |
-| `NONE` | **No direction is locked.** Everything below is a *worked example* of how to record one, not a direction to build toward. The first tier-2 surface must run [`/design-research`](../../.claude/commands/design-research.md) and rewrite this file with its own direction, references and do/don'ts. | Any app forked from the starter, before it has done its own design research. |
+| `ACTIVE` | The direction below is **binding**. Extending a surface = research *within* it. Only a deliberate redesign re-opens it, and that redesign updates this file in the same PR. | `package.json` `name` is `cf-saas-starter-react-router` — i.e. this repo, the starter itself. |
+| `NONE` | **No direction is locked.** Everything below is a *worked example* of how to record one, not a direction to build toward. The first tier-2 surface must run [`/design-research`](../../.claude/commands/design-research.md) and rewrite this file with its own direction, references and do/don'ts — which also replaces this derivation with that app's own `ACTIVE` statement. | Any other `name` — an app created from the starter, before it has done its own design research. |
+
+Edge case worth naming: an app that forked the starter but never ran `bun setup` still carries the starter's package name and will derive `ACTIVE` wrongly. If you know you are in a forked product, `NONE` is the answer regardless of what the `grep` says — the repo name, the README and the `## Overview` in `AGENTS.md` all settle it faster than the heuristic does.
 
 **If the status line above says `NONE`, stop treating the rest of this file as a spec.** The pillars, the Cursor/Linear reference lock, the stack badges, the "don't reintroduce the orange→yellow gradient" note — all of it describes the starter's own landing page. Read it for the *shape* of a design record (direction → tokens → components → do/don't → locked references), then replace the content.
 

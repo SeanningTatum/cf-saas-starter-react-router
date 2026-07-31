@@ -25,7 +25,7 @@ If you are unsure which tier you are in, you are in tier 1.
 Read these before your first edit. They are the source of truth and they change:
 
 1. `brain docs view rules/frontend.md` — tokens, `cn()`, ShadCN forms via `effectResolver`, `data-testid`, the design-intelligence tiers, scoped design systems, the tokens-win guardrail.
-2. `brain docs view codebase/design-system.md` — the committed visual language. **Read its `Lock status` line first.** `ACTIVE` = the direction below it binds. `NONE` = this repo was forked from the starter and the file describes the *starter's* landing page, not this product — treat it as an example of how a direction is recorded, follow only the repo conventions it shares with `rules/frontend.md` (semantic tokens, `cn()`, `data-testid`, i18n), and say in your report that you built without a locked direction.
+2. `brain docs view codebase/design-system.md` — the committed visual language. **Derive its `Lock status` first** (`grep -q '"name": "cf-saas-starter-react-router"' package.json && echo ACTIVE || echo NONE`). `ACTIVE` = the direction below it binds. `NONE` = this repo was forked from the starter and the file describes the *starter's* landing page, not this product — treat it as an example of how a direction is recorded, follow only the repo conventions it shares with `rules/frontend.md` (semantic tokens, `cn()`, `data-testid`, i18n), and say in your report that you built without a locked direction.
 3. `~/.claude/skills/refero-design/references/anti-ai-slop.md` — the nine tells. Read it *before* you choose anything, not after.
 4. For tier 2: `brain docs view recipes/add-premium-surface.md` — the step-by-step, including the craft moves in §4.
 
