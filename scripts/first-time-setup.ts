@@ -485,8 +485,68 @@ export async function setupGitHubCiCredentials(accountId?: string) {
 }
 
 // Main setup function
+/**
+ * Reset the inherited `.brain` state on a repo cloned from this template.
+ *
+ * This repo IS a template, and `.brain/` is committed — 96 files of it. So every
+ * cloned app was born believing it had already shipped this template's eight
+ * features, with a rolling cursor whose top entry was another project's release
+ * and five dated run notes to match. `brain progress` — the harness's own
+ * designated session-start recovery path — handed a fresh app someone else's
+ * state. That is context drift installed as a default, and it was silent because
+ * the inherited features are *half* true: the code really does implement auth,
+ * admin, and upload, so nothing reads as obviously stale.
+ *
+ * `brain init --state-only` wipes the state subsystem (features/, runs/, plans/,
+ * screenshots/, evals/) and keeps the docs (rules/, recipes/, codebase/,
+ * high-level-architecture/, HARNESS.md, verify.json) — the clone inherits the
+ * STACK along with the code, but not another project's history.
+ *
+ * Skipped, never failed: setup must not die because an optional CLI is absent.
+ */
+async function resetBrainState(): Promise<void> {
+  if (!fs.existsSync(".brain")) return;
+
+  const brainOnPath =
+    spawnSync("brain", ["--help"], { stdio: "ignore" }).status === 0;
+  const runner: [string, string[]] = brainOnPath
+    ? ["brain", []]
+    : ["npx", ["-y", "github:SeanningTatum/brain-axi"]];
+
+  const reset = await confirm({
+    message:
+      "Reset the inherited .brain state? (clears this template's features/runs/plans, keeps its rules/recipes/docs)",
+    initialValue: true,
+  });
+  if (isCancel(reset) || !reset) {
+    console.log(
+      "\x1b[33m  Skipped — note that `brain progress` will report this template's history, not yours.\x1b[0m"
+    );
+    return;
+  }
+
+  const res = spawnSync(
+    runner[0],
+    [...runner[1], "init", "--state-only", "--dir", ".", "--yes"],
+    { stdio: "inherit" }
+  );
+  if (res.status !== 0) {
+    console.log(
+      "\x1b[33m  Could not reset brain state (is brain-axi installed?). Run this yourself:\x1b[0m"
+    );
+    console.log(
+      "\x1b[33m    npx -y github:SeanningTatum/brain-axi init --state-only --dir . --yes\x1b[0m"
+    );
+    return;
+  }
+  console.log("\x1b[32m  Brain state reset — features/ and runs/ are yours now.\x1b[0m");
+}
+
 async function main() {
   intro("🚀 Cloudflare SaaS Stack - First-Time Setup");
+
+  // Before anything else: this clone must stop reporting the template's history.
+  await resetBrainState();
 
   // Check if wrangler is authenticated
   console.log("\n\x1b[36mChecking Wrangler authentication...\x1b[0m");

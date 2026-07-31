@@ -6,6 +6,30 @@ Run this before declaring a task complete. Externalises the "am I finished?" jud
 
 Agents tend to stop at "code compiles" or "tests pass without re-running them." This list forces an actual end-to-end pass + brain-coherence check before handoff.
 
+## The registry decides WHICH gates run — not this prose
+
+```bash
+brain verify --stage verify      # everything below that is a command
+brain verify --only <name>       # re-run one gate after a fix
+```
+
+[`.brain/verify.json`](../verify.json) is the single source of truth for the gate
+list and which stage each belongs to. Run it; don't hand-assemble the commands.
+
+This matters because the applicability rules used to be written down in **three
+places that disagreed** — this recipe said "e2e default-on for source changes",
+[`/verify-done`](../../.claude/commands/verify-done.md) used a path list, and
+[`verify-done-runner`](../../.claude/agents/verify-done-runner.md) used a
+narrower "cross-component" judgment. An agent could pick whichever reading
+demanded least, and nothing caught it. The registry has one answer.
+
+Every gate execution also appends a row to `runs/gates.jsonl`; `brain metrics`
+reports first-pass rate and which gate actually catches things. A gate that has
+never failed is worth questioning, not trusting.
+
+The sections below explain **why** each gate exists and what to do when it fails.
+They are no longer the place that decides whether it applies.
+
 ## 1. Tests that pin the change (if source changed)
 
 Before running the suite, make sure the change is actually *pinned* by a test — a green run of tests that never exercised the new behaviour proves nothing.

@@ -1,6 +1,6 @@
 ---
 name: recipe-runner
-description: Executes one of the 8 deterministic recipes in .brain/recipes/ (add-trpc-endpoint, add-db-table, add-tagged-error, add-cf-binding, add-feature, add-route, add-service, plus 00-before-task / 99-verify-done bookends). Reads recipe step-by-step, applies edits, verifies preconditions before each step. Use for any "add a new X" task to avoid re-deriving the pattern. Examples — "add a tRPC endpoint /billing.getInvoice that returns user invoices", "add a new D1 table for usage_event", "wire a new KV binding called CACHE".
+description: Executes one of the deterministic recipes in .brain/recipes/ (add-trpc-endpoint, add-db-table, add-tagged-error, add-cf-binding, add-feature, add-route, add-service, add-premium-surface, plus 00-before-task / 99-verify-done bookends). Reads recipe step-by-step, applies edits, verifies preconditions before each step. Use for any "add a new X" task to avoid re-deriving the pattern. Examples — "add a tRPC endpoint /billing.getInvoice that returns user invoices", "add a new D1 table for usage_event", "wire a new KV binding called CACHE".
 tools: Read, Edit, Write, Grep, Glob, Bash
 model: sonnet
 ---

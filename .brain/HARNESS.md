@@ -43,7 +43,7 @@ The agent's reading list. Layered from generic to specific.
 | [`.brain/codebase/`](codebase/) | Programming model — Effect TS, helpers, testing patterns, tRPC API surface, i18n |
 | [`.brain/high-level-architecture/`](high-level-architecture/) | Macro view — system layers, data flow, security, integrations, user journeys |
 | [`.brain/rules/`](rules/) | 7 layer-aligned do/don't rules — frontend, cloudflare, repository, services, routes, library, errors. Auto-surfaced per edited path by [`rule-router.sh`](../.claude/hooks/rule-router.sh) (see Lifecycle) |
-| [`.brain/recipes/`](recipes/) | 8 deterministic step-by-step runbooks — bookended by `00-before-task.md` and `99-verify-done.md` |
+| [`.brain/recipes/`](recipes/) | 10 deterministic step-by-step runbooks — bookended by `00-before-task.md` and `99-verify-done.md` |
 | [`.brain/features/`](features/) | One MD per shipped/in-progress feature (purpose, runtime flow, key files, changelog) |
 
 **Reading rule**: *retrieval over recall*. Open the matching `index.md` first; it tells you which file(s) apply. Do not rely on training data for project patterns.
@@ -141,7 +141,7 @@ Custom subagents in [`.claude/agents/`](../.claude/agents/) wrap pieces of the h
 | `verify-done-runner` | Runs the full `99-verify-done.md` checklist and reports pass/fail per step. |
 | `feature-verifier` | Drives a feature's golden + error path through the live app with the Playwright CLI (throwaway headless script run via `bun`), screenshots each step, writes a verdict doc to `verifications/`. The feature-level proof layer. |
 | `feature-tracker` | Updates `feature_list.json` + `features/<slug>/<slug>.md` on status change. Refuses to touch code. |
-| `recipe-runner` | Executes one of the 8 `add-*` recipes deterministically. Inputs: recipe name + task params. |
+| `recipe-runner` | Executes one of the `add-*` recipes deterministically. Inputs: recipe name + task params. |
 
 See [`.claude/agents/README.md`](../.claude/agents/README.md) for invocation syntax and full descriptions. Plugin-provided agents (`feature-dev`, `code-review`, `frontend-design`, etc.) are documented in their respective plugin READMEs and are *complementary* to these harness-specific ones.
 

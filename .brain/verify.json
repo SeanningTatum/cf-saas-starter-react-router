@@ -1,0 +1,41 @@
+{
+  "version": 1,
+  "checks": [
+    {
+      "name": "typecheck",
+      "run": "bun run typecheck",
+      "stages": ["bootstrap", "baseline", "verify"],
+      "timeout": 600
+    },
+    {
+      "name": "test",
+      "run": "bun run test",
+      "stages": ["bootstrap", "baseline", "verify"],
+      "timeout": 600
+    },
+    {
+      "name": "non-negotiables",
+      "run": "bun run scripts/check-non-negotiables.ts",
+      "stages": ["baseline", "verify"],
+      "timeout": 300
+    },
+    {
+      "name": "harness",
+      "run": "./scripts/harness-check.sh",
+      "stages": ["baseline", "verify"],
+      "timeout": 300
+    },
+    {
+      "name": "build",
+      "run": "bun run build",
+      "stages": ["verify"],
+      "timeout": 900
+    },
+    {
+      "name": "e2e",
+      "run": "bun run test:e2e",
+      "stages": ["verify"],
+      "timeout": 900
+    }
+  ]
+}

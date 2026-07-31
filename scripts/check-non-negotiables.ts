@@ -1,0 +1,405 @@
+#!/usr/bin/env bun
+/**
+ * Five non-negotiables — STRUCTURAL enforcement, not a grep sweep.
+ *
+ * Run: bun run scripts/check-non-negotiables.ts   (exit 1 on any violation)
+ *      bun run scripts/check-non-negotiables.ts --selftest   (prove it can fail)
+ *
+ * Why this replaced the CI grep sweep (`.github/workflows/ci.yml`, the
+ * `effect-ts-grep` job): the sweep matched added diff lines with
+ * `grep -E '\bthrow new\b'`, so every one of these walked straight through it —
+ *
+ *   throw err;                      // not `throw new`
+ *   try { ... } catch {}            // never checked at all
+ *   import { z } from 'zod'         // the pattern was double-quote only
+ *   Effect.promise(() => mayReject()) // never checked
+ *
+ * — and it only ever looked at the diff, so a violation that moved between files
+ * became invisible. Worse, non-negotiable #4 ("unit test for every helper and
+ * repository") had NO gate anywhere, and the repo was already violating it.
+ *
+ * This walks the TypeScript AST via the compiler API already present as a dev
+ * dependency, so `throw` is `throw` regardless of how it is spelled, and the
+ * checks apply to the whole tree rather than to one diff.
+ *
+ * The five (see AGENTS.md / .brain/codebase/effect-ts.md):
+ *   1. Effect TS is the default — no `throw`, no `try/catch` outside Effect.tryPromise
+ *   2. Effect Schema for all validation — no Zod
+ *   3. Tagged errors in app/models/errors/, mapped in app/lib/effect-trpc.ts
+ *   4. Unit test for every helper and repository
+ *   5. Cloudflare Workers, not Node — no process.env
+ */
+import ts from "typescript";
+import { readdirSync, readFileSync, statSync, existsSync } from "node:fs";
+import { join, relative, basename, dirname } from "node:path";
+
+const ROOT = process.cwd();
+
+type Violation = { rule: string; file: string; line: number; detail: string };
+const violations: Violation[] = [];
+
+function add(rule: string, file: string, node: ts.Node, sf: ts.SourceFile, detail: string) {
+  const { line } = sf.getLineAndCharacterOfPosition(node.getStart(sf));
+  violations.push({ rule, file: relative(ROOT, file), line: line + 1, detail });
+}
+
+function walkDir(dir: string, out: string[] = []): string[] {
+  if (!existsSync(dir)) return out;
+  for (const entry of readdirSync(dir)) {
+    const full = join(dir, entry);
+    const st = statSync(full);
+    if (st.isDirectory()) {
+      if (entry === "node_modules" || entry === ".react-router" || entry === "build") continue;
+      walkDir(full, out);
+    } else if (/\.tsx?$/.test(entry)) {
+      out.push(full);
+    }
+  }
+  return out;
+}
+
+const isTestPath = (p: string) =>
+  /__tests__/.test(p) || /\.test\.tsx?$/.test(p) || /\.test-layer\.ts$/.test(p);
+
+/**
+ * Files where throwing IS the documented contract. `throw` is how these layers
+ * are specified to work, so flagging them would be flagging the framework.
+ */
+const THROW_BOUNDARY = [
+  "app/trpc/index.ts", // tRPC middleware / errorFormatter contract
+  "app/lib/effect-trpc.ts", // the designated Effect -> tRPC edge
+];
+
+/**
+ * Vendored ShadCN primitives. Their context guards
+ * (`throw new Error("useX must be used within <X>")`) are the idiomatic React
+ * pattern and are upstream's code, not this repo's business logic. Exempting the
+ * directory is honest; rewriting vendored files to use Effect is not.
+ */
+const VENDORED_UI = "app/components/ui/";
+
+function inBoundary(file: string) {
+  const rel = relative(ROOT, file);
+  return THROW_BOUNDARY.some((b) => rel === b);
+}
+
+function isVendoredUi(file: string) {
+  return relative(ROOT, file).startsWith(VENDORED_UI);
+}
+
+/**
+ * `throw redirect(...)` / `throw data(...)` is React Router's *control flow*, not
+ * an error path — a loader has no other way to redirect. Same category as
+ * `throw new TRPCError` at the tRPC edge: framework contract, not a violation.
+ */
+const FRAMEWORK_THROW_CALLEES = new Set(["redirect", "redirectDocument", "data"]);
+
+function isFrameworkControlFlowThrow(node: ts.ThrowStatement): boolean {
+  const expr = node.expression;
+  if (!expr || !ts.isCallExpression(expr)) return false;
+  const callee = expr.expression;
+  if (ts.isIdentifier(callee)) return FRAMEWORK_THROW_CALLEES.has(callee.text);
+  return false;
+}
+
+/**
+ * try/catch that predates this gate. The old CI sweep never checked try/catch at
+ * all, so these were never enforced. Each is real debt against non-negotiable #1;
+ * the list makes it enumerable instead of invisible. Removing an entry (by
+ * converting to Effect.tryPromise) is the only correct direction — adding one
+ * needs a run-note justification.
+ */
+const TRY_CATCH_GRANDFATHERED = new Set([
+  "app/routes/admin/components/user-data-table.tsx",
+  "app/routes/authentication/components/login-form.tsx",
+  "app/routes/authentication/components/signup-form.tsx",
+  "workers/app.ts",
+]);
+
+/** Is this node inside an Effect.tryPromise / Effect.try callback? */
+function insideEffectTry(node: ts.Node): boolean {
+  for (let p: ts.Node | undefined = node.parent; p; p = p.parent) {
+    if (ts.isCallExpression(p) && ts.isPropertyAccessExpression(p.expression)) {
+      const name = p.expression.name.text;
+      if (name === "tryPromise" || name === "try" || name === "tryMap" || name === "tryMapPromise")
+        return true;
+    }
+  }
+  return false;
+}
+
+function checkSourceFile(file: string, sf: ts.SourceFile) {
+  const rel = relative(ROOT, file);
+
+  const visit = (node: ts.Node) => {
+    // --- 1. no bare throw -------------------------------------------------
+    if (ts.isThrowStatement(node)) {
+      const allowed =
+        insideEffectTry(node) || // the documented escape
+        inBoundary(file) || // designated Effect -> tRPC / tRPC middleware edge
+        isVendoredUi(file) || // vendored ShadCN context guards
+        isFrameworkControlFlowThrow(node); // React Router `throw redirect(...)`
+      if (!allowed) {
+        add(
+          "1-effect-ts",
+          file,
+          node,
+          sf,
+          "bare `throw` — use Effect.fail (or throw inside Effect.tryPromise). " +
+            `Allowed only at ${THROW_BOUNDARY.join(", ")}, in ${VENDORED_UI}, or as framework control flow (throw redirect(...))`
+        );
+      }
+    }
+
+    // --- 1b. no try/catch outside Effect.tryPromise ------------------------
+    if (
+      ts.isTryStatement(node) &&
+      !insideEffectTry(node) &&
+      !isVendoredUi(file) &&
+      !TRY_CATCH_GRANDFATHERED.has(rel)
+    ) {
+      add(
+        "1-effect-ts",
+        file,
+        node,
+        sf,
+        "`try`/`catch` — wrap the failing call in Effect.tryPromise instead"
+      );
+    }
+
+    // --- 1c. Effect.promise on something that can reject -------------------
+    // Effect.promise assumes the promise NEVER rejects; a rejection escapes the
+    // Effect error channel entirely and becomes an unhandled defect.
+    if (
+      ts.isCallExpression(node) &&
+      ts.isPropertyAccessExpression(node.expression) &&
+      ts.isIdentifier(node.expression.expression) &&
+      node.expression.expression.text === "Effect" &&
+      node.expression.name.text === "promise"
+    ) {
+      add(
+        "1-effect-ts",
+        file,
+        node,
+        sf,
+        "Effect.promise assumes the promise cannot reject — use Effect.tryPromise unless that is provably true (then add `// effect-promise-ok: <why>`)"
+      );
+    }
+
+    // --- 2. no Zod --------------------------------------------------------
+    if (ts.isImportDeclaration(node) && ts.isStringLiteral(node.moduleSpecifier)) {
+      const spec = node.moduleSpecifier.text;
+      if (spec === "zod" || spec.startsWith("zod/")) {
+        add("2-effect-schema", file, node, sf, `imports "${spec}" — use Effect Schema`);
+      }
+    }
+    if (
+      ts.isCallExpression(node) &&
+      ts.isIdentifier(node.expression) &&
+      node.expression.text === "require" &&
+      node.arguments.length === 1 &&
+      ts.isStringLiteral(node.arguments[0]) &&
+      /^zod(\/|$)/.test(node.arguments[0].text)
+    ) {
+      add("2-effect-schema", file, node, sf, "require()s zod — use Effect Schema");
+    }
+
+    // --- 5. no process.env ------------------------------------------------
+    if (
+      ts.isPropertyAccessExpression(node) &&
+      ts.isPropertyAccessExpression(node.expression) === false &&
+      ts.isIdentifier(node.expression) &&
+      node.expression.text === "process" &&
+      node.name.text === "env"
+    ) {
+      add(
+        "5-cloudflare",
+        file,
+        node,
+        sf,
+        "process.env — Workers has no process; use the CloudflareEnv Tag or context.cloudflare.env"
+      );
+    }
+
+    ts.forEachChild(node, visit);
+  };
+
+  // Allow a narrow, documented escape for Effect.promise.
+  const text = sf.getFullText();
+  const allowPromise = /effect-promise-ok:/.test(text);
+  const before = violations.length;
+  visit(sf);
+  if (allowPromise) {
+    for (let i = violations.length - 1; i >= before; i--) {
+      if (violations[i].detail.startsWith("Effect.promise")) violations.splice(i, 1);
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// 3. every tagged error is mapped in tagToTRPC
+// ---------------------------------------------------------------------------
+function checkTaggedErrorsMapped() {
+  const errDir = join(ROOT, "app/models/errors");
+  const mapFile = join(ROOT, "app/lib/effect-trpc.ts");
+  if (!existsSync(errDir) || !existsSync(mapFile)) return;
+  const mapText = readFileSync(mapFile, "utf8");
+
+  for (const file of walkDir(errDir)) {
+    if (isTestPath(file)) continue;
+    const sf = ts.createSourceFile(file, readFileSync(file, "utf8"), ts.ScriptTarget.Latest, true);
+    ts.forEachChild(sf, (node) => {
+      // class X extends Data.TaggedError("X")<...> {}
+      if (ts.isClassDeclaration(node) && node.name) {
+        const name = node.name.text;
+        const heritage = node.heritageClauses?.some((h) =>
+          h.types.some((t) => /TaggedError/.test(t.expression.getText(sf)))
+        );
+        if (heritage && !mapText.includes(name)) {
+          add(
+            "3-tagged-errors",
+            file,
+            node,
+            sf,
+            `tagged error ${name} is not referenced in app/lib/effect-trpc.ts — add it to the tag -> HTTP mapping`
+          );
+        }
+      }
+    });
+  }
+}
+
+// ---------------------------------------------------------------------------
+// 4. unit test for every helper and repository — the rule with NO gate before
+// ---------------------------------------------------------------------------
+
+/**
+ * Grandfathered files that predate the gate. Every entry is a real violation of
+ * non-negotiable #4, kept here so the gate can land without a red build. Deleting
+ * an entry (by writing the test) is the only correct direction; adding one needs
+ * a run-note justification.
+ */
+const TEST_PARITY_GRANDFATHERED = new Set(["app/lib/effect-form.ts", "app/lib/logger.ts"]);
+
+function hasExportedValue(sf: ts.SourceFile): boolean {
+  let found = false;
+  ts.forEachChild(sf, (node) => {
+    const mods = ts.canHaveModifiers(node) ? ts.getModifiers(node) : undefined;
+    const exported = mods?.some((m) => m.kind === ts.SyntaxKind.ExportKeyword);
+    if (!exported) return;
+    // Type-only exports need no test.
+    if (ts.isTypeAliasDeclaration(node) || ts.isInterfaceDeclaration(node)) return;
+    if (ts.isFunctionDeclaration(node) || ts.isClassDeclaration(node) || ts.isVariableStatement(node))
+      found = true;
+  });
+  return found;
+}
+
+function checkTestParity() {
+  const targets = [join(ROOT, "app/lib"), join(ROOT, "app/repositories")];
+  for (const dir of targets) {
+    if (!existsSync(dir)) continue;
+    for (const file of readdirSync(dir)) {
+      if (!/\.ts$/.test(file) || /\.test\.ts$/.test(file)) continue;
+      const full = join(dir, file);
+      if (!statSync(full).isFile()) continue;
+      const rel = relative(ROOT, full);
+      if (TEST_PARITY_GRANDFATHERED.has(rel)) continue;
+
+      const sf = ts.createSourceFile(full, readFileSync(full, "utf8"), ts.ScriptTarget.Latest, true);
+      if (!hasExportedValue(sf)) continue; // types-only module
+
+      const stem = basename(file, ".ts");
+      const candidates = [
+        join(dirname(full), "__tests__", `${stem}.test.ts`),
+        join(dirname(full), `${stem}.test.ts`),
+      ];
+      if (!candidates.some(existsSync)) {
+        violations.push({
+          rule: "4-unit-tests",
+          file: rel,
+          line: 1,
+          detail: `exports values but has no sibling __tests__/${stem}.test.ts — non-negotiable #4`,
+        });
+      }
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Self-test — a gate with no failing fixture is a claim, not a check
+// ---------------------------------------------------------------------------
+function selftest() {
+  const cases: Array<{ name: string; code: string; expect: string }> = [
+    { name: "bare throw (grep missed: no `new`)", code: "export function f(e: Error) { throw e; }", expect: "1-effect-ts" },
+    { name: "throw new Error", code: "export function f() { throw new Error('x'); }", expect: "1-effect-ts" },
+    { name: "bare try/catch (never checked before)", code: "export function f() { try { g(); } catch {} }", expect: "1-effect-ts" },
+    { name: "single-quoted zod (grep was double-quote only)", code: "import { z } from 'zod';", expect: "2-effect-schema" },
+    { name: "double-quoted zod", code: 'import { z } from "zod";', expect: "2-effect-schema" },
+    { name: "zod subpath", code: "import { z } from 'zod/v4';", expect: "2-effect-schema" },
+    { name: "Effect.promise (never checked before)", code: "export const a = Effect.promise(() => p());", expect: "1-effect-ts" },
+    { name: "process.env", code: "export const a = process.env.FOO;", expect: "5-cloudflare" },
+    { name: "throw inside Effect.tryPromise is ALLOWED", code: "export const a = Effect.tryPromise({ try: () => { throw new Error('x'); }, catch: (e) => e });", expect: "" },
+  ];
+
+  let failed = 0;
+  for (const c of cases) {
+    violations.length = 0;
+    const sf = ts.createSourceFile("selftest.ts", c.code, ts.ScriptTarget.Latest, true);
+    checkSourceFile(join(ROOT, "selftest.ts"), sf);
+    const hit = violations.some((v) => v.rule === c.expect);
+    const clean = violations.length === 0;
+    const pass = c.expect === "" ? clean : hit;
+    if (!pass) {
+      failed++;
+      console.error(
+        `  selftest FAIL: ${c.name} — expected ${c.expect || "no violation"}, got ${
+          violations.map((v) => v.rule).join(",") || "none"
+        }`
+      );
+    }
+  }
+  if (failed) {
+    console.error(`non-negotiables selftest: ${failed}/${cases.length} case(s) failed`);
+    process.exit(1);
+  }
+  console.log(`non-negotiables selftest: ok — ${cases.length} fixtures (each one the grep sweep missed or allowed)`);
+}
+
+// ---------------------------------------------------------------------------
+
+if (process.argv.includes("--selftest")) {
+  selftest();
+} else {
+  const files = [...walkDir(join(ROOT, "app")), ...walkDir(join(ROOT, "workers"))].filter(
+    (f) => !isTestPath(f)
+  );
+  for (const file of files) {
+    const sf = ts.createSourceFile(file, readFileSync(file, "utf8"), ts.ScriptTarget.Latest, true);
+    checkSourceFile(file, sf);
+  }
+  checkTaggedErrorsMapped();
+  checkTestParity();
+
+  if (violations.length) {
+    console.error(`Five non-negotiables: ${violations.length} violation(s)`);
+    const byRule = new Map<string, Violation[]>();
+    for (const v of violations) {
+      if (!byRule.has(v.rule)) byRule.set(v.rule, []);
+      byRule.get(v.rule)!.push(v);
+    }
+    for (const [rule, vs] of [...byRule.entries()].sort()) {
+      console.error(`\n  ${rule} (${vs.length}):`);
+      for (const v of vs) console.error(`    ${v.file}:${v.line} — ${v.detail}`);
+    }
+    console.error(
+      `\n  ${files.length} source file(s) swept. Grandfathered for #4: ${
+        [...TEST_PARITY_GRANDFATHERED].join(", ") || "none"
+      }`
+    );
+    process.exit(1);
+  }
+  console.log(
+    `Five non-negotiables: clean — ${files.length} source file(s), AST-swept (throw, try/catch, Effect.promise, zod, process.env, tagged-error mapping, test parity)`
+  );
+}

@@ -44,12 +44,28 @@ if command -v brain >/dev/null 2>&1; then
     fail "brain check reported violations (see output above)"
   fi
 else
-  # No brain-axi on PATH. Run the core brain-state invariants inline with jq — NO network
-  # dependency, so offline dev + `init.sh --baseline` still work. (Install brain-axi for the
-  # full check, incl. plan/review integrity + verification Verdict lines:
-  #   npm i -g github:SeanningTatum/brain-axi   — or   npx -y github:SeanningTatum/brain-axi#v0.1.0 check)
-  echo "  brain CLI not on PATH — running inline brain-state checks (install brain-axi for full coverage)."
+  # No brain-axi on PATH.
+  #
+  # This used to run a reduced jq subset, count every inline check as a PASS, and
+  # exit 0 with the same "Harness invariants intact" summary as a full run — so a
+  # machine missing the CLI reported an intact harness while skipping the schema,
+  # verdict, drift, plan-integrity, and eval invariants entirely. Silence looked
+  # identical to success, which is the one thing a gate must never do.
+  #
+  # The inline checks still run (they are genuinely useful offline), but this is
+  # now an explicit DEGRADED mode that fails. Anything that must pass without the
+  # CLI should install it:
+  #   npm i -g github:SeanningTatum/brain-axi
+  #   # or, no install:  npx -y github:SeanningTatum/brain-axi check
+  DEGRADED=1
+  echo "  ✗ brain CLI not on PATH — DEGRADED mode."
+  echo "    Running the inline jq subset below, but this run cannot verify the"
+  echo "    schema, verdict, index-drift, plan-integrity, or eval invariants."
+  echo "    Install brain-axi (npm i -g github:SeanningTatum/brain-axi) — a reduced"
+  echo "    check set must not report an intact harness."
   echo ""
+  FAIL=1
+  FAIL_COUNT=$((FAIL_COUNT+1))
 
   # 1. feature_list.json parses
   if jq empty "$FL" 2>/dev/null; then

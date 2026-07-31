@@ -50,8 +50,16 @@ features/
 | Analytics | [`analytics/analytics.md`](analytics/analytics.md) | shipped | — |
 | Preview Deployments | [`preview-deployments/preview-deployments.md`](preview-deployments/preview-deployments.md) | shipped | — |
 | Feature Verification | [`feature-verification/feature-verification.md`](feature-verification/feature-verification.md) | shipped | [2026-07-13 ✅ PASS (self-verified via authentication)](authentication/verifications/2026-07-13.md) |
-| OpenTelemetry Span Tracing | [`otel-tracing/otel-tracing.md`](otel-tracing/otel-tracing.md) | in-progress | — |
+| OpenTelemetry Span Tracing | [`otel-tracing/otel-tracing.md`](otel-tracing/otel-tracing.md) | shipped | [2026-07-29 ✅ PASS](otel-tracing/verifications/2026-07-29.md) |
+| Sample SaaS Landing | [`sample-saas-landing/sample-saas-landing.md`](sample-saas-landing/sample-saas-landing.md) | cut | [2026-07-30 ✅ PASS](sample-saas-landing/verifications/2026-07-30.md) |
 
 ## Update trigger
 
 Add a row when a feature folder is created; update the "Latest verification" cell when `feature-verifier` produces a new verdict; remove the row when the feature folder is deleted.
+
+**`brain check` now FAILS on any disagreement between this table and
+`feature_list.json`** (the "features/index.md agrees with the tracker" row), in
+both directions — a wrong status and a missing row both fail. This table had
+claimed `otel-tracing` was in-progress since it shipped, and omitted
+`sample-saas-landing` entirely; nothing noticed, because nothing compared them.
+`feature_list.json` is the source of truth — update both together.
