@@ -94,12 +94,32 @@ function isVendoredUi(file: string) {
  */
 const FRAMEWORK_THROW_CALLEES = new Set(["redirect", "redirectDocument", "data"]);
 
-function isFrameworkControlFlowThrow(node: ts.ThrowStatement): boolean {
+/** Names imported from react-router in this file — the only ones that count. */
+function reactRouterImports(sf: ts.SourceFile): Set<string> {
+  const names = new Set<string>();
+  ts.forEachChild(sf, (node) => {
+    if (!ts.isImportDeclaration(node) || !ts.isStringLiteralLike(node.moduleSpecifier)) return;
+    if (!/^react-router(\/|$)/.test(node.moduleSpecifier.text)) return;
+    const clause = node.importClause;
+    if (!clause) return;
+    if (clause.namedBindings && ts.isNamedImports(clause.namedBindings)) {
+      for (const el of clause.namedBindings.elements) names.add(el.name.text);
+    }
+  });
+  return names;
+}
+
+/**
+ * `throw redirect(...)` counts only when `redirect` was IMPORTED FROM
+ * react-router. Matching on the bare name let a local `const data = (e) => e`
+ * exempt `throw data(err)` — the allowance was attacker-controlled.
+ */
+function isFrameworkControlFlowThrow(node: ts.ThrowStatement, imported: Set<string>): boolean {
   const expr = node.expression;
   if (!expr || !ts.isCallExpression(expr)) return false;
   const callee = expr.expression;
-  if (ts.isIdentifier(callee)) return FRAMEWORK_THROW_CALLEES.has(callee.text);
-  return false;
+  if (!ts.isIdentifier(callee)) return false;
+  return FRAMEWORK_THROW_CALLEES.has(callee.text) && imported.has(callee.text);
 }
 
 /**
@@ -116,13 +136,27 @@ const TRY_CATCH_GRANDFATHERED = new Set([
   "workers/app.ts",
 ]);
 
-/** Is this node inside an Effect.tryPromise / Effect.try callback? */
+/**
+ * Is this node inside an `Effect.tryPromise` / `Effect.try` callback?
+ *
+ * The RECEIVER matters. Checking only the method name meant any object with a
+ * `.try()` — `foo.try(() => { throw e })` — exempted the throw, so the escape
+ * hatch was attacker-controlled.
+ */
+const EFFECT_TRY_METHODS = new Set(["tryPromise", "try", "tryMap", "tryMapPromise"]);
+
 function insideEffectTry(node: ts.Node): boolean {
   for (let p: ts.Node | undefined = node.parent; p; p = p.parent) {
     if (ts.isCallExpression(p) && ts.isPropertyAccessExpression(p.expression)) {
-      const name = p.expression.name.text;
-      if (name === "tryPromise" || name === "try" || name === "tryMap" || name === "tryMapPromise")
-        return true;
+      if (!EFFECT_TRY_METHODS.has(p.expression.name.text)) continue;
+      const recv = p.expression.expression;
+      // Effect.tryPromise(...) or SomeNamespace.Effect.tryPromise(...)
+      const recvName = ts.isIdentifier(recv)
+        ? recv.text
+        : ts.isPropertyAccessExpression(recv)
+          ? recv.name.text
+          : null;
+      if (recvName === "Effect") return true;
     }
   }
   return false;
@@ -130,6 +164,7 @@ function insideEffectTry(node: ts.Node): boolean {
 
 function checkSourceFile(file: string, sf: ts.SourceFile) {
   const rel = relative(ROOT, file);
+  const routerImports = reactRouterImports(sf);
 
   const visit = (node: ts.Node) => {
     // --- 1. no bare throw -------------------------------------------------
@@ -138,7 +173,7 @@ function checkSourceFile(file: string, sf: ts.SourceFile) {
         insideEffectTry(node) || // the documented escape
         inBoundary(file) || // designated Effect -> tRPC / tRPC middleware edge
         isVendoredUi(file) || // vendored ShadCN context guards
-        isFrameworkControlFlowThrow(node); // React Router `throw redirect(...)`
+        isFrameworkControlFlowThrow(node, routerImports); // React Router `throw redirect(...)`
       if (!allowed) {
         add(
           "1-effect-ts",
@@ -229,6 +264,18 @@ function checkSourceFile(file: string, sf: ts.SourceFile) {
       node.name.text === "env"
     ) {
       add("5-cloudflare", file, node, sf, PROCESS_ENV_MSG);
+    }
+
+    // globalThis.process.env — the same access with one more hop.
+    if (
+      ts.isPropertyAccessExpression(node) &&
+      node.name.text === "env" &&
+      ts.isPropertyAccessExpression(node.expression) &&
+      node.expression.name.text === "process" &&
+      ts.isIdentifier(node.expression.expression) &&
+      (node.expression.expression.text === "globalThis" || node.expression.expression.text === "global")
+    ) {
+      add("5-cloudflare", file, node, sf, `globalThis.process.env — ${PROCESS_ENV_MSG}`);
     }
 
     // process["env"] / process['env']
@@ -455,6 +502,13 @@ function selftest() {
       code: "// effect-promise-ok: cannot reject\nexport const a = Effect.promise(() => p());",
       expect: "",
     },
+    // Attacker-controlled exemptions — each of these was clean before.
+    { name: "throw data(err) with a LOCAL data() is not framework control flow", code: "const data = (e: unknown) => e;\nexport function f(err: Error) { throw data(err); }", expect: "1-effect-ts" },
+    { name: "throw redirect() WITH the react-router import is allowed", code: 'import { redirect } from "react-router";\nexport function f() { throw redirect("/login"); }', expect: "" },
+    { name: "throw redirect() WITHOUT the import is not", code: 'const redirect = (s: string) => s;\nexport function f() { throw redirect("/x"); }', expect: "1-effect-ts" },
+    { name: "foo.try() on a non-Effect receiver does not exempt a throw", code: "export const a = foo.try(() => { throw new Error('x'); });", expect: "1-effect-ts" },
+    { name: "Effect.try() DOES exempt a throw", code: "export const a = Effect.try(() => { throw new Error('x'); });", expect: "" },
+    { name: "globalThis.process.env", code: "export const a = globalThis.process.env.FOO;", expect: "5-cloudflare" },
     {
       name: "effect-promise-ok does NOT excuse a call 5 lines away",
       code: "// effect-promise-ok: cannot reject\nexport const a = Effect.promise(() => p());\nconst x = 1;\nconst y = 2;\nexport const b = Effect.promise(() => q());",
