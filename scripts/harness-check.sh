@@ -43,6 +43,28 @@ if command -v brain >/dev/null 2>&1; then
   else
     fail "brain check reported violations (see output above)"
   fi
+
+  # ADVISORY, deliberately non-blocking: `--strict` additionally requires every
+  # shipped feature to carry a PASS verification doc bound to a commit. This repo
+  # does not satisfy that yet — five features were shipped before the invariant
+  # existed and have no browser-walk evidence.
+  #
+  # It is advisory rather than a gate because the only way to make it green today
+  # would be to author PASS docs for flows nobody verified. That is fabricating
+  # evidence, which is the exact failure this harness exists to prevent. The debt
+  # is real; printing it is honest; hiding it or faking it is not.
+  #
+  # Close it by actually verifying those flows (`brain playbook verify` →
+  # feature-verifier browser walk → a receipt-bearing verdict doc), then promote
+  # this to a `fail`.
+  if ! brain check --strict >/tmp/brain-strict.$$ 2>&1; then
+    echo "  ⚠ advisory: \`brain check --strict\` reports unproven shipped features:"
+    grep -E "PASS verification|bound to a commit" /tmp/brain-strict.$$ | sed 's/^/      /' || true
+    echo "      (not a failure yet — see the comment in scripts/harness-check.sh)"
+  else
+    ok "brain check --strict passed (every shipped feature has a commit-bound PASS)"
+  fi
+  rm -f /tmp/brain-strict.$$
 else
   # No brain-axi on PATH.
   #

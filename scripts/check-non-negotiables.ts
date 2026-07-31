@@ -198,40 +198,91 @@ function checkSourceFile(file: string, sf: ts.SourceFile) {
       ts.isIdentifier(node.expression) &&
       node.expression.text === "require" &&
       node.arguments.length === 1 &&
-      ts.isStringLiteral(node.arguments[0]) &&
+      ts.isStringLiteralLike(node.arguments[0]) &&
       /^zod(\/|$)/.test(node.arguments[0].text)
     ) {
       add("2-effect-schema", file, node, sf, "require()s zod — use Effect Schema");
     }
+    // await import("zod") — a dynamic import is still an import. Checking only
+    // static declarations and require() let this through untouched.
+    if (
+      ts.isCallExpression(node) &&
+      node.expression.kind === ts.SyntaxKind.ImportKeyword &&
+      node.arguments.length >= 1 &&
+      ts.isStringLiteralLike(node.arguments[0]) &&
+      /^zod(\/|$)/.test(node.arguments[0].text)
+    ) {
+      add("2-effect-schema", file, node, sf, "dynamically imports zod — use Effect Schema");
+    }
 
     // --- 5. no process.env ------------------------------------------------
+    // Three spellings, all equivalent at runtime. Checking only the first let
+    // `process["env"]` and `const { env } = process` straight through.
+    const PROCESS_ENV_MSG =
+      "process.env — Workers has no process; use the CloudflareEnv Tag or context.cloudflare.env";
+
+    // process.env
     if (
       ts.isPropertyAccessExpression(node) &&
-      ts.isPropertyAccessExpression(node.expression) === false &&
       ts.isIdentifier(node.expression) &&
       node.expression.text === "process" &&
       node.name.text === "env"
     ) {
-      add(
-        "5-cloudflare",
-        file,
-        node,
-        sf,
-        "process.env — Workers has no process; use the CloudflareEnv Tag or context.cloudflare.env"
-      );
+      add("5-cloudflare", file, node, sf, PROCESS_ENV_MSG);
+    }
+
+    // process["env"] / process['env']
+    if (
+      ts.isElementAccessExpression(node) &&
+      ts.isIdentifier(node.expression) &&
+      node.expression.text === "process" &&
+      node.argumentExpression &&
+      ts.isStringLiteralLike(node.argumentExpression) &&
+      node.argumentExpression.text === "env"
+    ) {
+      add("5-cloudflare", file, node, sf, `process["env"] — ${PROCESS_ENV_MSG}`);
+    }
+
+    // const { env } = process   /   const { env: e } = process
+    if (
+      ts.isVariableDeclaration(node) &&
+      node.initializer &&
+      ts.isIdentifier(node.initializer) &&
+      node.initializer.text === "process" &&
+      node.name &&
+      ts.isObjectBindingPattern(node.name)
+    ) {
+      const bindsEnv = node.name.elements.some((el) => {
+        const key = el.propertyName ?? el.name;
+        return ts.isIdentifier(key) && key.text === "env";
+      });
+      if (bindsEnv) {
+        add("5-cloudflare", file, node, sf, `destructures env off process — ${PROCESS_ENV_MSG}`);
+      }
     }
 
     ts.forEachChild(node, visit);
   };
 
-  // Allow a narrow, documented escape for Effect.promise.
-  const text = sf.getFullText();
-  const allowPromise = /effect-promise-ok:/.test(text);
+  // Narrow, documented escape for Effect.promise — LINE-SCOPED.
+  //
+  // It was file-scoped: one `// effect-promise-ok:` comment anywhere exempted
+  // every Effect.promise in the file, so a single justified use silently
+  // licensed unlimited unjustified ones. The marker must now sit on the same
+  // line or the line directly above the call it excuses.
+  const lines = sf.getFullText().split("\n");
+  const exemptLines = new Set<number>();
+  lines.forEach((l, i) => {
+    if (/effect-promise-ok:/.test(l)) {
+      exemptLines.add(i + 1); // same line
+      exemptLines.add(i + 2); // the line below the comment
+    }
+  });
   const before = violations.length;
   visit(sf);
-  if (allowPromise) {
-    for (let i = violations.length - 1; i >= before; i--) {
-      if (violations[i].detail.startsWith("Effect.promise")) violations.splice(i, 1);
+  for (let i = violations.length - 1; i >= before; i--) {
+    if (violations[i].detail.startsWith("Effect.promise") && exemptLines.has(violations[i].line)) {
+      violations.splice(i, 1);
     }
   }
 }
@@ -243,7 +294,40 @@ function checkTaggedErrorsMapped() {
   const errDir = join(ROOT, "app/models/errors");
   const mapFile = join(ROOT, "app/lib/effect-trpc.ts");
   if (!existsSync(errDir) || !existsSync(mapFile)) return;
-  const mapText = readFileSync(mapFile, "utf8");
+
+  /**
+   * Collect the tags the mapper actually BRANCHES on, by AST — `case "X":`
+   * labels and `_tag === "X"` comparisons.
+   *
+   * This was `mapText.includes(name)`, which a bare comment satisfied: writing
+   * `// ProbeError mapped` in effect-trpc.ts made the gate pass with no mapping
+   * at all. A substring search cannot tell code from prose.
+   */
+  const mapped = new Set<string>();
+  const mapSf = ts.createSourceFile(mapFile, readFileSync(mapFile, "utf8"), ts.ScriptTarget.Latest, true);
+  const collect = (n: ts.Node) => {
+    if (ts.isCaseClause(n) && ts.isStringLiteralLike(n.expression)) mapped.add(n.expression.text);
+    if (
+      ts.isBinaryExpression(n) &&
+      (n.operatorToken.kind === ts.SyntaxKind.EqualsEqualsEqualsToken ||
+        n.operatorToken.kind === ts.SyntaxKind.EqualsEqualsToken)
+    ) {
+      for (const [a, b] of [
+        [n.left, n.right],
+        [n.right, n.left],
+      ] as const) {
+        const isTagRef =
+          (ts.isPropertyAccessExpression(a) && a.name.text === "_tag") ||
+          (ts.isElementAccessExpression(a) &&
+            a.argumentExpression &&
+            ts.isStringLiteralLike(a.argumentExpression) &&
+            a.argumentExpression.text === "_tag");
+        if (isTagRef && ts.isStringLiteralLike(b)) mapped.add(b.text);
+      }
+    }
+    ts.forEachChild(n, collect);
+  };
+  collect(mapSf);
 
   for (const file of walkDir(errDir)) {
     if (isTestPath(file)) continue;
@@ -255,7 +339,7 @@ function checkTaggedErrorsMapped() {
         const heritage = node.heritageClauses?.some((h) =>
           h.types.some((t) => /TaggedError/.test(t.expression.getText(sf)))
         );
-        if (heritage && !mapText.includes(name)) {
+        if (heritage && !mapped.has(name)) {
           add(
             "3-tagged-errors",
             file,
@@ -299,10 +383,11 @@ function checkTestParity() {
   const targets = [join(ROOT, "app/lib"), join(ROOT, "app/repositories")];
   for (const dir of targets) {
     if (!existsSync(dir)) continue;
-    for (const file of readdirSync(dir)) {
-      if (!/\.ts$/.test(file) || /\.test\.ts$/.test(file)) continue;
-      const full = join(dir, file);
-      if (!statSync(full).isFile()) continue;
+    // RECURSIVE: `app/lib/constants/` and `app/lib/schemas/` escaped a
+    // top-level-only scan entirely, so whole subtrees were ungated.
+    for (const full of walkDir(dir)) {
+      if (!/\.ts$/.test(full) || isTestPath(full)) continue;
+      const file = basename(full);
       const rel = relative(ROOT, full);
       if (TEST_PARITY_GRANDFATHERED.has(rel)) continue;
 
@@ -314,7 +399,18 @@ function checkTestParity() {
         join(dirname(full), "__tests__", `${stem}.test.ts`),
         join(dirname(full), `${stem}.test.ts`),
       ];
-      if (!candidates.some(existsSync)) {
+      // An EMPTY test file used to satisfy this — existence is not coverage.
+      const found = candidates.find(existsSync);
+      if (found && readFileSync(found, "utf8").trim().length < 40) {
+        violations.push({
+          rule: "4-unit-tests",
+          file: relative(ROOT, found),
+          line: 1,
+          detail: "test file is effectively empty — existence is not coverage",
+        });
+        continue;
+      }
+      if (!found) {
         violations.push({
           rule: "4-unit-tests",
           file: rel,
@@ -340,6 +436,30 @@ function selftest() {
     { name: "Effect.promise (never checked before)", code: "export const a = Effect.promise(() => p());", expect: "1-effect-ts" },
     { name: "process.env", code: "export const a = process.env.FOO;", expect: "5-cloudflare" },
     { name: "throw inside Effect.tryPromise is ALLOWED", code: "export const a = Effect.tryPromise({ try: () => { throw new Error('x'); }, catch: (e) => e });", expect: "" },
+
+    // Bypasses found by adversarial review AFTER the first version shipped.
+    // Each walked straight through the checks above.
+    { name: 'process["env"] element access', code: 'export const a = process["env"].FOO;', expect: "5-cloudflare" },
+    { name: "process['env'] single-quoted", code: "export const a = process['env'];", expect: "5-cloudflare" },
+    { name: "const { env } = process destructuring", code: "const { env } = process; export const a = env.FOO;", expect: "5-cloudflare" },
+    { name: "const { env: e } = process renamed", code: "const { env: e } = process; export const a = e;", expect: "5-cloudflare" },
+    { name: 'await import("zod") dynamic import', code: 'export const a = async () => (await import("zod")).z;', expect: "2-effect-schema" },
+    { name: "dynamic import of a zod subpath", code: "export const a = async () => await import('zod/v4');", expect: "2-effect-schema" },
+    { name: "process.versions is NOT process.env", code: "export const a = process.versions;", expect: "" },
+    { name: "an unrelated destructure off process is fine", code: "const { argv } = process; export const a = argv;", expect: "" },
+
+    // effect-promise-ok is LINE-scoped: it used to be file-scoped, so one
+    // justified use licensed every other use in the file.
+    {
+      name: "effect-promise-ok excuses the call on the next line",
+      code: "// effect-promise-ok: cannot reject\nexport const a = Effect.promise(() => p());",
+      expect: "",
+    },
+    {
+      name: "effect-promise-ok does NOT excuse a call 5 lines away",
+      code: "// effect-promise-ok: cannot reject\nexport const a = Effect.promise(() => p());\nconst x = 1;\nconst y = 2;\nexport const b = Effect.promise(() => q());",
+      expect: "1-effect-ts",
+    },
   ];
 
   let failed = 0;
@@ -363,7 +483,9 @@ function selftest() {
     console.error(`non-negotiables selftest: ${failed}/${cases.length} case(s) failed`);
     process.exit(1);
   }
-  console.log(`non-negotiables selftest: ok — ${cases.length} fixtures (each one the grep sweep missed or allowed)`);
+  console.log(
+    `non-negotiables selftest: ok — ${cases.length} fixtures (each one the grep sweep missed, or a bypass adversarial review found in this checker)`
+  );
 }
 
 // ---------------------------------------------------------------------------
