@@ -11,8 +11,7 @@
       "preview-deployments",
       "feature-verification",
       "authentication",
-      "otel-tracing",
-      "sample-saas-landing"
+      "otel-tracing"
     ]
   },
   "features": [
