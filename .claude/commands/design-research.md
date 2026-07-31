@@ -10,9 +10,10 @@ Steps:
 
 0. **Look at the category before the references.** Open the three best real products in this category and write down what they do that a template does not — that is the bar this surface gets judged against, and design references alone will not tell you. For software the answer is almost always: they show the product, they have a real typeface, they have depth. Skipping this step produces a page that is distinctive against a mood board and generic against the market.
 
-1. **Read the locked direction first.** `brain docs view codebase/design-system.md` + `brain docs view rules/frontend.md`. The public surface direction (Cursor + Linear, restrained/technical, single accent, mono for tech labels) is already locked. Decide and state which case you are in:
-   - **Extending** the locked direction → research *within* it. Default.
-   - **Re-opening** it (deliberate redesign) → say so explicitly and get the user's confirmation before continuing. This ends with a `design-system.md` rewrite in the same PR.
+1. **Read the lock status first.** `brain docs view codebase/design-system.md` + `brain docs view rules/frontend.md`. `design-system.md` opens with a `Lock status` line — read it before anything else in the file, and state which of the three cases you are in:
+   - `NONE` → **no direction is locked.** This repo was forked from the starter and has not done its own research. Everything in `design-system.md` describes the *starter's* landing page (Cursor + Linear, dev-tool monochrome) and is a worked example, not a spec — do not research "within" it, and do not carry its references forward because they are the ones already written down. Run the full flow below from scratch, and at step 10 rewrite `design-system.md` with this product's own direction and flip its status to `ACTIVE`.
+   - `ACTIVE` + **extending** → the direction (Cursor + Linear, restrained/technical, single accent, mono for tech labels) holds; research *within* it. Default on the starter itself.
+   - `ACTIVE` + **re-opening** it (deliberate redesign) → say so explicitly and get the user's confirmation before continuing. This ends with a `design-system.md` rewrite in the same PR.
 
 2. **Write the brief** (4–6 lines, in your reply): what surface, who it is for, the primary user goal, the feeling to hit, the objection to overcome, hard constraints (React Router + ShadCN + Tailwind + existing tokens, i18n via `app/locales/**`, both themes unless a reference lock pins one — see "Scoped design systems" in `rules/frontend.md`). Ask the user only for what would materially change the outcome; otherwise assume and proceed.
 
@@ -40,7 +41,7 @@ Steps:
 
 10. **Write the decision ledger into the brain** before coding — this is the deliverable of the command:
    - Feature-scoped work → a **"Design research"** section in `.brain/features/<slug>/<slug>.md`: references (title + URL + UUID), the dominant direction, and one row per decision (`layout / type / spacing / motion / imagery / copy` → concrete choice → which reference it traces to).
-   - Direction-level change → update `.brain/codebase/design-system.md` (tokens, do/don't, References) instead.
+   - Direction-level change → update `.brain/codebase/design-system.md` (tokens, do/don't, References) instead. Coming from `Lock status: NONE`, this is a **rewrite**, not an edit: replace the direction, pillars, component patterns, do/don'ts and reference table with this product's own, then set `Lock status` to `ACTIVE`. Leaving the starter's content in place next to your own is how a fork ends up with two directions and no lock.
    - Either way: `brain progress add --summary "design research: <surface> — locked <reference>" --next "implement <surface>"`.
 
 11. **Map every choice onto tokens.** Before implementing, restate each visual decision in repo terms: `app/app.css` semantic variables (`--primary`, `--card`, `--text-heading`, `--border`, `--chart-{1..5}`), Tailwind 4px rhythm, `cn()` for conditionals, `font-mono uppercase tracking-wider text-xs` for tech labels, ShadCN components, `@tabler/icons-react` / `lucide-react` icons (never emoji). A reference hex that has no token gets a new semantic token via the `frontend.md` "Adding a new color" steps, or gets dropped.

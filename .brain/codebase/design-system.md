@@ -1,8 +1,23 @@
 # Design System — Boilerplate Surface
 
+> **Lock status: `ACTIVE`** — see [Lock status](#lock-status) before treating anything below as binding. This line is the single signal [`../rules/frontend.md`](../rules/frontend.md) reads; nothing else in the repo encodes it.
+
 > Visual language for the **public marketing surface** (home, login/sign-up, dashboard entry). Synthesized from refero `DESIGN.md` references for [Cursor](https://styles.refero.design/style/4e3b4717-84c8-4599-baaf-a343c3d619b6) and [Linear](https://styles.refero.design/style/90ce5883-bb24-4466-93f7-801cd617b0d1) — both target a developer audience and read as "credible, technical, polished."
 >
 > **This is the surface design language.** Internal app surfaces (admin, dashboard sub-pages) should reuse the same tokens but lean denser/more utilitarian. ShadCN component defaults still apply unless overridden here.
+
+## Lock status
+
+This repo is a **template**. Apps are created from it (`/new-app`), which copies `.brain/` wholesale — so this file travels into products that have nothing to do with a developer-tooling boilerplate. The lock has to travel with a status, or every fork inherits Linear's palette for a product about restaurants.
+
+| Status | Means | Applies when |
+|---|---|---|
+| `ACTIVE` | The direction below is **binding**. Extending a surface = research *within* it. Only a deliberate redesign re-opens it, and that redesign updates this file in the same PR. | This repo — the starter itself (`package.json` name `cf-saas-starter-react-router`). |
+| `NONE` | **No direction is locked.** Everything below is a *worked example* of how to record one, not a direction to build toward. The first tier-2 surface must run [`/design-research`](../../.claude/commands/design-research.md) and rewrite this file with its own direction, references and do/don'ts. | Any app forked from the starter, before it has done its own design research. |
+
+**If the status line above says `NONE`, stop treating the rest of this file as a spec.** The pillars, the Cursor/Linear reference lock, the stack badges, the "don't reintroduce the orange→yellow gradient" note — all of it describes the starter's own landing page. Read it for the *shape* of a design record (direction → tokens → components → do/don't → locked references), then replace the content.
+
+What stays true in either status, because it is repo convention rather than visual direction: semantic tokens in `app/app.css` win over any tool's raw hex, `cn()` for conditional classes, `data-testid` on interactive elements, copy in `app/locales/en/*.json`. Those live in [`../rules/frontend.md`](../rules/frontend.md) and are not part of the lock.
 
 ## Direction
 
@@ -171,7 +186,7 @@ Worked example: the `/demo` surface (removed before merge — see [`features/sam
 
 This direction came from Refero. To extend it (new marketing section, new surface) or re-open it (deliberate redesign), run [`/design-research`](../../.claude/commands/design-research.md) — it drives the `refero-design` skill across the three Refero layers (styles → screens → flows), cross-checks a11y with `ui-ux-pro-max`, and writes a decision ledger before any JSX. Requires the `refero` MCP server ([`.mcp.json`](../../.mcp.json), `REFERO_MCP_TOKEN`).
 
-Locked reference set for this surface — pass these UUIDs to `refero_get_style` rather than re-searching from scratch:
+Locked reference set for this surface — **only while `Lock status` is `ACTIVE`**. Pass these UUIDs to `refero_get_style` rather than re-searching from scratch. Under `NONE` they are the starter's references, not yours: read them as an example of what a reference lock records (source + traits taken), then search Refero for your own product's world.
 
 | Reference | Style UUID | Traits taken |
 |---|---|---|
