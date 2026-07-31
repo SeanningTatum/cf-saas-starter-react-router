@@ -383,10 +383,34 @@ function checkTaggedErrorsMapped() {
       // class X extends Data.TaggedError("X")<...> {}
       if (ts.isClassDeclaration(node) && node.name) {
         const name = node.name.text;
+        // The runtime discriminant is the STRING passed to TaggedError("..."),
+        // not the class name. Comparing the class name let
+        // `class Foo extends Data.TaggedError("Bar")` pass on a `case "Foo":`
+        // that can never match — a mapping dead at runtime satisfying the gate.
+        let tag: string | null = null;
         const heritage = node.heritageClauses?.some((h) =>
-          h.types.some((t) => /TaggedError/.test(t.expression.getText(sf)))
+          h.types.some((t) => {
+            const text = t.expression.getText(sf);
+            if (!/TaggedError/.test(text)) return false;
+            if (ts.isCallExpression(t.expression) && t.expression.arguments.length) {
+              const arg = t.expression.arguments[0];
+              if (ts.isStringLiteralLike(arg)) tag = arg.text;
+            }
+            return true;
+          })
         );
-        if (heritage && !mapped.has(name)) {
+        const key = tag ?? name;
+        if (tag && tag !== name) {
+          // Not a violation by itself, but it is a trap worth naming.
+          if (!mapped.has(tag))
+            add(
+              "3-tagged-errors",
+              file,
+              node,
+              sf,
+              `class ${name} has runtime tag "${tag}" — app/lib/effect-trpc.ts must branch on "${tag}", not the class name`
+            );
+        } else if (heritage && !mapped.has(key)) {
           add(
             "3-tagged-errors",
             file,
@@ -448,14 +472,31 @@ function checkTestParity() {
       ];
       // An EMPTY test file used to satisfy this — existence is not coverage.
       const found = candidates.find(existsSync);
-      if (found && readFileSync(found, "utf8").trim().length < 40) {
-        violations.push({
-          rule: "4-unit-tests",
-          file: relative(ROOT, found),
-          line: 1,
-          detail: "test file is effectively empty — existence is not coverage",
-        });
-        continue;
+      if (found) {
+        const testSrc = readFileSync(found, "utf8");
+        if (testSrc.trim().length < 40) {
+          violations.push({
+            rule: "4-unit-tests",
+            file: relative(ROOT, found),
+            line: 1,
+            detail: "test file is effectively empty — existence is not coverage",
+          });
+          continue;
+        }
+        // It must actually IMPORT the module it claims to test. A file of the
+        // right name testing something else satisfied the gate otherwise.
+        const importsSubject = new RegExp(
+          `(from|import)\\s*\\(?\\s*["'\`][^"'\`]*\\b${stem.replace(/[.*+?^\${}()|[\]\\]/g, "\\$&")}(\\.js|\\.ts)?["'\`]`
+        ).test(testSrc);
+        if (!importsSubject) {
+          violations.push({
+            rule: "4-unit-tests",
+            file: relative(ROOT, found),
+            line: 1,
+            detail: `never imports "${stem}" — a test that does not load the module under test is not coverage`,
+          });
+          continue;
+        }
       }
       if (!found) {
         violations.push({
