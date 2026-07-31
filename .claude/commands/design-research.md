@@ -10,7 +10,15 @@ Steps:
 
 0. **Look at the category before the references.** Open the three best real products in this category and write down what they do that a template does not — that is the bar this surface gets judged against, and design references alone will not tell you. For software the answer is almost always: they show the product, they have a real typeface, they have depth. Skipping this step produces a page that is distinctive against a mood board and generic against the market.
 
-1. **Derive the lock status first.** `brain docs view codebase/design-system.md` + `brain docs view rules/frontend.md`, then run the one-line derivation the file specifies — `grep -q '"name": "cf-saas-starter-react-router"' package.json && echo ACTIVE || echo NONE`. The status is derived, not written down, precisely so a fork cannot inherit it. State which of the three cases you are in before anything else:
+1. **Derive the lock status first.** `brain docs view codebase/design-system.md` + `brain docs view rules/frontend.md`, then run the derivation from that file's `Lock status` section:
+
+   ```bash
+   grep -q '"name": "cf-saas-starter-react-router"' package.json \
+     && git remote get-url origin 2>/dev/null | grep -q 'SeanningTatum/cf-saas-starter-react-router' \
+     && echo ACTIVE || echo NONE
+   ```
+
+   The status is derived from both signals rather than written down, precisely so a fork cannot inherit it. If you already know you are in a forked product, the answer is `NONE` regardless of what this prints. State which of the three cases you are in before anything else:
    - `NONE` → **no direction is locked.** This repo was forked from the starter and has not done its own research. Everything in `design-system.md` describes the *starter's* landing page (Cursor + Linear, dev-tool monochrome) and is a worked example, not a spec — do not research "within" it, and do not carry its references forward because they are the ones already written down. Run the full flow below from scratch, and at step 10 rewrite `design-system.md` with this product's own direction and flip its status to `ACTIVE`.
    - `ACTIVE` + **extending** → the direction (Cursor + Linear, restrained/technical, single accent, mono for tech labels) holds; research *within* it. Default on the starter itself.
    - `ACTIVE` + **re-opening** it (deliberate redesign) → say so explicitly and get the user's confirmation before continuing. This ends with a `design-system.md` rewrite in the same PR.

@@ -1,9 +1,11 @@
 # Design System — Boilerplate Surface
 
-> **Lock status — derive it, never assume it.** `ACTIVE` while `package.json` `name` is `cf-saas-starter-react-router`; **`NONE` under any other name**. One `grep` answers it:
+> **Lock status — derive it, never assume it.** `ACTIVE` only when *both* signals say this is the starter itself; **`NONE` otherwise**:
 >
 > ```bash
-> grep -q '"name": "cf-saas-starter-react-router"' package.json && echo ACTIVE || echo NONE
+> grep -q '"name": "cf-saas-starter-react-router"' package.json \
+>   && git remote get-url origin 2>/dev/null | grep -q 'SeanningTatum/cf-saas-starter-react-router' \
+>   && echo ACTIVE || echo NONE
 > ```
 >
 > Read [Lock status](#lock-status) before treating anything below as binding.
@@ -16,14 +18,21 @@
 
 This repo is a **template**. Apps are created from it (`/new-app`), which copies `.brain/` wholesale — so this file travels into products that have nothing to do with a developer-tooling boilerplate. The lock has to travel with a status, or every fork inherits Linear's palette for a product about restaurants.
 
-The status is **derived, not written down**, because a hardcoded word is exactly what a wholesale copy carries across unchanged. The discriminator is `package.json` `name`: the starter is `cf-saas-starter-react-router`, and `bun setup` rewrites that field to the new app's name on first run ([`scripts/first-time-setup.ts`](../../scripts/first-time-setup.ts), `updatePackageJsonName`). A fork therefore reads `NONE` without anyone remembering to flip anything.
+The status is **derived, not written down**, because a hardcoded word is exactly what a wholesale copy carries across unchanged. Two independent signals have to agree, and they fail over for each other:
+
+| Signal | Why it discriminates | When it flips |
+|---|---|---|
+| `package.json` `name` | The starter is `cf-saas-starter-react-router`. | `bun setup` rewrites the field to the new app's name on first run — [`scripts/first-time-setup.ts`](../../scripts/first-time-setup.ts), `updatePackageJsonName`. |
+| `origin` remote | The starter is `SeanningTatum/cf-saas-starter-react-router`. | Immediately at creation — `/new-app` creates a **brand-new** GitHub repo from the template (no fork link) and clones it with `origin` already pointed at it. |
+
+`ACTIVE` requires **both**. That is what makes the derivation safe before setup has run: a freshly created app still carries the starter's package name for as long as it takes someone to run `bun setup`, but its `origin` never pointed at the starter for a moment. Conversely a starter checkout whose remote is renamed still reports its own package name. Either signal alone has a window where it lies; together they do not.
 
 | Status | Means | Derived when |
 |---|---|---|
-| `ACTIVE` | The direction below is **binding**. Extending a surface = research *within* it. Only a deliberate redesign re-opens it, and that redesign updates this file in the same PR. | `package.json` `name` is `cf-saas-starter-react-router` — i.e. this repo, the starter itself. |
-| `NONE` | **No direction is locked.** Everything below is a *worked example* of how to record one, not a direction to build toward. The first tier-2 surface must run [`/design-research`](../../.claude/commands/design-research.md) and rewrite this file with its own direction, references and do/don'ts — which also replaces this derivation with that app's own `ACTIVE` statement. | Any other `name` — an app created from the starter, before it has done its own design research. |
+| `ACTIVE` | The direction below is **binding**. Extending a surface = research *within* it. Only a deliberate redesign re-opens it, and that redesign updates this file in the same PR. | Both signals say starter — i.e. this repo. |
+| `NONE` | **No direction is locked.** Everything below is a *worked example* of how to record one, not a direction to build toward. The first tier-2 surface must run [`/design-research`](../../.claude/commands/design-research.md) and rewrite this file with its own direction, references and do/don'ts — which also replaces this derivation with that app's own `ACTIVE` statement. | Either signal disagrees — an app created from the starter, before it has done its own design research. |
 
-Edge case worth naming: an app that forked the starter but never ran `bun setup` still carries the starter's package name and will derive `ACTIVE` wrongly. If you know you are in a forked product, `NONE` is the answer regardless of what the `grep` says — the repo name, the README and the `## Overview` in `AGENTS.md` all settle it faster than the heuristic does.
+The derivation is a convenience, not an authority. **If you know you are in a forked product, the answer is `NONE`** whatever the commands print — the repo name, the README and the `## Overview` in `AGENTS.md` settle it faster than any heuristic. The commands exist so an agent with no other context still lands on the right answer.
 
 **If the status line above says `NONE`, stop treating the rest of this file as a spec.** The pillars, the Cursor/Linear reference lock, the stack badges, the "don't reintroduce the orange→yellow gradient" note — all of it describes the starter's own landing page. Read it for the *shape* of a design record (direction → tokens → components → do/don't → locked references), then replace the content.
 
