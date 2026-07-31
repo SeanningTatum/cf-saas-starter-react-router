@@ -14,7 +14,8 @@ Steps:
 
    ```bash
    grep -q '"name": "cf-saas-starter-react-router"' package.json \
-     && git remote get-url origin 2>/dev/null | grep -q 'SeanningTatum/cf-saas-starter-react-router' \
+     && git remote get-url origin 2>/dev/null \
+        | grep -qE 'SeanningTatum/cf-saas-starter-react-router(\.git)?/?$' \
      && echo ACTIVE || echo NONE
    ```
 

@@ -4,7 +4,8 @@
 >
 > ```bash
 > grep -q '"name": "cf-saas-starter-react-router"' package.json \
->   && git remote get-url origin 2>/dev/null | grep -q 'SeanningTatum/cf-saas-starter-react-router' \
+>   && git remote get-url origin 2>/dev/null \
+>      | grep -qE 'SeanningTatum/cf-saas-starter-react-router(\.git)?/?$' \
 >   && echo ACTIVE || echo NONE
 > ```
 >
@@ -23,7 +24,7 @@ The status is **derived, not written down**, because a hardcoded word is exactly
 | Signal | Why it discriminates | When it flips |
 |---|---|---|
 | `package.json` `name` | The starter is `cf-saas-starter-react-router`. | `bun setup` rewrites the field to the new app's name on first run — [`scripts/first-time-setup.ts`](../../scripts/first-time-setup.ts), `updatePackageJsonName`. |
-| `origin` remote | The starter is `SeanningTatum/cf-saas-starter-react-router`. | Immediately at creation — `/new-app` creates a **brand-new** GitHub repo from the template (no fork link) and clones it with `origin` already pointed at it. |
+| `origin` remote | The starter is `SeanningTatum/cf-saas-starter-react-router` — matched **anchored to the end** of the URL (`(\.git)?/?$`), so a name that merely starts with the starter's (`…-react-router-demo`) does not count. | Immediately at creation — `/new-app` creates a **brand-new** GitHub repo from the template (no fork link) and clones it with `origin` already pointed at it. |
 
 `ACTIVE` requires **both**. That is what makes the derivation safe before setup has run: a freshly created app still carries the starter's package name for as long as it takes someone to run `bun setup`, but its `origin` never pointed at the starter for a moment. Conversely a starter checkout whose remote is renamed still reports its own package name. Either signal alone has a window where it lies; together they do not.
 
