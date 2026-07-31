@@ -44,27 +44,26 @@ if command -v brain >/dev/null 2>&1; then
     fail "brain check reported violations (see output above)"
   fi
 
-  # ADVISORY, deliberately non-blocking: `--strict` additionally requires every
-  # shipped feature to carry a PASS verification doc bound to a commit. This repo
-  # does not satisfy that yet — five features were shipped before the invariant
-  # existed and have no browser-walk evidence.
+  # STRICT IS A GATE, via a ratchet.
   #
-  # It is advisory rather than a gate because the only way to make it green today
-  # would be to author PASS docs for flows nobody verified. That is fabricating
-  # evidence, which is the exact failure this harness exists to prevent. The debt
-  # is real; printing it is honest; hiding it or faking it is not.
+  # `--strict` additionally requires every shipped feature to carry a PASS
+  # verification bound to a commit. Five features here shipped before that
+  # invariant existed and have no browser-walk evidence, so this started as an
+  # advisory — but an advisory decays into noise, and review rightly called that
+  # a dodge.
   #
-  # Close it by actually verifying those flows (`brain playbook verify` →
-  # feature-verifier browser walk → a receipt-bearing verdict doc), then promote
-  # this to a `fail`.
-  if ! brain check --strict >/tmp/brain-strict.$$ 2>&1; then
-    echo "  ⚠ advisory: \`brain check --strict\` reports unproven shipped features:"
-    grep -E "PASS verification|bound to a commit" /tmp/brain-strict.$$ | sed 's/^/      /' || true
-    echo "      (not a failure yet — see the comment in scripts/harness-check.sh)"
+  # The ratchet resolves it without fabricating anything: `policy.strict_grandfathered`
+  # in feature_list.json lists exactly those legacy slugs, committed and
+  # reviewable. Every NEW ship must satisfy the gate. The list only shrinks —
+  # `brain check --strict` fails if an entry becomes fully provable and was left
+  # on it. Close the debt by actually verifying those flows (`brain playbook
+  # verify` -> feature-verifier browser walk -> `brain receipt <slug>`), then
+  # delete the entry.
+  if brain check --strict; then
+    ok "brain check --strict passed (new ships must prove themselves; legacy debt is on the ratchet list)"
   else
-    ok "brain check --strict passed (every shipped feature has a commit-bound PASS)"
+    fail "brain check --strict reported violations (see output above)"
   fi
-  rm -f /tmp/brain-strict.$$
 else
   # No brain-axi on PATH.
   #
