@@ -13,7 +13,7 @@ Steps:
 5. If diff touches `wrangler.jsonc`, `workers/`, `workflows/`, `app/runtime.ts`, or any binding wiring — run `bun run build`. If skipped, justify why.
 6. If diff touches a UI feature flow (`app/components/`, `app/routes/*.tsx`) — spawn the `feature-verifier` sub-agent (slug + golden path + one error path) and report its verdict + the `.brain/features/<slug>/verifications/<date>.md` path. For a trivial tweak, state plainly whether you walked it in a browser. Do not claim UI works without a browser walk.
 7. Run `git diff --stat` and for each changed path, name the brain doc that owns it (table in `99-verify-done.md`). Flag any path whose owning doc was not updated.
-8. Grep the diff for the five non-negotiables: `throw` outside `Effect.tryPromise.catch`, `process.env`, `from "zod"`, bare `try {}`. Quote any hit.
+8. Run `bun run scripts/check-non-negotiables.ts` for the five non-negotiables (AST over the whole tree, not a grep over the diff). Quote any violation verbatim. Do NOT hand-grep for `throw`/`process.env`/`from "zod"`/`try {}` — that sweep was deleted from CI as unsound (`throw err` has no `new`, `'zod'` is not `"zod"`, and rule #4 is not expressible as a pattern).
 9. Run `./scripts/harness-check.sh` (wraps `brain check` + repo supplement). Must exit zero. Quote any violation.
 10. If a run note was opened for this task — `brain runs append <slug> --step "verify-done" --observed "<result tails>"` (or append+close the flat run note), then `brain progress add --summary "..." --next "..."`.
 

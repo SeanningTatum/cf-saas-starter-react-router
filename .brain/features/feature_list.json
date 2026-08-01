@@ -3,7 +3,16 @@
   "updated": "2026-07-30",
   "policy": {
     "one_in_progress_at_a_time": true,
-    "definition_of_done": "implementation complete + verify-done passed + feature MD updated + brain coherent"
+    "definition_of_done": "implementation complete + verify-done passed + feature MD updated + brain coherent",
+    "strict_grandfathered": [
+      "admin-dashboard",
+      "file-upload",
+      "analytics",
+      "preview-deployments",
+      "feature-verification",
+      "authentication",
+      "otel-tracing"
+    ]
   },
   "features": [
     {

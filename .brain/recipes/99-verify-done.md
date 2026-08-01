@@ -6,6 +6,30 @@ Run this before declaring a task complete. Externalises the "am I finished?" jud
 
 Agents tend to stop at "code compiles" or "tests pass without re-running them." This list forces an actual end-to-end pass + brain-coherence check before handoff.
 
+## The registry decides WHICH gates run — not this prose
+
+```bash
+brain verify --stage verify      # everything below that is a command
+brain verify --only <name>       # re-run one gate after a fix
+```
+
+[`.brain/verify.json`](../verify.json) is the single source of truth for the gate
+list and which stage each belongs to. Run it; don't hand-assemble the commands.
+
+This matters because the applicability rules used to be written down in **three
+places that disagreed** — this recipe said "e2e default-on for source changes",
+[`/verify-done`](../../.claude/commands/verify-done.md) used a path list, and
+[`verify-done-runner`](../../.claude/agents/verify-done-runner.md) used a
+narrower "cross-component" judgment. An agent could pick whichever reading
+demanded least, and nothing caught it. The registry has one answer.
+
+Every gate execution also appends a row to `runs/gates.jsonl`; `brain metrics`
+reports first-pass rate and which gate actually catches things. A gate that has
+never failed is worth questioning, not trusting.
+
+The sections below explain **why** each gate exists and what to do when it fails.
+They are no longer the place that decides whether it applies.
+
 ## 1. Tests that pin the change (if source changed)
 
 Before running the suite, make sure the change is actually *pinned* by a test — a green run of tests that never exercised the new behaviour proves nothing.
@@ -91,18 +115,26 @@ Look at your diff (`git diff --stat`). For every changed path, ask:
 
 ## 7. Five non-negotiables sweep
 
-Grep your diff:
-
 ```bash
-git diff --stat | head
-git diff | grep -E '^\+' | grep -E '\bthrow\b|process\.env|from "zod"|try\s*\{'
+bun run scripts/check-non-negotiables.ts
 ```
+
+Walks the TypeScript AST over the whole tree. Exit 1 lists `rule — file:line — detail`.
+
+> **Do not grep for these.** This step used to be
+> `git diff | grep -E '\bthrow\b|process\.env|from "zod"|try\s*\{'`, which is the
+> same unsound sweep CI deleted: `throw err` has no `new`, `'zod'` is not
+> `"zod"`, `try` inside a comment matches, a violation that merely *moves*
+> between files vanishes from the diff, and non-negotiable #4 (a unit test per
+> helper and repository) cannot be expressed as a text pattern at all. The
+> checker covers all five structurally and carries 41 failing fixtures.
 
 Any hit = re-read [`.brain/codebase/effect-ts.md`](../codebase/effect-ts.md). Likely violation:
 - `throw` outside `Effect.tryPromise.catch` → use `Effect.fail(new TaggedError(...))`
 - `process.env` → use `CloudflareEnv` Tag
 - `from "zod"` → use Effect Schema
 - bare `try {}` → use `Effect.tryPromise`
+- an exported helper or repository with no sibling `__tests__/<name>.test.ts` → write the test
 
 ## 8. Harness invariants
 

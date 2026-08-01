@@ -9,7 +9,7 @@ Project-local Claude Code subagents that wrap pieces of [`.brain/HARNESS.md`](..
 | [`brain-navigator`](brain-navigator.md) | Instructions | Before writing code — get reading list for the task |
 | [`ui-builder`](ui-builder.md) | Instructions + Verification (builds) | **Any user-visible work** — routes, components, marketing surfaces, forms, states. Carries the frontend rules, craft moves and anti-slop tells so the mistakes are not made, and self-measures with `design:audit` |
 | [`design-critic`](design-critic.md) | Verification (judges) | After UI work — judges the *render* against the tells + craft, from screenshots only. P0/P1 block. Backstop, not the method |
-| [`recipe-runner`](recipe-runner.md) | Instructions + Lifecycle | Adding new code that matches one of the 8 recipes |
+| [`recipe-runner`](recipe-runner.md) | Instructions + Lifecycle | Adding new code that matches one of the add-* recipes |
 | [`test-author`](test-author.md) | Verification (authors) | After implementing a feature/fix — write or update the unit tests that pin its business logic |
 | [`span-instrumenter`](span-instrumenter.md) | Verification (observability) | After adding an endpoint / repo method / service call — add or audit tracing spans per convention |
 | [`effect-ts-enforcer`](effect-ts-enforcer.md) | Verification | After writing code, before `/verify-done` — review against 5 non-negotiables |

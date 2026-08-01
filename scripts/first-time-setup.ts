@@ -485,6 +485,91 @@ export async function setupGitHubCiCredentials(accountId?: string) {
 }
 
 // Main setup function
+/**
+ * Reset the inherited `.brain` state on a repo cloned from this template.
+ *
+ * This repo IS a template, and `.brain/` is committed — 96 files of it. So every
+ * cloned app was born believing it had already shipped this template's eight
+ * features, with a rolling cursor whose top entry was another project's release
+ * and five dated run notes to match. `brain progress` — the harness's own
+ * designated session-start recovery path — handed a fresh app someone else's
+ * state. That is context drift installed as a default, and it was silent because
+ * the inherited features are *half* true: the code really does implement auth,
+ * admin, and upload, so nothing reads as obviously stale.
+ *
+ * `brain init --state-only` wipes the state subsystem (features/, runs/, plans/,
+ * screenshots/, evals/) and keeps the docs (rules/, recipes/, codebase/,
+ * high-level-architecture/, HARNESS.md, verify.json) — the clone inherits the
+ * STACK along with the code, but not another project's history.
+ *
+ * Skipped, never failed: setup must not die because an optional CLI is absent.
+ */
+async function resetBrainState(): Promise<void> {
+  if (!fs.existsSync(".brain")) return;
+
+  const brainOnPath =
+    spawnSync("brain", ["--help"], { stdio: "ignore" }).status === 0;
+  // Pinned, like every other brain-axi invocation in this repo. An unpinned
+  // fallback meant the destructive path was the ONE place that ran whatever was
+  // on main at that moment.
+  const runner: [string, string[]] = brainOnPath
+    ? ["brain", []]
+    : ["npx", ["-y", "github:SeanningTatum/brain-axi#v0.1.0"]];
+
+  // Name what is about to be deleted. `--state-only` wipes features/ WHOLE,
+  // which includes the memos for authentication, file-upload, admin-dashboard —
+  // code this clone genuinely inherits. Losing the tracker rows is the point;
+  // losing those memos is a real cost, and the operator should see the list
+  // rather than discover it later.
+  let doomed: string[] = [];
+  try {
+    doomed = fs
+      .readdirSync(path.join(".brain", "features"), { withFileTypes: true })
+      .filter((e) => e.isDirectory())
+      .map((e) => e.name);
+  } catch {
+    // no features dir — nothing to enumerate
+  }
+  if (doomed.length) {
+    console.log(
+      `\x1b[33m  This deletes ${doomed.length} inherited feature folder(s), memos included: ${doomed.join(", ")}\x1b[0m`
+    );
+    console.log(
+      "\x1b[33m  The code stays; the docs describing it do not. Copy anything you want to keep first.\x1b[0m"
+    );
+  }
+
+  const reset = await confirm({
+    message:
+      "Reset the inherited .brain state? (clears this template's features/runs/plans, keeps its rules/recipes/docs)",
+    // Defaults to NO. This is irreversible and ran with initialValue: true as
+    // the first action of setup — one stray Enter destroyed the memos above.
+    initialValue: false,
+  });
+  if (isCancel(reset) || !reset) {
+    console.log(
+      "\x1b[33m  Skipped — note that `brain progress` will report this template's history, not yours.\x1b[0m"
+    );
+    return;
+  }
+
+  const res = spawnSync(
+    runner[0],
+    [...runner[1], "init", "--state-only", "--dir", ".", "--yes"],
+    { stdio: "inherit" }
+  );
+  if (res.status !== 0) {
+    console.log(
+      "\x1b[33m  Could not reset brain state (is brain-axi installed?). Run this yourself:\x1b[0m"
+    );
+    console.log(
+      "\x1b[33m    npx -y github:SeanningTatum/brain-axi init --state-only --dir . --yes\x1b[0m"
+    );
+    return;
+  }
+  console.log("\x1b[32m  Brain state reset — features/ and runs/ are yours now.\x1b[0m");
+}
+
 async function main() {
   intro("🚀 Cloudflare SaaS Stack - First-Time Setup");
 
@@ -504,6 +589,13 @@ async function main() {
     process.exit(1);
   }
   console.log("\x1b[32m✓ Authenticated with Cloudflare\x1b[0m");
+
+  // AFTER the auth gate, deliberately. This ran as the very first action in
+  // main(), before the check above — so anyone who hit "not logged in" and
+  // stopped had already had .brain/features/ deleted by a prompt that defaulted
+  // to yes. Irreversible work must sit behind every cheap precondition, not in
+  // front of them.
+  await resetBrainState();
 
   // Check for multiple accounts and prompt for selection if needed
   const accounts = extractAccountDetails(whoamiOutput);
