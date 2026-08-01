@@ -21,6 +21,14 @@
 
 ---
 
+## 2026-08-01 — Released v1.7.0 'Green Means Something Now' (squash 8501ac5 PR #22 + 4886305 PR #23) and brain-axi v0.2.0 'State You Can Check' (f6d9410 PR #18). AST non-negotiables gate replaces the CI grep sweep, .brain/verify.json is the single gate registry, harness-check degraded mode fails, and the CI pin now installs brain-axi v0.2.0 so 'brain check --strict' runs on a machine the agent does not control. An independent cold reviewer found the branch turned CI red on every PR (v0.1.0 rejects --strict; it passed locally only via npm link) and that the flagship gate reported pass over the empty set. Both fixed and proven.
+- branch: `main`
+- in-progress feature: none
+- run note: none
+- next: Two open: (1) --strict evaluates ZERO features — all 7 shipped are on policy.strict_grandfathered. Close the debt per-feature: brain playbook verify -> browser walk -> brain receipt <slug> -> delete the slug. (2) Deploy preview + Deploy Production still red on the missing D1:Edit token scope, red since 2026-07-24 and unrelated to this work.
+
+---
+
 ## 2026-07-30 — Released v1.6.0 'A Design Sub-Agent For Your Design Needs' (squash 7e9d5d6, PR #21 squash-merged, branch deleted). Ships ui-builder + design-critic + design-audit + add-premium-surface recipe + /design-research + /build-feature workflow + scoped-design-systems + ui-ux-pro-max/refero wiring. Demo surface cut before merge. Deploy preview red on the pre-existing D1:Edit token scope.
 - branch: `main`
 - in-progress feature: none
