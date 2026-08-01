@@ -34,10 +34,12 @@ jobs:
 
       - name: Install brain-axi CLI
         # Pinned for reproducible CI — bump deliberately when adopting a newer CLI.
-        # NOTE: the state-integrity gates (schema validation, verdict parsing,
-        # index-drift, receipts, `check --strict`) land in the next brain-axi
-        # release; until this pin moves, CI runs the older check set.
-        run: npm i -g github:SeanningTatum/brain-axi#v0.1.0
+        # v0.2.0 is the first release carrying the state-integrity gates (schema
+        # validation, one verdict parser, index-drift, receipts, `check
+        # --strict`). Before this bump CI ran the older check set, so the gate
+        # covering the documented trust boundary — gates on a machine the agent
+        # does not control — was live nowhere.
+        run: npm i -g github:SeanningTatum/brain-axi#v0.2.0
 
       - name: Baseline gates (declared in .brain/verify.json)
         # One entry point: the registry owns WHICH gates run, so adding one is a
@@ -63,7 +65,7 @@ jobs:
         run: bun install --frozen-lockfile
 
       - name: Install brain-axi CLI
-        run: npm i -g github:SeanningTatum/brain-axi#v0.1.0
+        run: npm i -g github:SeanningTatum/brain-axi#v0.2.0
 
       # Through the registry, not a hardcoded command. `build` is declared at
       # stage `verify` in .brain/verify.json, and nothing ran that stage — CI
@@ -94,7 +96,7 @@ jobs:
         run: bun run db:migrate:local
 
       - name: Install brain-axi CLI
-        run: npm i -g github:SeanningTatum/brain-axi#v0.1.0
+        run: npm i -g github:SeanningTatum/brain-axi#v0.2.0
 
       - name: Install Playwright browsers
         run: bunx playwright install --with-deps chromium
