@@ -42,16 +42,25 @@ features/
 
 ## Files
 
+> **Generated — do not hand-edit between the markers.** Run
+> `brain features index --write`. `feature_list.json` is the source of truth and
+> `brain check` fails on any disagreement. Without these markers the regenerator
+> silently no-ops (`no-markers`), so this table could drift from the tracker
+> indefinitely — which it did: it claimed `otel-tracing` was in-progress after it
+> shipped, and omitted `sample-saas-landing` entirely.
+
+<!-- brain:features-table -->
 | Feature | Memo | Status | Latest verification |
 |---------|------|--------|---------------------|
-| Authentication | [`authentication/authentication.md`](authentication/authentication.md) | shipped | [2026-07-13 ✅ PASS](authentication/verifications/2026-07-13.md) |
+| Authentication | [`authentication/authentication.md`](authentication/authentication.md) | shipped | [2026-07-13 PASS](authentication/verifications/2026-07-13.md) |
 | Admin Dashboard | [`admin-dashboard/admin-dashboard.md`](admin-dashboard/admin-dashboard.md) | shipped | — |
 | File Upload | [`file-upload/file-upload.md`](file-upload/file-upload.md) | shipped | — |
 | Analytics | [`analytics/analytics.md`](analytics/analytics.md) | shipped | — |
 | Preview Deployments | [`preview-deployments/preview-deployments.md`](preview-deployments/preview-deployments.md) | shipped | — |
-| Feature Verification | [`feature-verification/feature-verification.md`](feature-verification/feature-verification.md) | shipped | [2026-07-13 ✅ PASS (self-verified via authentication)](authentication/verifications/2026-07-13.md) |
-| OpenTelemetry Span Tracing | [`otel-tracing/otel-tracing.md`](otel-tracing/otel-tracing.md) | shipped | [2026-07-29 ✅ PASS](otel-tracing/verifications/2026-07-29.md) |
-| Sample SaaS Landing | [`sample-saas-landing/sample-saas-landing.md`](sample-saas-landing/sample-saas-landing.md) | cut | [2026-07-30 ✅ PASS](sample-saas-landing/verifications/2026-07-30.md) |
+| Feature Verification | [`feature-verification/feature-verification.md`](feature-verification/feature-verification.md) | shipped | — |
+| OpenTelemetry Span Tracing | [`otel-tracing/otel-tracing.md`](otel-tracing/otel-tracing.md) | shipped | [2026-07-29 PASS](otel-tracing/verifications/2026-07-29.md) |
+| Sample SaaS Landing (Loadline) | [`sample-saas-landing/sample-saas-landing.md`](sample-saas-landing/sample-saas-landing.md) | cut | [2026-07-30 PASS](sample-saas-landing/verifications/2026-07-30.md) |
+<!-- /brain:features-table -->
 
 ## Update trigger
 

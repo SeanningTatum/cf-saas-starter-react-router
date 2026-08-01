@@ -26,9 +26,16 @@ cd "$(dirname "$0")/.."
 FAIL=0
 PASS_COUNT=0
 FAIL_COUNT=0
+SKIP_COUNT=0
 
 ok()   { echo "  ✓ $1"; PASS_COUNT=$((PASS_COUNT+1)); }
 fail() { echo "  ✗ $1"; FAIL_COUNT=$((FAIL_COUNT+1)); FAIL=1; }
+# A check that could not RUN. Never counted as a pass — the whole reason the
+# degraded mode below fails is that silence must not look like success — but not
+# counted as a failure either, because the cause is a deliberate, pinned CLI
+# version rather than a defect in this tree. It prints loudly and is named again
+# in the summary, so it cannot be skimmed past.
+skip() { echo "  ⊘ $1"; SKIP_COUNT=$((SKIP_COUNT+1)); }
 
 # --- Layer 1: brain-axi CLI ---------------------------------------------------
 echo "=== brain check (brain-axi CLI) ==="
@@ -47,8 +54,8 @@ if command -v brain >/dev/null 2>&1; then
   # STRICT IS A GATE, via a ratchet.
   #
   # `--strict` additionally requires every shipped feature to carry a PASS
-  # verification bound to a commit. Five features here shipped before that
-  # invariant existed and have no browser-walk evidence, so this started as an
+  # verification bound to a commit. Every feature here shipped before that
+  # invariant existed and has no browser-walk evidence, so this started as an
   # advisory — but an advisory decays into noise, and review rightly called that
   # a dodge.
   #
@@ -59,10 +66,41 @@ if command -v brain >/dev/null 2>&1; then
   # on it. Close the debt by actually verifying those flows (`brain playbook
   # verify` -> feature-verifier browser walk -> `brain receipt <slug>`), then
   # delete the entry.
-  if brain check --strict; then
-    ok "brain check --strict passed (new ships must prove themselves; legacy debt is on the ratchet list)"
+  #
+  # CAPABILITY PROBE, not a version compare. `--strict` landed after v0.1.0, and
+  # CI pins v0.1.0 (.github/workflows/ci.yml) — so this ran `brain check
+  # --strict` against a CLI that rejects the flag, exited 2, and turned the
+  # baseline job red on EVERY pull request. It passed locally only because a
+  # developer `npm link`ed an unreleased checkout, which is the worst possible
+  # split: green on the machine that wrote the code, red everywhere else.
+  #
+  # Probing --help is version-agnostic; a version compare would need updating
+  # again at the next release.
+  if brain check --help 2>&1 | grep -q -- '--strict'; then
+    if STRICT_OUT=$(brain check --strict 2>&1); then
+      printf '%s\n' "$STRICT_OUT"
+      # Do not print a ✓ over a gate that evaluated nothing. With every shipped
+      # feature on the ratchet list the strict rows come back `skip`, and
+      # reporting that as "passed" reintroduced the vacuous green tick one layer
+      # up from the CLI that was just fixed to stop emitting it.
+      if printf '%s' "$STRICT_OUT" | grep -q ',skip,'; then
+        skip "brain check --strict evaluated 0 feature(s) — every shipped feature is on the ratchet list"
+        echo "      Nothing is failing, but nothing is PROVEN either. Close the debt one"
+        echo "      feature at a time: brain playbook verify -> browser walk -> brain receipt <slug>,"
+        echo "      then delete its slug from policy.strict_grandfathered in feature_list.json."
+      else
+        ok "brain check --strict passed (new ships must prove themselves; legacy debt is on the ratchet list)"
+      fi
+    else
+      printf '%s\n' "$STRICT_OUT"
+      fail "brain check --strict reported violations (see output above)"
+    fi
   else
-    fail "brain check --strict reported violations (see output above)"
+    skip "brain check --strict NOT RUN — the installed brain-axi predates the flag"
+    echo "      This run did NOT verify: shipped ⇒ PASS verification, receipt provenance."
+    echo "      Fix by moving the pin in .github/workflows/ci.yml once brain-axi"
+    echo "      cuts a release containing \`check --strict\`, or install from main:"
+    echo "        npm i -g github:SeanningTatum/brain-axi"
   fi
 else
   # No brain-axi on PATH.
@@ -231,11 +269,18 @@ done
 
 echo ""
 echo "=== Summary ==="
-echo "passed: $PASS_COUNT"
-echo "failed: $FAIL_COUNT"
+echo "passed:  $PASS_COUNT"
+echo "failed:  $FAIL_COUNT"
+echo "skipped: $SKIP_COUNT"
 echo ""
 if [ "$FAIL" -eq 0 ]; then
-  echo "Harness invariants intact (brain check + repo supplement)."
+  if [ "$SKIP_COUNT" -gt 0 ]; then
+    # Never claim "intact" over a check that did not run. That conflation is the
+    # exact bug the degraded mode above exists to prevent.
+    echo "Harness invariants hold for what RAN — $SKIP_COUNT check(s) skipped (⊘ above), coverage is incomplete."
+  else
+    echo "Harness invariants intact (brain check + repo supplement)."
+  fi
   exit 0
 else
   echo "Harness has violations. Fix before declaring work done."

@@ -62,8 +62,15 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
+      - name: Install brain-axi CLI
+        run: npm i -g github:SeanningTatum/brain-axi#v0.1.0
+
+      # Through the registry, not a hardcoded command. `build` is declared at
+      # stage `verify` in .brain/verify.json, and nothing ran that stage — CI
+      # invoked `bun run build` directly, so the registry entry was decorative
+      # and could drift from what CI actually did without anything noticing.
       - name: Build
-        run: bun run build
+        run: brain verify --only build
 
   # Thin, stable smoke specs (auth + critical paths) — the automated regression net.
   # Feature-level proof is the feature-verifier sub-agent → .brain/features/<slug>/verifications/ (not run in CI).
@@ -86,11 +93,15 @@ jobs:
       - name: Apply local D1 migrations
         run: bun run db:migrate:local
 
+      - name: Install brain-axi CLI
+        run: npm i -g github:SeanningTatum/brain-axi#v0.1.0
+
       - name: Install Playwright browsers
         run: bunx playwright install --with-deps chromium
 
+      # Registry-driven, same reason as `build` above.
       - name: Run e2e tests
-        run: bun run test:e2e
+        run: brain verify --only e2e
 
       - name: Upload Playwright report
         if: always()
@@ -100,30 +111,15 @@ jobs:
           path: playwright-report/
           retention-days: 7
 
-  non-negotiables:
-    name: Five non-negotiables (AST)
-    runs-on: ubuntu-latest
-    needs: baseline
-    timeout-minutes: 5
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: "1.2.19"  # pinned: gate behaviour must be reproducible across PRs
-
-      - name: Install dependencies
-        run: bun install --frozen-lockfile
-
-      # Prove the gate can FAIL before trusting that it passed. Each fixture is a
-      # violation the previous grep sweep let through.
-      - name: Checker selftest
-        run: bun run scripts/check-non-negotiables.ts --selftest
-
-      - name: Five non-negotiables
-        run: bun run scripts/check-non-negotiables.ts
-
+# The dedicated `non-negotiables` job that stood here was DELETED, not moved: it
+# re-ran `check-non-negotiables.ts` over the same tree the `baseline` job had
+# already swept via `brain verify --stage baseline`, with no caching between
+# them. Its one unique step — the selftest, which proves the gate can fail
+# before anyone trusts that it passed — is now a registry entry
+# (`non-negotiables-selftest` in .brain/verify.json), so it runs in baseline
+# alongside the sweep and the registry stays the single answer to "which gates
+# run".
+#
 # Replaced the `effect-ts-grep` job (a lexical sweep over ADDED DIFF LINES).
 # It matched `grep -E '\bthrow new\b'`, so `throw err` walked through; it never
 # checked try/catch or Effect.promise at all; its zod pattern was double-quote

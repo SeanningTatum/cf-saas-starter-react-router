@@ -30,17 +30,40 @@
  *   5. Cloudflare Workers, not Node — no process.env
  */
 import ts from "typescript";
-import { readdirSync, readFileSync, statSync, existsSync } from "node:fs";
+import {
+  readdirSync,
+  readFileSync,
+  statSync,
+  existsSync,
+  mkdtempSync,
+  mkdirSync,
+  writeFileSync,
+  rmSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
 import { join, relative, basename, dirname } from "node:path";
 
 const ROOT = process.cwd();
 
-type Violation = { rule: string; file: string; line: number; detail: string };
+// `kind` is a STABLE discriminator for violations that later logic must find
+// again. The exemption pass used to locate Effect.promise findings with
+// `detail.startsWith("Effect.promise")`, so rewording a human-readable message
+// would have silently disabled the `// effect-promise-ok:` escape hatch.
+// Behavior must not hang off prose.
+type ViolationKind = "effect-promise";
+type Violation = { rule: string; file: string; line: number; detail: string; kind?: ViolationKind };
 const violations: Violation[] = [];
 
-function add(rule: string, file: string, node: ts.Node, sf: ts.SourceFile, detail: string) {
+function add(
+  rule: string,
+  file: string,
+  node: ts.Node,
+  sf: ts.SourceFile,
+  detail: string,
+  kind?: ViolationKind
+) {
   const { line } = sf.getLineAndCharacterOfPosition(node.getStart(sf));
-  violations.push({ rule, file: relative(ROOT, file), line: line + 1, detail });
+  violations.push({ rule, file: relative(ROOT, file), line: line + 1, detail, kind });
 }
 
 function walkDir(dir: string, out: string[] = []): string[] {
@@ -145,18 +168,50 @@ const TRY_CATCH_GRANDFATHERED = new Set([
  */
 const EFFECT_TRY_METHODS = new Set(["tryPromise", "try", "tryMap", "tryMapPromise"]);
 
-function insideEffectTry(node: ts.Node): boolean {
+/**
+ * Local names bound to the `effect` package's Effect module in this file.
+ *
+ * `import { Effect } from "effect"` is the house style, but
+ * `import * as E from "effect/Effect"` and `import { Effect as Eff }` are the
+ * same module under another name. Resolving the alias is what keeps the
+ * detector from being defeated by a rename — and, just as importantly, keeps
+ * the DETECTION as wide as the EXEMPTION.
+ */
+function effectAliases(sf: ts.SourceFile): Set<string> {
+  const names = new Set<string>(["Effect"]);
+  for (const st of sf.statements) {
+    if (!ts.isImportDeclaration(st) || !ts.isStringLiteral(st.moduleSpecifier)) continue;
+    const spec = st.moduleSpecifier.text;
+    if (spec !== "effect" && !spec.startsWith("effect/")) continue;
+    const clause = st.importClause;
+    if (!clause) continue;
+    // import * as E from "effect/Effect"
+    if (clause.namedBindings && ts.isNamespaceImport(clause.namedBindings)) {
+      names.add(clause.namedBindings.name.text);
+    }
+    // import { Effect as Eff } from "effect"
+    if (clause.namedBindings && ts.isNamedImports(clause.namedBindings)) {
+      for (const el of clause.namedBindings.elements) {
+        if ((el.propertyName?.text ?? el.name.text) === "Effect") names.add(el.name.text);
+      }
+    }
+  }
+  return names;
+}
+
+/** Does this expression denote the Effect module? `Effect`, `E`, `Foo.Effect`. */
+function isEffectReceiver(recv: ts.Expression, sf: ts.SourceFile): boolean {
+  const aliases = effectAliases(sf);
+  if (ts.isIdentifier(recv)) return aliases.has(recv.text);
+  if (ts.isPropertyAccessExpression(recv)) return aliases.has(recv.name.text);
+  return false;
+}
+
+function insideEffectTry(node: ts.Node, sf: ts.SourceFile): boolean {
   for (let p: ts.Node | undefined = node.parent; p; p = p.parent) {
     if (ts.isCallExpression(p) && ts.isPropertyAccessExpression(p.expression)) {
       if (!EFFECT_TRY_METHODS.has(p.expression.name.text)) continue;
-      const recv = p.expression.expression;
-      // Effect.tryPromise(...) or SomeNamespace.Effect.tryPromise(...)
-      const recvName = ts.isIdentifier(recv)
-        ? recv.text
-        : ts.isPropertyAccessExpression(recv)
-          ? recv.name.text
-          : null;
-      if (recvName === "Effect") return true;
+      if (isEffectReceiver(p.expression.expression, sf)) return true;
     }
   }
   return false;
@@ -170,7 +225,7 @@ function checkSourceFile(file: string, sf: ts.SourceFile) {
     // --- 1. no bare throw -------------------------------------------------
     if (ts.isThrowStatement(node)) {
       const allowed =
-        insideEffectTry(node) || // the documented escape
+        insideEffectTry(node, sf) || // the documented escape
         inBoundary(file) || // designated Effect -> tRPC / tRPC middleware edge
         isVendoredUi(file) || // vendored ShadCN context guards
         isFrameworkControlFlowThrow(node, routerImports); // React Router `throw redirect(...)`
@@ -189,7 +244,7 @@ function checkSourceFile(file: string, sf: ts.SourceFile) {
     // --- 1b. no try/catch outside Effect.tryPromise ------------------------
     if (
       ts.isTryStatement(node) &&
-      !insideEffectTry(node) &&
+      !insideEffectTry(node, sf) &&
       !isVendoredUi(file) &&
       !TRY_CATCH_GRANDFATHERED.has(rel)
     ) {
@@ -205,19 +260,25 @@ function checkSourceFile(file: string, sf: ts.SourceFile) {
     // --- 1c. Effect.promise on something that can reject -------------------
     // Effect.promise assumes the promise NEVER rejects; a rejection escapes the
     // Effect error channel entirely and becomes an unhandled defect.
+    // The receiver test must be at least as PERMISSIVE as insideEffectTry's, or
+    // the exemption outruns the detection: insideEffectTry resolves a nested
+    // property-access receiver (`Foo.Effect.try`), while this required a bare
+    // identifier literally named `Effect` — so `E.promise(...)` under
+    // `import * as E from "effect"`, and `Foo.Effect.promise(...)`, were never
+    // flagged at all. Backwards: the escape hatch was wider than the rule.
     if (
       ts.isCallExpression(node) &&
       ts.isPropertyAccessExpression(node.expression) &&
-      ts.isIdentifier(node.expression.expression) &&
-      node.expression.expression.text === "Effect" &&
-      node.expression.name.text === "promise"
+      node.expression.name.text === "promise" &&
+      isEffectReceiver(node.expression.expression, sf)
     ) {
       add(
         "1-effect-ts",
         file,
         node,
         sf,
-        "Effect.promise assumes the promise cannot reject — use Effect.tryPromise unless that is provably true (then add `// effect-promise-ok: <why>`)"
+        "Effect.promise assumes the promise cannot reject — use Effect.tryPromise unless that is provably true (then add `// effect-promise-ok: <why>`)",
+        "effect-promise"
       );
     }
 
@@ -328,7 +389,7 @@ function checkSourceFile(file: string, sf: ts.SourceFile) {
   const before = violations.length;
   visit(sf);
   for (let i = violations.length - 1; i >= before; i--) {
-    if (violations[i].detail.startsWith("Effect.promise") && exemptLines.has(violations[i].line)) {
+    if (violations[i].kind === "effect-promise" && exemptLines.has(violations[i].line)) {
       violations.splice(i, 1);
     }
   }
@@ -337,9 +398,14 @@ function checkSourceFile(file: string, sf: ts.SourceFile) {
 // ---------------------------------------------------------------------------
 // 3. every tagged error is mapped in tagToTRPC
 // ---------------------------------------------------------------------------
-function checkTaggedErrorsMapped() {
-  const errDir = join(ROOT, "app/models/errors");
-  const mapFile = join(ROOT, "app/lib/effect-trpc.ts");
+// `root` is parameterized ONLY so the selftest can point these at a synthetic
+// tree. Both functions read fixed paths off ROOT, which is why 270 of this
+// file's 535 code lines shipped with no fixture at all — they were physically
+// untestable while the banner claimed "a gate with no failing fixture is a
+// claim, not a check".
+function checkTaggedErrorsMapped(root: string = ROOT) {
+  const errDir = join(root, "app/models/errors");
+  const mapFile = join(root, "app/lib/effect-trpc.ts");
   if (!existsSync(errDir) || !existsSync(mapFile)) return;
 
   /**
@@ -372,7 +438,7 @@ function checkTaggedErrorsMapped() {
   if (mapperSubtrees.length === 0) {
     violations.push({
       rule: "3-tagged-errors",
-      file: relative(ROOT, mapFile),
+      file: relative(root, mapFile),
       line: 1,
       detail: `no mapper function found (looked for ${[...MAPPER_NAMES].join(", ")}) — the tag mapping cannot be verified`,
     });
@@ -440,7 +506,6 @@ function checkTaggedErrorsMapped() {
             return true;
           })
         );
-        const key = tag ?? name;
         if (tag && tag !== name) {
           // Not a violation by itself, but it is a trap worth naming.
           if (!mapped.has(tag))
@@ -451,7 +516,10 @@ function checkTaggedErrorsMapped() {
               sf,
               `class ${name} has runtime tag "${tag}" — app/lib/effect-trpc.ts must branch on "${tag}", not the class name`
             );
-        } else if (heritage && !mapped.has(key)) {
+          // `const key = tag ?? name` was computed above this branch and read
+          // only below it, where `tag` is known falsy or equal to `name` — so it
+          // was always just `name`. Inlined.
+        } else if (heritage && !mapped.has(name)) {
           add(
             "3-tagged-errors",
             file,
@@ -491,8 +559,28 @@ function hasExportedValue(sf: ts.SourceFile): boolean {
   return found;
 }
 
-function checkTestParity() {
-  const targets = [join(ROOT, "app/lib"), join(ROOT, "app/repositories")];
+/**
+ * The first exported value declaration, so "this module has no test" can point
+ * at the export that created the obligation rather than at line 1.
+ *
+ * Whole-FILE findings below ("test file is effectively empty", "no expect() in
+ * the parsed source") keep line 1 deliberately — there is no offending node to
+ * name, and inventing one would be worse than an honest file-level anchor.
+ */
+function firstExportedValue(sf: ts.SourceFile): ts.Node | null {
+  let hit: ts.Node | null = null;
+  ts.forEachChild(sf, (node) => {
+    if (hit) return;
+    const mods = ts.canHaveModifiers(node) ? ts.getModifiers(node) : undefined;
+    if (!mods?.some((m) => m.kind === ts.SyntaxKind.ExportKeyword)) return;
+    if (ts.isFunctionDeclaration(node) || ts.isClassDeclaration(node) || ts.isVariableStatement(node))
+      hit = node;
+  });
+  return hit;
+}
+
+function checkTestParity(root: string = ROOT) {
+  const targets = [join(root, "app/lib"), join(root, "app/repositories")];
   for (const dir of targets) {
     if (!existsSync(dir)) continue;
     // RECURSIVE: `app/lib/constants/` and `app/lib/schemas/` escaped a
@@ -500,7 +588,7 @@ function checkTestParity() {
     for (const full of walkDir(dir)) {
       if (!/\.ts$/.test(full) || isTestPath(full)) continue;
       const file = basename(full);
-      const rel = relative(ROOT, full);
+      const rel = relative(root, full);
       if (TEST_PARITY_GRANDFATHERED.has(rel)) continue;
 
       const sf = ts.createSourceFile(full, readFileSync(full, "utf8"), ts.ScriptTarget.Latest, true);
@@ -518,7 +606,7 @@ function checkTestParity() {
         if (testSrc.trim().length < 40) {
           violations.push({
             rule: "4-unit-tests",
-            file: relative(ROOT, found),
+            file: relative(root, found),
             line: 1,
             detail: "test file is effectively empty — existence is not coverage",
           });
@@ -541,10 +629,11 @@ function checkTestParity() {
             )
           )
             importsSubjectAst = true;
+          // Was `ts.isCallExpression(n) && ts.isCallExpression(n) &&
+          // n.arguments.length >= 0` — the same predicate twice, then a
+          // tautology on a length. Both deleted; neither could ever narrow.
           if (
             ts.isCallExpression(n) &&
-            ts.isCallExpression(n) &&
-            n.arguments.length >= 0 &&
             ((ts.isIdentifier(n.expression) && /^(expect|assert)$/.test(n.expression.text)) ||
               (ts.isPropertyAccessExpression(n.expression) &&
                 ts.isIdentifier(n.expression.expression) &&
@@ -557,7 +646,7 @@ function checkTestParity() {
         if (!hasAssertionAst) {
           violations.push({
             rule: "4-unit-tests",
-            file: relative(ROOT, found),
+            file: relative(root, found),
             line: 1,
             detail: "no expect()/assert() call in the parsed source — a commented-out or assertion-free test is not coverage",
           });
@@ -566,46 +655,30 @@ function checkTestParity() {
         if (!importsSubjectAst) {
           violations.push({
             rule: "4-unit-tests",
-            file: relative(ROOT, found),
+            file: relative(root, found),
             line: 1,
             detail: `no import of "${stem}" in the parsed source — a test that does not load the module under test is not coverage`,
           });
           continue;
         }
 
-        // Legacy text checks kept below as a cheap second opinion.
-        const importsSubject = new RegExp(
-          `(from|import)\\s*\\(?\\s*["'\`][^"'\`]*\\b${stem.replace(/[.*+?^\${}()|[\]\\]/g, "\\$&")}(\\.js|\\.ts)?["'\`]`
-        ).test(testSrc);
-        // A test that imports its subject, never calls it, and asserts nothing is
-        // not coverage — `void subject;` satisfied the import check alone.
-        if (importsSubject) {
-          const hasAssertion = /\bexpect\s*\(|\bassert(\.|\s*\()/.test(testSrc);
-          if (!hasAssertion) {
-            violations.push({
-              rule: "4-unit-tests",
-              file: relative(ROOT, found),
-              line: 1,
-              detail: "imports the module but contains no expect()/assert() — a test that asserts nothing is not coverage",
-            });
-            continue;
-          }
-        }
-        if (!importsSubject) {
-          violations.push({
-            rule: "4-unit-tests",
-            file: relative(ROOT, found),
-            line: 1,
-            detail: `never imports "${stem}" — a test that does not load the module under test is not coverage`,
-          });
-          continue;
-        }
+        // The 27-line "legacy text checks kept below as a cheap second opinion"
+        // block that stood here was UNREACHABLE. Control only arrived after both
+        // AST checks above had already passed, and its regexes were strictly
+        // broader than the AST tests they shadowed — so no input could reach it
+        // and fail. It was dead weight advertised as a safety net, in a file
+        // whose banner sells AST analysis as the upgrade over exactly those
+        // regexes. Deleted rather than repaired: the AST checks are the check.
       }
       if (!found) {
+        const exportNode = firstExportedValue(sf);
         violations.push({
           rule: "4-unit-tests",
           file: rel,
-          line: 1,
+          // Point at the export that creates the obligation — "line 1" sent the
+          // reader to the import block of a file whose actual problem was 200
+          // lines down.
+          line: exportNode ? sf.getLineAndCharacterOfPosition(exportNode.getStart(sf)).line + 1 : 1,
           detail: `exports values but has no sibling __tests__/${stem}.test.ts — non-negotiable #4`,
         });
       }
@@ -677,12 +750,221 @@ function selftest() {
       );
     }
   }
-  if (failed) {
-    console.error(`non-negotiables selftest: ${failed}/${cases.length} case(s) failed`);
+  // -------------------------------------------------------------------------
+  // Checks 3 and 4 — 270 of this file's code lines, and until now ZERO fixtures.
+  //
+  // selftest() called only checkSourceFile, so the two functions carrying the
+  // densest "we closed a bypass" commentary were never exercised. Each case
+  // below builds a throwaway tree and runs the real function against it.
+  // -------------------------------------------------------------------------
+  const tmpRoot = mkdtempSync(join(tmpdir(), "nonneg-selftest-"));
+  let treeFailed = 0;
+
+  function tree(name: string, files: Record<string, string>): string {
+    const root = join(tmpRoot, name);
+    for (const [rel, body] of Object.entries(files)) {
+      const full = join(root, rel);
+      mkdirSync(dirname(full), { recursive: true });
+      writeFileSync(full, body);
+    }
+    return root;
+  }
+
+  function expectRule(label: string, run: () => void, rule: string | "") {
+    violations.length = 0;
+    run();
+    const got = violations.map((v) => v.rule);
+    const pass = rule === "" ? got.length === 0 : got.includes(rule);
+    if (!pass) {
+      treeFailed++;
+      console.error(
+        `  selftest FAIL: ${label} — expected ${rule || "no violation"}, got ${got.join(",") || "none"}` +
+          (violations.length ? ` (${violations[0].detail})` : "")
+      );
+    }
+  }
+
+  const ERR = (name: string, tag?: string) =>
+    `import { Data } from "effect";\nexport class ${name} extends Data.TaggedError(${
+      tag ? `"${tag}"` : `"${name}"`
+    })<{}> {}\n`;
+
+  // --- check 3: tagged errors mapped ---------------------------------------
+  expectRule(
+    "3: a tagged error absent from the mapper is caught",
+    () =>
+      checkTaggedErrorsMapped(
+        tree("t3-unmapped", {
+          "app/models/errors/boom.ts": ERR("BoomError"),
+          "app/lib/effect-trpc.ts": `export function tagToTRPC(t: string) { switch (t) { case "OtherError": return 1; } }`,
+        })
+      ),
+    "3-tagged-errors"
+  );
+  expectRule(
+    "3: a tagged error WITH a case branch is clean",
+    () =>
+      checkTaggedErrorsMapped(
+        tree("t3-mapped", {
+          "app/models/errors/boom.ts": ERR("BoomError"),
+          "app/lib/effect-trpc.ts": `export function tagToTRPC(t: string) { switch (t) { case "BoomError": return 1; } }`,
+        })
+      ),
+    ""
+  );
+  expectRule(
+    "3: a bare COMMENT naming the error does not count as mapping",
+    () =>
+      checkTaggedErrorsMapped(
+        tree("t3-comment", {
+          "app/models/errors/boom.ts": ERR("BoomError"),
+          "app/lib/effect-trpc.ts": `export function tagToTRPC(t: string) { /* BoomError mapped */ return 0; }`,
+        })
+      ),
+    "3-tagged-errors"
+  );
+  expectRule(
+    "3: a case branch in a NESTED dead function does not count",
+    () =>
+      checkTaggedErrorsMapped(
+        tree("t3-nested", {
+          "app/models/errors/boom.ts": ERR("BoomError"),
+          "app/lib/effect-trpc.ts":
+            `export function tagToTRPC(t: string) {\n` +
+            `  function unused(x: string) { switch (x) { case "BoomError": return 9; } }\n` +
+            `  return 0;\n}`,
+        })
+      ),
+    "3-tagged-errors"
+  );
+  expectRule(
+    "3: `_tag === \"X\"` counts as a branch, not just `case`",
+    () =>
+      checkTaggedErrorsMapped(
+        tree("t3-eq", {
+          "app/models/errors/boom.ts": ERR("BoomError"),
+          "app/lib/effect-trpc.ts": `export function tagToTRPC(e: any) { if (e._tag === "BoomError") return 1; return 0; }`,
+        })
+      ),
+    ""
+  );
+  expectRule(
+    "3: a runtime tag differing from the class name is reported",
+    () =>
+      checkTaggedErrorsMapped(
+        tree("t3-renamed", {
+          "app/models/errors/boom.ts": ERR("BoomError", "boom_failed"),
+          "app/lib/effect-trpc.ts": `export function tagToTRPC(t: string) { switch (t) { case "BoomError": return 1; } }`,
+        })
+      ),
+    "3-tagged-errors"
+  );
+  expectRule(
+    "3: a missing mapper function is itself a violation",
+    () =>
+      checkTaggedErrorsMapped(
+        tree("t3-nomapper", {
+          "app/models/errors/boom.ts": ERR("BoomError"),
+          "app/lib/effect-trpc.ts": `export const somethingElse = 1;`,
+        })
+      ),
+    "3-tagged-errors"
+  );
+
+  // --- check 4: test parity -------------------------------------------------
+  const HELPER = `export function helper(a: number) { return a + 1; }\n`;
+  const REAL_TEST =
+    `import { describe, it, expect } from "vitest";\n` +
+    `import { helper } from "../helper";\n` +
+    `describe("helper", () => { it("adds", () => { expect(helper(1)).toBe(2); }); });\n`;
+
+  expectRule(
+    "4: an exported helper with NO test file is caught",
+    () => checkTestParity(tree("t4-none", { "app/lib/helper.ts": HELPER })),
+    "4-unit-tests"
+  );
+  expectRule(
+    "4: an exported helper WITH a real test is clean",
+    () =>
+      checkTestParity(
+        tree("t4-ok", { "app/lib/helper.ts": HELPER, "app/lib/__tests__/helper.test.ts": REAL_TEST })
+      ),
+    ""
+  );
+  expectRule(
+    "4: an effectively empty test file is not coverage",
+    () =>
+      checkTestParity(
+        tree("t4-empty", { "app/lib/helper.ts": HELPER, "app/lib/__tests__/helper.test.ts": "// todo\n" })
+      ),
+    "4-unit-tests"
+  );
+  expectRule(
+    "4: a COMMENTED-OUT test file is not coverage",
+    () =>
+      checkTestParity(
+        tree("t4-commented", {
+          "app/lib/helper.ts": HELPER,
+          // Long enough to clear the length floor, but every assertion is inside
+          // a comment — the text-regex version of this check passed it.
+          "app/lib/__tests__/helper.test.ts":
+            `import { helper } from "../helper";\n` +
+            `// describe("helper", () => { it("adds", () => { expect(helper(1)).toBe(2); }); });\n` +
+            `// more commentary to clear the minimum-length floor comfortably\n`,
+        })
+      ),
+    "4-unit-tests"
+  );
+  expectRule(
+    "4: a test that imports its subject but asserts nothing is not coverage",
+    () =>
+      checkTestParity(
+        tree("t4-noassert", {
+          "app/lib/helper.ts": HELPER,
+          "app/lib/__tests__/helper.test.ts":
+            `import { helper } from "../helper";\nvoid helper;\nconst padding = "xxxxxxxxxxxxxxxxxxxxxxxxxxxx";\n`,
+        })
+      ),
+    "4-unit-tests"
+  );
+  expectRule(
+    "4: a test that asserts but never imports its subject is not coverage",
+    () =>
+      checkTestParity(
+        tree("t4-noimport", {
+          "app/lib/helper.ts": HELPER,
+          "app/lib/__tests__/helper.test.ts":
+            `import { expect, it } from "vitest";\nit("x", () => { expect(1).toBe(1); });\n`,
+        })
+      ),
+    "4-unit-tests"
+  );
+  expectRule(
+    "4: a types-only module needs no test",
+    () => checkTestParity(tree("t4-types", { "app/lib/kinds.ts": `export type A = { a: number };\n` })),
+    ""
+  );
+  expectRule(
+    "4: nested subdirectories are swept, not just the top level",
+    () => checkTestParity(tree("t4-nested", { "app/lib/schemas/user.ts": HELPER })),
+    "4-unit-tests"
+  );
+  expectRule(
+    "4: repositories are swept too, not only app/lib",
+    () => checkTestParity(tree("t4-repo", { "app/repositories/user.ts": HELPER })),
+    "4-unit-tests"
+  );
+
+  rmSync(tmpRoot, { recursive: true, force: true });
+  violations.length = 0;
+
+  const total = cases.length + 16;
+  if (failed || treeFailed) {
+    console.error(`non-negotiables selftest: ${failed + treeFailed}/${total} case(s) failed`);
     process.exit(1);
   }
   console.log(
-    `non-negotiables selftest: ok — ${cases.length} fixtures (each one the grep sweep missed, or a bypass adversarial review found in this checker)`
+    `non-negotiables selftest: ok — ${total} fixtures (each one the grep sweep missed, or a bypass adversarial review found in this checker)`
   );
 }
 

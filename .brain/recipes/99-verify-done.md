@@ -115,18 +115,26 @@ Look at your diff (`git diff --stat`). For every changed path, ask:
 
 ## 7. Five non-negotiables sweep
 
-Grep your diff:
-
 ```bash
-git diff --stat | head
-git diff | grep -E '^\+' | grep -E '\bthrow\b|process\.env|from "zod"|try\s*\{'
+bun run scripts/check-non-negotiables.ts
 ```
+
+Walks the TypeScript AST over the whole tree. Exit 1 lists `rule — file:line — detail`.
+
+> **Do not grep for these.** This step used to be
+> `git diff | grep -E '\bthrow\b|process\.env|from "zod"|try\s*\{'`, which is the
+> same unsound sweep CI deleted: `throw err` has no `new`, `'zod'` is not
+> `"zod"`, `try` inside a comment matches, a violation that merely *moves*
+> between files vanishes from the diff, and non-negotiable #4 (a unit test per
+> helper and repository) cannot be expressed as a text pattern at all. The
+> checker covers all five structurally and carries 41 failing fixtures.
 
 Any hit = re-read [`.brain/codebase/effect-ts.md`](../codebase/effect-ts.md). Likely violation:
 - `throw` outside `Effect.tryPromise.catch` → use `Effect.fail(new TaggedError(...))`
 - `process.env` → use `CloudflareEnv` Tag
 - `from "zod"` → use Effect Schema
 - bare `try {}` → use `Effect.tryPromise`
+- an exported helper or repository with no sibling `__tests__/<name>.test.ts` → write the test
 
 ## 8. Harness invariants
 

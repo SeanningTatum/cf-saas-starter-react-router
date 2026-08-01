@@ -509,14 +509,42 @@ async function resetBrainState(): Promise<void> {
 
   const brainOnPath =
     spawnSync("brain", ["--help"], { stdio: "ignore" }).status === 0;
+  // Pinned, like every other brain-axi invocation in this repo. An unpinned
+  // fallback meant the destructive path was the ONE place that ran whatever was
+  // on main at that moment.
   const runner: [string, string[]] = brainOnPath
     ? ["brain", []]
-    : ["npx", ["-y", "github:SeanningTatum/brain-axi"]];
+    : ["npx", ["-y", "github:SeanningTatum/brain-axi#v0.1.0"]];
+
+  // Name what is about to be deleted. `--state-only` wipes features/ WHOLE,
+  // which includes the memos for authentication, file-upload, admin-dashboard —
+  // code this clone genuinely inherits. Losing the tracker rows is the point;
+  // losing those memos is a real cost, and the operator should see the list
+  // rather than discover it later.
+  let doomed: string[] = [];
+  try {
+    doomed = fs
+      .readdirSync(path.join(".brain", "features"), { withFileTypes: true })
+      .filter((e) => e.isDirectory())
+      .map((e) => e.name);
+  } catch {
+    // no features dir — nothing to enumerate
+  }
+  if (doomed.length) {
+    console.log(
+      `\x1b[33m  This deletes ${doomed.length} inherited feature folder(s), memos included: ${doomed.join(", ")}\x1b[0m`
+    );
+    console.log(
+      "\x1b[33m  The code stays; the docs describing it do not. Copy anything you want to keep first.\x1b[0m"
+    );
+  }
 
   const reset = await confirm({
     message:
       "Reset the inherited .brain state? (clears this template's features/runs/plans, keeps its rules/recipes/docs)",
-    initialValue: true,
+    // Defaults to NO. This is irreversible and ran with initialValue: true as
+    // the first action of setup — one stray Enter destroyed the memos above.
+    initialValue: false,
   });
   if (isCancel(reset) || !reset) {
     console.log(
@@ -545,9 +573,6 @@ async function resetBrainState(): Promise<void> {
 async function main() {
   intro("🚀 Cloudflare SaaS Stack - First-Time Setup");
 
-  // Before anything else: this clone must stop reporting the template's history.
-  await resetBrainState();
-
   // Check if wrangler is authenticated
   console.log("\n\x1b[36mChecking Wrangler authentication...\x1b[0m");
   const whoamiOutput = executeCommand("wrangler whoami", true);
@@ -564,6 +589,13 @@ async function main() {
     process.exit(1);
   }
   console.log("\x1b[32m✓ Authenticated with Cloudflare\x1b[0m");
+
+  // AFTER the auth gate, deliberately. This ran as the very first action in
+  // main(), before the check above — so anyone who hit "not logged in" and
+  // stopped had already had .brain/features/ deleted by a prompt that defaulted
+  // to yes. Irreversible work must sit behind every cheap precondition, not in
+  // front of them.
+  await resetBrainState();
 
   // Check for multiple accounts and prompt for selection if needed
   const accounts = extractAccountDetails(whoamiOutput);
