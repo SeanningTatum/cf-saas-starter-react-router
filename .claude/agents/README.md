@@ -85,6 +85,27 @@ These come from shared plugins enabled in `.claude/settings.json`. They cover *g
 - Tools: minimal set. Read-only agents (`brain-navigator`, `effect-ts-enforcer`, `verify-done-runner`) explicitly omit `Edit` / `Write`.
 - Model: `sonnet` is the default for harness operators (cost / quality balance). Exception: `test-author` runs `opus` — deciding *which* tests are worth writing is judgment work, and a cheap model defaults to coverage padding.
 
+## Kimi Code reads this same directory
+
+[Kimi Code](https://moonshotai.github.io/kimi-code/) (`kimi`) discovers project sub-agents from
+`.kimi-code/agents`, which in this repo is a **symlink onto this directory** — the same way
+`CLAUDE.md` symlinks to `AGENTS.md`. One file defines an agent for both CLIs; a new agent added here
+shows up in `kimi` with no second step. Verified with `kimi --agent <bogus>`, which prints the
+discovered roster. `scripts/harness-check.sh` (check D2) fails if the symlink is missing or replaced
+by a real directory, because a copy drifts the moment either side is edited.
+
+What does *not* carry over:
+
+- **`model:`** — Kimi's field is `model_preference`, so a Claude `model: opus` line is ignored and the
+  agent runs on Kimi's configured model. Unknown frontmatter keys are skipped, not rejected.
+- **Claude-only tool names** in `tools:` (e.g. `Task`, MCP tools). `Read`/`Write`/`Edit`/`Glob`/`Grep`/`Bash`
+  are named identically in both, so the read-only agents stay read-only.
+- **`README.md`** (this file) has no frontmatter, so Kimi logs one `Skipping invalid agent file`
+  WARN per session and moves on. Harmless; not worth adding fake frontmatter to silence.
+
+Slash commands, hooks and skills are **not** shared — those live under `.claude/` in a
+Claude-specific format.
+
 ## When to add a new sub-agent
 
 Only when:

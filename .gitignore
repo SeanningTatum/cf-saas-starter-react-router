@@ -43,6 +43,10 @@ worker-configuration.d.ts
 # Editor agent caches
 .cursor/
 
+# Kimi Code — only the sub-agent symlink is shared; the rest is per-machine state
+/.kimi-code/*
+!/.kimi-code/agents
+
 # feature-verifier throwaway Playwright scripts (see .claude/agents/feature-verifier.md)
 tmp/
 
