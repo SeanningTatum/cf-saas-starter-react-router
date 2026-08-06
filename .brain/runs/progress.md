@@ -21,6 +21,14 @@
 
 ---
 
+## 2026-08-06 — Released v1.8.0 'Your Sub-Agents Follow You To Kimi' (squash 2fac879, PR #24 squash-merged). The ten .claude/agents/ operators now load under Kimi Code too: .kimi-code/agents is a symlink onto .claude/agents (git mode 120000), .gitignore shares that one path only, and harness-check check D2 asserts symlink identity rather than existence. Discovery path was read out of the kimi binary and confirmed with 'kimi --agent <bogus>', which prints the roster at zero model cost. Greptile pre-PR caught a false green in D2's first draft — a dangling symlink compared two failed cd resolutions as equal and reported PASS; fixed in dce3ba2 and driven into all five states.
+- branch: `main`
+- in-progress feature: none
+- run note: none
+- next: Unchanged from v1.7.0, both pre-existing: (1) brain check --strict evaluates ZERO features — all 7 shipped sit on policy.strict_grandfathered; close per-feature via brain playbook verify -> browser walk -> brain receipt <slug> -> delete the slug. (2) Deploy preview + Deploy Production still red on the missing D1:Edit token scope, red since 2026-07-24. Optional follow-up from this release: link the user-level roster (~/.kimi-code/agents -> ~/.claude/agents) if it ever holds agents worth sharing.
+
+---
+
 ## 2026-08-01 — Released v1.7.0 'Green Means Something Now' (squash 8501ac5 PR #22 + 4886305 PR #23) and brain-axi v0.2.0 'State You Can Check' (f6d9410 PR #18). AST non-negotiables gate replaces the CI grep sweep, .brain/verify.json is the single gate registry, harness-check degraded mode fails, and the CI pin now installs brain-axi v0.2.0 so 'brain check --strict' runs on a machine the agent does not control. An independent cold reviewer found the branch turned CI red on every PR (v0.1.0 rejects --strict; it passed locally only via npm link) and that the flagship gate reported pass over the empty set. Both fixed and proven.
 - branch: `main`
 - in-progress feature: none
