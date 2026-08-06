@@ -12,6 +12,7 @@
 #        B. init.sh exists and is executable
 #        C. CLAUDE.md and AGENTS.md are the same file (symlink / byte-identical)
 #        D. Every .claude/agents/*.md has YAML frontmatter with name + description
+#        D2. .kimi-code/agents is a symlink onto .claude/agents (one roster, two CLIs)
 #        E. Core recipes (00-before-task, 99-verify-done) exist
 #        F. Brain internal markdown links resolve
 #        G. Every hook script referenced by .claude/settings.json exists and is executable
@@ -204,6 +205,32 @@ if [ -z "$AGENT_BAD" ]; then
   ok "all sub-agents have valid frontmatter"
 else
   fail "sub-agents with broken frontmatter:$AGENT_BAD"
+fi
+
+# D2. Kimi Code reads the same roster. Kimi Code discovers project sub-agents from
+#     .kimi-code/agents; that path is a symlink onto .claude/agents so one file
+#     defines an agent for both CLIs. If the symlink is replaced by a real
+#     directory the two rosters drift silently, which is the failure worth
+#     catching — a copy looks fine right up until someone edits one side.
+if [ -L .kimi-code/agents ]; then
+  # Resolve both sides separately and require both to be non-empty. A dangling
+  # symlink makes `cd` fail, and comparing two failed resolutions is `"" = ""` —
+  # a false green over the exact state this check exists to catch.
+  KIMI_AGENTS=$(cd .kimi-code/agents 2>/dev/null && pwd -P)
+  CLAUDE_AGENTS=$(cd .claude/agents 2>/dev/null && pwd -P)
+  if [ -z "$KIMI_AGENTS" ]; then
+    fail ".kimi-code/agents is a dangling symlink — Kimi Code sees no project sub-agents (re-create: ln -sfn ../.claude/agents .kimi-code/agents)"
+  elif [ -z "$CLAUDE_AGENTS" ]; then
+    fail ".claude/agents is missing or unreadable — the shared sub-agent roster is gone"
+  elif [ "$KIMI_AGENTS" = "$CLAUDE_AGENTS" ]; then
+    ok "Kimi sub-agent roster symlinks onto .claude/agents"
+  else
+    fail ".kimi-code/agents points at $KIMI_AGENTS, not .claude/agents (re-create: ln -sfn ../.claude/agents .kimi-code/agents)"
+  fi
+elif [ -e .kimi-code/agents ]; then
+  fail ".kimi-code/agents is a real path, not a symlink — rosters will drift (rm -rf it, then: ln -sfn ../.claude/agents .kimi-code/agents)"
+else
+  fail ".kimi-code/agents missing — Kimi Code sees no project sub-agents (mkdir -p .kimi-code && ln -sfn ../.claude/agents .kimi-code/agents)"
 fi
 
 # E. Core recipes exist
