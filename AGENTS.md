@@ -32,6 +32,38 @@ claude plugin install brain-axi@SeanningTatum     # skills + SessionStart `brain
 | Verify | `brain verify --stage baseline` · `brain verify` (all gates) · `brain verifications add <slug> --verdict PASS ...` · `brain check` |
 | Plans | `brain review open <plan.html>` · `brain plans list` |
 
+## Code search — CodeGraph
+
+The brain holds project state; **[CodeGraph](https://github.com/colbymchenry/codegraph)** holds the code. It parses the repo into a symbol graph (functions, types, imports, calls) in `.codegraph/codegraph.db`, which is local to each checkout and gitignored, like the brain.
+
+Setup, once per machine and once per checkout:
+
+```bash
+npm i -g @colbymchenry/codegraph   # CLI on PATH (Node ≥ 24 — same node:sqlite as the brain)
+codegraph init -y                  # build .codegraph/ (init.sh does this, or syncs it)
+```
+
+[`.mcp.json`](.mcp.json) registers the `codegraph` MCP server for Claude Code; approve it when Claude Code asks. While it runs, a file watcher keeps the index current, so `codegraph sync` is only for scripts. The `UserPromptSubmit` hook in [`.claude/settings.json`](.claude/settings.json) (`codegraph prompt-hook`) adds graph context to prompts and is a no-op when the CLI is missing.
+
+<!-- CODEGRAPH_START -->
+In repositories indexed by CodeGraph (a `.codegraph/` directory exists at the repo root), reach for it BEFORE grep/find or reading files when you need to understand or locate code:
+
+- **MCP tool** (when available): `codegraph_explore` answers most code questions in one call — the relevant symbols' verbatim source plus the call paths between them, including dynamic-dispatch hops grep can't follow. Name a file or symbol in the query to read its current line-numbered source. If it's listed but deferred, load it by name via tool search.
+- **Shell** (always works): `codegraph explore "<symbol names or question>"` prints the same output.
+
+If there is no `.codegraph/` directory, skip CodeGraph entirely — indexing is the user's decision.
+<!-- CODEGRAPH_END -->
+
+| Question | Command |
+|----------|---------|
+| How does X work / where is X | `codegraph explore "<symbols or question>"` |
+| Who calls X · what does X call | `codegraph callers <symbol>` · `codegraph callees <symbol>` |
+| What breaks if I change X | `codegraph impact <symbol>` |
+| Which tests cover my diff | `git diff --name-only \| codegraph affected --stdin` |
+| Is the index fresh | `codegraph status` |
+
+Run `codegraph impact` before you change a repository, a tRPC procedure or anything in `app/lib/` — it lists the callers and the tests you must keep green. `codegraph install` writes its instructions to `.claude/CLAUDE.md`; delete that file, since the block above is the copy every agent reads.
+
 ## Workflow
 
 The brain-axi plugin skills carry the method and hand off to each other:

@@ -38,6 +38,7 @@ If you're a human, scroll to [Quick Start](#quick-start). If you're an agent, sc
 - `scripts/brain-setup.sh` — creates the brain and declares the gates `brain verify` and CI run
 - `.githooks/pre-commit` — typecheck + tests block broken commits (no-dep, auto-installs)
 - `CLAUDE.md` → `AGENTS.md` — one file (symlink), the agent entry point
+- `.mcp.json` — the [CodeGraph](https://github.com/colbymchenry/codegraph) MCP server: a local symbol graph of the code (`.codegraph/`, gitignored) that agents query before grepping
 
 ---
 
@@ -449,7 +450,8 @@ CLOUDFLARE_ENV=preview bun run build \
 ## Editor integrations
 
 - **VS Code / Cursor** — uses the local TypeScript server. The `typescript-lsp` Claude plugin (auto-enabled in `.claude/settings.json`) gives agents diagnostics inline.
-- **MCP servers** — optional. If you want richer tool access (Tavily search, Playwright control, etc.), set them up via Claude Code's `/plugin` system instead of repo-local config.
+- **CodeGraph** — the one repo-local MCP server, in [`.mcp.json`](.mcp.json). Install the CLI (`npm i -g @colbymchenry/codegraph`), run `codegraph init -y` (or `./init.sh`), and approve the server when Claude Code asks. Usage lives in [`AGENTS.md`](AGENTS.md#code-search--codegraph).
+- **Other MCP servers** — optional. If you want richer tool access (Tavily search, Playwright control, etc.), set them up via Claude Code's `/plugin` system instead of repo-local config.
 
 ---
 

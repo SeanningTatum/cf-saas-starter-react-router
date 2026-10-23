@@ -59,6 +59,9 @@ worker-configuration.d.ts
 # feature-verifier throwaway Playwright scripts (see .claude/agents/feature-verifier.md)
 tmp/
 
+# CodeGraph index — local to each checkout, rebuilt by `codegraph init` (init.sh runs it)
+/.codegraph/
+
 # brain-axi local state
 .brain/brain.db
 .brain/brain.db-wal

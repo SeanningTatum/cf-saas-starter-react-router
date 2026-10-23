@@ -41,6 +41,9 @@
       "Bash(git reset --hard:*)",
       "Bash(git clean -fd:*)",
       "Bash(git clean -fdx:*)"
+    ],
+    "allow": [
+      "mcp__codegraph__*"
     ]
   },
   "hooks": {
@@ -51,6 +54,17 @@
             "type": "command",
             "timeout": 5,
             "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/session-start.sh\" 2>&1 || true"
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "timeout": 10,
+            "command": "command -v codegraph >/dev/null 2>&1 && codegraph prompt-hook || true"
           }
         ]
       }
