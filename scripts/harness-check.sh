@@ -14,6 +14,8 @@
 #        D2. .kimi-code/agents is a symlink onto .claude/agents (one roster, two CLIs)
 #        G. Every hook script referenced by .claude/settings.json exists and is executable
 #        H. The SessionStart skill restore passes its own tests
+#        I. Workflows: every command that launches one has its script, every script
+#           parses and names itself by filename, brand-init fences cover app/components/ui once
 
 set -uo pipefail
 
@@ -136,6 +138,50 @@ for t in test-restore-skills; do
     fail "scripts/${t}.sh missing or not executable"
   fi
 done
+
+# I. Workflows. A command that launches a workflow by name needs the script; each
+#    script must parse and carry meta.name equal to its filename. Workflow scripts
+#    are bodies, not modules: top-level `return`, undeclared globals. Wrap the body
+#    in an async function so `node --check` sees valid ESM.
+WF_BAD=""
+WF_N=0
+for c in .claude/commands/*.md; do
+  while IFS= read -r wf; do
+    [ -z "$wf" ] && continue
+    [ -f ".claude/workflows/${wf}.js" ] || WF_BAD="$WF_BAD $(basename "$c"):${wf}.js(missing)"
+  done < <(awk '/Workflow\(\{/ {w=1} w && match($0, /name: *"[^"]+"/) {s=substr($0,RSTART,RLENGTH); sub(/^name: *"/,"",s); sub(/"$/,"",s); print s; w=0}' "$c")
+done
+for f in .claude/workflows/*.js; do
+  [ -f "$f" ] || continue
+  WF_N=$((WF_N+1))
+  base=$(basename "$f" .js)
+  if ! { echo 'async function __workflow(){'; sed 's/^export const meta/const meta/' "$f"; echo; echo '}'; } | node --input-type=module --check >/dev/null 2>&1; then
+    WF_BAD="$WF_BAD $base(syntax)"
+  fi
+  grep -Eq "^[[:space:]]*name:[[:space:]]*\"${base}\"" "$f" || WF_BAD="$WF_BAD $base(meta.name!=filename)"
+done
+if [ -z "$WF_BAD" ]; then
+  ok "workflows intact ($WF_N scripts parse, meta.name matches, launched names resolve)"
+else
+  fail "broken workflows:$WF_BAD"
+fi
+
+# I2. brand-init hardcodes the primitive fences. Every file in app/components/ui must
+#     appear exactly once as "<name>" in the script, or a primitive escapes the redesign
+#     (0) or two lanes fight over it (2+).
+if [ -f .claude/workflows/brand-init.js ]; then
+  FENCE_BAD=""
+  for u in app/components/ui/*.tsx; do
+    n=$(basename "$u" .tsx)
+    c=$(grep -o "\"${n}\"" .claude/workflows/brand-init.js | wc -l | tr -d ' ')
+    [ "$c" = "1" ] || FENCE_BAD="$FENCE_BAD ${n}(x${c})"
+  done
+  if [ -z "$FENCE_BAD" ]; then
+    ok "brand-init fences cover every app/components/ui primitive exactly once"
+  else
+    fail "brand-init fence mismatch:$FENCE_BAD"
+  fi
+fi
 
 echo ""
 echo "=== Summary ==="

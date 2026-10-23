@@ -1,0 +1,588 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>/brand-init plan</title>
+<style>
+  :root {
+    --bg: #faf9f5; --surface: #ffffff; --fg: #141413; --fg-secondary: #3d3d3a;
+    --muted: #5f5e59; --border: #dedcd1; --highlight: #fff7ca; --accent: #a8492a;
+    --space-2: 8px; --space-3: 16px; --space-4: 24px; --space-6: 40px;
+  }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    font-size: 16px; background: var(--bg); color: var(--fg); line-height: 1.6;
+    max-width: 72ch; margin: 0 auto; padding: var(--space-6) var(--space-4);
+  }
+  h1, h2, h3 { font-family: Charter, "Iowan Old Style", "Palatino Linotype", Georgia, serif;
+    font-weight: 600; line-height: 1.25; color: var(--fg); }
+  h1 { font-size: 1.75em; }
+  h2 { font-size: 1.3em; font-weight: 500; margin-top: var(--space-6);
+    border-bottom: 1px solid var(--border); padding-bottom: var(--space-2); }
+  h3 { font-size: 1.05em; font-weight: 500; }
+  p, li { color: var(--fg-secondary); }
+  code { font-size: 0.9em; }
+  mark, .highlight { background: var(--highlight); color: var(--fg); padding: 0 2px; }
+  .chip { display: inline-block; padding: 2px 10px; border-radius: 999px;
+    font-size: 0.8em; font-weight: 600; border: 1px solid var(--border); }
+  .chip-status-in-review { background: var(--highlight); color: var(--fg); border-color: var(--highlight); }
+  .chip-high { color: var(--accent); border-color: var(--accent); }
+  .chip-low { color: var(--muted); }
+  .settled { font-size: 0.85em; color: var(--muted); margin: 0 0 var(--space-2); }
+  .decision-card { background: var(--surface); border: 1px solid var(--border);
+    border-radius: 10px; padding: var(--space-4); margin: var(--space-4) 0; }
+  .decision-card table { margin-bottom: var(--space-3); }
+  table { width: 100%; border-collapse: collapse; margin: var(--space-3) 0;
+    background: var(--surface); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+  th, td { text-align: left; padding: 10px 14px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  tr:last-child td { border-bottom: none; }
+  th { font-weight: 600; font-size: 0.9em; color: var(--fg); }
+  td { font-size: 0.95em; color: var(--fg-secondary); }
+  .tag-recommended { color: var(--accent); font-weight: 600; }
+  .btn-queue { border: none; border-radius: 10px; padding: 8px 16px; font-weight: 600;
+    cursor: pointer; font-size: 0.95em; background: var(--fg); color: #fff; }
+  .queue-ack { margin-left: var(--space-3); font-size: 0.9em; color: var(--muted); }
+  .checklist { list-style: none; padding: 0; }
+  .checklist li { margin: var(--space-2) 0; }
+  pre.mermaid { text-align: center; background: var(--surface); border: 1px solid var(--border);
+    border-radius: 10px; padding: var(--space-3); }
+  pre.mermaid svg { display: block; margin: 0 auto; }
+  details { margin-top: var(--space-2); }
+  summary { cursor: pointer; color: var(--fg); }
+</style>
+<script type="module">
+  import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
+  mermaid.initialize({ startOnLoad: true, theme: "neutral" });
+</script>
+</head>
+<body>
+
+<header>
+  <h1>/brand-init: choose a brand from three, then redesign the components</h1>
+  <div>
+    <span>2026-10-23</span> ·
+    <span>feature: brand-init</span> ·
+    <span class="chip chip-high">tier: full</span> ·
+    <span class="chip chip-status-in-review">in-review</span> ·
+    <span>round 0</span>
+  </div>
+</header>
+
+<section id="tldr">
+  <h2>TL;DR</h2>
+  <p>A new command, <code>/brand-init</code>, interviews you with <code>impeccable init</code>, has taste deal three
+  directions, and builds each one as a live comp with Emil-grade motion. You pick one in this review UI.
+  It then redesigns the 55 shadcn primitives and the shared components in that direction, all in one PR, so
+  every page inherits the brand without being touched. It exists because the repo's design work has gone
+  generic every time a model chose the look alone.</p>
+</section>
+
+<section id="product-brief">
+  <h2>Product brief</h2>
+
+  <h3>Problem and evidence</h3>
+  <p>A fork of this template starts with the starter's look: neutral oklch tokens in <code>app/app.css</code>
+  (every <code>--primary</code>, <code>--muted</code> and <code>--border</code> has chroma 0), Inter loaded from
+  <code>app/root.tsx:31</code>, and no <code>PRODUCT.md</code> or <code>DESIGN.md</code>, so impeccable runs
+  with no product context. When the repo has let a model pick the look, it has gone generic. The 2026-07-30
+  postmortem (<code>c3b7202:.brain/runs/2026-07-30-design-slop-postmortem.md</code>) records a surface that
+  "passed every gate the repo had" and was still judged "still generic slop", failing six anti-slop checks,
+  with "Cover the wordmark and it could be any ops SaaS" among them.</p>
+
+  <h3>User and job</h3>
+  <p>You, on the first day of a fork made with <code>/new-app</code>: you need the app to look like this
+  product before anyone builds a feature on it. The second user is every later UI agent
+  (<code>ui-builder</code>, impeccable, taste), whose job is to build new screens in the brand without
+  being told it again. They read <code>PRODUCT.md</code> and <code>DESIGN.md</code>.</p>
+
+  <h3>Success metric</h3>
+  <p>No baseline number exists, so this uses a named check (tier 3). After one run on a fresh fork:</p>
+  <ul>
+    <li>You were asked for input <strong>at most 3 times after the interview</strong>: the pick, the home
+      question, and P0/P1 escalations if any. Today the count has no bound, since every surface is designed
+      by hand.</li>
+    <li>The kitchen-sink page (<code>admin/kitchen-sink.tsx</code>, every primitive) has <strong>0 impeccable
+      P0/P1</strong> findings at desktop and mobile, in light and dark.</li>
+    <li><code>grep -c "oklch([0-9.]* 0 0)" app/app.css</code> falls from today's count to only the true
+      neutrals the direction keeps on purpose, and <code>brain verify</code> is green.</li>
+  </ul>
+
+  <h3>Non-goals</h3>
+  <ul>
+    <li><strong>A drawn logo mark.</strong> Marks drawn by models read as clip art. The wordmark is typeset;
+      a real mark is a designer's job (grill Q3).</li>
+    <li><strong>Rewriting pages.</strong> Pages inherit from the primitives. The one exception is
+      <code>home.tsx</code>, and only if you say yes when asked (grill Q8).</li>
+    <li><strong>Stacked PRs.</strong> This is a once-per-repo redesign, so one big PR is fine (grill Q10).
+      Stacking belongs to <code>/ship-stack</code>.</li>
+    <li><strong>Refero.</strong> It is removed from this project and from the global skills (grill Q7).</li>
+  </ul>
+
+  <h3>Scope tiers</h3>
+  <table>
+    <thead><tr><th>Tier</th><th>Ships</th><th>Leaves out</th><th>Phases</th></tr></thead>
+    <tbody>
+      <tr><td>Thin</td><td>Interview, 3 comps, the pick, tokens and fonts applied, <code>PRODUCT.md</code>, <code>DESIGN.md</code>, the brain doc</td><td>Primitives keep shadcn's default shapes; only colour, type, radius and motion change</td><td>1–3</td></tr>
+      <tr><td><strong>Complete (this plan)</strong></td><td>Thin, plus every primitive and shared component redesigned through <code>cva</code>, the critique loop, and the browser walk</td><td>Pages other than home</td><td>1–5</td></tr>
+      <tr><td>Gold</td><td>Complete, plus a home rebuild and an <code>emil-design-eng</code> craft pass on every interactive primitive</td><td>Nothing on this list</td><td>1–6 (6 runs when you answer yes to home)</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Prior art</h3>
+  <ul>
+    <li><code>brain plans list</code>: no plans. <code>brain search "brand"</code> and <code>"design"</code>: only this
+      feature's own row and checkpoint 2.</li>
+    <li><code>c3b7202:.brain/codebase/design-system.md</code> fixes the template's look: "Do not introduce a
+      new color palette". That still holds for the template; <code>/brand-init</code> runs in forks.</li>
+    <li><code>/build-feature</code> (<code>.claude/workflows/build-feature.js</code>) is the house pattern for
+      multi-agent commands: a command doc does the pre-flight and the script owns the phases, never commits
+      and never writes to the brain.</li>
+    <li>taste ships <code>draw.mjs --options 3</code>, which deals three directions. impeccable ships
+      <code>init</code> (PRODUCT.md), <code>critique</code>, <code>polish</code> and <code>document</code>
+      (DESIGN.md).</li>
+  </ul>
+</section>
+
+<section id="context">
+  <h2>Context</h2>
+  <p>Feature <code>brand-init</code> is in-progress (claimed 2026-10-23, checkpoint 2: "Start /brand-init.
+  Roadmap set: /brand-init, then /plan-feature, then /ship-stack"). Baseline was green: typecheck, test,
+  non-negotiables (both) and harness all pass, exit 0. Four grill rounds settled eleven questions. Every
+  answer is quoted in <code>brain runs view brand-init --run 2026-10-23-progress</code> (steps 5, 7, 9, 11).
+  Refero is gone from <code>.claude/settings.local.json</code>, from this project's MCP config and from the
+  global skills (<code>npx skills remove refero-design -g</code>: "Successfully removed 1 skill(s)").</p>
+</section>
+
+<section id="big-picture">
+  <h2>Big picture</h2>
+  <p>Two stages, because a workflow cannot stop to ask you anything. The command runs the interactive
+  parts on the main thread and starts the same workflow script twice: once to propose, once to apply.</p>
+<pre class="mermaid">
+flowchart TD
+  A["/brand-init<br/>pre-flight: clean tree, baseline green,<br/>no DESIGN.md unless --redo"] --> B["impeccable init<br/>interview → PRODUCT.md"]
+  B --> C["taste draw.mjs --options 3<br/>three direction sheets"]
+  C --> W1
+  subgraph W1 ["Workflow stage: propose"]
+    D1["Lane 1: comp<br/>landing hero + dashboard + primitives strip"]
+    D2["Lane 2: comp"]
+    D3["Lane 3: comp"]
+    K["Critique per comp:<br/>taste loop (landing) · impeccable (dashboard)<br/>· review-animations (motion)"]
+    D1 --> K
+    D2 --> K
+    D3 --> K
+  end
+  W1 --> E["plans/brand-pick.html<br/>three live comps + screenshots<br/>brain review: you pick, and answer 'rebuild home?'"]
+  E --> W2
+  subgraph W2 ["Workflow stage: apply"]
+    F["Contract lane: app/app.css tokens<br/>+ root.tsx fonts + motion tokens"]
+    G1["Primitives: actions + forms"]
+    G2["Primitives: overlays + feedback"]
+    G3["Primitives: layout + navigation"]
+    G4["Primitives: data display"]
+    G5["Shared components"]
+    G6["home.tsx (only if yes)"]
+    F --> G1 & G2 & G3 & G4 & G5 & G6
+    V["Check wave: impeccable critique (kitchen-sink, dashboard, admin)<br/>· taste critique (home) · review-animations<br/>· brain verify · feature-verifier"]
+    G1 & G2 & G3 & G4 & G5 & G6 --> V
+    X["impeccable polish → document → DESIGN.md"]
+    V --> X
+  end
+  W2 --> H["Main thread: fix P0/P1 → brain docs set →<br/>commit → one PR"]
+</pre>
+</section>
+
+<section id="product-decisions">
+  <h2>Product decisions</h2>
+  <p>All of these were answered in the grill. Each one shows your answer already checked; queue it again
+  only to change it.</p>
+
+  <div class="decision-card" id="decision-interview" data-brain-action>
+    <p class="settled">Settled in grill round 1: "yes let's utilize impeccable".</p>
+    <p><strong>P1. How does the run learn about the product?</strong></p>
+    <table>
+      <thead><tr><th></th><th>Option</th><th>Gives</th><th>Costs</th></tr></thead>
+      <tbody>
+        <tr><td><input type="radio" name="decision-interview" id="int-a" value="impeccable init writes PRODUCT.md" checked data-brain-action></td>
+          <td><label for="int-a">impeccable <code>init</code> writes PRODUCT.md <span class="tag-recommended">(recommended)</span></label></td>
+          <td>impeccable reloads it on every later UI task</td><td>We do not tune its interview</td></tr>
+        <tr><td><input type="radio" name="decision-interview" id="int-b" value="Our own questions in a brain doc" data-brain-action></td>
+          <td><label for="int-b">Our own questions in a brain doc</label></td>
+          <td>Full control</td><td>No design skill reads it on its own</td></tr>
+        <tr><td><input type="radio" name="decision-interview" id="int-c" value="impeccable init plus brand extras" data-brain-action></td>
+          <td><label for="int-c">impeccable <code>init</code> plus brand extras</label></td>
+          <td>Most complete</td><td>Longer interview</td></tr>
+      </tbody>
+    </table>
+    <button type="button" class="btn-queue" data-brain-action onclick="queueDecision('decision-interview','How does the run learn about the product?')">Queue answer</button>
+    <span class="queue-ack" id="ack-decision-interview"></span>
+  </div>
+
+  <div class="decision-card" id="decision-contents" data-brain-action>
+    <p class="settled">Settled in grill round 2: "3a".</p>
+    <p><strong>P2. What does one direction contain?</strong></p>
+    <table>
+      <thead><tr><th></th><th>Option</th><th>Gives</th><th>Costs</th></tr></thead>
+      <tbody>
+        <tr><td><input type="radio" name="decision-contents" id="con-a" value="Palette, type, radius, voice, wordmark, motion vocabulary" checked data-brain-action></td>
+          <td><label for="con-a">Palette (light and dark, mapped to shadcn roles), type pair, radius and density, three voice lines, a typeset wordmark, motion vocabulary <span class="tag-recommended">(recommended)</span></label></td>
+          <td>Everything the tokens and DESIGN.md need, and you hear and feel the brand</td><td>A larger comp per lane</td></tr>
+        <tr><td><input type="radio" name="decision-contents" id="con-b" value="Same plus a drawn SVG mark" data-brain-action></td>
+          <td><label for="con-b">The same, plus a drawn SVG mark</label></td>
+          <td>A logo</td><td>Model-drawn marks read as clip art</td></tr>
+        <tr><td><input type="radio" name="decision-contents" id="con-c" value="Tokens only" data-brain-action></td>
+          <td><label for="con-c">Tokens only</label></td>
+          <td>Fastest</td><td>You pick a brand you cannot hear or feel</td></tr>
+      </tbody>
+    </table>
+    <button type="button" class="btn-queue" data-brain-action onclick="queueDecision('decision-contents','What does one direction contain?')">Queue answer</button>
+    <span class="queue-ack" id="ack-decision-contents"></span>
+  </div>
+
+  <div class="decision-card" id="decision-pick" data-brain-action>
+    <p class="settled">Settled in grill rounds 2 and 4: "4a", "11a".</p>
+    <p><strong>P3. How do you see the three, and what does each show?</strong></p>
+    <table>
+      <thead><tr><th></th><th>Option</th><th>Gives</th><th>Costs</th></tr></thead>
+      <tbody>
+        <tr><td><input type="radio" name="decision-pick" id="pick-a" value="Live HTML comps (hero, dashboard, primitives strip) in a brain review plan" checked data-brain-action></td>
+          <td><label for="pick-a">Live HTML comps: landing hero, dashboard, and a primitives strip (button, input, badge, table row, dialog, toast), with motion, in one brain review plan <span class="tag-recommended">(recommended)</span></label></td>
+          <td>You judge colour, type, components and motion at once; the pick is recorded</td><td>The comps imitate shadcn rather than run it</td></tr>
+        <tr><td><input type="radio" name="decision-pick" id="pick-b" value="Temporary /brand-preview route" data-brain-action></td>
+          <td><label for="pick-b">A temporary <code>/brand-preview</code> route</label></td>
+          <td>The truest render</td><td>App code we throw away</td></tr>
+        <tr><td><input type="radio" name="decision-pick" id="pick-c" value="Screenshots only" data-brain-action></td>
+          <td><label for="pick-c">Screenshots only</label></td>
+          <td>Cheapest</td><td>No motion</td></tr>
+      </tbody>
+    </table>
+    <button type="button" class="btn-queue" data-brain-action onclick="queueDecision('decision-pick','How do you see the three, and what does each show?')">Queue answer</button>
+    <span class="queue-ack" id="ack-decision-pick"></span>
+  </div>
+
+  <div class="decision-card" id="decision-scope" data-brain-action>
+    <p class="settled">Settled in grill round 4: "the pages don't have to reflect, because they're based off the components... let's ask if we want to replace home".</p>
+    <p><strong>P4. What does applying the brand change?</strong></p>
+    <table>
+      <thead><tr><th></th><th>Option</th><th>Gives</th><th>Costs</th></tr></thead>
+      <tbody>
+        <tr><td><input type="radio" name="decision-scope" id="sc-d" value="Tokens, fonts, every primitive and shared component; ask about home" checked data-brain-action></td>
+          <td><label for="sc-d">Tokens, fonts, every primitive and shared component; the run asks whether to rebuild <code>home.tsx</code> <span class="tag-recommended">(recommended)</span></label></td>
+          <td>Every page inherits; one optional page shows the direction at full strength</td><td>Other pages keep their layout</td></tr>
+        <tr><td><input type="radio" name="decision-scope" id="sc-a" value="Tokens and fonts only" data-brain-action></td>
+          <td><label for="sc-a">Tokens and fonts only</label></td>
+          <td>Smallest diff</td><td>The components keep shadcn's shapes</td></tr>
+        <tr><td><input type="radio" name="decision-scope" id="sc-e" value="Everything, every page rebuilt" data-brain-action></td>
+          <td><label for="sc-e">Everything, with every page rebuilt</label></td>
+          <td>Fully branded</td><td>Pages rewritten that would have inherited anyway</td></tr>
+      </tbody>
+    </table>
+    <button type="button" class="btn-queue" data-brain-action onclick="queueDecision('decision-scope','What does applying the brand change?')">Queue answer</button>
+    <span class="queue-ack" id="ack-decision-scope"></span>
+  </div>
+
+  <div class="decision-card" id="decision-delivery" data-brain-action>
+    <p class="settled">Settled in grill round 4: "10b — it's okay if it's a big PR because it's a huge redesign that we do at the start".</p>
+    <p><strong>P5. How does the redesign land?</strong></p>
+    <table>
+      <thead><tr><th></th><th>Option</th><th>Gives</th><th>Costs</th></tr></thead>
+      <tbody>
+        <tr><td><input type="radio" name="decision-delivery" id="del-b" value="One PR" checked data-brain-action></td>
+          <td><label for="del-b">One PR <span class="tag-recommended">(your call)</span></label></td>
+          <td>Simple; it happens once per repo</td><td>80+ files to review together</td></tr>
+        <tr><td><input type="radio" name="decision-delivery" id="del-a" value="One branch, commit per layer" data-brain-action></td>
+          <td><label for="del-a">One branch with a commit per layer</label></td>
+          <td>Splits into stacks later</td><td>Longer run</td></tr>
+      </tbody>
+    </table>
+    <button type="button" class="btn-queue" data-brain-action onclick="queueDecision('decision-delivery','How does the redesign land?')">Queue answer</button>
+    <span class="queue-ack" id="ack-decision-delivery"></span>
+  </div>
+</section>
+
+<section id="decisions">
+  <h2>Technical decisions</h2>
+  <p>T1 to T4 are settled. <mark>T5 to T7 are new</mark>: they came out of writing this plan and have not
+  been asked yet.</p>
+
+  <div class="decision-card" id="decision-source" data-brain-action>
+    <p class="settled">Settled in grill round 1: "utilize the other design skills as well such as taste and emil kowalski".</p>
+    <p><strong>T1. Who does what?</strong></p>
+    <table>
+      <thead><tr><th></th><th>Option</th><th>Gives</th><th>Costs</th></tr></thead>
+      <tbody>
+        <tr><td><input type="radio" name="decision-source" id="src-a" value="taste deals and leads landing; impeccable leads app screens, critique, polish, document; Emil owns motion" checked data-brain-action></td>
+          <td><label for="src-a">taste deals the three and leads the landing comp; impeccable leads the dashboard, primitives, critique, polish and DESIGN.md; Emil (<code>animate</code>, <code>emil-design-eng</code>, <code>review-animations</code>) owns motion <span class="tag-recommended">(recommended)</span></label></td>
+          <td>Follows AGENTS.md's one-lead-per-surface rule; draw.mjs makes the three differ</td><td>taste's library is tuned for public pages</td></tr>
+        <tr><td><input type="radio" name="decision-source" id="src-b" value="impeccable new-work per lane" data-brain-action></td>
+          <td><label for="src-b">impeccable <code>new-work</code>, one world per lane</label></td>
+          <td>Better at app screens</td><td>Nothing makes the three differ</td></tr>
+      </tbody>
+    </table>
+    <button type="button" class="btn-queue" data-brain-action onclick="queueDecision('decision-source','Who does what?')">Queue answer</button>
+    <span class="queue-ack" id="ack-decision-source"></span>
+  </div>
+
+  <div class="decision-card" id="decision-motion" data-brain-action>
+    <p class="settled">Settled in grill round 2: "6a".</p>
+    <p><strong>T2. When do Emil's skills run?</strong></p>
+    <table>
+      <thead><tr><th></th><th>Option</th><th>Gives</th><th>Costs</th></tr></thead>
+      <tbody>
+        <tr><td><input type="radio" name="decision-motion" id="mo-a" value="On all three comps before the pick, and on the primitives after" checked data-brain-action></td>
+          <td><label for="mo-a">On all three comps before the pick, then on the primitives during apply <span class="tag-recommended">(recommended)</span></label></td>
+          <td>You compare finished feel</td><td>Three extra critique passes</td></tr>
+        <tr><td><input type="radio" name="decision-motion" id="mo-b" value="Winner only" data-brain-action></td>
+          <td><label for="mo-b">On the winner only</label></td>
+          <td>Cheaper</td><td>You pick without feeling the motion</td></tr>
+      </tbody>
+    </table>
+    <button type="button" class="btn-queue" data-brain-action onclick="queueDecision('decision-motion','When do Emil skills run?')">Queue answer</button>
+    <span class="queue-ack" id="ack-decision-motion"></span>
+  </div>
+
+  <div class="decision-card" id="decision-primitives" data-brain-action>
+    <p class="settled">Settled in grill round 4: "9a".</p>
+    <p><strong>T3. How are the primitives redesigned and kept easy to maintain?</strong></p>
+    <table>
+      <thead><tr><th></th><th>Option</th><th>Gives</th><th>Costs</th></tr></thead>
+      <tbody>
+        <tr><td><input type="radio" name="decision-primitives" id="pr-a" value="Edit in place through cva and tokens, keep shadcn APIs" checked data-brain-action></td>
+          <td><label for="pr-a">Edit in place through <code>cva</code> variants and tokens; keep every prop and variant name; new brand components in <code>app/components/brand/</code>; no raw hex or arbitrary values in pages <span class="tag-recommended">(recommended)</span></label></td>
+          <td>No call site breaks; <code>shadcn diff</code> still works</td><td>Future <code>shadcn add</code> updates need a merge</td></tr>
+        <tr><td><input type="radio" name="decision-primitives" id="pr-b" value="Re-pull a shadcn base style first" data-brain-action></td>
+          <td><label for="pr-b">Re-pull a shadcn base style first</label></td>
+          <td>Closer to upstream</td><td>Wipes the current customizations</td></tr>
+        <tr><td><input type="radio" name="decision-primitives" id="pr-c" value="Fork into our own namespace" data-brain-action></td>
+          <td><label for="pr-c">Fork into our own namespace</label></td>
+          <td>Total freedom</td><td>Loses the shadcn update path</td></tr>
+      </tbody>
+    </table>
+    <button type="button" class="btn-queue" data-brain-action onclick="queueDecision('decision-primitives','How are the primitives redesigned?')">Queue answer</button>
+    <span class="queue-ack" id="ack-decision-primitives"></span>
+  </div>
+
+  <div class="decision-card" id="decision-rerun" data-brain-action>
+    <p class="settled">Settled in grill round 2: "5a".</p>
+    <p><strong>T4. What happens when DESIGN.md already exists?</strong></p>
+    <table>
+      <thead><tr><th></th><th>Option</th><th>Gives</th><th>Costs</th></tr></thead>
+      <tbody>
+        <tr><td><input type="radio" name="decision-rerun" id="re-a" value="Refuse unless --redo; old brand becomes the anti-reference" checked data-brain-action></td>
+          <td><label for="re-a">Refuse unless <code>--redo</code>; with it, the old brand is what the new one moves away from <span class="tag-recommended">(recommended)</span></label></td>
+          <td>Safe by default</td><td>One extra flag</td></tr>
+        <tr><td><input type="radio" name="decision-rerun" id="re-b" value="--keep palette|type refresh" data-brain-action></td>
+          <td><label for="re-b"><code>--keep palette|type</code> for a partial refresh</label></td>
+          <td>Partial rebrand</td><td>A second mode to maintain</td></tr>
+      </tbody>
+    </table>
+    <button type="button" class="btn-queue" data-brain-action onclick="queueDecision('decision-rerun','What happens when DESIGN.md already exists?')">Queue answer</button>
+    <span class="queue-ack" id="ack-decision-rerun"></span>
+  </div>
+
+  <div class="decision-card" id="decision-shape" data-brain-action>
+    <p class="settled">New. Not asked in the grill.</p>
+    <p><strong>T5. One workflow script or two?</strong> A workflow cannot stop for your pick, so the work
+    splits around it either way.</p>
+    <table>
+      <thead><tr><th></th><th>Option</th><th>Gives</th><th>Costs</th></tr></thead>
+      <tbody>
+        <tr><td><input type="radio" name="decision-shape" id="sh-a" value="One script, args.stage propose|apply" checked data-brain-action></td>
+          <td><label for="sh-a">One script, <code>brand-init.js</code>, with <code>stage: "propose" | "apply"</code> <span class="tag-recommended">(recommended)</span></label></td>
+          <td>Matches build-feature's one command, one script; shared prompts and schemas live in one place</td><td>A larger file</td></tr>
+        <tr><td><input type="radio" name="decision-shape" id="sh-b" value="Two scripts, brand-propose.js and brand-apply.js" data-brain-action></td>
+          <td><label for="sh-b">Two scripts, <code>brand-propose.js</code> and <code>brand-apply.js</code></label></td>
+          <td>Each is smaller</td><td>The shared token schema lives in two places</td></tr>
+      </tbody>
+    </table>
+    <button type="button" class="btn-queue" data-brain-action onclick="queueDecision('decision-shape','One workflow script or two?')">Queue answer</button>
+    <span class="queue-ack" id="ack-decision-shape"></span>
+  </div>
+
+  <div class="decision-card" id="decision-lanes" data-brain-action>
+    <p class="settled">New. Not asked in the grill.</p>
+    <p><strong>T6. How are the 55 primitives split across parallel lanes?</strong> Lanes must own disjoint files.</p>
+    <table>
+      <thead><tr><th></th><th>Option</th><th>Gives</th><th>Costs</th></tr></thead>
+      <tbody>
+        <tr><td><input type="radio" name="decision-lanes" id="ln-a" value="Four lanes by family" checked data-brain-action></td>
+          <td><label for="ln-a">Four lanes by family: actions and forms (20), overlays and feedback (17), layout and navigation (12), data display (6) <span class="tag-recommended">(recommended)</span></label></td>
+          <td>Related parts share a hand: a select and an input match because one agent made both</td><td>Uneven lane sizes</td></tr>
+        <tr><td><input type="radio" name="decision-lanes" id="ln-b" value="One lane" data-brain-action></td>
+          <td><label for="ln-b">One lane does all 55</label></td>
+          <td>One hand, most consistent</td><td>The slowest by far, and its context fills up</td></tr>
+        <tr><td><input type="radio" name="decision-lanes" id="ln-c" value="Eight lanes, about 7 files each" data-brain-action></td>
+          <td><label for="ln-c">Eight lanes of about seven files</label></td>
+          <td>Fastest</td><td>Drift between lanes; more fixing in critique</td></tr>
+      </tbody>
+    </table>
+    <button type="button" class="btn-queue" data-brain-action onclick="queueDecision('decision-lanes','How are the 55 primitives split across lanes?')">Queue answer</button>
+    <span class="queue-ack" id="ack-decision-lanes"></span>
+  </div>
+
+  <div class="decision-card" id="decision-comps" data-brain-action>
+    <p class="settled">New. Not asked in the grill.</p>
+    <p><strong>T7. Where do the comps and the pick plan live?</strong></p>
+    <table>
+      <thead><tr><th></th><th>Option</th><th>Gives</th><th>Costs</th></tr></thead>
+      <tbody>
+        <tr><td><input type="radio" name="decision-comps" id="cp-a" value="Comps in .brain/shots (gitignored); pick plan committed in plans/" checked data-brain-action></td>
+          <td><label for="cp-a">Comps and screenshots in <code>.brain/shots/brand-init/</code> (gitignored); the pick plan, with the comps inlined, committed as <code>plans/brand-pick.html</code> <span class="tag-recommended">(recommended)</span></label></td>
+          <td>The PR records which brand won and what lost; no loose files in the tree</td><td>One large HTML file in the PR</td></tr>
+        <tr><td><input type="radio" name="decision-comps" id="cp-b" value="Nothing committed" data-brain-action></td>
+          <td><label for="cp-b">Nothing committed; everything in <code>.brain/</code></label></td>
+          <td>Clean PR</td><td>The rejected two vanish with the checkout, since the brain is gitignored</td></tr>
+      </tbody>
+    </table>
+    <button type="button" class="btn-queue" data-brain-action onclick="queueDecision('decision-comps','Where do the comps and the pick plan live?')">Queue answer</button>
+    <span class="queue-ack" id="ack-decision-comps"></span>
+  </div>
+</section>
+
+<section id="plan-of-record">
+  <h2>Plan of record</h2>
+  <p>Phases 1 to 3 build the harness. Phases 4 to 6 are what one run of <code>/brand-init</code> does, and
+  the dry run in phase 7 proves them.</p>
+  <ol>
+    <li><strong>Phase 1: the command.</strong> <code>.claude/commands/brand-init.md</code> runs the pre-flight
+      (clean tree, green baseline, refuses when DESIGN.md exists without <code>--redo</code>, one feature in
+      progress), the impeccable <code>init</code> interview, the taste draw, both workflow launches, the pick
+      review, and the close (brain doc, commit, PR).
+      Acceptance: the command refuses on a dirty tree and on an existing DESIGN.md, saying why.
+      Verify: run it in both states and read the refusal.</li>
+    <li><strong>Phase 2: the propose stage.</strong> <code>.claude/workflows/brand-init.js</code> with
+      <code>stage: "propose"</code> takes three direction sheets and PRODUCT.md and returns three comps, each
+      with tokens as JSON (shadcn roles for light and dark, fonts, radius, motion), screenshots at desktop and
+      mobile in light and dark, and its critique scores.
+      Acceptance: three comps that differ in palette, type and composition; each passes WCAG AA for body
+      text in both themes; each critique is attached, with scores under 7.5 left as they are.
+      Verify: open the three comps; check contrast with the inspector.</li>
+    <li><strong>Phase 3: the apply stage.</strong> The same script with <code>stage: "apply"</code> takes the
+      chosen tokens as the contract. The contract lane goes first, then six lanes on disjoint paths
+      (T6, shared components, and home when you said yes), then the check wave, then polish and document.
+      It never commits and never writes to the brain.
+      Acceptance: no lane edits outside its fence; every call site still compiles with no prop changes.
+      Verify: <code>bun run typecheck</code>; a diff of each lane's files against its fence.</li>
+    <li><strong>Phase 4: the pick.</strong> The command writes <code>plans/brand-pick.html</code> with the three
+      comps inlined, and opens it in <code>brain review</code>.
+      Acceptance: you pick with one radio button and answer "rebuild home?" with another; the answers come
+      back in the poll.
+      Verify: <code>brain plans view brand-pick</code> shows both decision prompts.</li>
+    <li><strong>Phase 5: the gates.</strong> On the apply stage's tree: impeccable critique at desktop and
+      mobile, in light and dark, on kitchen-sink, the dashboard and admin users; review-animations on the
+      motion; <code>brain verify</code>; <code>feature-verifier</code> walks sign-up, the dashboard and admin.
+      Acceptance: 0 impeccable P0/P1; review-animations passes; every gate green.
+      Verify: the critique text pasted into the verification body, as AGENTS.md requires.</li>
+    <li><strong>Phase 6: the record.</strong> DESIGN.md (impeccable <code>document</code>), PRODUCT.md,
+      <code>brain docs set codebase design-system</code> naming the winner, the two that lost and why, and
+      <code>ui-builder.md</code> told to read DESIGN.md first. One commit, one PR in the pr-format layout.
+      Acceptance: <code>brain docs view codebase/design-system</code> returns the decision; a new UI agent
+      reads DESIGN.md before its first edit.</li>
+    <li><strong>Phase 7: the dry run.</strong> Run <code>/brand-init</code> on a throwaway branch
+      <code>try/brand-init</code> with a sample brief, carry it through to an unmerged PR, and screenshot the
+      result. Then drop the branch: the template keeps its monochrome, per the c3b7202 precedent.
+      Acceptance: the success metrics above hold on the dry run.
+      Verify: a <code>brain verifications add brand-init</code> PASS with the screenshots attached.</li>
+  </ol>
+</section>
+
+<section id="files-changed">
+  <h2>Files that change</h2>
+  <p>In this PR, which builds the harness:</p>
+  <table>
+    <thead><tr><th>Path</th><th>Change</th><th>Why</th></tr></thead>
+    <tbody>
+      <tr><td><code>.claude/commands/brand-init.md</code></td><td>new</td><td>Pre-flight, interactive steps, launches, close</td></tr>
+      <tr><td><code>.claude/workflows/brand-init.js</code></td><td>new</td><td>Propose and apply stages</td></tr>
+      <tr><td><code>.claude/agents/ui-builder.md</code></td><td>edit</td><td>Read PRODUCT.md and DESIGN.md before the first edit</td></tr>
+      <tr><td><code>AGENTS.md</code></td><td>edit</td><td>Slash-command row; a note in "Frontend tasks" that a fork runs /brand-init first</td></tr>
+      <tr><td><code>scripts/harness-check.sh</code></td><td>edit, if needed</td><td>Check that every command's workflow script exists and parses</td></tr>
+      <tr><td><code>plans/brand-init.html</code></td><td>new</td><td>This plan</td></tr>
+      <tr><td><code>sean-skills: engineering-toolkit/skills/new-app/SKILL.md</code></td><td>edit, separate repo and PR</td><td>After <code>bun setup</code>, offer to run <code>/brand-init</code> in the new app</td></tr>
+    </tbody>
+  </table>
+  <p>In a fork, a run of <code>/brand-init</code> changes <code>app/app.css</code>, <code>app/root.tsx</code>
+  (font link), the 55 files in <code>app/components/ui/</code>, the 6 shared components in
+  <code>app/components/</code>, new files in <code>app/components/brand/</code>, optionally
+  <code>app/routes/home.tsx</code>, and adds <code>PRODUCT.md</code>, <code>DESIGN.md</code> and
+  <code>plans/brand-pick.html</code>.</p>
+</section>
+
+<section id="agents">
+  <h2>Agent topology</h2>
+  <table>
+    <thead><tr><th>Stage</th><th>Agents</th><th>Writes</th><th>Skills loaded</th></tr></thead>
+    <tbody>
+      <tr><td>Main thread</td><td>you and me</td><td>PRODUCT.md, plans/brand-pick.html, brain, commit</td><td>impeccable <code>init</code>, taste <code>draw.mjs</code></td></tr>
+      <tr><td>Propose</td><td>3 comp lanes, then 3 critics</td><td><code>.brain/shots/brand-init/&lt;n&gt;/</code> only</td><td>taste (landing), impeccable (dashboard, strip), animate + emil-design-eng (build), review-animations (critique)</td></tr>
+      <tr><td>Apply: contract</td><td>1</td><td><code>app/app.css</code>, <code>app/root.tsx</code></td><td>impeccable</td></tr>
+      <tr><td>Apply: build</td><td>4 primitive lanes + 1 shared + 0–1 home (<code>ui-builder</code>)</td><td>own fence only</td><td>impeccable (taste for home), animate, emil-design-eng</td></tr>
+      <tr><td>Apply: check</td><td>impeccable critic, taste critic (if home), review-animations, gates, feature-verifier</td><td>nothing</td><td>as named</td></tr>
+      <tr><td>Apply: close</td><td>impeccable-documenter</td><td>DESIGN.md</td><td>impeccable <code>polish</code>, <code>document</code></td></tr>
+    </tbody>
+  </table>
+  <p>Roughly 7 agents to propose and 13 to apply, about the same as <code>/build-feature</code>'s 14.</p>
+</section>
+
+<section id="error-paths">
+  <h2>Error paths</h2>
+  <table>
+    <thead><tr><th>Failure</th><th>Detected by</th><th>Handled by</th><th>You see</th></tr></thead>
+    <tbody>
+      <tr><td>DESIGN.md exists, no <code>--redo</code></td><td>pre-flight</td><td>stop</td><td>"A brand exists. Run /brand-init --redo to replace it."</td></tr>
+      <tr><td>Dirty tree or red baseline</td><td><code>git status</code>, <code>brain verify --stage baseline</code></td><td>stop</td><td>which gate failed</td></tr>
+      <tr><td>Two comps look alike</td><td>the critics flag it</td><td>redraw one with <code>--redraw direction</code>, once</td><td>a note on the redrawn comp</td></tr>
+      <tr><td>You reject all three</td><td>your answer on the pick card</td><td>a fresh <code>--options 3</code> draw that excludes the three</td><td>a second pick plan</td></tr>
+      <tr><td>A comp lane fails twice</td><td>workflow</td><td>continue with two</td><td>"Lane 2 failed: &lt;reason&gt;" in the pick plan</td></tr>
+      <tr><td>A token pair fails contrast</td><td>contract lane's AA check</td><td>adjust lightness and keep the hue</td><td>the change listed in DESIGN.md</td></tr>
+      <tr><td>A lane edits outside its fence</td><td>synthesis diff check</td><td>P0; rerun that lane alone</td><td>the collision in the report</td></tr>
+      <tr><td>A P0/P1 survives two fix rounds</td><td>critic</td><td>stop, no rounding up</td><td>the finding and screenshots, for you to decide</td></tr>
+      <tr><td>taste scores home under 7.5 after 3 rounds</td><td>taste loop</td><td>reported as is</td><td>the score, never rounded</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section id="testing-plan">
+  <h2>Testing plan</h2>
+  <ul class="checklist">
+    <li><label><input type="checkbox"> Dry run on <code>try/brand-init</code>: three comps, a pick, the apply stage, an unmerged PR</label></li>
+    <li><label><input type="checkbox"> Refusals: dirty tree; existing DESIGN.md without --redo</label></li>
+    <li><label><input type="checkbox"> <code>--redo</code> on the dry-run branch: the new set moves away from the first brand</label></li>
+    <li><label><input type="checkbox"> Kitchen-sink at desktop and mobile, light and dark: 0 impeccable P0/P1</label></li>
+    <li><label><input type="checkbox"> <code>bun run typecheck</code> with no call-site edits outside <code>app/components/</code></label></li>
+    <li><label><input type="checkbox"> <code>brain verify</code> green, including build and e2e</label></li>
+    <li><label><input type="checkbox"> feature-verifier: sign-up, dashboard, admin users, with screenshots</label></li>
+    <li><label><input type="checkbox"> <code>prefers-reduced-motion</code>: motion tokens collapse to none</label></li>
+    <li><label><input type="checkbox"> <code>./scripts/harness-check.sh</code> passes with the new command and script</label></li>
+  </ul>
+</section>
+
+<section id="open-questions">
+  <h2>Open questions</h2>
+  <ul>
+    <li><s>Should <code>/new-app</code> offer to run <code>/brand-init</code> at the end of its setup wizard?</s>
+      Answered in review round 1: "yes, that's a good idea". Added to the files table.</li>
+    <li>The old brain at c3b7202 is still not imported. Recall in <code>/plan-feature</code> will need it; is that its own task now or after <code>/ship-stack</code>?</li>
+  </ul>
+</section>
+
+<script>
+  function queueDecision(cardId, question) {
+    var card = document.getElementById(cardId);
+    var checked = card.querySelector('input[type="radio"]:checked');
+    if (!checked) return;
+    var choice = checked.value;
+    if (window.brain && typeof window.brain.queuePrompt === "function") {
+      window.brain.queuePrompt({
+        tag: "decision",
+        queueKey: cardId,
+        prompt: question + ": " + choice,
+        target: { type: "decision", question: question, choice: choice }
+      });
+    }
+    var ack = document.getElementById("ack-" + cardId);
+    if (ack) ack.textContent = "Queued: " + choice;
+  }
+</script>
+</body>
+</html>
