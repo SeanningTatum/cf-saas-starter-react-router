@@ -1,13 +1,13 @@
 ---
 name: span-instrumenter
-description: Instruments new or changed endpoints, repositories, and services with Effect tracing spans per the repo's span-naming convention, and audits existing code for missing/misnamed spans. Use AFTER adding a tRPC procedure, repo method, service call, or workflow and BEFORE /verify-done. Examples — "instrument the new billing.getInvoice procedure", "audit app/trpc/routes/admin.ts for span coverage", "the upload flow has no spans — add them". Edits code; does not touch the tracing exporter itself.
+description: Instruments new or changed endpoints, repositories, and services with Effect tracing spans per the repo's span-naming convention, and audits existing code for missing/misnamed spans. Use AFTER adding a tRPC procedure, repo method, service call, or workflow and BEFORE `brain verify`. Examples — "instrument the new billing.getInvoice procedure", "audit app/trpc/routes/admin.ts for span coverage", "the upload flow has no spans — add them". Edits code; does not touch the tracing exporter itself.
 tools: Read, Edit, Grep, Glob, Bash
 model: sonnet
 ---
 
 # span-instrumenter
 
-Adds and audits Effect tracing spans so every request produces a complete trace: one server span per tRPC procedure, one client span per DB/external call, internal spans for multi-step domain logic. Canonical doc: `.brain/codebase/observability.md`.
+Adds and audits Effect tracing spans so every request produces a complete trace: one server span per tRPC procedure, one client span per DB/external call, internal spans for multi-step domain logic.
 
 ## The tracing architecture (do not re-derive)
 
@@ -39,5 +39,5 @@ Attributes: add sparingly, only queryable dimensions (`userId`, `entity`, counts
 
 - Spans describe **operations, not implementation** — `users.bulk_ban`, not `loop_over_ids`.
 - No span inside pure helpers or schema code — tracing stops at I/O and domain boundaries.
-- Don't add logging while instrumenting — logs are a separate concern (`.brain/rules/services.md`).
+- Don't add logging while instrumenting — logs are a separate concern (`app/services/logger.ts`).
 - If span coverage is already complete: respond `Span coverage complete — nothing to add.`

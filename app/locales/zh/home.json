@@ -61,15 +61,15 @@
     "pillars": {
       "brain": {
         "title": "Brain",
-        "description": "智能助手在动代码前要读的分层文档:高层架构、代码模式、7 条分层规则、每个功能的记忆、运行日志。"
+        "description": "每个检出一个 SQLite 文件。功能、任务、检查点、运行日志和验证结果在上下文窗口清空后依然在,助手通过 brain CLI 查询。"
       },
-      "recipes": {
-        "title": "Recipes",
-        "description": "常见动作的步骤手册 —— 加 tRPC 接口、加数据表、加标记错误、加 CF 绑定。前后由 00-before-task 和 99-verify-done 包夹。"
+      "skills": {
+        "title": "Skills",
+        "description": "brain-axi 插件把方法串成一条链 —— 开始、计划、执行、验证、完成。每个技能交给下一个,助手不用提醒也会按步骤走。"
       },
       "gates": {
         "title": "验证门",
-        "description": "斜杠命令一键跑类型检查、单测、e2e、brain 一致性、harness 不变量。所有门没绿,就不能宣告完成。"
+        "description": "已声明的检查 —— 类型检查、单测、非妥协项、harness 不变量、构建、e2e —— 由 brain verify 运行。所有门没绿,就不能宣告完成。"
       }
     }
   },

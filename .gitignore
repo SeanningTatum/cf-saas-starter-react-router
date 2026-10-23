@@ -43,9 +43,10 @@ worker-configuration.d.ts
 # Editor agent caches
 .cursor/
 
-# Agent skills — restored from skills-lock.json by scripts/restore-skills.sh; only the lock and the
-# .claude/skills/ symlinks are committed
+# Agent skills — restored from skills-lock.json by scripts/restore-skills.sh, which also links them
+# into .claude/skills/; only the lock is committed
 /.agents/
+/.claude/skills/
 
 # Design skill scratch output and per-machine config; .impeccable/config.json stays shared
 .taste-skill/
@@ -58,5 +59,10 @@ worker-configuration.d.ts
 # feature-verifier throwaway Playwright scripts (see .claude/agents/feature-verifier.md)
 tmp/
 
-# Gate telemetry is per-machine run history, not shared state.
-.brain/runs/gates.jsonl
+# brain-axi local state
+.brain/brain.db
+.brain/brain.db-wal
+.brain/brain.db-shm
+.brain/brain.db.bak-v*
+.brain/export.toon
+.brain/shots/

@@ -9,7 +9,6 @@ interface StackBadgeProps {
 
 /**
  * Small monospace label naming a stack piece (e.g. "Workers", "tRPC").
- * See `.brain/codebase/design-system.md` for usage rationale.
  */
 export function StackBadge({ children, className, active = false }: StackBadgeProps) {
   return (

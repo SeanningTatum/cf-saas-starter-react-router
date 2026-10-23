@@ -5,6 +5,18 @@
         "source": "github",
         "repo": "nextlevelbuilder/ui-ux-pro-max-skill"
       }
+    },
+    "impeccable": {
+      "source": {
+        "source": "github",
+        "repo": "pbakaus/impeccable"
+      }
+    },
+    "taste-skill": {
+      "source": {
+        "source": "github",
+        "repo": "Leonxlnx/taste-skill"
+      }
     }
   },
   "enabledPlugins": {
@@ -18,14 +30,17 @@
     "github@claude-plugins-official": true,
     "auth-skills@better-auth-agent-skills": true,
     "claude-md-management@claude-plugins-official": true,
-    "ui-ux-pro-max@ui-ux-pro-max-skill": true
+    "ui-ux-pro-max@ui-ux-pro-max-skill": true,
+    "impeccable@impeccable": true,
+    "taste-skill@taste-skill": true
   },
   "permissions": {
     "deny": [
-      "Bash(rm -rf:*)", "Bash(rm -fr:*)",
-      "Bash(git push --force:*)", "Bash(git push -f:*)",
+      "Bash(git push --force:*)",
+      "Bash(git push -f:*)",
       "Bash(git reset --hard:*)",
-      "Bash(git clean -fd:*)", "Bash(git clean -fdx:*)"
+      "Bash(git clean -fd:*)",
+      "Bash(git clean -fdx:*)"
     ]
   },
   "hooks": {
@@ -36,31 +51,6 @@
             "type": "command",
             "timeout": 5,
             "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/session-start.sh\" 2>&1 || true"
-          }
-        ]
-      }
-    ],
-    "PreToolUse": [
-      {
-        "matcher": "Bash",
-        "hooks": [
-          {
-            "type": "command",
-            "if": "Bash(git commit*)",
-            "timeout": 5,
-            "statusMessage": "Checking which .brain/ docs to update",
-            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/brain-reminder.sh\" || true"
-          }
-        ]
-      },
-      {
-        "matcher": "Edit|Write|NotebookEdit",
-        "hooks": [
-          {
-            "type": "command",
-            "timeout": 5,
-            "statusMessage": "Routing to the .brain/rules layer doc",
-            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/rule-router.sh\" || true"
           }
         ]
       }

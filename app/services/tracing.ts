@@ -12,7 +12,7 @@ import { Context, Effect, Exit, Layer, Option, Tracer } from "effect";
  * response).
  *
  * Backend-agnostic: any OTLP-compatible collector works (Jaeger, Grafana,
- * Honeycomb, Axiom, Logfire, otel-tui) — see `.brain/codebase/observability.md`.
+ * Honeycomb, Axiom, Logfire, otel-tui).
  */
 
 export interface TracingConfig {
