@@ -103,12 +103,16 @@ wait
   || bad "concurrent restores: calls=$(calls "$SB")"
 rm -r "$SB"
 
+# No clock: whole-second timestamps flake across a second boundary. The stub installer
+# sleeps 1s before writing SKILL.md, so "returned before the install finished" is the
+# observable proof that --background did not wait.
 SB=$(sandbox)
-t0=$(date +%s); out=$(restore "$SB" --background); dt=$(( $(date +%s) - t0 ))
+out=$(restore "$SB" --background)
+[ -f "$SB/.agents/skills/beta/SKILL.md" ] && returned_early=no || returned_early=yes
 for _ in $(seq 1 15); do [ -f "$SB/.agents/skills/beta/SKILL.md" ] && lockgone "$SB" && break; sleep 1; done
-[ "$dt" -lt 1 ] && [ -n "$out" ] && [ "$(calls "$SB")" = 1 ] && lockgone "$SB" \
-  && ok "--background returns at once and the restore completes" \
-  || bad "background: returned in ${dt}s, calls=$(calls "$SB")"
+[ "$returned_early" = yes ] && [ -n "$out" ] && [ "$(calls "$SB")" = 1 ] && lockgone "$SB" \
+  && ok "--background returns before the install finishes, and the restore completes" \
+  || bad "background: returned_early=$returned_early calls=$(calls "$SB")"
 rm -r "$SB"
 
 echo ""
