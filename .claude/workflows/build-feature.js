@@ -80,7 +80,7 @@ const orient = await parallel([
     ? [
         () =>
           agent(
-            `Feature to build: ${feature}\n\nUI-surface prep. Read app/app.css (the semantic tokens) and the nearest existing surfaces under app/routes/ and app/components/, then report: is this tier 1 (pattern work — reuse existing components and states) or tier 2 (net-new surface needing a locked direction from the lead design skill: impeccable `shape` for app screens, design-taste-frontend's direction library for public pages)? Name the existing components, states and i18n namespaces it should reuse. Do NOT design anything and do NOT edit files.`,
+            `Feature to build: ${feature}\n\nUI-surface prep. Read app/app.css (the semantic tokens) and the nearest existing surfaces under app/routes/ and app/components/, then report: is this tier 1 (pattern work — reuse existing components and states) or tier 2 (net-new surface needing a locked direction from the lead design skill: impeccable \`shape\` for app screens, design-taste-frontend's direction library for public pages)? Name the existing components, states and i18n namespaces it should reuse. Do NOT design anything and do NOT edit files.`,
             { label: "ui:tier-check", phase: "Orient" }
           ),
       ]

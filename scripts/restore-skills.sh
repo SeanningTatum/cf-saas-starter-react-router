@@ -37,15 +37,23 @@ find_missing() {
   done
 }
 
-# Link every installed skill into .claude/skills/, and drop links left dangling by a skill
-# removed from the lock. Never touches a real directory there.
+# Link every installed skill into .claude/skills/. Drop dangling links, and links this script
+# made (../../.agents/skills/<name>) for a skill no longer in the lock — its folder may outlive
+# the lock entry. Never touches a real directory or a link pointing anywhere else.
 link_skills() {
-  local name link
+  local name link names
+  names=$(locked_names)
   mkdir -p "$ROOT/.claude/skills"
   for link in "$ROOT"/.claude/skills/*; do
-    [ -L "$link" ] && [ ! -e "$link" ] && rm "$link"
+    [ -L "$link" ] || continue
+    name=$(basename "$link")
+    if [ ! -e "$link" ]; then
+      rm "$link"
+    elif [ "$(readlink "$link")" = "../../.agents/skills/$name" ] && ! grep -qx "$name" <<<"$names"; then
+      rm "$link"
+    fi
   done
-  for name in $(locked_names); do
+  for name in $names; do
     [ -f "$ROOT/.agents/skills/$name/SKILL.md" ] || continue
     [ -e "$ROOT/.claude/skills/$name" ] || ln -s "../../.agents/skills/$name" "$ROOT/.claude/skills/$name"
   done
