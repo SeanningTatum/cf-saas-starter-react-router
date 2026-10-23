@@ -292,7 +292,8 @@ and contrastAA.dark as booleans (true only if every pair passes AA).`,
       agent(
         `Review the motion in ${comp.html}. Read-only: do not edit.
 
-Load the \`review-animations\` skill and run it. Check easing, duration, purpose, and that
+Load the \`emil-design-eng\` skill and judge the motion by its rules (\`review-animations\` is
+user-only: the Skill tool refuses it). Check easing, duration, purpose, and that
 prefers-reduced-motion collapses the motion. Return verdict PASS or FAIL with notes.`,
         {
           label: `critique:${comp.id}:motion`,
@@ -453,7 +454,7 @@ async function pickRound(round, comps, failed, similar, again) {
   const file = round === 1 ? "plans/brand-pick.html" : "plans/brand-pick-2.html";
   const askHome = typeof input.rebuildHome !== "boolean";
   const pick = await agent(
-    `Ask the user to pick a brand. Write ${file}, tier small.${again ? " (The first poll ended without an answer: reopen the same file and poll again.)" : ""}
+    `Ask the user to pick a brand. Write ${file}, tier small.${again ? ` (The first poll ended without an answer. The old session is closed: run \`brain review open ${file} --feature brand-init --reopen\`, say at the top that no comp was ticked last time, and poll again.)` : ""}
 
 One card per comp: name, comp.html inlined in an <iframe srcdoc> (or its markup, if small), the four
 screenshots (embed them as data URIs so the file is self-contained), the taste score, the impeccable
@@ -476,7 +477,9 @@ ${
 ${REVIEW_HOWTO}
 
 Return decision "pick" with the chosen comp id, "none" (pick null) only if the user chose "None of these",
-or "unanswered" if the review ended without a choice. Also return the home answer as a boolean (${askHome ? "from decision 2" : `${input.rebuildHome}`}), and for every comp that was NOT
+or "unanswered" if the review ended without a choice. A free-text approval with no radio ticked
+("LGTM", "go with this", "this direction") accepts what the card recommends: the comp you said you
+would pick, and the recommended home answer. A message that names a different comp picks that one. Also return the home answer as a boolean (${askHome ? "from decision 2" : `${input.rebuildHome}`}), and for every comp that was NOT
 chosen a one-line "why" built from the critiques and anything the user wrote; do not invent a reason.`,
     {
       label: `pick:round-${round}`,
@@ -855,8 +858,8 @@ as scored and is a P1; never round up. Put the score and the last critique in ev
       agent(
         `Review the motion of the rebuilt brand. Read-only: fix nothing.
 
-Dev server: \`CI=1 bun run dev --port 5283\` (yours alone). Load the \`review-animations\` skill and
-run it over the primitives that move (dialog, sheet, dropdown-menu, tabs, accordion, sonner, button
+Dev server: \`CI=1 bun run dev --port 5283\` (yours alone). Load the \`emil-design-eng\` skill (not
+\`review-animations\`, which the Skill tool refuses) and judge by its rules the primitives that move (dialog, sheet, dropdown-menu, tabs, accordion, sonner, button
 press states). Check that the durations and easings come from the --duration-* / --ease-* tokens and
 that prefers-reduced-motion collapses them. ${FIND_NOTE}`,
         { label: "check:review-animations", phase: "Check", schema: VERDICT_SCHEMA }
