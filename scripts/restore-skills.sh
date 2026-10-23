@@ -12,9 +12,10 @@ set -uo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 LOCK="$ROOT/skills-lock.json"
 SKILLS_CLI="skills@1.7.4"
-TMP="${TMPDIR:-/tmp}"
-LOCKDIR="${TMP%/}/restore-skills-$(printf '%s' "$ROOT" | cksum | cut -d' ' -f1)"
-LOG="$LOCKDIR.log"
+# Lock and log live in the gitignored, user-owned .agents/ — not a shared temp dir, where a
+# predictable path lets another user plant a symlink for the log or squat the lock.
+LOCKDIR="$ROOT/.agents/.restore.lock"
+LOG="$ROOT/.agents/.restore.log"
 
 [ -f "$LOCK" ] || exit 0
 
@@ -43,6 +44,8 @@ else
   echo "restore-skills: needs bunx (Bun) or npx (Node) on PATH — not restored: ${MISSING[*]}" >&2
   exit 1
 fi
+
+mkdir -p "$ROOT/.agents"
 
 if [ "${1:-}" = "--background" ]; then
   # Re-run as its own process rather than a subshell: the lock records the owner's PID,
