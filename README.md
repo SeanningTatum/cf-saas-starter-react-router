@@ -118,6 +118,7 @@ You're working in a codebase with strict conventions. Skipping the brain will co
 - Adding code → matching recipe in [`.brain/recipes/index.md`](.brain/recipes/index.md)
 - Refactor / bugfix → the layer's rule file in [`.brain/rules/index.md`](.brain/rules/index.md)
 - Feature work → existing memo in [`.brain/features/<slug>.md`](.brain/features/index.md), plus past attempts in [`.brain/runs/`](.brain/runs/)
+- Frontend work → load the design skill for the lane (see [Design skills](#design-skills) below)
 
 **3. Verify — [`/verify-done`](.claude/commands/verify-done.md)** (or [`.brain/recipes/99-verify-done.md`](.brain/recipes/99-verify-done.md))
 - typecheck + test + e2e (if cross-component) + build (if CF-touching) + manual UI smoke (if UI)
@@ -428,6 +429,26 @@ Add a shadcn component:
 
 ```bash
 bunx shadcn@latest add <component-name>
+```
+
+### Design skills
+
+Agents load one of these on every frontend task. [`skills-lock.json`](skills-lock.json) lists them, and [`scripts/restore-skills.sh`](scripts/restore-skills.sh) installs any that are missing — run by `./init.sh`, and in the background by the Claude Code SessionStart hook — so a fresh clone has them by its first session. They land in `.agents/skills/` (gitignored); the committed `.claude/skills/` symlinks point there.
+
+| Skill | Source | Job here |
+|-------|--------|----------|
+| `impeccable` | [pbakaus/impeccable](https://github.com/pbakaus/impeccable) | Leads app screens — dashboard, admin, settings, forms. Runs the finish pass (`audit`, `harden`, `polish`) on every surface. |
+| `design-taste-frontend` | [Leonxlnx/taste-skill](https://github.com/Leonxlnx/taste-skill) | Leads public pages — landing, marketing, pricing. Art direction plus a screenshot look-and-fix loop. |
+| `emil-design-eng` · `animate` · `review-animations` | [emilkowalski/skills](https://github.com/emilkowalski/skills) | Own all motion — easing, duration, enter/exit, gestures. `review-animations` runs only when you call `/review-animations`. |
+
+One skill leads each surface, so they never fight over the same choice. The tokens in [`app/app.css`](app/app.css) beat all of them. Lane rules: [`.brain/rules/frontend.md`](.brain/rules/frontend.md).
+
+The restore pulls each skill's latest upstream version, unpinned.
+
+```bash
+./scripts/restore-skills.sh                                # install missing skills now
+npx skills add <owner/repo> --skill <name> -y              # add another, then:
+ln -s ../../.agents/skills/<name> .claude/skills/<name>    # expose it to Claude Code; commit lock + symlink
 ```
 
 **Forms — always Effect Schema + `effectResolver`** (no Zod resolver):

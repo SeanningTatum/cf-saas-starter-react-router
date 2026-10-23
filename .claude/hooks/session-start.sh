@@ -11,6 +11,9 @@ if command -v brain >/dev/null 2>&1; then
   echo ""
 fi
 
+# --- Agent skills: restore any missing from skills-lock.json, detached (hook timeout is 5s) ---
+bash "$(dirname "$0")/../../scripts/restore-skills.sh" --background 2>/dev/null || true
+
 cat <<'EOF'
 🧠 Harness loaded — brain-axi CLI is the interface. Read before non-trivial work:
 

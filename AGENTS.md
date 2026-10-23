@@ -104,13 +104,26 @@ Direct pointers (each rule is the canonical "do / don't" for one layer):
 
 | # | Rule | Layer |
 |---|------|-------|
-| 1 | [`.brain/rules/frontend.md`](.brain/rules/frontend.md) | UI, forms, modals, Tailwind, `ui-ux-pro-max` design lookup, feature-verifier browser walk |
+| 1 | [`.brain/rules/frontend.md`](.brain/rules/frontend.md) | UI, forms, modals, Tailwind, `ui-ux-pro-max` design lookup, design-skill lanes, feature-verifier browser walk |
 | 2 | [`.brain/rules/cloudflare.md`](.brain/rules/cloudflare.md) | Workers runtime, bindings, env, Workflows declaration |
 | 3 | [`.brain/rules/repository.md`](.brain/rules/repository.md) | `Effect.Service` repos, Drizzle schema, repo inputs |
 | 4 | [`.brain/rules/services.md`](.brain/rules/services.md) | Effect Tags + Layers, Better Auth, Workflows, Session, Logger |
 | 5 | [`.brain/rules/routes.md`](.brain/rules/routes.md) | tRPC procedures via `runProcedure`, React Router loaders, auth gating |
 | 6 | [`.brain/rules/library.md`](.brain/rules/library.md) | Helpers, Effect Schema, effect-utils, Vitest, Playwright CLI (smoke specs + feature verification) |
 | 7 | [`.brain/rules/errors.md`](.brain/rules/errors.md) | Tagged errors, `tagToTRPC`, error helpers |
+
+## Frontend tasks — load a design skill every time
+
+Any task that changes what a user sees loads at least one of these skills before the first UI edit. They are listed in [`skills-lock.json`](skills-lock.json) and installed on session start by [`scripts/restore-skills.sh`](scripts/restore-skills.sh) (symlinked into `.claude/skills/`). Each owns a lane, so never run both leads on one surface:
+
+| Lane | Skill |
+|------|-------|
+| Lead — app screens (dashboard, admin, settings, tables, forms, states) | `impeccable` |
+| Lead — public pages (landing, marketing, pricing, hero) | `design-taste-frontend` |
+| Finish pass before `/verify-done`, any surface | `impeccable` `audit` / `harden` / `polish` |
+| Motion — anything that moves | `emil-design-eng` + `animate` (build) · `/review-animations` (critique) |
+
+`ui-ux-pro-max` (rules) and `/design-research` (Refero references) still apply, and the tokens in `app/app.css` + [`.brain/codebase/design-system.md`](.brain/codebase/design-system.md) beat every skill. Full lane rules: [`.brain/rules/frontend.md`](.brain/rules/frontend.md) "Design skills".
 
 ## Five non-negotiables
 

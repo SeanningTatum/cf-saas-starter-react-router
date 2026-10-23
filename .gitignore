@@ -43,6 +43,14 @@ worker-configuration.d.ts
 # Editor agent caches
 .cursor/
 
+# Agent skills — restored from skills-lock.json by scripts/restore-skills.sh; only the lock and the
+# .claude/skills/ symlinks are committed
+/.agents/
+
+# Design skill scratch output and per-machine config; .impeccable/config.json stays shared
+.taste-skill/
+.impeccable/config.local.json
+
 # Kimi Code — only the sub-agent symlink is shared; the rest is per-machine state
 /.kimi-code/*
 !/.kimi-code/agents
