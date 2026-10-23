@@ -9,8 +9,7 @@ import { isDev } from "@/lib/log-format";
 // Decision (fix 5): wire the already-tested `Session`/`SessionLive` service
 // in as the single source of truth for session resolution, rather than
 // deleting it. `SessionLive(headers)` is per-request (needs the request's
-// Headers) so it's provided locally here — exactly the pattern documented
-// in `.brain/rules/services.md` "Session" section — instead of being added
+// Headers) so it's provided locally here instead of being added
 // to the global `AppServices` union in runtime.ts, which is built once per
 // request before headers are threaded through and has no per-request
 // parameter today. This also replaces the previous `Effect.promise(() =>

@@ -1,116 +1,78 @@
-# AGENTS.md — Brain Pointer
+# AGENTS.md
 
-> This is the single source of truth. `CLAUDE.md` is a symlink to this file, so Claude Code, Cursor, Codex, Aider all read the same content. **Edit `AGENTS.md` only** — never replace the symlink with a real file. All real content lives under [`.brain/`](.brain/).
+> This is the single source of truth. `CLAUDE.md` is a symlink to this file, so Claude Code, Cursor, Codex, Aider all read the same content. **Edit `AGENTS.md` only** — never replace the symlink with a real file. Project state lives in the brain, `.brain/brain.db`.
 
 ## Overview
 
 SaaS starter on **Cloudflare Workers + React Router v7 + tRPC + D1/Drizzle + Better Auth + Effect TS + ShadCN/Tailwind**. Email/password auth, admin dashboard, file upload (R2), analytics, i18n, dark mode.
 
-> **Retrieval over recall.** Query the brain before any task. Do not rely on training data for project-specific patterns.
+> **Retrieval over recall.** Ask the brain before any task. Do not rely on training data for project state.
 
-## brain-axi CLI — the harness interface
+## The brain — brain-axi 0.3.0
 
-The `.brain/` harness is driven by the **[brain-axi](https://github.com/SeanningTatum/brain-axi) CLI** (`brain`). It reads and writes brain state (features, checkpoints, docs, runs, plan reviews, verifications) with token-efficient TOON output. Prefer `brain` over reading/editing raw `.brain/` files — every command emits a `help[]` block so you self-bootstrap.
+The brain is one SQLite file, `.brain/brain.db`: features, tasks, checkpoints, run notes, docs, reviewed plans, verifications and the declared gates. It is **gitignored** — every checkout has its own, and a clone starts empty. The **[brain-axi](https://github.com/SeanningTatum/brain-axi) CLI** (`brain`) is the only way in; every command prints TOON with a `help:` block naming the next command.
 
-Install: `npx skills add SeanningTatum/brain-axi --skill brain` (installs the `brain` Agent Skill). CLI on PATH via `npm i -g github:SeanningTatum/brain-axi#v0.1.0` (or `npm link` from a checkout); it is **not** on npm, so any fallback uses the pinned GitHub spec: `npx -y github:SeanningTatum/brain-axi#v0.1.0 <cmd>`.
+Setup (Node ≥ 24 — the CLI uses the built-in `node:sqlite`):
+
+```bash
+npm i -g github:SeanningTatum/brain-axi#v0.3.0     # CLI on PATH (not on npm)
+claude plugin marketplace add SeanningTatum/brain-axi
+claude plugin install brain-axi@SeanningTatum     # skills + SessionStart `brain context`
+./scripts/brain-setup.sh                           # create .brain/brain.db + declare the gates
+```
+
+`scripts/brain-setup.sh` is idempotent and is the tracked list of gates. `init.sh`, CI and first-time setup all run it.
 
 | Phase | Command |
 |-------|---------|
-| Orient | `brain` (dashboard) · `brain progress` (last checkpoint) · `brain features` |
-| Look up | `brain docs <section>` · `brain docs view <sec/file>` · `brain search "<q>"` · `brain features view <slug>` |
+| Orient | `brain` (dashboard) · `brain progress` · `brain features` |
+| Look up | `brain search "<q>"` · `brain docs list` · `brain features view <slug>` |
 | Record | `brain progress add --summary "..." --next "..."` · `brain runs append <slug> --step "..." --observed "..."` |
-| Feature state | `brain features set-status <slug> --status <planned\|in-progress\|shipped\|blocked\|cut>` · `brain ship <slug> --evidence "..."` |
-| Playbooks | `brain playbook plan` · `brain playbook verify` · `brain playbook execute` |
-| Verify | `brain check` (brain-state invariants; wrapped by `./scripts/harness-check.sh` + repo supplement) |
-| Setup | `brain setup --app claude` (session-start context hook) |
+| Feature state | `brain features add <slug> --name "..."` · `brain features set <slug> --status <planned\|in-progress\|blocked\|cut>` · `brain features ship <slug> --evidence "..."` |
+| Verify | `brain verify --stage baseline` · `brain verify` (all gates) · `brain verifications add <slug> --verdict PASS ...` · `brain check` |
+| Plans | `brain review open <plan.html>` · `brain plans list` |
 
-`brain-axi` is the primary interface; the slash commands and `scripts/harness-check.sh` below are thin repo-specific wrappers on top of it. See [`.brain/HARNESS.md`](.brain/HARNESS.md) for how the CLI maps to the 5 harness subsystems.
+## Workflow
 
-## Read-before-task workflow
+The brain-axi plugin skills carry the method and hand off to each other:
 
-For every non-trivial task, run the recipe bookends:
+1. **Start:** `brain-axi:brain-start` — read brain state, frame the task, check scope, run `brain verify --stage baseline`, claim the feature.
+2. **Plan** (when a decision is involved): `brain-axi:brain-grill` → `brain-axi:brain-plan` (+ `brain-product` / `brain-ux` / `brain-ai`).
+3. **Work:** `brain-axi:brain-execute` — log each step with `brain runs append`.
+4. **Verify:** `brain-axi:brain-verify` — an independent walk; spawn `feature-verifier` for a browser walk of any user-visible flow.
+5. **Done:** `brain-axi:brain-done` — `brain verify` green, `brain check` green, checkpoint, `brain features ship`.
 
-1. **Start:** [`/start-task`](.claude/commands/start-task.md) (or [`.brain/recipes/00-before-task.md`](.brain/recipes/00-before-task.md)) — runs baseline, reads the brain, frames task, opens run note, writes progress entry.
-2. **Work:** the matching recipe / rule / feature doc.
-3. **End:** [`/verify-done`](.claude/commands/verify-done.md) (or [`.brain/recipes/99-verify-done.md`](.brain/recipes/99-verify-done.md)) before declaring done.
+For trivial edits (typo, comment, one-line change), skip the bookends — but never skip `brain verify` on user-visible work.
 
-For trivial edits (typo, comment, one-line change), bookends are optional — but never skip the verify step on user-visible work.
-
-## Slash commands (deterministic gates)
-
-Thin wrappers that sequence `brain` CLI commands with repo-specific steps (baseline, typecheck, e2e, feature-verify).
+## Slash commands
 
 | Command | Purpose |
 |---------|---------|
-| [`/start-task`](.claude/commands/start-task.md) | Kickoff — `init.sh --baseline` + brain read (`brain`/`brain progress`/`brain docs`/`brain search`) + framing + run note + `brain progress add`. Refuses if scope policy violated. |
-| [`/verify-done`](.claude/commands/verify-done.md) | Full verification — `test-author` (tests that pin the change)/typecheck/test/e2e smoke/build/feature-verification/brain coherence/non-negotiables + `brain check`. |
-| [`/ship-feature`](.claude/commands/ship-feature.md) | Close out — verify-done + `brain ship <slug> --evidence` (flips `feature_list.json`, checkpoints, runs `brain check`) + update feature MD + close run note. |
-| [`/build-feature`](.claude/commands/build-feature.md) | Multi-layer feature build with the sub-agents **fanned out in parallel** — orient (3 read-only lanes) → fix the contract (the one sequential step) → build lanes on **disjoint paths** → verify lanes at once (gates · non-negotiables · spans · browser walk · design critique) → synthesis. ~13 agents for a UI feature. Does not commit, does not touch brain state, does not decide for you. |
-| [`/design-research`](.claude/commands/design-research.md) | Tier-2 frontend gate — Refero MCP (styles → screens → flows) via `refero-design` + `ui-ux-pro-max` a11y cross-check → one dominant direction + decision ledger in the brain, before any JSX. Tier-1 UI (another modal/table, spacing fix) skips it. |
-| [`/harness-check`](.claude/commands/harness-check.md) | Validate harness invariants via [`scripts/harness-check.sh`](scripts/harness-check.sh) = `brain check` + repo supplement (sync rule, sub-agent frontmatter, dead links, hook wiring + hook tests). Deterministic, no LLM, exits non-zero on drift. |
+| [`/build-feature`](.claude/commands/build-feature.md) | Multi-layer feature build with the sub-agents **fanned out in parallel** — orient → fix the contract (the one sequential step) → build lanes on **disjoint paths** → verify lanes at once (gates · non-negotiables · spans · browser walk · design critique) → synthesis. Does not commit, does not touch brain state, does not decide for you. |
+| [`/design-research`](.claude/commands/design-research.md) | Tier-2 frontend gate — Refero MCP (styles → screens → flows) via `refero-design` + `ui-ux-pro-max` a11y cross-check → one dominant direction + decision ledger, before any JSX. Tier-1 UI (another modal/table, spacing fix) skips it. |
+| [`/harness-check`](.claude/commands/harness-check.md) | [`scripts/harness-check.sh`](scripts/harness-check.sh) = `brain check` + repo supplement (CLAUDE↔AGENTS symlink, sub-agent frontmatter, Kimi roster symlink, hook wiring + hook tests). Deterministic, no LLM, exits non-zero on drift. |
 
-## Harness — what holds this together
+## Gates
 
-This repo follows the [5-subsystem harness framework](.brain/HARNESS.md). The five concerns:
+Declared in [`scripts/brain-setup.sh`](scripts/brain-setup.sh), run by `brain verify`:
 
-1. **Instructions** — this file + `.brain/` (rules, recipes, features), queried via `brain docs` / `brain search`
-2. **State** — [`.brain/features/feature_list.json`](.brain/features/feature_list.json) (via `brain features` / `set-status` / `ship`), [`.brain/runs/progress.md`](.brain/runs/progress.md) (via `brain progress`), per-feature/task run notes (via `brain runs`)
-3. **Verification** — [`.brain/recipes/99-verify-done.md`](.brain/recipes/99-verify-done.md) + `/verify-done` + `brain check` + `brain playbook verify`
-4. **Scope** — see "Scope policy" below (enforced by `brain check` one-in-progress invariant)
-5. **Lifecycle** — [`init.sh`](init.sh) at repo root + hooks in `.claude/hooks/`: SessionStart (`brain context`), pre-edit rule routing ([`rule-router.sh`](.claude/hooks/rule-router.sh)), pre-commit brain reminder ([`brain-reminder.sh`](.claude/hooks/brain-reminder.sh))
+| Gate | Command | Stages |
+|------|---------|--------|
+| typecheck | `bun run typecheck` | bootstrap, baseline, verify |
+| test | `bun run test` | bootstrap, baseline, verify |
+| non-negotiables-selftest | `bun run scripts/check-non-negotiables.ts --selftest` | baseline, verify |
+| non-negotiables | `bun run scripts/check-non-negotiables.ts` | baseline, verify |
+| harness | `./scripts/harness-check.sh` | baseline, verify |
+| build | `bun run build` | verify |
+| e2e | `bun run test:e2e` | verify |
 
-> **Rules auto-surface.** A `PreToolUse(Edit|Write|NotebookEdit)` hook maps the edited path to its `.brain/rules/` layer doc and injects the pointer — once per layer per session. `.brain/rules/` stays the single tool-agnostic source of truth; the hook is only the Claude-native trigger. Globs live in [`.brain/rules/index.md`](.brain/rules/index.md) and must stay in sync with the `case` block in the hook.
+To add a gate, add a line to `scripts/brain-setup.sh` — CI picks it up.
 
 ## Scope policy
 
-- **One in-progress feature at a time.** Source of truth: `status: "in-progress"` row in [`.brain/features/feature_list.json`](.brain/features/feature_list.json). If you must start a second, mark the first `blocked` with reason in `evidence`.
-- **Definition of done** for any feature/task: implementation complete + `/verify-done` passes + per-feature `.brain/features/<slug>/<slug>.md` updated + `feature_list.json` status flipped + run note closed.
-- **Scope creep guardrail**: if you touch >2 features in one diff, stop and split. Cross-feature refactor is a separate task with its own run note.
-
-## Brain layout
-
-```
-.brain/
-├── HARNESS.md                 The harness, explained — read once
-├── high-level-architecture/   System layers, data flow, security, integrations, user journeys
-├── codebase/                  Programming model, helpers, tests, i18n, tRPC API surface
-├── rules/                     Layer-aligned conventions (frontend / cloudflare / repository / services / routes / library / errors)
-├── features/                  Per-feature memory — one folder per feature (<slug>/<slug>.md + verifications/ + screenshots/ + runs/) + feature_list.json
-├── recipes/                   Step-by-step runbooks (00-before-task, 99-verify-done, add-*)
-├── runs/                      progress.md (rolling cursor) + cross-cutting <date>-<slug>.md work logs (feature-specific runs live under features/<slug>/runs/)
-├── transcripts/               Meeting notes, decision logs
-├── emails/                    Archived stakeholder correspondence
-└── CHANGELOG.md               High-level project + brain change log
-```
-
-## Index map — open these first
-
-| Folder | Index | Read when |
-|--------|-------|-----------|
-| High-level architecture | [`.brain/high-level-architecture/index.md`](.brain/high-level-architecture/index.md) | Designing a feature; touching auth, DB schema, integrations, request lifecycle |
-| Codebase | [`.brain/codebase/index.md`](.brain/codebase/index.md) | **Every code change.** Default reading. Effect TS programming model, helpers, tests, i18n, tRPC API surface |
-| Rules | [`.brain/rules/index.md`](.brain/rules/index.md) | Editing in a specific layer — 7 layer-aligned rules (frontend / cloudflare / repository / services / routes / library / errors) |
-| Features | [`.brain/features/index.md`](.brain/features/index.md) | Modifying or extending an existing feature; before scoping a new one |
-| **Recipes** | [`.brain/recipes/index.md`](.brain/recipes/index.md) | **Adding code.** Step-by-step runbooks: 00-before-task / 99-verify-done bookends + tRPC endpoint, DB table, CF binding, tagged error, route, service, feature. Read this before writing. |
-| Runs | [`.brain/runs/index.md`](.brain/runs/index.md) | Multi-session task or recovery after compaction — past attempts, baselines, what failed and why |
-| Verifications | [`.brain/features/index.md`](.brain/features/index.md) | Verifying a user-visible feature — spawn `feature-verifier` for a browser walk; verdict doc + screenshots land in `features/<slug>/verifications/` + `screenshots/` (replaces per-feature e2e specs) |
-| Transcripts | [`.brain/transcripts/index.md`](.brain/transcripts/index.md) | A constraint or decision in code lacks visible "why" |
-| Emails | [`.brain/emails/index.md`](.brain/emails/index.md) | Same — for stakeholder-driven constraints |
-| Changelog | [`.brain/CHANGELOG.md`](.brain/CHANGELOG.md) | Recent architectural or brain shifts |
-
-## Rules — 7 layers
-
-Direct pointers (each rule is the canonical "do / don't" for one layer):
-
-| # | Rule | Layer |
-|---|------|-------|
-| 1 | [`.brain/rules/frontend.md`](.brain/rules/frontend.md) | UI, forms, modals, Tailwind, `ui-ux-pro-max` design lookup, design-skill lanes, feature-verifier browser walk |
-| 2 | [`.brain/rules/cloudflare.md`](.brain/rules/cloudflare.md) | Workers runtime, bindings, env, Workflows declaration |
-| 3 | [`.brain/rules/repository.md`](.brain/rules/repository.md) | `Effect.Service` repos, Drizzle schema, repo inputs |
-| 4 | [`.brain/rules/services.md`](.brain/rules/services.md) | Effect Tags + Layers, Better Auth, Workflows, Session, Logger |
-| 5 | [`.brain/rules/routes.md`](.brain/rules/routes.md) | tRPC procedures via `runProcedure`, React Router loaders, auth gating |
-| 6 | [`.brain/rules/library.md`](.brain/rules/library.md) | Helpers, Effect Schema, effect-utils, Vitest, Playwright CLI (smoke specs + feature verification) |
-| 7 | [`.brain/rules/errors.md`](.brain/rules/errors.md) | Tagged errors, `tagToTRPC`, error helpers |
+- **One in-progress feature at a time** (`brain features list`). To start a second, set the first `--status blocked` and say why in a checkpoint.
+- **Definition of done:** implementation complete + `brain verify` green + a PASS verification (`brain verifications add`) + `brain features ship <slug> --evidence "..."`.
+- **Scope creep guardrail:** if you touch >2 features in one diff, stop and split. A cross-feature refactor is a separate task.
 
 ## Frontend tasks — load a design skill every time
 
@@ -120,30 +82,32 @@ Any task that changes what a user sees loads at least one of these skills before
 |------|-------|
 | Lead — app screens (dashboard, admin, settings, tables, forms, states) | `impeccable` |
 | Lead — public pages (landing, marketing, pricing, hero) | `design-taste-frontend` |
-| Finish pass before `/verify-done`, any surface | `impeccable` `audit` / `harden` / `polish` |
+| Finish pass before `brain verify`, any surface | `impeccable` `audit` / `harden` / `polish` |
 | Motion — anything that moves | `emil-design-eng` + `animate` (build) · `/review-animations` (critique) |
 
-`ui-ux-pro-max` (rules) and `/design-research` (Refero references) still apply, and the tokens in `app/app.css` + [`.brain/codebase/design-system.md`](.brain/codebase/design-system.md) beat every skill. Full lane rules: [`.brain/rules/frontend.md`](.brain/rules/frontend.md) "Design skills".
+`ui-ux-pro-max` (rules) and `/design-research` (Refero references) still apply, and the tokens in `app/app.css` beat every skill.
 
 ## Five non-negotiables
 
-(Full detail in [`.brain/codebase/effect-ts.md`](.brain/codebase/effect-ts.md).)
+Enforced by `scripts/check-non-negotiables.ts` (the `non-negotiables` gate).
 
 1. **Effect TS** is the default. No `throw`, no `try/catch` outside `Effect.tryPromise`.
 2. **Effect Schema** for all validation. **No Zod.**
 3. **Tagged errors** in `app/models/errors/`. Map in `app/lib/effect-trpc.ts`.
-4. **Unit test for every helper and repository.** See [`.brain/codebase/testing.md`](.brain/codebase/testing.md).
+4. **Unit test for every helper and repository.**
 5. **Cloudflare Workers, not Node.** Bindings via `CloudflareEnv` Tag or `context.cloudflare.env`. Never `process.env`.
 
 ## Commands
 
 ```bash
-brain                     # Harness dashboard (features, in-progress, last checkpoint) — brain-axi CLI
-brain check               # Brain-state invariants (feature_list, one-in-progress, doc paths, verifications)
+brain                     # Brain dashboard (features, in-progress, last checkpoint)
+brain verify              # Run every declared gate (--stage baseline for the quick set)
+brain check               # Brain integrity (SQLite, foreign keys, search index, shipped ⇒ verified)
 brain search "<query>"    # Find text anywhere in the brain
-./scripts/harness-check.sh # brain check + repo supplement (sync rule, sub-agent frontmatter, dead links, hooks)
-./init.sh                 # Harness bootstrap — install + migrate + typecheck + test (run start of session)
-./init.sh --baseline      # Baseline only (typecheck + test) — used by 00-before-task.md
+./scripts/brain-setup.sh  # Create .brain/brain.db + declare the gates (idempotent)
+./scripts/harness-check.sh # brain check + repo supplement (symlinks, sub-agent frontmatter, hooks)
+./init.sh                 # Harness bootstrap — install + brain + migrate + typecheck + test (run start of session)
+./init.sh --baseline      # Baseline only (typecheck + test + harness-check)
 bun run dev               # Dev server (auto-runs local DB migrations) → http://localhost:5173
 bun run build             # Production build
 bun run deploy            # Build + deploy to Cloudflare Workers
@@ -161,25 +125,16 @@ bun run db:seed:preview   # Seed the preview-env D1 with the same fixtures
 bun run db:studio         # Drizzle Studio
 ```
 
-## When you change something — update the brain
+## When you change something
 
-| Change | Update |
-|--------|--------|
-| New service / CF binding | `high-level-architecture/architecture.md` + `integrations.md` |
-| New / renamed DB table | `high-level-architecture/data-models.md` |
-| Auth / RBAC / session change | `high-level-architecture/security.md` + `user-journeys.md` |
-| New helper / convention | `rules/library.md` (or `codebase/<topic>.md` if cross-cutting) |
-| New tRPC route | `rules/routes.md` + `codebase/api.md` |
-| New repository | `rules/repository.md` |
-| New service / external client | `rules/services.md` + `high-level-architecture/integrations.md` |
-| New tagged error | `rules/errors.md` (and add to `tagToTRPC`!) |
-| New UI component / form | `rules/frontend.md` |
-| New CF binding | `rules/cloudflare.md` + `high-level-architecture/architecture.md` |
-| New / changed feature | `features/<slug>/<slug>.md` (use `_TEMPLATE.md`) |
-| New / changed user-visible flow | Run `feature-verifier` → `features/<slug>/verifications/<date>.md` (browser walk + screenshots + PASS verdict) |
-| New / changed DB table or feature with user-visible data | extend fixtures in `scripts/seed-preview.ts` (see `rules/repository.md` "Seed data") |
-| Architectural shift | append to `CHANGELOG.md` |
-| Stakeholder decision | drop file in `transcripts/` or `emails/`, link from `CHANGELOG.md` |
+| Change | Do |
+|--------|----|
+| New tagged error | Add it to `tagToTRPC` in `app/lib/effect-trpc.ts` |
+| New helper or repository | Add its unit test in the same diff |
+| New / changed DB table or user-visible data | Extend the fixtures in `scripts/seed-preview.ts` |
+| New / changed user-visible flow | Run `feature-verifier` → `brain verifications add <slug>` (browser walk + screenshots + verdict) |
+| New / changed feature | `brain features add` / `set`, then `brain features ship` once verified |
+| A decision worth keeping | `brain progress add --summary "..." --body "..."` (or `brain docs set` for a lasting rule) |
 
 ## One file, two names
 

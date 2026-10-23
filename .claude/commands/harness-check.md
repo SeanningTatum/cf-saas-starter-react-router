@@ -1,12 +1,12 @@
 ---
-description: Validate harness invariants — brain check (brain-axi CLI) + repo supplement (sync rule, sub-agent frontmatter, dead links)
+description: Validate harness invariants — brain check (brain-axi CLI) + repo supplement (CLAUDE↔AGENTS symlink, sub-agent frontmatter, hook wiring)
 ---
 
 Run `./scripts/harness-check.sh` and surface the result verbatim.
 
 The script runs two layers:
-1. `brain check` (brain-axi CLI) — authoritative brain-state invariants (feature_list, one-in-progress, doc paths, dependency refs, progress.md, plan/review integrity, verification Verdict lines).
-2. Repo-specific supplement — HARNESS.md exists, init.sh executable, CLAUDE↔AGENTS sync, sub-agent frontmatter, core recipes, dead internal links.
+1. `brain check` (brain-axi CLI) — integrity of `.brain/brain.db`: SQLite integrity, foreign keys, search index, shipped features verified, no open tasks on shipped features, plan/shot file hashes.
+2. Repo-specific supplement — init.sh executable, CLAUDE↔AGENTS symlink, sub-agent frontmatter, `.kimi-code/agents` symlink, hook scripts wired in `.claude/settings.json` exist, restore-skills hook test.
 
 If the script exits non-zero:
 1. Quote the failing line(s).

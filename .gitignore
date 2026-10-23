@@ -58,5 +58,10 @@ worker-configuration.d.ts
 # feature-verifier throwaway Playwright scripts (see .claude/agents/feature-verifier.md)
 tmp/
 
-# Gate telemetry is per-machine run history, not shared state.
-.brain/runs/gates.jsonl
+# brain-axi local state
+.brain/brain.db
+.brain/brain.db-wal
+.brain/brain.db-shm
+.brain/brain.db.bak-v*
+.brain/export.toon
+.brain/shots/

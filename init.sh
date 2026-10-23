@@ -5,7 +5,7 @@
 # Usage:
 #   ./init.sh             # full bootstrap (install + typegen + migrate + typecheck + test)
 #   ./init.sh --quick     # skip install + migrate (assume already done)
-#   ./init.sh --baseline  # only typecheck + test (used by 00-before-task.md)
+#   ./init.sh --baseline  # only typecheck + test + harness-check
 
 set -uo pipefail
 
@@ -24,6 +24,11 @@ if [ "$MODE" != "--baseline" ] && [ "$MODE" != "--quick" ]; then
 
   echo "--- Restore agent skills (skills-lock.json) ---"
   ./scripts/restore-skills.sh || echo "WARN: skill restore failed — frontend design skills unavailable until it succeeds"
+  echo ""
+
+  echo "--- Brain (.brain/brain.db + declared gates) ---"
+  ./scripts/brain-setup.sh >/dev/null || { echo "FAIL: brain-setup (needs Node >= 24)"; exit 1; }
+  echo "OK: brain"
   echo ""
 
   echo "--- Apply local D1 migrations ---"
@@ -59,10 +64,7 @@ echo "harness-check: $([ $HARNESS_RC -eq 0 ] && echo PASS || echo FAIL)"
 echo ""
 echo "Brain entry points:"
 echo "  - CLAUDE.md (read first)"
-echo "  - .brain/HARNESS.md (this harness explained)"
-echo "  - .brain/recipes/00-before-task.md (start every task here)"
-echo "  - .brain/features/feature_list.json (feature state)"
-echo "  - .brain/runs/progress.md (rolling session log)"
+echo "  - brain (dashboard) · brain progress (checkpoints) · brain features (feature state)"
 echo ""
 
 if [ $TC_RC -ne 0 ] || [ $TEST_RC -ne 0 ] || [ $HARNESS_RC -ne 0 ]; then

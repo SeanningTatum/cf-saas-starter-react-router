@@ -13,9 +13,8 @@
 // invocation and on every PR synchronize in CI — it never overwrites rows a
 // human or test has since modified.
 //
-// See `.brain/rules/repository.md` ("Seed data") for the rule that every
-// feature adding a table or user-visible data must extend these fixtures in
-// the same diff.
+// Rule: every feature adding a table or user-visible data extends these
+// fixtures in the same diff.
 import { execSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";

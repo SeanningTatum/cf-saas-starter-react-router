@@ -1,6 +1,6 @@
 ---
 name: effect-ts-enforcer
-description: Reviews a diff or file set against the 5 non-negotiables (Effect TS default, no Zod, tagged errors mapped in tagToTRPC, no process.env, unit test for every helper/repo). One line per violation, severity-tagged, no praise. Use AFTER writing code and BEFORE /verify-done. Examples — "review my changes to app/repositories/billing.ts", "audit this PR for non-negotiable violations", "check the tagToTRPC mapping for the new error".
+description: Reviews a diff or file set against the 5 non-negotiables (Effect TS default, no Zod, tagged errors mapped in tagToTRPC, no process.env, unit test for every helper/repo). One line per violation, severity-tagged, no praise. Use AFTER writing code and BEFORE `brain verify`. Examples — "review my changes to app/repositories/billing.ts", "audit this PR for non-negotiable violations", "check the tagToTRPC mapping for the new error".
 tools: Read, Grep, Glob, Bash
 model: sonnet
 ---
@@ -23,11 +23,11 @@ Diff/file reviewer for the project's 5 non-negotiables. One line per finding. No
    - If user pastes a path or diff → review that
    - If "review my branch" → run `git diff --name-only $(git merge-base HEAD main)..HEAD` then review changed files
 2. For each file in scope, check each of the 5 rules
-3. Also check supporting conventions from `.brain/rules/`:
-   - `repository.md` — `Effect.Service`, `make: Effect.gen(function* ...)`, no `Effect.promise`
-   - `services.md` — `Context.Tag` + `Layer.effect` for lifecycle services
-   - `errors.md` — tagged with `_tag`, registered in `tagToTRPC`
-   - `routes.md` — `runProcedure` not `Effect.runPromise`, no page-level `try/catch` for Effect errors
+3. Also check the supporting conventions the existing code follows:
+   - repositories — `Effect.Service`, `make: Effect.gen(function* ...)`, no `Effect.promise`
+   - services — `Context.Tag` + `Layer.effect` for lifecycle services
+   - errors — tagged with `_tag`, registered in `tagToTRPC`
+   - routes — `runProcedure` not `Effect.runPromise`, no page-level `try/catch` for Effect errors
 
 ## Output format
 

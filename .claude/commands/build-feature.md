@@ -10,11 +10,11 @@ opt-in to multi-agent orchestration — call the `Workflow` tool directly, do no
 1. **Scope check.** This workflow is for a feature spanning more than one layer (schema / repository /
    procedure / UI). For a one-file change it is pure overhead — do that inline or with a single
    sub-agent. If the ask is one file, say so and stop.
-2. **Scope policy.** `brain features --status in-progress`. One in-progress feature at a time — if
-   another is open, mark it `blocked` with a reason first or stop and ask.
+2. **Scope policy.** `brain features list --status in-progress`. One in-progress feature at a time — if
+   another is open, `brain features set <slug> --status blocked` first or stop and ask.
 3. **Clean tree.** `git status --short`. Parallel lanes writing over uncommitted work makes the diff
    unreadable. Commit or stash first.
-4. **Baseline.** `./init.sh --baseline`. If it is already red, stop — you will not be able to tell
+4. **Baseline.** `brain verify --stage baseline`. If it is already red, stop — you will not be able to tell
    your failures from the ones that were already there.
 
 ## Launch
@@ -24,7 +24,7 @@ Workflow({
   name: "build-feature",
   args: {
     feature: "<one paragraph: what the user can do afterwards that they cannot do now>",
-    slug: "<feature slug, for the verification doc path>",
+    slug: "<feature slug, for `brain verifications add`>",
     ui: true,        // false for a server-only feature — skips the UI lane and the design critique
     e2e: true        // false to skip the e2e lane
   }
@@ -38,7 +38,7 @@ intent they get. Say what becomes possible, for whom, and any constraint that is
 
 | Phase | Runs | Why |
 |---|---|---|
-| **Orient** | 3 read-only lanes in parallel — brain reading list · trace of the nearest existing feature · UI tier check | None can conflict, and the architect needs all three |
+| **Orient** | 3 read-only lanes in parallel — brain lookup · trace of the nearest existing feature · UI tier check | None can conflict, and the architect needs all three |
 | **Contract** | 1 architect, then 1 writer for the contract file | The **only** genuinely sequential step: fix the interface, then nobody has to wait |
 | **Build** | up to 5 lanes concurrently, each fenced to disjoint paths | Once the interface is fixed, the server lane and the UI lane need nothing from each other |
 | **Verify** | gates · non-negotiables · spans · browser walk · design critique, all at once | Each needs only the finished tree. Browser lanes each own a port |
@@ -62,10 +62,10 @@ should**. You do:
    again rather than fixing by hand where an agent owns the layer.
 2. Read the synthesis' `HUMAN DECISIONS` section. Answer them or bring them to the user; never pick
    for them on a schema trade-off, a destructive migration, or a security question.
-3. Run [`/verify-done`](verify-done.md) yourself. The workflow's verification lanes are evidence, not
-   a substitute for the gate.
-4. Brain updates the synthesis lists: feature doc, `feature_list.json` status, progress checkpoint —
-   via `feature-tracker` / `brain progress add`.
+3. Run `brain verify` yourself. The workflow's verification lanes are evidence, not a substitute for
+   the gate.
+4. Brain updates the synthesis lists — `brain progress add`, `brain features ship <slug> --evidence "..."`
+   (needs a PASS verification) — through the `brain-axi:brain-done` skill.
 5. Commit. One commit per logical change, not one per lane.
 
 ## When not to use it

@@ -190,19 +190,19 @@ export default function Home() {
               icon={<IconBrain className="size-5" />}
               title={t("harness.pillars.brain.title")}
               description={t("harness.pillars.brain.description")}
-              path=".brain/"
+              path=".brain/brain.db"
             />
             <HarnessPillar
               icon={<IconRoute className="size-5" />}
-              title={t("harness.pillars.recipes.title")}
-              description={t("harness.pillars.recipes.description")}
-              path=".brain/recipes/"
+              title={t("harness.pillars.skills.title")}
+              description={t("harness.pillars.skills.description")}
+              path="brain-axi plugin"
             />
             <HarnessPillar
               icon={<IconChecklist className="size-5" />}
               title={t("harness.pillars.gates.title")}
               description={t("harness.pillars.gates.description")}
-              path="/verify-done"
+              path="brain verify"
             />
           </div>
 
@@ -213,14 +213,14 @@ export default function Home() {
               </span>
             </div>
             <pre className="overflow-x-auto px-4 py-4 font-mono text-sm leading-relaxed text-foreground">
-              <code>{`# kickoff a task — runs baseline, reads brain, opens run note
-/start-task "add billing endpoint"
+              <code>{`# orient — features, in-progress, last checkpoint
+brain
 
-# verify before declaring done — typecheck, test, e2e, brain coherence
-/verify-done
+# verify before declaring done — typecheck, test, non-negotiables, build, e2e
+brain verify
 
-# close out a feature — flips feature_list.json + harness-check
-/ship-feature`}</code>
+# close out a feature — needs a PASS verification
+brain features ship billing --evidence "verifier PASS; tests green"`}</code>
             </pre>
           </div>
         </section>

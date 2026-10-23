@@ -5,7 +5,7 @@ export const meta = {
   whenToUse:
     "A feature with more than one layer (schema/repo/procedure/UI) where the lanes can proceed against a fixed contract. Overkill for a one-file change.",
   phases: [
-    { title: "Orient", detail: "reading list + nearest existing feature + design prep, in parallel" },
+    { title: "Orient", detail: "brain lookup + nearest existing feature + design prep, in parallel" },
     { title: "Contract", detail: "architect fixes the interface every lane builds against" },
     { title: "Build", detail: "lanes own disjoint files and run concurrently" },
     { title: "Verify", detail: "gates, non-negotiables, spans, design critique, browser walk" },
@@ -39,8 +39,9 @@ if (!input.feature) {
   log("No feature description passed — pass one via args, e.g. { feature: '…', ui: true }.");
 }
 
-const REPO_RULES = `Repo conventions are non-negotiable and live in the brain. Read what you need with
-\`brain docs view rules/<layer>.md\` before editing. The five that fail CI: Effect TS (no throw, no
+const REPO_RULES = `Repo conventions are non-negotiable. Copy the pattern of the nearest existing file in
+the same layer, and run \`brain search "<topic>"\` for any convention recorded in the brain. The five
+that fail CI (AGENTS.md "Five non-negotiables"): Effect TS (no throw, no
 try/catch outside Effect.tryPromise), Effect Schema (no Zod), tagged errors in app/models/errors
 mapped in tagToTRPC, a unit test for every helper and repository, and Cloudflare bindings (never
 process.env).`;
@@ -67,8 +68,8 @@ const CONTEXT_SCHEMA = {
 const orient = await parallel([
   () =>
     agent(
-      `Feature to build: ${feature}\n\nReturn the reading list for it: which .brain docs, rules and recipes the builders must open, and why each one. Do not suggest code.`,
-      { label: "brain:reading-list", phase: "Orient", agentType: "brain-navigator" }
+      `Feature to build: ${feature}\n\nCheck the brain for anything already settled about it. Run \`brain features list\`, \`brain search "<keywords from the feature>"\` and \`brain docs list\`, open the relevant hits with \`brain features view <slug>\` / \`brain docs view <ref>\`, and report what bears on this feature (existing feature rows, decisions, docs, recent checkpoints) and why. Say "nothing recorded" if the brain has nothing. Read only; do not suggest code.`,
+      { label: "brain:lookup", phase: "Orient", agentType: "Explore" }
     ),
   () =>
     agent(
@@ -79,7 +80,7 @@ const orient = await parallel([
     ? [
         () =>
           agent(
-            `Feature to build: ${feature}\n\nUI-surface prep. Read .brain/rules/frontend.md and .brain/codebase/design-system.md, then report: is this tier 1 (pattern work — reuse existing components and states) or tier 2 (net-new surface needing a reference lock from /design-research)? Name the existing components, states and i18n namespaces it should reuse. Do NOT design anything and do NOT edit files.`,
+            `Feature to build: ${feature}\n\nUI-surface prep. Read app/app.css (the semantic tokens) and the nearest existing surfaces under app/routes/ and app/components/, then report: is this tier 1 (pattern work — reuse existing components and states) or tier 2 (net-new surface needing a reference lock from /design-research)? Name the existing components, states and i18n namespaces it should reuse. Do NOT design anything and do NOT edit files.`,
             { label: "ui:tier-check", phase: "Orient" }
           ),
       ]
@@ -122,7 +123,7 @@ const CONTRACT_SCHEMA = {
           agentType: {
             type: "string",
             description:
-              "One of: recipe-runner (schema/repo/procedure), ui-builder (any user-visible work), test-author (unit tests), general-purpose",
+              "One of: general-purpose (schema/repo/procedure), ui-builder (any user-visible work), test-author (unit tests)",
           },
         },
         additionalProperties: false,
@@ -152,7 +153,7 @@ Produce:
 3. \`lanes\` — the parallel build lanes. **Paths must be disjoint across lanes**; two lanes editing one
    file is the one thing this workflow cannot recover from. Typical split: data (db/schema + repo +
    repo tests) · api (tRPC procedure + its tests) · ui (route/components + i18n locale files)${wantsE2e ? " · e2e (spec only)" : ""}.
-   Assign agentType per lane: recipe-runner for schema/repo/procedure work, ui-builder for anything
+   Assign agentType per lane: general-purpose for schema/repo/procedure work, ui-builder for anything
    user-visible, test-author for tests.
 4. \`acceptance\` — the checks that prove the feature works, in terms a verifier can run.
 
@@ -258,15 +259,17 @@ const acceptance = (contract.acceptance ?? []).join("\n  · ");
 const verifications = await parallel([
   () =>
     agent(
-      `Run the full verification checklist on the working tree for: ${feature}
+      `Run the declared gates on the working tree for: ${feature}
 
-Acceptance checks the architect specified:
+Run \`brain verify\` (typecheck, test, non-negotiables, harness, build, e2e — declared by
+scripts/brain-setup.sh; \`brain verify list\` shows them), then check each acceptance item the
+architect specified:
   · ${acceptance}
 
 Use a free port and CI=1 for anything needing a dev server (CI=1 skips the Workers-AI remote-bindings
 proxy; without it the dev server cannot boot today). Report pass/fail per step with verbatim output
 tails. Do not fix anything.`,
-      { label: "verify:gates", phase: "Verify", agentType: "verify-done-runner", schema: VERDICT_SCHEMA }
+      { label: "verify:gates", phase: "Verify", schema: VERDICT_SCHEMA }
     ),
   () =>
     agent(
@@ -285,15 +288,16 @@ tails. Do not fix anything.`,
             `Prove the user-visible flow works for: ${feature}
 
 Golden path plus one error path, driven through the LIVE app with the Playwright CLI on a port you
-own. Use \`CI=1 bun run dev --port <free port>\`. Screenshot every step, and write the verdict doc to
-.brain/features/${slug || "<slug>"}/verifications/<date>.md. Return PASS/FAIL and the screenshot paths.`,
+own. Use \`CI=1 bun run dev --port <free port>\`. Screenshot every step under
+.brain/shots/${slug || "<slug>"}/, and record the verdict with \`brain verifications add ${slug || "<slug>"} --verdict <V>
+--body-from <file> --shot <png>::"<caption>" --verified-by feature-verifier\`. Return PASS/FAIL and the screenshot paths.`,
             { label: "verify:browser-walk", phase: "Verify", agentType: "feature-verifier" }
           ),
         () =>
           agent(
             `Judge the rendered surface for: ${feature}
 
-The build lane should have left screenshots — find them under .brain/features/ (or ask for them in
+The build lane should have left screenshots — find them under .brain/shots/ (or ask for them in
 your report if absent). Score the anti-slop tells AND the craft signals, and run the litmus tests.
 Judge pixels only; you may not read the route source. Return your usual verdict block.`,
             { label: "verify:design-critic", phase: "Verify", agentType: "design-critic" }
@@ -330,8 +334,9 @@ Produce, in this order:
 3. LANE COLLISIONS — any sign two lanes touched the same file or drifted from the contract.
 4. HUMAN DECISIONS — anything a person must choose (schema trade-off, destructive migration, a
    design direction, a security question). Never decide these yourself.
-5. BRAIN — the exact brain updates still owed: feature doc, feature_list status, progress checkpoint.
-   List them; do not perform them.
+5. BRAIN — the exact brain updates still owed, as commands: \`brain progress add\`, \`brain features
+   ship <slug> --evidence\` (needs a PASS verification), any \`brain docs set\`. List them; do not
+   perform them.
 
 Be blunt about what is unfinished. A confident summary of a broken tree is worse than no summary.`,
   { label: "close:synthesis", phase: "Close", effort: "high" }

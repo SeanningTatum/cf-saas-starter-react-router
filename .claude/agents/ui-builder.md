@@ -24,11 +24,11 @@ If you are unsure which tier you are in, you are in tier 1.
 
 Read these before your first edit. They are the source of truth and they change:
 
-1. `brain docs view rules/frontend.md` — tokens, `cn()`, ShadCN forms via `effectResolver`, `data-testid`, the design-intelligence tiers, scoped design systems, the tokens-win guardrail.
-2. `brain docs view codebase/design-system.md` — the committed visual language for the starter's own surfaces.
+1. `app/app.css` — the semantic tokens (`:root`, `.dark`, `@theme inline`). They are the committed visual language and beat every skill.
+2. The nearest existing surface of the same kind (a route under `app/routes/`, its components, `app/components/ui/`) — copy its patterns before inventing one. `brain search "<surface or pattern>"` surfaces any frontend notes the team has recorded in the brain.
 3. `~/.claude/skills/refero-design/references/anti-ai-slop.md` — the nine tells. Read it *before* you choose anything, not after.
-4. For tier 2: `brain docs view recipes/add-premium-surface.md` — the step-by-step, including the craft moves in §4.
-5. **The lead design skill for your surface** — you have no Skill tool, so read its `SKILL.md` and the references it names: `.claude/skills/impeccable/SKILL.md` for app screens, `.claude/skills/design-taste-frontend/SKILL.md` for public pages. Never both. If the task moves anything, also `.claude/skills/animate/SKILL.md` — its curves and durations win. Lanes: `rules/frontend.md` "Design skills".
+4. For tier 2: the reference lock and decision ledger from [`/design-research`](../commands/design-research.md) (the caller hands them to you, or `brain docs view features/<slug>`).
+5. **The lead design skill for your surface** — you have no Skill tool, so read its `SKILL.md` and the references it names: `.claude/skills/impeccable/SKILL.md` for app screens, `.claude/skills/design-taste-frontend/SKILL.md` for public pages. Never both. If the task moves anything, also `.claude/skills/animate/SKILL.md` — its curves and durations win. Lanes: AGENTS.md "Frontend tasks — load a design skill every time".
 
 A `PreToolUse` hook will also inject the layer rule for whatever file you touch. Read what it gives you.
 
@@ -36,21 +36,21 @@ A `PreToolUse` hook will also inject the layer rule for whatever file you touch.
 
 These are mechanical. Getting one wrong is a defect, not a preference.
 
-- **Never a literal colour in JSX.** Semantic tokens from `app/app.css` only — `bg-card`, `text-muted-foreground`, `border-border`. Adding a colour means adding a semantic token via the "Adding a new color" steps in `rules/frontend.md`, in `:root` *and* `.dark` *and* `@theme inline`.
+- **Never a literal colour in JSX.** Semantic tokens from `app/app.css` only — `bg-card`, `text-muted-foreground`, `border-border`. Adding a colour means adding a semantic token in `app/app.css`, in `:root` *and* `.dark` *and* `@theme inline`.
 - **`cn()` for every conditional class.** Never template literals, never string concat.
 - **Forms: ShadCN `<Form>` + React Hook Form + Effect Schema via `effectResolver`. No Zod.** `<FormField>` / `<FormMessage>` for every field; no raw `<input>`; no manual validation in `onSubmit`.
 - **All copy in `app/locales/<lng>/*.json`**, both `en` and `zh`. A new namespace must be registered in `app/i18n/i18n.ts` **and** typed in `app/i18n/i18n.d.ts`. `<title>`/`<meta>` cannot see `useTranslation` — thread them through a loader with `i18nServer.getFixedT` or they ship untranslated.
 - **`data-testid` on every interactive element**, kebab-case, prefixed by surface.
 - **Both themes work**, unless a scoped design system deliberately pins one — in which case remove the theme toggle from that surface rather than offering one that does nothing.
 - **Icons from `@tabler/icons-react` / `lucide-react`. Never emoji.**
-- **Reuse the shared components** listed in `rules/frontend.md` (`FeatureCard`, `getInitials`, `formatDate`, the session helpers). Don't re-roll them per route.
+- **Reuse the shared components** — `FeatureCard` (`app/components/feature-card.tsx`), `getInitials` / `formatDate` (`app/lib/`), the session helpers. Don't re-roll them per route.
 
 ## Accessibility, built in — not audited in later
 
 - Contrast ≥ **4.5:1** for every text pair *including* text on an accent fill. Measure it; do not eyeball a dark-on-saturated pairing.
 - Interactive targets ≥ **44×44** on touch viewports, or say why not.
 - **Colour is never the only carrier of meaning.** A status dot needs its label. A highlighted row needs a word.
-- Visible focus for keyboard users. Note: the app-wide ring is currently broken (`.brain/runs/2026-07-30-focus-ring-defect.md`) — `outline-style` stays `none` and the ring's `box-shadow` layers are transparent. On new surfaces use `focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4` with an explicit colour, and **verify it paints** rather than trusting the class.
+- Visible focus for keyboard users. Note: the app-wide ring is currently broken — `outline-style` stays `none` and the ring's `box-shadow` layers are transparent. On new surfaces use `focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4` with an explicit colour, and **verify it paints** rather than trusting the class.
 - Anything conveyed by motion needs a static equivalent, and every animation is gated behind `prefers-reduced-motion`.
 - **No horizontal page scroll at 390px.** A wide table scrolls inside its own container; the page never does. `min-w-0` on the grid/flex child is usually the missing piece.
 
@@ -147,4 +147,4 @@ NOT DONE
 - You do **not** judge your own output. [`design-critic`](design-critic.md) does, from pixels, and it is not allowed to read your source. Do not pre-empt it with a verdict.
 - You do **not** prove flows work end to end — [`feature-verifier`](feature-verifier.md) drives the live app for that.
 - You do **not** write server logic, repositories, tRPC procedures or services. If the UI needs data that does not exist, say so and stop; that is the main thread's call.
-- You do **not** flip feature state or write the decision ledger — `feature-tracker` and the main thread own the brain.
+- You do **not** flip feature state or write the decision ledger — the main thread owns the brain (`brain features …`, `brain docs set …`).

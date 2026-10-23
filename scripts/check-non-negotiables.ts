@@ -22,7 +22,7 @@
  * dependency, so `throw` is `throw` regardless of how it is spelled, and the
  * checks apply to the whole tree rather than to one diff.
  *
- * The five (see AGENTS.md / .brain/codebase/effect-ts.md):
+ * The five (see AGENTS.md):
  *   1. Effect TS is the default — no `throw`, no `try/catch` outside Effect.tryPromise
  *   2. Effect Schema for all validation — no Zod
  *   3. Tagged errors in app/models/errors/, mapped in app/lib/effect-trpc.ts
