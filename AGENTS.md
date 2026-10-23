@@ -38,18 +38,29 @@ The brain-axi plugin skills carry the method and hand off to each other:
 
 1. **Start:** `brain-axi:brain-start` — read brain state, frame the task, check scope, run `brain verify --stage baseline`, claim the feature.
 2. **Plan** (when a decision is involved): `brain-axi:brain-grill` → `brain-axi:brain-plan` (+ `brain-product` / `brain-ux` / `brain-ai`).
-3. **Work:** `brain-axi:brain-execute` — log each step with `brain runs append`.
+3. **Work:** `brain-axi:brain-execute` — log each step with `brain runs append`. Delegate the lanes to sub-agents in parallel (below).
 4. **Verify:** `brain-axi:brain-verify` — an independent walk; spawn `feature-verifier` for a browser walk of any user-visible flow.
 5. **Done:** `brain-axi:brain-done` — `brain verify` green, `brain check` green, checkpoint, `brain features ship`.
 
 For trivial edits (typo, comment, one-line change), skip the bookends — but never skip `brain verify` on user-visible work.
 
+## Delegate in parallel
+
+Any change beyond one file runs as parallel sub-agents, not one long sequential thread. Most of a feature's order is a compile dependency, not an information one: once the interface is fixed, the server work and the UI work need nothing from each other.
+
+1. **Fix the contract** — types, procedure signatures, and which lane owns which paths. The only sequential step.
+2. **Build lanes, one message** — one `Agent` call per lane, all sent together: data (schema + repository + its tests) · api (tRPC procedure + its tests) · UI (`ui-builder`). Each lane owns disjoint paths; a lane that needs a file it does not own stops and reports.
+3. **Writer wave** — `test-author` ‖ `span-instrumenter`. Tests and spans touch different files, so they run together.
+4. **Checker wave** — `effect-ts-enforcer` ‖ `feature-verifier` ‖ design critique ‖ `brain verify`. All read-only, all need the finished tree. Each browser lane owns its port (`CI=1 bun run dev --port <free>`).
+5. **Converge** — the main thread reads every report, re-dispatches the owning agent for each P0/P1, then runs `brain-axi:brain-done`.
+
+A multi-layer feature can run all of this as one workflow with [`/build-feature`](.claude/commands/build-feature.md). Stay sequential for a one-file change, an interface you do not know yet, a red baseline, or two lanes that need the same file.
+
 ## Slash commands
 
 | Command | Purpose |
 |---------|---------|
-| [`/build-feature`](.claude/commands/build-feature.md) | Multi-layer feature build with the sub-agents **fanned out in parallel** — orient → fix the contract (the one sequential step) → build lanes on **disjoint paths** → verify lanes at once (gates · non-negotiables · spans · browser walk · design critique) → synthesis. Does not commit, does not touch brain state, does not decide for you. |
-| [`/design-research`](.claude/commands/design-research.md) | Tier-2 frontend gate — Refero MCP (styles → screens → flows) via `refero-design` + `ui-ux-pro-max` a11y cross-check → one dominant direction + decision ledger, before any JSX. Tier-1 UI (another modal/table, spacing fix) skips it. |
+| [`/build-feature`](.claude/commands/build-feature.md) | Multi-layer feature build with the sub-agents **fanned out in parallel** — orient → fix the contract (the one sequential step) → build lanes on **disjoint paths** → spans, then verify lanes at once (gates · non-negotiables · browser walk · design critique) → synthesis. Does not commit, does not touch brain state, does not decide for you. |
 | [`/harness-check`](.claude/commands/harness-check.md) | [`scripts/harness-check.sh`](scripts/harness-check.sh) = `brain check` + repo supplement (CLAUDE↔AGENTS symlink, sub-agent frontmatter, Kimi roster symlink, hook wiring + hook tests). Deterministic, no LLM, exits non-zero on drift. |
 
 ## Gates
@@ -76,16 +87,24 @@ To add a gate, add a line to `scripts/brain-setup.sh` — CI picks it up.
 
 ## Frontend tasks — load a design skill every time
 
-Any task that changes what a user sees loads at least one of these skills before the first UI edit. They are listed in [`skills-lock.json`](skills-lock.json) and installed on session start by [`scripts/restore-skills.sh`](scripts/restore-skills.sh) (symlinked into `.claude/skills/`). Each owns a lane, so never run both leads on one surface:
+Any task that changes what a user sees loads at least one of these skills before the first UI edit. Each owns a lane, so never run both leads on one surface. Nothing here is a committed copy:
+
+- **Plugins** — `impeccable` (`impeccable:impeccable`) and the taste skill (`taste-skill:design-taste-frontend`) are enabled in [`.claude/settings.json`](.claude/settings.json); Claude Code asks to install them when you trust the repo.
+- **Skills without a plugin** — `animate`, `emil-design-eng`, `review-animations` are listed in [`skills-lock.json`](skills-lock.json). [`scripts/restore-skills.sh`](scripts/restore-skills.sh) installs them on session start and links them into `.claude/skills/`; both directories are gitignored.
+
 
 | Lane | Skill |
 |------|-------|
+| Direction — tier-2 surfaces (net-new or redesign), before any JSX | the lead's own: `impeccable` `shape` (app screens) · `design-taste-frontend` direction library (public pages) |
 | Lead — app screens (dashboard, admin, settings, tables, forms, states) | `impeccable` |
 | Lead — public pages (landing, marketing, pricing, hero) | `design-taste-frontend` |
+| Critique — the render, before `brain verify` | the lead's own: `impeccable` `critique` (app screens) · `design-taste-frontend` `references/critique.md` loop (public pages) |
 | Finish pass before `brain verify`, any surface | `impeccable` `audit` / `harden` / `polish` |
 | Motion — anything that moves | `emil-design-eng` + `animate` (build) · `/review-animations` (critique) |
 
-`ui-ux-pro-max` (rules) and `/design-research` (Refero references) still apply, and the tokens in `app/app.css` beat every skill.
+**The critique gates the work.** Judge screenshots at desktop and mobile, not the source. App screens: fix every `impeccable` P0/P1, then critique again. Public pages: run the taste loop up to three rounds; a page still under 7.5 is reported as such, never rounded up. Paste the last critique into the verification body. Typecheck, tests and the browser walk all pass on a templated page; only the critique fails a design for being generic.
+
+`ui-ux-pro-max` (a11y rules) still applies, and the tokens in `app/app.css` beat every skill.
 
 ## Five non-negotiables
 

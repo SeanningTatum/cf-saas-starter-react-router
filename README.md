@@ -152,7 +152,6 @@ claude plugin install brain-axi@SeanningTatum
 | Command | What it does |
 |---------|--------------|
 | [`/build-feature`](.claude/commands/build-feature.md) | Multi-layer feature build with the sub-agents fanned out in parallel on disjoint paths, then parallel verification. |
-| [`/design-research`](.claude/commands/design-research.md) | Refero references + `ui-ux-pro-max` cross-check → one design direction before any JSX. |
 | [`/harness-check`](.claude/commands/harness-check.md) | `brain check` + repo supplement (CLAUDE↔AGENTS symlink, sub-agent frontmatter, hook wiring) via [`scripts/harness-check.sh`](scripts/harness-check.sh) — no LLM, exits non-zero on drift. |
 
 ### Project-local sub-agents ([`.claude/agents/`](.claude/agents/))
@@ -163,7 +162,6 @@ claude plugin install brain-axi@SeanningTatum
 | [`test-author`](.claude/agents/test-author.md) | After a change — write the tests that pin it |
 | [`span-instrumenter`](.claude/agents/span-instrumenter.md) | After adding a procedure, repo method or service — add tracing spans |
 | [`ui-builder`](.claude/agents/ui-builder.md) | Any user-visible work |
-| [`design-critic`](.claude/agents/design-critic.md) | Judge a rendered surface for generic AI-design tells |
 | [`feature-verifier`](.claude/agents/feature-verifier.md) | Walk a user-visible flow in the browser and record the verdict |
 
 See [`.claude/agents/README.md`](.claude/agents/README.md) for invocation flow + complementary plugin agents.
@@ -347,22 +345,26 @@ bunx shadcn@latest add <component-name>
 
 ### Design skills
 
-Agents load one of these on every frontend task. [`skills-lock.json`](skills-lock.json) lists them, and [`scripts/restore-skills.sh`](scripts/restore-skills.sh) installs any that are missing — run by `./init.sh`, and in the background by the Claude Code SessionStart hook — so a fresh clone has them by its first session. They land in `.agents/skills/` (gitignored); the committed `.claude/skills/` symlinks point there.
+Agents load one of these on every frontend task. None is committed; each comes from its upstream repo:
+
+- **Plugins**, enabled in [`.claude/settings.json`](.claude/settings.json): `impeccable` and `taste-skill`. Claude Code asks to install them when you trust the repo.
+- **Plain skills**, listed in [`skills-lock.json`](skills-lock.json) because their repo ships no plugin: the three motion skills. [`scripts/restore-skills.sh`](scripts/restore-skills.sh) installs any that are missing into `.agents/skills/` and links them into `.claude/skills/` — run by `./init.sh`, and in the background by the Claude Code SessionStart hook. Both directories are gitignored.
 
 | Skill | Source | Job here |
 |-------|--------|----------|
-| `impeccable` | [pbakaus/impeccable](https://github.com/pbakaus/impeccable) | Leads app screens — dashboard, admin, settings, forms. Runs the finish pass (`audit`, `harden`, `polish`) on every surface. |
-| `design-taste-frontend` | [Leonxlnx/taste-skill](https://github.com/Leonxlnx/taste-skill) | Leads public pages — landing, marketing, pricing. Art direction plus a screenshot look-and-fix loop. |
-| `emil-design-eng` · `animate` · `review-animations` | [emilkowalski/skills](https://github.com/emilkowalski/skills) | Own all motion — easing, duration, enter/exit, gestures. `review-animations` runs only when you call `/review-animations`. |
+| `impeccable` (plugin) | [pbakaus/impeccable](https://github.com/pbakaus/impeccable) | Leads app screens — dashboard, admin, settings, forms. Critiques app screens from screenshots (`critique`, P0/P1 block) and runs the finish pass (`audit`, `harden`, `polish`) on every surface. |
+| `design-taste-frontend` (plugin `taste-skill`) | [Leonxlnx/taste-skill](https://github.com/Leonxlnx/taste-skill) | Leads public pages — landing, marketing, pricing. Art direction plus a screenshot look-and-fix loop that scores the render and gates public pages. |
+| `emil-design-eng` · `animate` · `review-animations` (lock) | [emilkowalski/skills](https://github.com/emilkowalski/skills) | Own all motion — easing, duration, enter/exit, gestures. `review-animations` runs only when you call `/review-animations`. |
 
 One skill leads each surface, so they never fight over the same choice. The tokens in [`app/app.css`](app/app.css) beat all of them. Lane rules: [`AGENTS.md`](AGENTS.md).
 
 The restore pulls each skill's latest upstream version, unpinned.
 
+To add a design skill: if its repo ships `.claude-plugin/marketplace.json`, add the marketplace to `extraKnownMarketplaces` and the plugin to `enabledPlugins` in `.claude/settings.json`. Otherwise:
+
 ```bash
-./scripts/restore-skills.sh                                # install missing skills now
-npx skills add <owner/repo> --skill <name> -y              # add another, then:
-ln -s ../../.agents/skills/<name> .claude/skills/<name>    # expose it to Claude Code; commit lock + symlink
+npx skills add <owner/repo> --skill <name> -y   # adds it to skills-lock.json
+./scripts/restore-skills.sh                     # installs and links it; commit the lock only
 ```
 
 **Forms — always Effect Schema + `effectResolver`** (no Zod resolver):

@@ -8,7 +8,7 @@ export const meta = {
     { title: "Orient", detail: "brain lookup + nearest existing feature + design prep, in parallel" },
     { title: "Contract", detail: "architect fixes the interface every lane builds against" },
     { title: "Build", detail: "lanes own disjoint files and run concurrently" },
-    { title: "Verify", detail: "gates, non-negotiables, spans, design critique, browser walk" },
+    { title: "Verify", detail: "spans first, then gates, non-negotiables, design critique, browser walk at once" },
     { title: "Close", detail: "synthesis + what still needs a human" },
   ],
 };
@@ -80,7 +80,7 @@ const orient = await parallel([
     ? [
         () =>
           agent(
-            `Feature to build: ${feature}\n\nUI-surface prep. Read app/app.css (the semantic tokens) and the nearest existing surfaces under app/routes/ and app/components/, then report: is this tier 1 (pattern work — reuse existing components and states) or tier 2 (net-new surface needing a reference lock from /design-research)? Name the existing components, states and i18n namespaces it should reuse. Do NOT design anything and do NOT edit files.`,
+            `Feature to build: ${feature}\n\nUI-surface prep. Read app/app.css (the semantic tokens) and the nearest existing surfaces under app/routes/ and app/components/, then report: is this tier 1 (pattern work — reuse existing components and states) or tier 2 (net-new surface needing a locked direction from the lead design skill: impeccable `shape` for app screens, design-taste-frontend's direction library for public pages)? Name the existing components, states and i18n namespaces it should reuse. Do NOT design anything and do NOT edit files.`,
             { label: "ui:tier-check", phase: "Orient" }
           ),
       ]
@@ -254,9 +254,16 @@ const VERDICT_SCHEMA = {
 
 const acceptance = (contract.acceptance ?? []).join("\n  · ");
 
-// Every verifier needs only the finished tree, so they all run at once. Each owns its own port where
-// it needs a server — CI=1 is required while Cloudflare's edge-preview API is failing.
-const verifications = await parallel([
+// Spans edit source, so they land first — a checker reading the tree while it changes reports on a
+// tree that no longer exists. Everything after is read-only, needs only the finished tree, and runs at
+// once. Each owns its own port where it needs a server — CI=1 is required while Cloudflare's
+// edge-preview API is failing.
+const spans = await agent(
+  `Audit the new code paths for: ${feature}\n\nAdd or correct tracing spans per the repo's naming convention. Report what you changed.`,
+  { label: "verify:spans", phase: "Verify", agentType: "span-instrumenter" }
+);
+
+const checks = await parallel([
   () =>
     agent(
       `Run the declared gates on the working tree for: ${feature}
@@ -276,11 +283,6 @@ tails. Do not fix anything.`,
       `Review the working-tree diff for: ${feature}\n\nAudit against the five non-negotiables. One line per violation, severity-tagged, no praise.`,
       { label: "verify:non-negotiables", phase: "Verify", agentType: "effect-ts-enforcer", schema: VERDICT_SCHEMA }
     ),
-  () =>
-    agent(
-      `Audit the new code paths for: ${feature}\n\nAdd or correct tracing spans per the repo's naming convention. Report what you changed.`,
-      { label: "verify:spans", phase: "Verify", agentType: "span-instrumenter" }
-    ),
   ...(hasUi
     ? [
         () =>
@@ -295,18 +297,21 @@ own. Use \`CI=1 bun run dev --port <free port>\`. Screenshot every step under
           ),
         () =>
           agent(
-            `Judge the rendered surface for: ${feature}
+            `Critique the rendered surface for: ${feature}
 
-The build lane should have left screenshots — find them under .brain/shots/ (or ask for them in
-your report if absent). Score the anti-slop tells AND the craft signals, and run the litmus tests.
-Judge pixels only; you may not read the route source. Return your usual verdict block.`,
-            { label: "verify:design-critic", phase: "Verify", agentType: "design-critic" }
+The build lane should have left screenshots — find them under .brain/shots/ (or say they are
+missing in your report). Load the lead design skill for the surface and run its critique on the
+screenshots: \`impeccable:impeccable\` \`critique\` for app screens, the \`taste-skill:design-taste-frontend\` critique loop
+(references/critique.md) for public pages. Judge pixels only; do not read the route source and do
+not fix anything. Report each issue as a finding with its P0-P3 severity; a public page scoring
+under 7.5 is a P1.`,
+            { label: "verify:design-critique", phase: "Verify", schema: VERDICT_SCHEMA }
           ),
       ]
     : []),
 ]);
 
-const verdicts = verifications.filter(Boolean);
+const verdicts = [spans, ...checks].filter(Boolean);
 const blocking = verdicts
   .filter((v) => v && typeof v === "object" && Array.isArray(v.findings))
   .flatMap((v) => v.findings.filter((f) => f.severity === "P0" || f.severity === "P1"));

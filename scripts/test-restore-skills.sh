@@ -63,6 +63,15 @@ restore "$SB" >/dev/null 2>&1
 [ "$(calls "$SB")" = 1 ] \
   && ok "no-op when every locked skill is present" \
   || bad "re-ran the installer with nothing missing: calls=$(calls "$SB")"
+[ "$(readlink "$SB/.claude/skills/alpha")" = "../../.agents/skills/alpha" ] && [ -f "$SB/.claude/skills/beta/SKILL.md" ] \
+  && ok "each installed skill is linked into .claude/skills/" \
+  || bad "links: alpha -> $(readlink "$SB/.claude/skills/alpha" || echo none)"
+rm "$SB/.claude/skills/alpha"
+ln -s ../../.agents/skills/gone "$SB/.claude/skills/gone"
+restore "$SB" >/dev/null 2>&1
+[ "$(calls "$SB")" = 1 ] && [ -L "$SB/.claude/skills/alpha" ] && [ ! -L "$SB/.claude/skills/gone" ] \
+  && ok "with nothing to install, missing links are restored and dangling ones dropped" \
+  || bad "relink: calls=$(calls "$SB") alpha=$([ -L "$SB/.claude/skills/alpha" ] && echo y || echo n) gone=$([ -L "$SB/.claude/skills/gone" ] && echo y || echo n)"
 rm -r "$SB"
 
 SB=$(sandbox)

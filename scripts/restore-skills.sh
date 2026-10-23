@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
-# Restore agent skills from skills-lock.json into .agents/skills/. The committed
-# .claude/skills/<name> symlinks point there, so Claude Code sees them once restored.
-# No-op when every locked skill is already present.
+# Restore agent skills from skills-lock.json into .agents/skills/, then link each into
+# .claude/skills/<name> so Claude Code sees it. Both directories are gitignored: the lock is
+# the only committed record. Skills that ship as Claude Code plugins live in
+# .claude/settings.json (enabledPlugins) instead, not here.
+# When every locked skill is already present, it only refreshes the links.
 #
 # Usage:
 #   scripts/restore-skills.sh               # blocking restore (init.sh)
@@ -19,21 +21,38 @@ LOG="$ROOT/.agents/.restore.log"
 
 [ -f "$LOCK" ] || exit 0
 
-find_missing() {
-  local names name
+locked_names() {
   if command -v jq >/dev/null 2>&1; then
-    names=$(jq -r '.skills | keys[]' "$LOCK")
+    jq -r '.skills | keys[]' "$LOCK"
   else
-    names=$(grep -oE '^    "[a-z0-9-]+": \{' "$LOCK" | cut -d'"' -f2)
+    grep -oE '^    "[a-z0-9-]+": \{' "$LOCK" | cut -d'"' -f2
   fi
+}
+
+find_missing() {
+  local name
   MISSING=()
-  for name in $names; do
+  for name in $(locked_names); do
     [ -f "$ROOT/.agents/skills/$name/SKILL.md" ] || MISSING+=("$name")
   done
 }
 
+# Link every installed skill into .claude/skills/, and drop links left dangling by a skill
+# removed from the lock. Never touches a real directory there.
+link_skills() {
+  local name link
+  mkdir -p "$ROOT/.claude/skills"
+  for link in "$ROOT"/.claude/skills/*; do
+    [ -L "$link" ] && [ ! -e "$link" ] && rm "$link"
+  done
+  for name in $(locked_names); do
+    [ -f "$ROOT/.agents/skills/$name/SKILL.md" ] || continue
+    [ -e "$ROOT/.claude/skills/$name" ] || ln -s "../../.agents/skills/$name" "$ROOT/.claude/skills/$name"
+  done
+}
+
 find_missing
-[ ${#MISSING[@]} -eq 0 ] && exit 0
+if [ ${#MISSING[@]} -eq 0 ]; then link_skills; exit 0; fi
 
 # Bun is the repo's toolchain; fall back to Node for machines that have only npx.
 if command -v bunx >/dev/null 2>&1; then
@@ -113,7 +132,10 @@ trap 'exit 1' INT TERM HUP
 
 # The restore we waited on may already have installed everything.
 find_missing
-[ ${#MISSING[@]} -eq 0 ] && exit 0
+if [ ${#MISSING[@]} -eq 0 ]; then link_skills; exit 0; fi
 
 echo "Restoring ${#MISSING[@]} agent skill(s) from skills-lock.json: ${MISSING[*]}"
 cd "$ROOT" && "${RUNNER[@]}" "$SKILLS_CLI" experimental_install -y
+status=$?
+link_skills
+exit $status

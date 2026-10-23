@@ -43,9 +43,10 @@ worker-configuration.d.ts
 # Editor agent caches
 .cursor/
 
-# Agent skills — restored from skills-lock.json by scripts/restore-skills.sh; only the lock and the
-# .claude/skills/ symlinks are committed
+# Agent skills — restored from skills-lock.json by scripts/restore-skills.sh, which also links them
+# into .claude/skills/; only the lock is committed
 /.agents/
+/.claude/skills/
 
 # Design skill scratch output and per-machine config; .impeccable/config.json stays shared
 .taste-skill/

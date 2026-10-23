@@ -7,7 +7,6 @@ Project-local Claude Code subagents for the repo-specific work: the five non-neg
 | Agent | Subsystem | Use when |
 |-------|-----------|----------|
 | [`ui-builder`](ui-builder.md) | Instructions + Verification (builds) | **Any user-visible work** — routes, components, marketing surfaces, forms, states. Carries the frontend rules, craft moves and anti-slop tells so the mistakes are not made, and self-measures with `design:audit` |
-| [`design-critic`](design-critic.md) | Verification (judges) | After UI work — judges the *render* against the tells + craft, from screenshots only. P0/P1 block. Backstop, not the method |
 | [`test-author`](test-author.md) | Verification (authors) | After implementing a feature/fix — write or update the unit tests that pin its business logic |
 | [`span-instrumenter`](span-instrumenter.md) | Verification (observability) | After adding an endpoint / repo method / service call — add or audit tracing spans per convention |
 | [`effect-ts-enforcer`](effect-ts-enforcer.md) | Verification | After writing code, before `brain verify` — review against 5 non-negotiables |
@@ -18,20 +17,21 @@ Project-local Claude Code subagents for the repo-specific work: the five non-neg
 ```
 1. brain-axi:brain-start →  read brain state, frame the task, run the baseline
 2. main thread         →  writes the code, following the nearest existing pattern
-3. test-author         →  writes the tests that pin the new logic
-4. span-instrumenter   →  adds/audits tracing spans on the new code paths
-5. effect-ts-enforcer  →  reviews the diff
-6. brain verify        →  runs the declared gates (typecheck, test, non-negotiables, harness, build, e2e)
-7. brain-axi:brain-done →  closes state: checkpoint, `brain features ship <slug> --evidence`
+3. test-author ‖ span-instrumenter          →  writer wave, one message: tests pin the logic,
+                                               spans cover the new paths (disjoint files)
+4. effect-ts-enforcer ‖ brain verify        →  checker wave, one message: review the diff, run
+                                               the declared gates (read-only, finished tree)
+5. brain-axi:brain-done →  closes state: checkpoint, `brain features ship <slug> --evidence`
 ```
 
 ### UI work has its own loop
 
 ```
-0. /design-research    →  tier 2 only: references → three directions → reference lock
+0. lead skill          →  tier 2 only: `impeccable` `shape` or taste-skill direction → locked direction
 1. ui-builder          →  builds it with the rules already loaded, then measures itself
                           (bun run design:audit — HARD failures fixed before returning)
-2. design-critic       →  judges the render from screenshots; P0/P1 block
+2. critique skill      →  the lead skill judges the render from screenshots — `impeccable`
+                          `critique` (app) or the taste critique loop (public); P0/P1 block
 3. feature-verifier    →  proves the flow works in the live app
 4. test-author         →  pins the design's intent (live figure source, status in words,
                           scoped tokens do not leak)
@@ -46,8 +46,9 @@ same operators concurrently via [`.claude/workflows/build-feature.js`](../workfl
 Orient    brain lookup ‖ nearest-feature trace ‖ UI tier check         (3 in parallel, read-only)
 Contract  architect fixes the interface → one writer lands it          (the only sequential step)
 Build     data ‖ api ‖ ui ‖ e2e — each fenced to disjoint paths        (up to 5 in parallel)
-Verify    gates (brain verify) ‖ effect-ts-enforcer ‖ span-instrumenter
-          ‖ feature-verifier ‖ design-critic                           (5 in parallel)
+Verify    span-instrumenter (writes source, so it lands first)
+          → gates (brain verify) ‖ effect-ts-enforcer ‖ feature-verifier
+          ‖ design critique (lead skill)                               (4 in parallel)
 Close     synthesis: what is true, what blocks, what a human must decide
 ```
 
@@ -56,7 +57,7 @@ The insight is that most of a feature's apparent ordering is a **compile** depen
 from each other. The cost is that parallel writers must own **disjoint paths** — that constraint is
 enforced in every lane prompt, and a reported lane collision is a P0.
 
-**The split matters.** The critic is a backstop. Quality comes from `ui-builder` knowing the rules
+**The split matters.** The critique is a backstop. Quality comes from `ui-builder` knowing the rules
 before the first edit — the alternative is making the same mistakes, catching them, and reworking,
 which is what four rejected rebuilds of `/demo` cost.
 
@@ -79,7 +80,7 @@ These come from shared plugins enabled in `.claude/settings.json`. They cover *g
 
 - Sub-agents are markdown files with YAML frontmatter (`name`, `description`, `tools`, `model`).
 - Description should match the schema's expected pattern (single short paragraph) — Claude Code uses it to decide when to spawn the agent.
-- Tools: minimal set. Read-only agents (`effect-ts-enforcer`, `design-critic`) explicitly omit `Edit` / `Write`.
+- Tools: minimal set. Read-only agents (`effect-ts-enforcer`) explicitly omit `Edit` / `Write`.
 - Model: `sonnet` is the default for harness operators (cost / quality balance). Exception: `test-author` runs `opus` — deciding *which* tests are worth writing is judgment work, and a cheap model defaults to coverage padding.
 
 ## Kimi Code reads this same directory
@@ -95,7 +96,7 @@ What does *not* carry over:
 
 - **`model:`** — Kimi's field is `model_preference`, so a Claude `model: opus` line is ignored and the
   agent runs on Kimi's configured model. Unknown frontmatter keys are skipped, not rejected.
-- **Claude-only tool names** in `tools:` (e.g. `Task`, MCP tools). `Read`/`Write`/`Edit`/`Glob`/`Grep`/`Bash`
+- **Claude-only tool names** in `tools:` (e.g. `Task`, `Skill`, MCP tools). `Read`/`Write`/`Edit`/`Glob`/`Grep`/`Bash`
   are named identically in both, so the read-only agents stay read-only.
 - **`README.md`** (this file) has no frontmatter, so Kimi logs one `Skipping invalid agent file`
   WARN per session and moves on. Harmless; not worth adding fake frontmatter to silence.

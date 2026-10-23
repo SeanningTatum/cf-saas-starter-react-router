@@ -1,8 +1,8 @@
 /**
  * Deterministic craft audit for a rendered surface.
  *
- * The `design-critic` sub-agent judges taste. This script measures the mechanics taste sits on, so
- * the critic argues about the right things and nobody has to take "it looks premium" on faith.
+ * The lead design skill's critique judges taste. This script measures the mechanics taste sits on, so
+ * the critique argues about the right things and nobody has to take "it looks premium" on faith.
  *
  * Four passes of a sample surface were rejected by a human reviewer before one landed. Every rejection
  * traced to something on this list: no real typeface, no depth, an accent spent everywhere, no product
