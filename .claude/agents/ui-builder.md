@@ -28,6 +28,7 @@ Read these before your first edit. They are the source of truth and they change:
 2. `brain docs view codebase/design-system.md` — the committed visual language for the starter's own surfaces.
 3. `~/.claude/skills/refero-design/references/anti-ai-slop.md` — the nine tells. Read it *before* you choose anything, not after.
 4. For tier 2: `brain docs view recipes/add-premium-surface.md` — the step-by-step, including the craft moves in §4.
+5. **The lead design skill for your surface** — you have no Skill tool, so read its `SKILL.md` and the references it names: `.claude/skills/impeccable/SKILL.md` for app screens, `.claude/skills/design-taste-frontend/SKILL.md` for public pages. Never both. If the task moves anything, also `.claude/skills/animate/SKILL.md` — its curves and durations win. Lanes: `rules/frontend.md` "Design skills".
 
 A `PreToolUse` hook will also inject the layer rule for whatever file you touch. Read what it gives you.
 

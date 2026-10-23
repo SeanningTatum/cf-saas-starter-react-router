@@ -127,7 +127,9 @@ Exception: gray scale OK for subtle layout (`border-gray-200 dark:border-gray-80
 Delegate user-visible work to [`ui-builder`](../../.claude/agents/ui-builder.md) — it carries this
 rule file, the craft moves, the anti-slop tells and the a11y floor, and it self-measures with
 `bun run design:audit` before returning. That is the point: the mistakes should not be made, rather
-than made and then caught.
+than made and then caught. It has no Skill tool, so it reads the lane skill's `SKILL.md` from
+`.claude/skills/` instead — tell it which surface it is on (app screen or public page) so it reads
+the right one.
 
 [`design-critic`](../../.claude/agents/design-critic.md) is the **backstop** that judges the render
 afterwards, from screenshots only. It is not the quality mechanism — a critic at the end means the
@@ -135,13 +137,26 @@ same defects get built, found and reworked every time.
 
 ## Design intelligence — never design from training-data taste
 
-Two tools, two jobs. Pick by **how much visual invention the task needs**, and run [`/design-research`](../../.claude/commands/design-research.md) for anything in tier 2.
+Two research tools, plus the craft skills below. Pick the research tool by **how much visual invention the task needs**, and run [`/design-research`](../../.claude/commands/design-research.md) for anything in tier 2. Then load the lane's design skill — on every tier.
 
 | Task | Tool | Why |
 |------|------|-----|
 | Reusing existing patterns — another modal, another table, another form, a spacing/a11y fix, a chart | **`ui-ux-pro-max`** (tier 1, default) | Offline rule lookup. Cheap, no network. Answers "what is the correct pattern here". |
 | Net-new surface with real visual ambition — a new marketing/landing section, a new product surface, a redesign, a multi-step journey, "make this beautiful/premium" | **Refero MCP + `refero-design` skill** (tier 2) | Real-product references. Answers "what should this *feel* like" with named evidence instead of averaged AI taste. |
-| Anything touching color, type, radius, elevation | [`../codebase/design-system.md`](../codebase/design-system.md) + `app/app.css` tokens | Committed visual language. **Wins over both tools.** |
+| Anything touching color, type, radius, elevation | [`../codebase/design-system.md`](../codebase/design-system.md) + `app/app.css` tokens | Committed visual language. **Wins over every tool and skill.** |
+
+### Design skills — load one on every frontend task
+
+The tools above answer *what is correct* and *what real products do*. Three craft skills answer *how to make it good*. [`skills-lock.json`](../../skills-lock.json) lists them; [`scripts/restore-skills.sh`](../../scripts/restore-skills.sh) installs any missing ones into `.agents/skills/` (gitignored) — from `init.sh`, and in the background from the SessionStart hook — and the committed `.claude/skills/<name>` symlinks point there. A fresh clone gets them on its first session. **Every frontend task loads at least one.** Each owns a lane — one lead per surface, so two skills never argue over the same decision:
+
+| Lane | Skill | Load when |
+|------|-------|-----------|
+| **Lead — app screens** (dashboard, admin, settings, tables, forms, empty/loading/error states) | **`impeccable`** | Building or changing any in-app UI. Its *Operate* mode: scanability and consistency over expression. |
+| **Lead — public pages** (landing, marketing, pricing, hero, `/demo`-style surfaces) | **`design-taste-frontend`** | Building or restyling anything a visitor lands on. Pass `--keep palette,type` unless a scoped design system is declared. For tier 2, it turns the `/design-research` reference lock into a direction — it does not replace the lock. |
+| **Finish pass — any surface** | `impeccable` `audit` · `harden` · `clarify` · `adapt` · `polish` | Before `/verify-done` on user-visible work. Checks a11y, edge states, copy, responsive; `polish` preserves the lead's direction, it does not re-design. |
+| **Motion — any surface** | **`emil-design-eng`** (principles) · **`animate`** (build) · **`review-animations`** (critique, manual: `/review-animations`) | Anything that moves: transitions, enter/exit, hover/press feedback, toasts, drawers, gestures. **Emil's values win** over `impeccable animate` and taste's motion step — skip those. |
+
+The restore pulls each skill's **upstream latest**, not a pinned copy — these are third-party instructions that run with full agent permissions, so skim the upstream changelog when a skill starts behaving differently. To add one: `npx skills add <owner/repo> --skill <name> -y` (writes the lock entry and `.agents/skills/<name>`), then `ln -s ../../.agents/skills/<name> .claude/skills/<name>` and commit the lock + symlink.
 
 ### Tier 1 — `ui-ux-pro-max`
 
@@ -182,7 +197,7 @@ Rules for this repo:
 - **Composition comes from the primary, not from habit.** If the section stack would be identical under any other reference, only tokens were taken. Ask what layout the reference would actually produce — a document, a contact sheet, a ledger, a poster — and build that.
 - **A clean checklist is not a passing grade.** Anti-slop measures ways to be *bad*; removing all of them (no cards, no hue, one weight, no radius) can leave a surface with no reason to look at it. Answer the memorability and identity questions *before* implementing: what would a viewer recall tomorrow, and could this belong to another company — or another category? A surface that scored clean on every tell was still rejected as "lame and boring"; see [`../runs/2026-07-30-design-slop-postmortem.md`](../runs/2026-07-30-design-slop-postmortem.md).
 - **Distinctive is not the same as appropriate.** Check the candidate against the *domain's own visual world* before reaching for a design-canon reference. Freight has DOT guide signs, reflective tape, hazard placards, dot-matrix rate cons; an archival architecture portfolio was genuinely distinctive and completely wrong for a product about trucks going dark at 3am.
-- **Consider motion.** If the subject changes over time — a queue, a board, a countdown, a live figure — the design has a time dimension, and ignoring it is a decision rather than a default. `/demo` shipped three static passes for a product whose whole nature is that it moves.
+- **Consider motion.** If the subject changes over time — a queue, a board, a countdown, a live figure — the design has a time dimension, and ignoring it is a decision rather than a default. `/demo` shipped three static passes for a product whose whole nature is that it moves. Build that motion with the `animate` skill; its curves and durations are the ones to use.
 - **Build the craft, then measure it.** [`../recipes/add-premium-surface.md`](../recipes/add-premium-surface.md) is the step-by-step: show the product as a real panel, three surface levels, depth as four concrete details, two real type faces, one accent spent sparingly, motion at the subject's cadence, one structural memorable move. Then `bun run design:audit -- --url <url> --scope <sel> --accent <#hex>` ([`scripts/design-audit.ts`](../../scripts/design-audit.ts)) for the numbers — accent economy, type faces, depth counts, contrast, overflow, reduced-motion.
 - **Never build the metaphor literally.** A concept informs tone, palette, density and what the page shows. A page that *is* a waybill or a hero that *is* a road sign is a costume — two of the four rejected `/demo` passes died on exactly that.
 - **Run [`design-critic`](../../.claude/agents/design-critic.md) on the render before calling it done.** It judges screenshots against the anti-slop tells and the litmus tests and never reads the route source. P0/P1 findings block. This is the only gate in the repo that can fail a design for looking generic — typecheck, unit tests, e2e and the browser walk all pass happily on a templated page.
@@ -227,11 +242,15 @@ import "./loadline-theme.css";
 
 **Guardrail — tokens win over both tools (outside a declared scope).** This repo already has a committed visual language: [`../codebase/design-system.md`](../codebase/design-system.md) (refero-derived Linear/Cursor direction) + the semantic CSS variables in `app/app.css`. `ui-ux-pro-max` and Refero output are **advisory on structure and behavior, never on raw color values**. Map every recommendation onto existing semantic tokens; if a genuinely new color is needed, add it via the "Adding a new color" steps above. Hardcoding a hex a tool printed is still an anti-pattern.
 
-**One design authority.** The generic `frontend-design` plugin was removed from [`.claude/settings.json`](../../.claude/settings.json) on purpose — three overlapping design skills means whichever fires first wins, and the generic one averages back toward default AI styling (`refero-design` forbids running it as a parallel authority). Tier 1 + tier 2 + the tokens are the whole stack.
+**One design authority per decision.** The generic `frontend-design` plugin was removed from [`.claude/settings.json`](../../.claude/settings.json) on purpose — overlapping design skills mean whichever fires first wins, and the generic one averages back toward default AI styling (`refero-design` forbids running it as a parallel authority). The craft skills above are allowed because each owns a lane: `impeccable` leads app screens, `design-taste-frontend` leads public pages, Emil's skills own motion. Never run both leads on one surface. Tier 1 + tier 2 + the lane skills + the tokens are the whole stack.
+
+**`impeccable` and `DESIGN.md`.** `impeccable` reads `PRODUCT.md` / `DESIGN.md` at the repo root. This repo's visual language lives in [`../codebase/design-system.md`](../codebase/design-system.md). If `impeccable` asks for a `DESIGN.md`, generate it with `impeccable document` (derived from shipped code) — never let `impeccable init` invent a new visual world on an ordinary page.
 
 ## Verification (browser proof before done)
 
 For frontend changes, **verify in a browser before declaring done** — never claim UI works from reading code.
+
+Before the browser walk, run the **finish pass** from "Design skills": `impeccable audit` on the changed surface, plus `harden` when it has empty/error/loading states or user input. If the diff touches motion, run `/review-animations` on it too — it defaults to flagging, so a clean result means something. Fix what they find, then walk.
 
 For a **feature-level flow**, spawn the [`feature-verifier`](../../.claude/agents/feature-verifier.md) sub-agent (slug + golden path + one error path). It drives the live app with the Playwright CLI (throwaway headless script run via `bun`), screenshots each state, and writes a verdict doc to [`features/<slug>/verifications/<date>.md`](../features/index.md). Verdict must be PASS. For a **trivial tweak** (copy, spacing), a manual `bun run dev` walk noted in the run note is enough.
 
@@ -247,3 +266,7 @@ E2E smoke specs (CI regression net): `library.md`.
 - Forms without `<Form>` + RHF — every form goes through ShadCN Form
 - Inline `<button>` styling — use `<Button variant=... />`
 - Missing `data-testid` on interactive elements
+- A frontend task with no design skill loaded — designing from training-data taste
+- Both leads (`impeccable` + `design-taste-frontend`) on one surface
+- Motion curves or durations invented by hand, or taken from `impeccable animate` / taste's motion step instead of `animate`
+- Letting `impeccable init` invent a new visual world on an ordinary page — `design-system.md` + the tokens win

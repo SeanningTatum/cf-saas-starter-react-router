@@ -22,6 +22,10 @@ if [ "$MODE" != "--baseline" ] && [ "$MODE" != "--quick" ]; then
   bun install || { echo "FAIL: bun install"; exit 1; }
   echo ""
 
+  echo "--- Restore agent skills (skills-lock.json) ---"
+  ./scripts/restore-skills.sh || echo "WARN: skill restore failed — frontend design skills unavailable until it succeeds"
+  echo ""
+
   echo "--- Apply local D1 migrations ---"
   bun run db:migrate:local || { echo "FAIL: db:migrate:local"; exit 1; }
   echo ""

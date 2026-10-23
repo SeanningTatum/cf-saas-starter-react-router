@@ -184,6 +184,7 @@ Adjacent references worth studying for a *technical, monochrome, dev-audience* s
 
 - `ui-ux-pro-max` skill — offline design-rule database (styles, layouts, UX/a11y checks, chart rules) queried before net-new UI. Advisory on **structure and behavior only**; the tokens above win on color/type. Invocation + guardrail: [`../rules/frontend.md`](../rules/frontend.md) "Design intelligence".
 - Refero MCP + `refero-design` skill — reference research for complex/net-new surfaces (tier 2 in `frontend.md`). Same guardrail: structure and behavior, never raw color.
+- `impeccable` · `design-taste-frontend` · `emil-design-eng` / `animate` / `review-animations` — craft skills restored from `skills-lock.json` into `.claude/skills/`, one lane each (app screens · public pages · motion). The tokens above still win. Lanes: [`../rules/frontend.md`](../rules/frontend.md) "Design skills".
 - Refero — Cursor `DESIGN.md` (warm light, mono-accented, multi-layer shadow, deliberate type).
 - Refero — Linear `DESIGN.md` (4px spacing unit, 6px radius, dense type, restrained palette).
 - `.brain/rules/frontend.md` — repo-wide frontend conventions (Tailwind tokens, `cn`, ShadCN forms, `data-testid`).
