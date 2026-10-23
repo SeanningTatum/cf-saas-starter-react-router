@@ -35,7 +35,8 @@ echo ""
 # shellcheck source=lib/brain-cli.sh
 . scripts/lib/brain-cli.sh
 
-if [ ! -f .brain/brain.db ]; then
+# Ask the CLI, not the path: a worktree shares the main checkout's brain.
+if ! brain >/dev/null 2>&1; then
   fail "no .brain/brain.db — brain state NOT checked (run ./scripts/brain-setup.sh)"
 else
   if brain check; then
