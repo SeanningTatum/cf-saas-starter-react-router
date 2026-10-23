@@ -5,7 +5,7 @@ description: Validate harness invariants — brain check (brain-axi CLI) + repo 
 Run `./scripts/harness-check.sh` and surface the result verbatim.
 
 The script runs two layers:
-1. `brain check` (brain-axi CLI) — integrity of `.brain/brain.db`: SQLite integrity, foreign keys, search index, shipped features verified, no open tasks on shipped features, plan/shot file hashes.
+1. `brain check` (brain-axi CLI) — integrity of `.brain/brain.db`: SQLite integrity, foreign keys, search index, shipped features verified, no open tasks on shipped features, plan/shot file hashes. Then `scripts/brain-setup.sh --check`: the db's declared gates match the tracked list (a stale db after a pull fails here — fix with `./scripts/brain-setup.sh`).
 2. Repo-specific supplement — init.sh executable, CLAUDE↔AGENTS symlink, sub-agent frontmatter, `.kimi-code/agents` symlink, hook scripts wired in `.claude/settings.json` exist, restore-skills hook test.
 
 If the script exits non-zero:

@@ -3,9 +3,10 @@
 #
 # Two layers:
 #   1. Brain-state invariants: `brain check` (brain-axi 0.3.0) over .brain/brain.db —
-#        SQLite integrity, foreign keys, search index, shipped ⇒ verified, plan/shot hashes.
-#        A missing CLI or a missing brain.db FAILS: a check that did not run must never
-#        render like one that passed. `./scripts/brain-setup.sh` creates the db.
+#        SQLite integrity, foreign keys, search index, shipped ⇒ verified, plan/shot hashes —
+#        then `brain-setup.sh --check` (the db's gates match the tracked list).
+#        Uses the same CLI runner as brain-setup.sh (scripts/lib/brain-cli.sh). A missing
+#        brain.db FAILS: a check that did not run must never render like one that passed.
 #   2. Repo-specific supplement (below) — invariants brain-axi does not own:
 #        B. init.sh exists and is executable
 #        C. CLAUDE.md and AGENTS.md are the same file (symlink / byte-identical)
@@ -29,14 +30,22 @@ fail() { echo "  ✗ $1"; FAIL_COUNT=$((FAIL_COUNT+1)); FAIL=1; }
 echo "=== brain check (brain-axi CLI) ==="
 echo ""
 
-if ! command -v brain >/dev/null 2>&1; then
-  fail "brain CLI not on PATH — brain state NOT checked (npm i -g github:SeanningTatum/brain-axi#v0.3.0)"
-elif [ ! -f .brain/brain.db ]; then
+# shellcheck source=lib/brain-cli.sh
+. scripts/lib/brain-cli.sh
+
+if [ ! -f .brain/brain.db ]; then
   fail "no .brain/brain.db — brain state NOT checked (run ./scripts/brain-setup.sh)"
-elif brain check; then
-  ok "brain check passed"
 else
-  fail "brain check reported violations (see output above)"
+  if brain check; then
+    ok "brain check passed"
+  else
+    fail "brain check reported violations (see output above)"
+  fi
+  if GATES_OUT=$(./scripts/brain-setup.sh --check 2>&1); then
+    ok "$GATES_OUT"
+  else
+    fail "$GATES_OUT"
+  fi
 fi
 
 echo ""
