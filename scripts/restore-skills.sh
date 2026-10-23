@@ -52,19 +52,35 @@ if [ "${1:-}" = "--background" ]; then
   exit 0
 fi
 
-# mkdir is atomic, so one restore runs at a time. The owner writes its PID; a lock whose
-# owner died before cleanup (SIGKILL, crash) is reclaimed instead of blocking every retry.
-take_lock() {
+older_than_2m() { [ -n "$(find "$1" -maxdepth 0 -mmin +2 2>/dev/null)" ]; }
+
+# Stale = the owner died before cleanup (SIGKILL, crash), or died between mkdir and
+# writing its PID.
+lock_is_stale() {
   local owner
+  [ -d "$LOCKDIR" ] || return 1
+  owner=$(cat "$LOCKDIR/pid" 2>/dev/null || true)
+  if [ -n "$owner" ]; then
+    ! kill -0 "$owner" 2>/dev/null
+  else
+    older_than_2m "$LOCKDIR"
+  fi
+}
+
+# mkdir is atomic, so one restore runs at a time. The owner writes its PID, and a stale
+# lock is reclaimed instead of blocking every retry. Reclaim happens under a second mutex
+# that re-reads the owner inside it: two waiters that saw the same dead PID must not both
+# delete, or the second deletes the lock a new owner took in between.
+take_lock() {
   if mkdir "$LOCKDIR" 2>/dev/null; then
     echo $$ >"$LOCKDIR/pid"
     return 0
   fi
-  owner=$(cat "$LOCKDIR/pid" 2>/dev/null || true)
-  if [ -n "$owner" ] && ! kill -0 "$owner" 2>/dev/null; then
-    rm -r "$LOCKDIR" 2>/dev/null
-  elif [ -z "$owner" ] && [ -n "$(find "$LOCKDIR" -maxdepth 0 -mmin +2 2>/dev/null)" ]; then
-    rm -r "$LOCKDIR" 2>/dev/null # owner died between mkdir and writing its PID
+  if mkdir "$LOCKDIR.reclaim" 2>/dev/null; then
+    lock_is_stale && rm -r "$LOCKDIR" 2>/dev/null
+    rmdir "$LOCKDIR.reclaim"
+  elif older_than_2m "$LOCKDIR.reclaim"; then
+    rmdir "$LOCKDIR.reclaim" 2>/dev/null # held for milliseconds; this old, its holder died
   fi
   return 1
 }
