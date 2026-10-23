@@ -280,8 +280,8 @@ else
   fail "broken hook wiring:$HOOK_BAD"
 fi
 
-# H. Hook behaviour tests (path -> docs mappings)
-for t in test-rule-router test-brain-reminder; do
+# H. Hook behaviour tests (path -> docs mappings, SessionStart skill restore)
+for t in test-rule-router test-brain-reminder test-restore-skills; do
   if [ -x "scripts/${t}.sh" ]; then
     if T_OUT=$("./scripts/${t}.sh" 2>&1); then
       ok "${t#test-} hook tests pass ($(grep -c '✓' <<<"$T_OUT") checks)"

@@ -57,26 +57,37 @@ fi
 
 older_than_2m() { [ -n "$(find "$1" -maxdepth 0 -mmin +2 2>/dev/null)" ]; }
 
-# Stale = the owner died before cleanup (SIGKILL, crash), or died between mkdir and
-# writing its PID.
+# A process's start time, whitespace-normalised; empty when the PID is not running.
+started() { ps -o lstart= -p "$1" 2>/dev/null | awk '{$1=$1; print}'; }
+
+# Stale = the owner died before cleanup (SIGKILL, crash, reboot), or died between mkdir and
+# writing its owner line. The owner line is "<pid> <start time>": a PID alone is not
+# identity, since after a reboot or exit it can belong to an unrelated live process.
 lock_is_stale() {
-  local owner
+  local owner pid start
   [ -d "$LOCKDIR" ] || return 1
-  owner=$(cat "$LOCKDIR/pid" 2>/dev/null || true)
-  if [ -n "$owner" ]; then
-    ! kill -0 "$owner" 2>/dev/null
-  else
+  owner=$(cat "$LOCKDIR/owner" 2>/dev/null || true)
+  if [ -z "$owner" ]; then
     older_than_2m "$LOCKDIR"
+    return
+  fi
+  pid=${owner%% *}
+  start=${owner#* }
+  if [ -n "$start" ]; then
+    [ "$(started "$pid")" != "$start" ]
+  else
+    ! kill -0 "$pid" 2>/dev/null # no ps on this host: fall back to liveness alone
   fi
 }
 
-# mkdir is atomic, so one restore runs at a time. The owner writes its PID, and a stale
+# mkdir is atomic, so one restore runs at a time. The owner records who it is, and a stale
 # lock is reclaimed instead of blocking every retry. Reclaim happens under a second mutex
 # that re-reads the owner inside it: two waiters that saw the same dead PID must not both
 # delete, or the second deletes the lock a new owner took in between.
 take_lock() {
   if mkdir "$LOCKDIR" 2>/dev/null; then
-    echo $$ >"$LOCKDIR/pid"
+    # Written via rename so a reader never sees a half-written owner line.
+    printf '%s %s\n' $$ "$(started $$)" >"$LOCKDIR/owner.tmp" && mv "$LOCKDIR/owner.tmp" "$LOCKDIR/owner"
     return 0
   fi
   if mkdir "$LOCKDIR.reclaim" 2>/dev/null; then
