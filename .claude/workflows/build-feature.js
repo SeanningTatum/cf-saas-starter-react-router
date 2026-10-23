@@ -8,7 +8,7 @@ export const meta = {
     { title: "Orient", detail: "brain lookup + nearest existing feature + design prep, in parallel" },
     { title: "Contract", detail: "architect fixes the interface every lane builds against" },
     { title: "Build", detail: "lanes own disjoint files and run concurrently" },
-    { title: "Verify", detail: "spans first, then gates, non-negotiables, design critique, browser walk at once" },
+    { title: "Verify", detail: "tests + spans first, then gates, non-negotiables, design critique, browser walk at once" },
     { title: "Close", detail: "synthesis + what still needs a human" },
   ],
 };
@@ -254,14 +254,22 @@ const VERDICT_SCHEMA = {
 
 const acceptance = (contract.acceptance ?? []).join("\n  · ");
 
-// Spans edit source, so they land first — a checker reading the tree while it changes reports on a
-// tree that no longer exists. Everything after is read-only, needs only the finished tree, and runs at
-// once. Each owns its own port where it needs a server — CI=1 is required while Cloudflare's
-// edge-preview API is failing.
-const spans = await agent(
-  `Audit the new code paths for: ${feature}\n\nAdd or correct tracing spans per the repo's naming convention. Report what you changed.`,
-  { label: "verify:spans", phase: "Verify", agentType: "span-instrumenter" }
-);
+// The writer wave lands first — a checker reading the tree while it changes reports on a tree that
+// no longer exists. Tests and spans touch different files, so the two writers run together.
+// Everything after is read-only, needs only the finished tree, and runs at once. Each owns its own
+// port where it needs a server — CI=1 is required while Cloudflare's edge-preview API is failing.
+const writers = await parallel([
+  () =>
+    agent(
+      `Write or update the unit tests that pin the changed behaviour for: ${feature}\n\nEvery new helper and repository needs a test (non-negotiable 4). Edit test files only — never source. Report each test with the regression it would catch, and any changed behaviour you left uncovered and why.`,
+      { label: "verify:tests", phase: "Verify", agentType: "test-author" }
+    ),
+  () =>
+    agent(
+      `Audit the new code paths for: ${feature}\n\nAdd or correct tracing spans per the repo's naming convention. Edit source only — never test files. Report what you changed.`,
+      { label: "verify:spans", phase: "Verify", agentType: "span-instrumenter" }
+    ),
+]);
 
 const checks = await parallel([
   () =>
@@ -311,7 +319,7 @@ under 7.5 is a P1.`,
     : []),
 ]);
 
-const verdicts = [spans, ...checks].filter(Boolean);
+const verdicts = [...writers, ...checks].filter(Boolean);
 const blocking = verdicts
   .filter((v) => v && typeof v === "object" && Array.isArray(v.findings))
   .flatMap((v) => v.findings.filter((f) => f.severity === "P0" || f.severity === "P1"));

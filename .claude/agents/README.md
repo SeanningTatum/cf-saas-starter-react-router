@@ -46,7 +46,7 @@ same operators concurrently via [`.claude/workflows/build-feature.js`](../workfl
 Orient    brain lookup ‖ nearest-feature trace ‖ UI tier check         (3 in parallel, read-only)
 Contract  architect fixes the interface → one writer lands it          (the only sequential step)
 Build     data ‖ api ‖ ui ‖ e2e — each fenced to disjoint paths        (up to 5 in parallel)
-Verify    span-instrumenter (writes source, so it lands first)
+Verify    test-author ‖ span-instrumenter (they write files, so they land first)
           → gates (brain verify) ‖ effect-ts-enforcer ‖ feature-verifier
           ‖ design critique (lead skill)                               (4 in parallel)
 Close     synthesis: what is true, what blocks, what a human must decide

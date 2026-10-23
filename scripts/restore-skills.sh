@@ -37,9 +37,10 @@ find_missing() {
   done
 }
 
-# Link every installed skill into .claude/skills/. Drop dangling links, and links this script
-# made (../../.agents/skills/<name>) for a skill no longer in the lock — its folder may outlive
-# the lock entry. Never touches a real directory or a link pointing anywhere else.
+# Link every installed skill into .claude/skills/. A link this script made
+# (../../.agents/skills/<name>) is dropped when it dangles or its skill has left the lock — the
+# folder may outlive the lock entry. Real directories and links pointing anywhere else are never
+# touched, even when they dangle.
 link_skills() {
   local name link names
   names=$(locked_names)
@@ -47,9 +48,8 @@ link_skills() {
   for link in "$ROOT"/.claude/skills/*; do
     [ -L "$link" ] || continue
     name=$(basename "$link")
-    if [ ! -e "$link" ]; then
-      rm "$link"
-    elif [ "$(readlink "$link")" = "../../.agents/skills/$name" ] && ! grep -qx "$name" <<<"$names"; then
+    [ "$(readlink "$link")" = "../../.agents/skills/$name" ] || continue
+    if [ ! -e "$link" ] || ! grep -qx "$name" <<<"$names"; then
       rm "$link"
     fi
   done

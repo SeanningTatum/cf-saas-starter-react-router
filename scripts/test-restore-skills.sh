@@ -75,11 +75,13 @@ restore "$SB" >/dev/null 2>&1
 mkdir -p "$SB/.agents/skills/dropped" && touch "$SB/.agents/skills/dropped/SKILL.md"
 ln -s ../../.agents/skills/dropped "$SB/.claude/skills/dropped"
 ln -s "$SB/.agents/skills/alpha" "$SB/.claude/skills/hand-made"
+ln -s /nonexistent/external-skill "$SB/.claude/skills/external"
 mkdir -p "$SB/.claude/skills/real-dir"
 restore "$SB" >/dev/null 2>&1
-[ ! -L "$SB/.claude/skills/dropped" ] && [ -L "$SB/.claude/skills/hand-made" ] && [ -d "$SB/.claude/skills/real-dir" ] \
-  && ok "a linked skill dropped from the lock is unlinked; other links and real dirs are kept" \
-  || bad "unlink: dropped=$([ -L "$SB/.claude/skills/dropped" ] && echo kept || echo gone) hand-made=$([ -L "$SB/.claude/skills/hand-made" ] && echo kept || echo gone)"
+[ ! -L "$SB/.claude/skills/dropped" ] && [ -L "$SB/.claude/skills/hand-made" ] && [ -L "$SB/.claude/skills/external" ] \
+  && [ -d "$SB/.claude/skills/real-dir" ] \
+  && ok "a linked skill dropped from the lock is unlinked; other links (even dangling) and real dirs are kept" \
+  || bad "unlink: dropped=$([ -L "$SB/.claude/skills/dropped" ] && echo kept || echo gone) hand-made=$([ -L "$SB/.claude/skills/hand-made" ] && echo kept || echo gone) external=$([ -L "$SB/.claude/skills/external" ] && echo kept || echo gone)"
 rm -r "$SB"
 
 SB=$(sandbox)

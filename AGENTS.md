@@ -60,7 +60,7 @@ A multi-layer feature can run all of this as one workflow with [`/build-feature`
 
 | Command | Purpose |
 |---------|---------|
-| [`/build-feature`](.claude/commands/build-feature.md) | Multi-layer feature build with the sub-agents **fanned out in parallel** — orient → fix the contract (the one sequential step) → build lanes on **disjoint paths** → spans, then verify lanes at once (gates · non-negotiables · browser walk · design critique) → synthesis. Does not commit, does not touch brain state, does not decide for you. |
+| [`/build-feature`](.claude/commands/build-feature.md) | Multi-layer feature build with the sub-agents **fanned out in parallel** — orient → fix the contract (the one sequential step) → build lanes on **disjoint paths** → tests ‖ spans, then verify lanes at once (gates · non-negotiables · browser walk · design critique) → synthesis. Does not commit, does not touch brain state, does not decide for you. |
 | [`/harness-check`](.claude/commands/harness-check.md) | [`scripts/harness-check.sh`](scripts/harness-check.sh) = `brain check` + repo supplement (CLAUDE↔AGENTS symlink, sub-agent frontmatter, Kimi roster symlink, hook wiring + hook tests). Deterministic, no LLM, exits non-zero on drift. |
 
 ## Gates

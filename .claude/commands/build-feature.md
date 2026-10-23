@@ -41,10 +41,10 @@ intent they get. Say what becomes possible, for whom, and any constraint that is
 | **Orient** | 3 read-only lanes in parallel — brain lookup · trace of the nearest existing feature · UI tier check | None can conflict, and the architect needs all three |
 | **Contract** | 1 architect, then 1 writer for the contract file | The **only** genuinely sequential step: fix the interface, then nobody has to wait |
 | **Build** | up to 5 lanes concurrently, each fenced to disjoint paths | Once the interface is fixed, the server lane and the UI lane need nothing from each other |
-| **Verify** | spans first, then gates · non-negotiables · browser walk · design critique, all at once | Spans edit source, so they land before anyone reads the tree. The checkers are read-only and need only the finished tree. Browser lanes each own a port |
+| **Verify** | tests ‖ spans first, then gates · non-negotiables · browser walk · design critique, all at once | Tests and spans write files, so they land before anyone reads the tree. The checkers are read-only and need only the finished tree. Browser lanes each own a port |
 | **Close** | 1 synthesis | States what is true with evidence, what blocks, what a human must decide, and the brain updates still owed |
 
-~13 agents for a UI feature, ~9 for server-only.
+~14 agents for a UI feature, ~10 for server-only.
 
 ## The one rule that makes it safe
 
