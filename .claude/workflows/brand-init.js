@@ -818,6 +818,16 @@ const builtParallel = await parallel(parallelLanes.map((lane) => () => buildLane
 // The shell lane imports the wordmark `shared` writes, so it runs once the wave is done.
 const builtShell = await buildLane(BUILD_LANES.find((l) => l.name === "shell"));
 const builtByName = new Map([...parallelLanes.map((l, i) => [l.name, builtParallel[i]]), ["shell", builtShell]]);
+// A lane that returns nothing gets one retry, alone. If it is still empty its work is missing, and
+// that blocks Ship until the user accepts it (see `missingBuild` in openBlocking).
+const missingBuild = [];
+for (const lane of BUILD_LANES) {
+  if (builtByName.get(lane.name)) continue;
+  log(`WARNING: build:${lane.name} returned nothing; retrying once`);
+  const retry = await buildLane(lane);
+  if (retry) builtByName.set(lane.name, retry);
+  else missingBuild.push({ severity: "P1", source: `build:${lane.name}`, issue: `build lane returned nothing twice; its fence (${lane.owns.join(", ")}) was not rebuilt` });
+}
 const built = BUILD_LANES.map((l) => builtByName.get(l.name) ?? null);
 
 const lanes = BUILD_LANES.map((lane, i) => ({
@@ -872,7 +882,11 @@ Return the paths.`,
       : reports.some((r) => r.name === v.lane && (r.reverted || []).includes(v.path));
     if (!clean) next.push(v);
   }
-  const known = () => new Set(next.map((v) => v.path));
+  // Keyed by lane AND path: two lanes that both edit a third lane's file are two violations, and
+  // one offender reverting must not clear the other's.
+  const keyOf = (lane, path) => `${lane}\u0000${path}`;
+  const known = () => new Set(next.map((v) => keyOf(v.lane, v.path)));
+  const knownPaths = () => new Set(next.map((v) => v.path));
   for (const r of reports) {
     const reverted = r.reverted || [];
     if (r.cwd !== undefined && r.cwd !== ROOT && !next.some((v) => v.cwd && v.lane === r.name)) {
@@ -881,11 +895,11 @@ Return the paths.`,
     for (const f of r.files) {
       const allowedHere = r.allow ? r.allow(f) : inFence(f, r.owns);
       if (r.allow && allowedHere) orphanTouched.add(f);
-      if (!allowedHere && !exempt(f) && !reverted.includes(f) && !known().has(f)) next.push({ lane: r.name, path: f });
+      if (!allowedHere && !exempt(f) && !reverted.includes(f) && !known().has(keyOf(r.name, f))) next.push({ lane: r.name, path: f });
     }
   }
   for (const p of current) {
-    if (!inFence(p, ALL_FENCES) && !exempt(p) && !known().has(p)) next.push({ lane: "unattributed", path: p });
+    if (!inFence(p, ALL_FENCES) && !exempt(p) && !knownPaths().has(p)) next.push({ lane: "unattributed", path: p });
   }
   return next;
 }
@@ -1029,7 +1043,7 @@ const openFindings = () =>
     }
     return blocking;
   });
-const extraBlocking = []; // findings the code itself raises (for example a missing DESIGN.md)
+const extraBlocking = [...missingBuild]; // findings the code itself raises (a missing build lane, a missing DESIGN.md)
 const openBlocking = () => [
   ...fenceViolations.map((v) => ({ severity: "P0", source: `fence:${v.lane}`, issue: `edited ${v.path}, outside its fence`, file: v.path })),
   ...openFindings(),
@@ -1256,16 +1270,23 @@ for (let round = 1; round <= 2 && openBlocking().length; round++) {
     if (lane) byOffender.set(lane.name, { lane, vs: [...(byOffender.get(lane.name)?.vs || []), v] });
     else strays.push(v);
   }
-  const repairs = await parallel(
-    [...byOffender.values()].map(({ lane, vs }) => () =>
-      ask(repairPrompt(lane.name, lane.owns, vs), {
-        label: `fix:${round}:repair:${lane.name}`,
-        phase: "Fix",
-        agentType: "ui-builder",
-        schema: FILES_SCHEMA,
-      }).then((r) => ({ name: lane.name, owns: lane.owns, files: r ? r.files : [], cwd: r ? r.cwd : undefined, reverted: r ? r.reverted ?? [] : [], report: r ? r.report : "repair lane returned nothing" }))
-    )
-  );
+  const runRepair = ({ lane, vs }) =>
+    ask(repairPrompt(lane.name, lane.owns, vs), {
+      label: `fix:${round}:repair:${lane.name}`,
+      phase: "Fix",
+      agentType: "ui-builder",
+      schema: FILES_SCHEMA,
+    }).then((r) => ({ name: lane.name, owns: lane.owns, files: r ? r.files : [], cwd: r ? r.cwd : undefined, reverted: r ? r.reverted ?? [] : [], report: r ? r.report : "repair lane returned nothing" }));
+  // Two offenders on one path would edit the same file at once, so any shared path makes the
+  // repairs run one at a time.
+  const offenders = [...byOffender.values()];
+  const repairPaths = offenders.flatMap(({ vs }) => vs.map((v) => v.path));
+  const repairs = [];
+  if (new Set(repairPaths).size < repairPaths.length) {
+    for (const o of offenders) repairs.push(await runRepair(o));
+  } else {
+    repairs.push(...(await parallel(offenders.map((o) => () => runRepair(o)))));
+  }
   if (strays.length) {
     const r = await ask(
       `Restore these files, which no lane may edit:
