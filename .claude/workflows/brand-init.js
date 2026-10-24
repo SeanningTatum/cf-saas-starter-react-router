@@ -1416,7 +1416,7 @@ ${redo ? "This is a redo: replace the old DESIGN.md outright. Carry nothing over
     {
       label: "close:design-md",
       phase: "Close",
-      agentType: "impeccable-documenter",
+      agentType: "impeccable:impeccable-documenter",
       schema: {
         type: "object",
         required: ["written", "files"],

@@ -1,115 +1,43 @@
-# Sub-agents — harness operators
+# Sub-agents
 
-Project-local Claude Code subagents for the repo-specific work: the five non-negotiables, UI craft, tests, spans, browser verification. The method (start, plan, execute, verify, done) and brain state come from the [brain-axi](https://github.com/SeanningTatum/brain-axi) plugin's skills and the `brain` CLI, not from agents here.
+Project sub-agents for repo-specific work. The method (start, plan, execute, verify, done) comes from the brain-axi skills; the order of the waves is in AGENTS.md ("Delegate in parallel") and [`/build-feature`](../commands/build-feature.md).
 
 ## Roster
 
-| Agent | Subsystem | Use when |
-|-------|-----------|----------|
-| [`ui-builder`](ui-builder.md) | Instructions + Verification (builds) | **Any user-visible work** — routes, components, marketing surfaces, forms, states. Carries the frontend rules, craft moves and anti-slop tells so the mistakes are not made, and self-measures with `design:audit` |
-| [`test-author`](test-author.md) | Verification (authors) | After implementing a feature/fix — write or update the unit tests that pin its business logic |
-| [`span-instrumenter`](span-instrumenter.md) | Verification (observability) | After adding an endpoint / repo method / service call — add or audit tracing spans per convention |
-| [`effect-ts-enforcer`](effect-ts-enforcer.md) | Verification | After writing code, before `brain verify` — review against 5 non-negotiables |
-| [`feature-verifier`](feature-verifier.md) | Verification (proves) | Any user-visible flow — browser walk, screenshots, verdict recorded with `brain verifications add` |
+| Agent | Use when |
+|-------|----------|
+| [`ui-builder`](ui-builder.md) | Any user-visible work, inside a file fence the caller sets (runs on `opus`) |
+| [`test-author`](test-author.md) | After a feature or fix: write or update the unit tests (runs on `opus`) |
+| [`span-instrumenter`](span-instrumenter.md) | After adding an endpoint, repo method or service call: add or audit tracing spans |
+| [`effect-ts-enforcer`](effect-ts-enforcer.md) | Before `brain verify`: read-only review against the five non-negotiables |
+| [`feature-verifier`](feature-verifier.md) | Any user-visible flow: browser walk, screenshots, verdict via `brain verifications add` |
 
-## Typical flow
+Plugin agents (enabled in `.claude/settings.json`; names carry the plugin prefix):
 
-```
-1. brain-axi:brain-start →  read brain state, frame the task, run the baseline
-2. main thread         →  writes the code, following the nearest existing pattern
-3. test-author ‖ span-instrumenter          →  writer wave, one message: tests pin the logic,
-                                               spans cover the new paths (disjoint files)
-4. effect-ts-enforcer ‖ brain verify        →  checker wave, one message: review the diff, run
-                                               the declared gates (read-only, finished tree)
-5. brain-axi:brain-done →  closes state: checkpoint, `brain features ship <slug> --evidence`
-```
+| Agent | Use when |
+|-------|----------|
+| `feature-dev:code-architect` | Design a feature blueprint before coding |
+| `feature-dev:code-explorer` | Trace how an existing feature runs |
+| `feature-dev:code-reviewer` | Generic review for bugs and security |
+| `code-simplifier:code-simplifier` | Simplify recently changed code |
+| `impeccable:impeccable-documenter` | Write DESIGN.md from a finished build (`brand-init` Close; its preflight fails without the plugin) |
 
-### UI work has its own loop
+Use a project agent for the non-negotiables, this repo's UI rules and its verification standard. Use a plugin agent for generic engineering.
 
-```
-0. lead skill          →  tier 2 only: `impeccable` `shape` or taste-skill direction → locked direction
-1. ui-builder          →  builds it with the rules already loaded, then measures itself
-                          (bun run design:audit — HARD failures fixed before returning)
-2. critique skill      →  the lead skill judges the render from screenshots — `impeccable`
-                          `critique` (app) or the taste critique loop (public); P0/P1 block
-3. feature-verifier    →  proves the flow works in the live app
-4. test-author         →  pins the design's intent (live figure source, status in words,
-                          scoped tokens do not leak)
-```
+## Editing
 
-### Or fan them out — `/build-feature`
+- Frontmatter: `name`, `description`, `tools`, `model`. `scripts/harness-check.sh` fails an agent missing `---`, `name:` or `description:`. Workflows call agents by `name`; do not rename one.
+- `description` is what routers read: one short paragraph, two or three examples.
+- Grant the fewest tools. `effect-ts-enforcer` has no `Edit` or `Write`.
+- Default `model: sonnet`. `test-author` and `ui-builder` use `opus`: choosing which tests to write, and building UI to a brand, take judgment a cheaper model lacks.
+- Add an agent only for a recurring task with long instructions and structured output. Otherwise work in the main thread.
 
-For a feature spanning more than one layer, [`/build-feature`](../commands/build-feature.md) runs the
-same operators concurrently via [`.claude/workflows/build-feature.js`](../workflows/build-feature.js):
+## Kimi Code
 
-```
-Orient    brain lookup ‖ nearest-feature trace ‖ UI tier check         (3 in parallel, read-only)
-Contract  architect fixes the interface → one writer lands it          (the only sequential step)
-Build     data ‖ api ‖ ui ‖ e2e — each fenced to disjoint paths        (up to 5 in parallel)
-Verify    test-author ‖ span-instrumenter (they write files, so they land first)
-          → gates (brain verify) ‖ effect-ts-enforcer ‖ feature-verifier
-          ‖ design critique (lead skill)                               (4 in parallel)
-Close     synthesis: what is true, what blocks, what a human must decide
-```
+`.kimi-code/agents` is a symlink to this directory, so `kimi` sees the same agents. `harness-check.sh` fails if the symlink is missing or replaced by a copy. Not shared: slash commands, hooks, skills.
 
-The insight is that most of a feature's apparent ordering is a **compile** dependency, not an
-**information** dependency: once the interface is fixed, the server lane and the UI lane need nothing
-from each other. The cost is that parallel writers must own **disjoint paths** — that constraint is
-enforced in every lane prompt, and a reported lane collision is a P0.
+What does not carry over:
 
-**The split matters.** The critique is a backstop. Quality comes from `ui-builder` knowing the rules
-before the first edit — the alternative is making the same mistakes, catching them, and reworking,
-which is what four rejected rebuilds of `/demo` cost.
-
-## Plugin-provided agents (complementary, not replaced)
-
-These come from shared plugins enabled in `.claude/settings.json`. They cover *generic* concerns; the harness-local agents above cover *project-specific* concerns.
-
-| Agent | Plugin | Use when |
-|-------|--------|----------|
-| `feature-dev:code-architect` | feature-dev | Designing a feature blueprint before coding |
-| `feature-dev:code-explorer` | feature-dev | Deep tracing of an existing feature's runtime |
-| `feature-dev:code-reviewer` | feature-dev | Generic code review (bugs, security, quality) |
-| `code-simplifier:code-simplifier` | code-simplifier | Simplifying recently-modified code |
-| `claude-md-management:claude-md-improver` | claude-md-management | Auditing CLAUDE.md / AGENTS.md |
-| `caveman:cavecrew-*` | caveman | Token-compressed locator / builder / reviewer |
-| `impeccable-documenter` | impeccable | Writing DESIGN.md from a finished build (`brand-init` Close; its Preflight fails if the plugin is missing) |
-
-**Rule of thumb**: project-local agent if the task involves the 5 non-negotiables, this repo's UI rules, or its verification standard. brain-axi skill or `brain` CLI for brain state. Plugin agent for generic engineering work.
-
-## Editing these files
-
-- Sub-agents are markdown files with YAML frontmatter (`name`, `description`, `tools`, `model`).
-- Description should match the schema's expected pattern (single short paragraph) — Claude Code uses it to decide when to spawn the agent.
-- Tools: minimal set. Read-only agents (`effect-ts-enforcer`) explicitly omit `Edit` / `Write`.
-- Model: `sonnet` is the default for harness operators (cost / quality balance). Exception: `test-author` runs `opus` — deciding *which* tests are worth writing is judgment work, and a cheap model defaults to coverage padding.
-
-## Kimi Code reads this same directory
-
-[Kimi Code](https://moonshotai.github.io/kimi-code/) (`kimi`) discovers project sub-agents from
-`.kimi-code/agents`, which in this repo is a **symlink onto this directory** — the same way
-`CLAUDE.md` symlinks to `AGENTS.md`. One file defines an agent for both CLIs; a new agent added here
-shows up in `kimi` with no second step. Verified with `kimi --agent <bogus>`, which prints the
-discovered roster. `scripts/harness-check.sh` (check D2) fails if the symlink is missing or replaced
-by a real directory, because a copy drifts the moment either side is edited.
-
-What does *not* carry over:
-
-- **`model:`** — Kimi's field is `model_preference`, so a Claude `model: opus` line is ignored and the
-  agent runs on Kimi's configured model. Unknown frontmatter keys are skipped, not rejected.
-- **Claude-only tool names** in `tools:` (e.g. `Task`, `Skill`, MCP tools). `Read`/`Write`/`Edit`/`Glob`/`Grep`/`Bash`
-  are named identically in both, so the read-only agents stay read-only.
-- **`README.md`** (this file) has no frontmatter, so Kimi logs one `Skipping invalid agent file`
-  WARN per session and moves on. Harmless; not worth adding fake frontmatter to silence.
-
-Slash commands, hooks and skills are **not** shared — those live under `.claude/` in a
-Claude-specific format.
-
-## When to add a new sub-agent
-
-Only when:
-- The task recurs frequently
-- The instructions are long enough that the main thread benefits from offloading
-- The output is structured enough to consume back as tool result
-
-Otherwise: do it in the main thread. More agents ≠ better harness.
+- `model:`. Kimi reads `model_preference`, so `model: opus` is ignored.
+- Claude-only tool names in `tools:` (`Task`, `Skill`, MCP tools). `Read`, `Write`, `Edit`, `Glob`, `Grep` and `Bash` match, so read-only agents stay read-only.
+- This README has no frontmatter, so Kimi logs one `Skipping invalid agent file` warning per session. Ignore it.
