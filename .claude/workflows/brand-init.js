@@ -1082,10 +1082,17 @@ choice, return stop.`,
         },
       }
     )) ?? { decision: "stop", notes: "escalation agent returned nothing" };
-  escalations.push({ ...answer, about: items.map((i) => `${i.source}: ${i.issue}`) });
+  escalations.push({
+    ...answer,
+    about: items.map((i) => `${i.source}: ${i.issue}`),
+    gates: items.filter((i) => i.source === "brain verify gates").map((i) => i.issue),
+  });
   return answer;
 }
 const accepted = () => escalations.length > 0 && escalations.every((e) => e.decision === "accept");
+// Accepting a visual defect is not accepting a red gate. Ship may pass a red gate only when the user
+// was shown that gate failing and accepted it.
+const acceptedGateFailures = () => (accepted() ? escalations.flatMap((e) => e.gates) : []);
 
 // ---------------------------------------------------------------------------------------------
 phase("Fix");
@@ -1093,8 +1100,18 @@ phase("Fix");
 const unresolved = []; // { file, why, from } things no lane could do: outside app/, or owned by another lane
 const noteUnresolved = (u) => { if (!unresolved.some((x) => x.file === u.file && x.from === u.from)) unresolved.push(u); };
 // A fix lane that returned nothing: everything it was handed is still owed.
+// Items that came from a check finding carry `findingKey`, so a later round that fixes the finding
+// clears the entry (see the prune before `stillOpen`). A `needs` item has no check that could confirm it.
+const findingKey = (f) => `${f.source}|${f.issue}`;
 const failedLane = (name, items) =>
-  items.forEach((f) => noteUnresolved({ file: f.file || `(${f.source})`, why: `lane ${name} returned nothing; still open: [${f.severity}] ${f.issue}`, from: name }));
+  items.forEach((f) =>
+    noteUnresolved({
+      file: f.file || `(${f.source})`,
+      why: `lane ${name} returned nothing; still open: [${f.severity}] ${f.issue}`,
+      from: name,
+      findingKey: f.source.startsWith("needs:") ? undefined : findingKey(f),
+    })
+  );
 const outsideApp = (f) => !!f.file && !f.file.startsWith("app/") && !f.source.startsWith("fence:");
 const offenderOf = laneByName;
 
@@ -1327,6 +1344,13 @@ Touch nothing else. Return the files you changed, the paths you restored or dele
   await rerunAfter(roundReports);
 }
 
+// A failed lane's finding that a later round fixed is no longer owed.
+{
+  const openKeys = new Set(openBlocking().map(findingKey));
+  for (let i = unresolved.length - 1; i >= 0; i--) {
+    if (unresolved[i].findingKey && !openKeys.has(unresolved[i].findingKey)) unresolved.splice(i, 1);
+  }
+}
 const stillOpen = openBlocking().map((f) =>
   outsideApp(f) ? { ...f, issue: `needs a human or a separate task (outside app/): ${f.issue}` } : f
 );
@@ -1483,11 +1507,15 @@ Open findings the user explicitly accepted in an escalation review: ${accepted()
 Steps, in order:
   1. \`brain verify\` (every gate, including build and e2e). Also \`bun run typecheck\` and confirm no
      call site outside app/components/ changed.
-  2. IF ANY GATE IS RED${accepted() ? "" : ": STOP. Change nothing, write nothing to the brain, commit nothing, push nothing, open no PR. Return shipped=false, gatesGreen=false and the failing gate in reason"}.${
-      accepted()
-        ? " The user accepted open findings, so you may continue: skip the verification and the ship below, and say in the PR which gate failed."
-        : ""
-    }
+  2. IF ANY GATE IS RED: ${
+      acceptedGateFailures().length
+        ? `continue ONLY if every red gate was already failing in this evidence the user saw and accepted:
+${JSON.stringify(acceptedGateFailures())}
+     Then skip the verification and the ship below, and say in the PR which gate failed. Any OTHER red gate:
+     STOP as below.`
+        : "STOP."
+    } STOP means: change nothing, write nothing to the brain, commit nothing, push nothing, open no PR.
+     Return shipped=false, gatesGreen=false and the failing gate in reason.
      IF every gate is green:
      · \`brain verifications add brand-init --verdict PASS --body-from <file> --shot <png>::"<caption>"\`
        (screenshots under ${outDir}/check/<lane>/, one folder per check). The body pastes the last impeccable
