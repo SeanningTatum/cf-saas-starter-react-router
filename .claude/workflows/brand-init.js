@@ -68,7 +68,14 @@ hex and no arbitrary Tailwind values in app code. Do not run git commit and do n
 unless your task says so. Dev servers: \`CI=1 bun run dev --port <port>\` on the port you were given.
 Skills: load them by plain name (\`impeccable\`, \`design-taste-frontend\`, \`animate\`, \`emil-design-eng\`).
 If the Skill tool says "Unknown skill", try the plugin-qualified name (\`impeccable:impeccable\`,
-\`taste-skill:design-taste-frontend\`) before giving up.`;
+\`taste-skill:design-taste-frontend\`) before giving up.${
+  redo
+    ? `
+This is a redo: DESIGN.md at the repo root describes the OLD brand, the one this run replaces. It is
+not binding. The chosen direction replaces all of it, shapes, density, voice and component conventions
+included; never follow a DESIGN.md rule that disagrees with the direction.`
+    : ""
+}`;
 
 // How an agent talks to the user. Used by every human step.
 const REVIEW_HOWTO = `HOW TO ASK THE USER (the only way you can): write ONE self-contained HTML file, using the
@@ -122,20 +129,25 @@ except where an item says to.
     typeof input.root === "string"
       ? `The caller gave root ${JSON.stringify(input.root)}. Run \`git -C <that> rev-parse --is-inside-work-tree\`; it must print true, else fail with "args.root is not a git work tree". ROOT is \`git -C <that> rev-parse --show-toplevel\`.`
       : "Run `git rev-parse --show-toplevel` in your starting directory. That is ROOT. Do not look for another checkout or a .claude/worktrees/* tree."
-  } ROOT must be an absolute path. Then \`cd\` to ROOT: items 1 to 6 run there, and so does every later step of
+  } ROOT must be an absolute path. Then \`cd\` to ROOT: items 1 to 7 run there, and so does every later step of
      this run. Return ROOT in \`root\`.
   1. Brand check. If DESIGN.md exists at ROOT and redo is ${redo}: when redo is false, fail with
      exactly: A brand exists. Run Workflow({ name: "brand-init", args: { redo: true } }) to replace it.
      (When redo is true, leave DESIGN.md in place; it is the brand to move away from.)
-  2. Clean tree. \`git status --short\`. Ignore anything under .brain/ and any plans/brand-*.html. If
+  2. Plugins. This run needs two plugin installs that a fresh fork may lack. Run
+     \`find ~/.claude/plugins -path '*impeccable*' -name impeccable-documenter.md | head -1\` (the agent
+     that writes DESIGN.md at Close) and \`find ~/.claude/plugins -path '*taste-skill*' -name draw.mjs | head -1\`
+     (the comp renderer). If either prints nothing, fail with exactly: Missing plugin. Run
+     claude plugin install impeccable@impeccable and claude plugin install taste-skill@taste-skill, then restart.
+  3. Clean tree. \`git status --short\`. Ignore anything under .brain/ and any plans/brand-*.html. If
      anything else is dirty, fail and name the files: parallel lanes writing over uncommitted work make
      the diff unreadable.
-  3. Baseline. \`brain verify --stage baseline\`. If red, fail and name the failing gate.
-  4. Scope policy. \`brain features list --status in-progress\`. If a feature other than brand-init is
+  4. Baseline. \`brain verify --stage baseline\`. If red, fail and name the failing gate.
+  5. Scope policy. \`brain features list --status in-progress\`. If a feature other than brand-init is
      open, fail and name it. Do not block it for the user.
-  5. Claim the feature: \`brain features add brand-init --name "Brand init"\` (skip if it exists), then
+  6. Claim the feature: \`brain features add brand-init --name "Brand init"\` (skip if it exists), then
      \`brain features set brand-init --status in-progress\`.
-  6. Branch. If on main, \`git switch -c feat/brand-init\`. Otherwise stay.
+  7. Branch. If on main, \`git switch -c feat/brand-init\`. Otherwise stay.
 Return ok=false with a one-line reason for the first failure, else ok=true. Always return root when you found it.`,
   {
     label: "preflight",
@@ -1381,6 +1393,12 @@ Return the files you changed, your cwd (\`git rev-parse --show-toplevel\`), and 
   );
   polishReport = polish ? polish.report : "polish lane returned nothing";
   polishFiles = polish ? polish.files : [];
+  // Polish may not edit outside its fence, and no fix round follows it, so a `needs` item can only go to the user.
+  const polishNeeds = ((polish && polish.needs) || []).map((n) => ({ severity: "P1", source: "needs:close:polish", issue: `needs a human or a separate task: ${n.why}`, file: n.file }));
+  if (polishNeeds.length) {
+    await escalate(polishNeeds, "were outside the polish lane's fence", "post-close");
+    if (!accepted()) mayShip = false;
+  }
 
   // DESIGN.md comes from the shipped artifact, so it must follow polish.
   const doc = await ask(
@@ -1393,7 +1411,7 @@ Record: colour tokens (light and dark) with their roles, type scale and pairings
 motion tokens and the reduced-motion rule, the wordmark, the voice lines, component conventions, and
 this contrast log from the contract lane:
 ${contract.report}
-Write only DESIGN.md (and its sidecar if your instructions call for one). When done, confirm with
+${redo ? "This is a redo: replace the old DESIGN.md outright. Carry nothing over from it that the shipped app does not show.\n" : ""}Write only DESIGN.md (and its sidecar if your instructions call for one). When done, confirm with
 \`ls -l DESIGN.md\`, then return written=true and every file you wrote.`,
     {
       label: "close:design-md",

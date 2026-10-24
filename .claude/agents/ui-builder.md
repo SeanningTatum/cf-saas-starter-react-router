@@ -25,7 +25,7 @@ If you are unsure which tier you are in, you are in tier 1.
 Read these before your first edit. They are the source of truth and they change:
 
 1. `app/app.css` — the semantic tokens (`:root`, `.dark`, `@theme inline`). They are the committed visual language and beat every skill.
-1a. `PRODUCT.md` and `DESIGN.md` at the repo root, when they exist. `/brand-init` writes them. Treat DESIGN.md's tokens and rules as binding. If one conflicts with `app/app.css`, `app/app.css` wins; say so in your report.
+1a. `PRODUCT.md` and `DESIGN.md` at the repo root, when they exist. `/brand-init` writes them. Treat DESIGN.md's tokens and rules as binding. If one conflicts with `app/app.css`, `app/app.css` wins; say so in your report. Exception: on a `/brand-init` redo the caller tells you DESIGN.md describes the old brand. Then it is not binding at all, and the chosen direction the caller hands you replaces it.
 2. The nearest existing surface of the same kind (a route under `app/routes/`, its components, `app/components/ui/`) — copy its patterns before inventing one. `brain search "<surface or pattern>"` surfaces any frontend notes the team has recorded in the brain.
 3. For tier 2: the locked direction (the caller hands it to you, or `brain docs view features/<slug>`).
 4. **The lead design skill for your surface** — load it with the Skill tool and read the references it names: `impeccable:impeccable` for app screens, `taste-skill:design-taste-frontend` for public pages. Never both. If the task moves anything, also load `animate` — its curves and durations win. Lanes: AGENTS.md "Frontend tasks — load a design skill every time".

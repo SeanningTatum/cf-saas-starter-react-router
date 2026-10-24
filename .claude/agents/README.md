@@ -73,6 +73,7 @@ These come from shared plugins enabled in `.claude/settings.json`. They cover *g
 | `code-simplifier:code-simplifier` | code-simplifier | Simplifying recently-modified code |
 | `claude-md-management:claude-md-improver` | claude-md-management | Auditing CLAUDE.md / AGENTS.md |
 | `caveman:cavecrew-*` | caveman | Token-compressed locator / builder / reviewer |
+| `impeccable-documenter` | impeccable | Writing DESIGN.md from a finished build (`brand-init` Close; its Preflight fails if the plugin is missing) |
 
 **Rule of thumb**: project-local agent if the task involves the 5 non-negotiables, this repo's UI rules, or its verification standard. brain-axi skill or `brain` CLI for brain state. Plugin agent for generic engineering work.
 
