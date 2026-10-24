@@ -13,7 +13,7 @@ export const meta = {
     { title: "Contract", detail: "one lane writes tokens into app/app.css and the font link into app/root.tsx" },
     { title: "Build", detail: "primitive and shared lanes own disjoint files and run concurrently; fence check" },
     { title: "Check", detail: "design critiques, motion review, gates and a browser walk at once" },
-    { title: "Fix", detail: "up to two rounds: owning lane per open finding, re-run failing checks; escalate the rest" },
+    { title: "Fix", detail: "up to two rounds: owning lane per open finding, re-run every check the changes could affect; escalate the rest" },
     { title: "Close", detail: "polish, DESIGN.md, synthesis" },
     { title: "Ship", detail: "brain verify, verification, docs, progress, one commit, one PR; no merge" },
   ],
@@ -270,17 +270,20 @@ async function critique(comp) {
     `Run the taste look-and-fix loop on the LANDING HERO of ${comp.html}.
 
 Load \`design-taste-frontend\` and follow its references/critique.md loop: screenshot at
-desktop (1440 and 1920) and mobile, score, fix, repeat — AT MOST 3 rounds. You may edit only ${dir}/comp.html and
-${dir}/shots/. Retake the four screenshots (desktop/mobile x light/dark) after your last edit.
+desktop (1440 and 1920) and mobile, score, fix, repeat — AT MOST 3 rounds. You may edit only ${dir}/comp.html,
+${dir}/tokens.json and ${dir}/shots/. When a fix changes a colour, font, radius, density, motion value, voice line
+or the wordmark in comp.html, make the same change in tokens.json (same shape, oklch() colours), so the file always
+matches what the comp shows. Retake the four screenshots (desktop/mobile x light/dark) after your last edit.
 At 1920 the content must sit in a max-width page container; edge to edge is a defect to fix. A score under 7.5 after round 3 is reported exactly as scored. Never round up.
-Return the final score (a number) and short notes on what changed and what still bites.`,
+Return the final score (a number), short notes on what changed and what still bites, and \`tokens\`: the exact
+contents of ${dir}/tokens.json after your last edit (read the file back).`,
     {
       label: `critique:${comp.id}:taste`,
       phase: "Critique",
       schema: {
         type: "object",
-        required: ["score", "notes"],
-        properties: { score: { type: "number" }, notes: { type: "string" } },
+        required: ["score", "notes", "tokens"],
+        properties: { score: { type: "number" }, notes: { type: "string" }, tokens: { type: "object" } },
         additionalProperties: false,
       },
     }
@@ -349,6 +352,8 @@ prefers-reduced-motion collapses the motion. Return verdict PASS or FAIL with no
 Write only that file.\n\n${JSON.stringify(result, null, 1)}`,
     { label: `critique:${comp.id}:notes`, phase: "Critique", effort: "low" }
   );
+  // The loop may have changed the comp and its tokens.json; carry the file's current contents forward.
+  result.tokens = taste && taste.tokens && typeof taste.tokens === "object" ? taste.tokens : comp.tokens;
   return result;
 }
 
@@ -374,6 +379,7 @@ async function drawAndCritique(d, extra, redrawn) {
   const c = await critique(comp);
   return {
     ...comp,
+    tokens: c.tokens,
     critique: { taste: c.taste, impeccable: c.impeccable, motion: c.motion },
     contrastAA: c.contrastAA,
   };
@@ -598,6 +604,7 @@ const ui = (names) => names.map((n) => `app/components/ui/${n}.tsx`);
 // Hardcoded fences. The four primitive families cover all 55 files in app/components/ui once.
 const CONTRACT_FENCE = ["app/app.css", "app/root.tsx"];
 const BUILD_LANES = [
+  // harness:primitive-fences:start
   {
     name: "primitives:actions-forms",
     owns: ui(["button", "button-group", "toggle", "toggle-group", "input", "input-group", "input-otp", "textarea", "label", "field", "form", "checkbox", "radio-group", "switch", "slider", "select", "native-select", "combobox", "calendar", "kbd"]),
@@ -614,6 +621,7 @@ const BUILD_LANES = [
     name: "primitives:data-display",
     owns: ui(["table", "chart", "avatar", "badge", "item", "carousel"]),
   },
+  // harness:primitive-fences:end
   {
     name: "shared",
     owns: [
@@ -649,7 +657,10 @@ const orphanTouched = new Set(); // paths fix:orphans edited legitimately; the f
 const inFence = (path, fence) =>
   fence.some((f) => (f.endsWith("/**") ? path.startsWith(f.slice(0, -2)) : path === f));
 const ignored = (path) => IGNORED_PREFIXES.some((p) => path.startsWith(p));
-const ownerOf = (path) => BUILD_LANES.find((l) => inFence(path, l.owns)) || null;
+// The contract lane owns app/app.css and app/root.tsx, so contrast and font-link findings have an owner.
+const CONTRACT_LANE = { name: "contract:tokens", owns: CONTRACT_FENCE };
+const laneByName = (n) => (n === CONTRACT_LANE.name ? CONTRACT_LANE : BUILD_LANES.find((l) => l.name === n) || null);
+const ownerOf = (path) => BUILD_LANES.find((l) => inFence(path, l.owns)) || (inFence(path, CONTRACT_FENCE) ? CONTRACT_LANE : null);
 
 // Files the run itself writes outside every fence: the brief, the brand docs, the plans.
 const allowed = (path) => path === "PRODUCT.md" || path === "DESIGN.md" || path.startsWith("DESIGN.") || /^plans\/brand-[^/]*\.html$/.test(path);
@@ -900,7 +911,7 @@ const WIDE_CHECK = `WIDE CHECK at 1920: the page content must sit in a max-width
 full-bleed content column at 1920 is a P1 finding; name the file that owns that page layout in \`file\`.`;
 const CHECK_INPUTS = `INPUTS — judge against these, not against memory:
   · ${compDir}/comp.html  · ${compDir}/tokens.json  · the comp screenshots in ${compDir}/shots/  · ${ROOT}/PRODUCT.md
-DESIGN.md does not exist yet (it is written at Close): never look for it and never fail for it.
+DESIGN.md is written at Close and may not exist yet: never require it and never fail for it.
 First \`ls\` each input. If any is missing, return verdict FAIL with ONE P0 finding "inputs missing at <path>"
 and stop; never critique from memory.`;
 const browserRules = (lane, port) => `BROWSER RULES: you are the only browser agent running now. Dev server: \`CI=1 bun run dev --port ${port}\` (yours alone). Save every
@@ -1068,8 +1079,22 @@ phase("Fix");
 const unresolved = []; // { file, why, from } things no lane could do: outside app/, or owned by another lane
 const noteUnresolved = (u) => { if (!unresolved.some((x) => x.file === u.file && x.from === u.from)) unresolved.push(u); };
 const outsideApp = (f) => !!f.file && !f.file.startsWith("app/") && !f.source.startsWith("fence:");
-const offenderOf = (name) =>
-  name === "contract:tokens" ? { name, owns: CONTRACT_FENCE } : BUILD_LANES.find((l) => l.name === name) || null;
+const offenderOf = laneByName;
+
+const contractFixPrompt = (fs, tag) => `Lane: contract:tokens, FIX PASS ${tag}. You are the CONTRACT lane; it already built. You own ${CONTRACT_FENCE.join(" and ")} and nothing else.
+
+${DESIGN_BRIEF}
+
+Fix ONLY these open findings, inside your fence, and change nothing else:
+${fs.map((f) => `  · [${f.severity}] ${f.source}: ${f.issue}${f.file ? ` (${f.file})` : ""}`).join("\n")}
+
+AA rule: a text pair under 4.5:1 gets its lightness adjusted, keeping hue and chroma, in light AND dark; list each change
+(token, before, after). A font-link finding means fixing the <link> tags for tokens.fonts hrefs in app/root.tsx (preconnect plus
+stylesheet). A file you need but do not own: do not edit it, return it in \`needs\`. No dev server and no browser in this lane.
+Load \`impeccable\` for the colour work. The tokens in app/app.css beat every skill.
+
+${REPO_RULES}
+Return the files you changed, your cwd (\`git rev-parse --show-toplevel\`), and a report.`;
 
 const repairPrompt = (name, owns, vs) => `Lane: ${name}. FENCE REPAIR. You edited paths outside your fence:
 ${vs.map((v) => `  · ${v.path}`).join("\n")}
@@ -1082,9 +1107,143 @@ untracked file outside app/. Never touch these paths, which were dirty before th
 ${[...preDirty].join(", ") || "(none)"}.
 Change nothing else. Return the files you changed, the paths you actually reverted in \`reverted\`, your cwd, and a report.`;
 
+const toReport = (name, lane, r, none) => ({
+  name,
+  owns: lane.owns,
+  files: r ? r.files : [],
+  cwd: r ? r.cwd : undefined,
+  reverted: [],
+  changedDefaults: r ? r.changedDefaults ?? [] : [],
+  needs: r ? r.needs ?? [] : [],
+  report: r ? r.report : none,
+});
+
+// Fix machinery, shared by the first-build handoff and every fix round. `items` are finding-shaped
+// ({ severity, source, issue, file }). Step 1: each owning lane (the contract lane included) fixes its own, in
+// parallel. Step 2: a `needs` entry that another lane owns goes to that lane in one more parallel wave. Step 3: items
+// no lane owns, plus unowned `needs`, go to ONE fix:orphans lane that runs alone after everything else. Anything outside
+// app/, or still owned by a lane after step 2, lands in `unresolved` and is escalated.
+async function fixLanes(items, tag) {
+  const reports = [];
+  const orphanQ = [];
+  const route = (list) => {
+    const by = new Map();
+    for (const f of list) {
+      const owner = f.file ? ownerOf(f.file) : null;
+      if (owner) by.set(owner.name, [...(by.get(owner.name) || []), f]);
+      else if (outsideApp(f)) log(`Finding outside app/, no lane may fix it, escalating: ${f.file}`); // tagged at escalation
+      else orphanQ.push(f);
+    }
+    return by;
+  };
+  const wave = (by, n) =>
+    parallel(
+      [...by.entries()].map(([name, fs]) => () => {
+        const lane = laneByName(name);
+        const prompt =
+          name === CONTRACT_LANE.name
+            ? contractFixPrompt(fs, tag)
+            : lanePrompt(
+                lane,
+                `\nFIX PASS ${tag}. This lane already built. Fix ONLY these open findings, inside your fence, and change nothing else:
+${fs.map((f) => `  · [${f.severity}] ${f.source}: ${f.issue}${f.file ? ` (${f.file})` : ""}`).join("\n")}\n`
+              );
+        return ask(prompt, { label: `fix:${tag}:${name}${n > 1 ? ":handoff" : ""}`, phase: "Fix", agentType: "ui-builder", schema: FILES_SCHEMA }).then((r) =>
+          toReport(name, lane, r, "fix lane returned nothing")
+        );
+      })
+    );
+  // Turn a wave's `needs` into next-wave items, orphan items or unresolved entries.
+  const handoffs = (rs, last) => {
+    const next = [];
+    for (const r of rs.filter(Boolean)) {
+      for (const n of r.needs || []) {
+        const owner = n.file.startsWith("app/") ? ownerOf(n.file) : null;
+        if (!n.file.startsWith("app/")) noteUnresolved({ file: n.file, why: n.why, from: r.name });
+        else if (owner && owner.name === r.name) continue;
+        else {
+          const item = { severity: "P1", source: `needs:${r.name}`, issue: n.why, file: n.file };
+          if (!owner) orphanQ.push(item);
+          else if (last) noteUnresolved({ file: n.file, why: `${n.why} (owned by lane ${owner.name})`, from: r.name });
+          else next.push(item);
+        }
+      }
+    }
+    return next;
+  };
+  const w1 = (await wave(route(items), 1)).filter(Boolean);
+  reports.push(...w1);
+  const again = handoffs(w1, false);
+  if (again.length) {
+    const w2 = (await wave(route(again), 2)).filter(Boolean);
+    reports.push(...w2);
+    handoffs(w2, true);
+  }
+  if (orphanQ.length) {
+    const solo = await ask(
+      `FIX PASS ${tag}, lane fix:orphans. You run alone: every other lane has finished. These items name no
+file inside any lane's fence:
+${orphanQ.map((f) => `  · [${f.severity}] ${f.source}: ${f.issue}${f.file ? ` (${f.file})` : ""}`).join("\n")}
+
+${DESIGN_BRIEF}
+
+FILE FENCE — you may edit any file under app/ EXCEPT these, which other lanes own:
+${ALL_FENCES.map((p) => `  · ${p}`).join("\n")}
+You may NEVER edit anything under scripts/, any test (__tests__, *.test.*, *.spec.*), or any config file. A finding that
+needs anything outside that fence: do not edit; return it in \`needs\`. Keep every export, prop and variant name, and every
+default prop value. No dev server and no browser in this lane. ${REPO_RULES}
+Return the files you changed, your cwd (\`git rev-parse --show-toplevel\`), and a report.`,
+      { label: `fix:${tag}:orphans`, phase: "Fix", agentType: "ui-builder", schema: FILES_SCHEMA }
+    );
+    for (const n of (solo && solo.needs) || []) noteUnresolved({ file: n.file, why: n.why, from: "fix:orphans" });
+    reports.push({ ...toReport("fix:orphans", { owns: [] }, solo, "orphans fix returned nothing"), allow: orphanMayEdit });
+  }
+  return reports;
+}
+
+// Which checks can a set of changed files affect? Any change re-runs the gates.
+const affectedChecks = (files) => {
+  const names = new Set();
+  if (!files.length) return names;
+  names.add("brain verify gates");
+  for (const f of files) {
+    if (f === "app/app.css" || f === "app/root.tsx" || f.startsWith("app/components/")) {
+      ["impeccable critique", "taste critique (home)", "feature-verifier walk", "review-animations"].forEach((n) => names.add(n));
+    } else if (f === "app/routes/home.tsx") names.add("taste critique (home)");
+    else if (f.startsWith("app/locales/")) ["impeccable critique", "feature-verifier walk", "taste critique (home)"].forEach((n) => names.add(n));
+    else if (f.startsWith("app/")) ["impeccable critique", "feature-verifier walk"].forEach((n) => names.add(n)); // shells, auth shell, other routes
+  }
+  return names;
+};
+// Re-run every check the changed files could affect, plus any that failed.
+const rerunAfter = async (reports) => {
+  const changed = reports.flatMap((r) => [...(r.files || []), ...(r.reverted || [])]);
+  const hit = affectedChecks(changed);
+  const todo = CHECKS.filter((c) => checkFailed(c.name) || hit.has(c.name));
+  if (todo.length) {
+    log(`Re-running ${todo.length} check(s): ${todo.map((c) => c.name).join(", ")}`);
+    await runChecks(todo);
+  }
+};
+
+// First-build `needs` (a lane hit a file it does not own) are routed even when every check passes.
+{
+  const buildNeeds = [...lanes, { name: CONTRACT_LANE.name, needs: contract.needs || [] }].flatMap((l) =>
+    (l.needs || []).filter((n) => ownerOf(n.file)?.name !== l.name).map((n) => ({ severity: "P1", source: `needs:${l.name}`, issue: n.why, file: n.file }))
+  );
+  if (buildNeeds.length) {
+    log(`Build handoff: ${buildNeeds.length} file(s) a lane needed but did not own`);
+    const handoffReports = await fixLanes(buildNeeds, "handoff");
+    lanes.push(...handoffReports.map((r) => ({ ...r, name: `${r.name} (handoff)` })));
+    fenceViolations = await fenceCheck(handoffReports, "Fix");
+    fenceViolations.forEach((v) => log(`P0 FENCE VIOLATION still open: ${v.lane} touched ${v.path}`));
+    await rerunAfter(handoffReports);
+  }
+}
+
 // Up to two rounds. First the OFFENDING lane repairs its own out-of-fence edits, alone (plan error
-// table: "P0; rerun that lane alone"); then the owning lane (by fence) fixes each finding; then only
-// the failing checks run again. Anything that survives goes to the user.
+// table: "P0; rerun that lane alone"); then the owning lane (by fence) fixes each finding; then every check the
+// changed files could affect runs again, plus any that failed. Anything that survives goes to the user.
 for (let round = 1; round <= 2 && openBlocking().length; round++) {
   const open = openBlocking();
   log(`Fix round ${round}: ${open.length} open P0/P1`);
@@ -1122,66 +1281,15 @@ Touch nothing else. Return the files you changed, the paths you restored or dele
     repairs.push({ name: "revert-strays", owns: [], files: r ? r.files : [], cwd: r ? r.cwd : undefined, reverted: r ? r.reverted ?? [] : [], report: r ? r.report : "revert agent returned nothing" });
   }
 
-  // B. Findings. Group by owning lane; findings with no owner go to the fix:orphans lane afterwards.
-  const byLane = new Map();
-  const orphans = [];
-  for (const f of open.filter((x) => !x.source.startsWith("fence:"))) {
-    const owner = f.file ? ownerOf(f.file) : null;
-    if (owner) byLane.set(owner.name, [...(byLane.get(owner.name) || []), f]);
-    else if (outsideApp(f)) log(`Finding outside app/, no lane may fix it, escalating: ${f.file}`); // tagged at escalation
-    else orphans.push(f);
-  }
-  const fixed = await parallel(
-    [...byLane.entries()].map(([name, fs]) => () => {
-      const lane = BUILD_LANES.find((l) => l.name === name);
-      return ask(
-        lanePrompt(
-          lane,
-          `\nFIX ROUND ${round}. This lane already built. Fix ONLY these open findings, inside your fence, and change nothing else:
-${fs.map((f) => `  · [${f.severity}] ${f.source}: ${f.issue}${f.file ? ` (${f.file})` : ""}`).join("\n")}\n`
-        ),
-        { label: `fix:${round}:${name}`, phase: "Fix", agentType: "ui-builder", schema: FILES_SCHEMA }
-      ).then((r) => ({ name, owns: lane.owns, files: r ? r.files : [], cwd: r ? r.cwd : undefined, reverted: [], changedDefaults: r ? r.changedDefaults ?? [] : [], needs: r ? r.needs ?? [] : [], report: r ? r.report : "fix lane returned nothing" }));
-    })
-  );
-  // Findings no fence owns go to ONE sequential lane, after every parallel fix lane has finished, so it
-  // cannot collide with them. Lanes that hit a file they do not own hand it over in `needs`.
-  const handedOver = [];
-  for (const r of fixed) {
-    for (const n of r.needs || []) {
-      if (!n.file.startsWith("app/")) noteUnresolved({ file: n.file, why: n.why, from: r.name });
-      else if (ownerOf(n.file)) noteUnresolved({ file: n.file, why: `${n.why} (owned by lane ${ownerOf(n.file).name}; ${r.name} needs it)`, from: r.name });
-      else handedOver.push({ severity: "P1", source: `needs:${r.name}`, issue: n.why, file: n.file });
-    }
-  }
-  const orphanItems = [...orphans, ...handedOver];
-  if (orphanItems.length) {
-    const solo = await ask(
-      `FIX ROUND ${round}, lane fix:orphans. You run alone: every other lane has finished. These open findings name no
-file inside any lane's fence:
-${orphanItems.map((f) => `  · [${f.severity}] ${f.source}: ${f.issue}${f.file ? ` (${f.file})` : ""}`).join("\n")}
-
-${DESIGN_BRIEF}
-
-FILE FENCE — you may edit any file under app/ EXCEPT these, which other lanes own:
-${ALL_FENCES.map((p) => `  · ${p}`).join("\n")}
-You may NEVER edit anything under scripts/, any test (__tests__, *.test.*, *.spec.*), or any config file. A finding that
-needs anything outside that fence: do not edit; return it in \`needs\`. Keep every export, prop and variant name, and every
-default prop value. No dev server and no browser in this lane. ${REPO_RULES}
-Return the files you changed, your cwd (\`git rev-parse --show-toplevel\`), and a report.`,
-      { label: `fix:${round}:orphans`, phase: "Fix", agentType: "ui-builder", schema: FILES_SCHEMA }
-    );
-    for (const n of (solo && solo.needs) || []) noteUnresolved({ file: n.file, why: n.why, from: "fix:orphans" });
-    fixed.push({ name: "fix:orphans", owns: [], allow: orphanMayEdit, files: solo ? solo.files : [], cwd: solo ? solo.cwd : undefined, reverted: [], changedDefaults: solo ? solo.changedDefaults ?? [] : [], report: solo ? solo.report : "orphans fix returned nothing" });
-  }
+  // B. Findings, routed by owner (the contract lane included); unowned ones go to fix:orphans.
+  const fixed = await fixLanes(open.filter((x) => !x.source.startsWith("fence:")), round);
   const roundReports = [...repairs, ...fixed].filter(Boolean);
   lanes.push(...roundReports.map((r) => ({ ...r, name: `${r.name} (fix ${round})` })));
 
   fenceViolations = await fenceCheck(roundReports, "Fix");
   fenceViolations.forEach((v) => log(`P0 FENCE VIOLATION still open: ${v.lane} touched ${v.path}`));
 
-  const failing = CHECKS.filter((c) => checkFailed(c.name));
-  if (failing.length) await runChecks(failing);
+  await rerunAfter(roundReports);
 }
 
 const stillOpen = openBlocking().map((f) =>
@@ -1198,6 +1306,7 @@ phase("Close");
 
 // Polish is a finish pass, not a fix round; skip it when something is still on fire.
 let polishReport = "skipped: open P0/P1 and the user did not accept them";
+let polishFiles = []; // files the polish lane reported changing; Ship stages them
 if (mayShip) {
   const polish = await ask(
     `Finish pass on the branded app. Load \`impeccable\` and run \`polish\` (then \`audit\`
@@ -1212,6 +1321,7 @@ Return the files you changed, your cwd (\`git rev-parse --show-toplevel\`), and 
     { label: "close:polish", phase: "Close", agentType: "ui-builder", schema: FILES_SCHEMA }
   );
   polishReport = polish ? polish.report : "polish lane returned nothing";
+  polishFiles = polish ? polish.files : [];
 
   // DESIGN.md comes from the shipped artifact, so it must follow polish.
   const doc = await ask(
@@ -1258,6 +1368,22 @@ Write only DESIGN.md (and its sidecar if your instructions call for one). When d
       "post-close"
     );
     if (!accepted()) mayShip = false;
+  }
+
+  // Polish and DESIGN.md came after the last check, so no earlier verdict covers the tree Ship would commit.
+  // Run the FULL set once more (gates alone, then the browser checks one at a time). New P0/P1 are escalated,
+  // never auto-fixed. Ship reads only these latest verdicts.
+  if (mayShip) {
+    log("Final pass: re-running every check on the polished tree");
+    await runChecks(CHECKS);
+    const asked = new Set(escalations.flatMap((e) => e.about));
+    const fresh2 = openBlocking()
+      .map((f) => (outsideApp(f) ? { ...f, issue: `needs a human or a separate task (outside app/): ${f.issue}` } : f))
+      .filter((f) => !asked.has(`${f.source}: ${f.issue}`));
+    if (fresh2.length) {
+      await escalate(fresh2, "appeared in the final check pass after polish and DESIGN.md", "post-close");
+      if (!accepted()) mayShip = false;
+    }
   }
 }
 
@@ -1309,7 +1435,9 @@ if (mayShip) {
   const lastCritique = results["impeccable critique"] ? JSON.stringify(results["impeccable critique"], null, 1) : "(the impeccable critique returned nothing)";
   const walk = results["feature-verifier walk"];
   const motionRes = results["review-animations"];
-  const STAGE = [...ALL_FENCES, "PRODUCT.md", "DESIGN.md", "DESIGN.* (its sidecar, if the documenter wrote one)", "plans/brand-pick*.html"];
+  // Everything any lane reported changing (fix:orphans edits land outside ALL_FENCES) is staged too.
+  const reportedFiles = [...new Set([...lanes.flatMap((l) => l.files || []), ...contract.files, ...polishFiles, ...orphanTouched])].filter((f) => !ignored(f));
+  const STAGE = [...new Set([...ALL_FENCES, ...reportedFiles])].concat(["PRODUCT.md", "DESIGN.md", "DESIGN.* (its sidecar, if the documenter wrote one)", "plans/brand-pick*.html"]);
   const shipped = await ask(
     `Ship the brand. You own the brain writes, the commit and the PR for this run.
 
@@ -1344,6 +1472,10 @@ ${rejected.length ? rejected.map((r) => `       · comp ${r.id}: ${r.why}`).join
   5. Extend scripts/seed-preview.ts only if the run changed seeded data (it should not); stage it only then.
   6. ONE commit, one PR. Stage EXPLICIT paths with \`git add -- <paths>\`, never a wholesale \`git add app/\` or \`-A\`:
 ${STAGE.map((p) => `       · ${p}`).join("\n")}
+     After \`git add\`, run \`git status --porcelain\`. These files were reported changed by a lane:
+${reportedFiles.map((p) => `       · ${p}`).join("\n") || "       · (none)"}
+     If ANY of them still shows as modified or untracked and not staged, do NOT commit: stop and return shipped=false
+     with a reason naming each unstaged file. (A file with no change against HEAD is fine.)
      Do NOT stage plans/brand-brief.html, plans/brand-escalation.html, anything under .brain/, or draw
      files. Check \`git status --short\` afterwards: anything modified and unstaged that is not one of
      those is a surprise, so name it in your note. Commit message:

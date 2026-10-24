@@ -168,19 +168,28 @@ else
 fi
 
 # I2. brand-init hardcodes the primitive fences. Every file in app/components/ui must
-#     appear exactly once as "<name>" in the script, or a primitive escapes the redesign
-#     (0) or two lanes fight over it (2+).
+#     appear exactly once as "<name>" inside the fence arrays, which the workflow marks with
+#     `// harness:primitive-fences:start` and `// harness:primitive-fences:end` (0 = a
+#     primitive escapes the redesign, 2+ = two lanes fight over it). Names elsewhere don't count.
 if [ -f .claude/workflows/brand-init.js ]; then
-  FENCE_BAD=""
-  for u in app/components/ui/*.tsx; do
-    n=$(basename "$u" .tsx)
-    c=$(grep -o "\"${n}\"" .claude/workflows/brand-init.js | wc -l | tr -d ' ')
-    [ "$c" = "1" ] || FENCE_BAD="$FENCE_BAD ${n}(x${c})"
-  done
-  if [ -z "$FENCE_BAD" ]; then
-    ok "brand-init fences cover every app/components/ui primitive exactly once"
+  FENCE_FILE=.claude/workflows/brand-init.js
+  FENCE_TEXT=$(awk '/harness:primitive-fences:start/{f=1;next} /harness:primitive-fences:end/{f=0} f' "$FENCE_FILE")
+  S_N=$(grep -c 'harness:primitive-fences:start' "$FENCE_FILE" || true)
+  E_N=$(grep -c 'harness:primitive-fences:end' "$FENCE_FILE" || true)
+  if [ "$S_N" != "1" ] || [ "$E_N" != "1" ] || [ -z "$FENCE_TEXT" ]; then
+    fail "brand-init fence sentinels missing or malformed in $FENCE_FILE (need exactly one '// harness:primitive-fences:start' and one ':end' with the fence arrays between them)"
   else
-    fail "brand-init fence mismatch:$FENCE_BAD"
+    FENCE_BAD=""
+    for u in app/components/ui/*.tsx; do
+      n=$(basename "$u" .tsx)
+      c=$(printf '%s\n' "$FENCE_TEXT" | grep -o "\"${n}\"" | wc -l | tr -d ' ')
+      [ "$c" = "1" ] || FENCE_BAD="$FENCE_BAD ${n}(x${c})"
+    done
+    if [ -z "$FENCE_BAD" ]; then
+      ok "brand-init fences cover every app/components/ui primitive exactly once"
+    else
+      fail "brand-init fence mismatch:$FENCE_BAD"
+    fi
   fi
 fi
 
