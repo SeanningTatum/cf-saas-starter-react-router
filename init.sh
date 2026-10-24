@@ -31,6 +31,16 @@ if [ "$MODE" != "--baseline" ] && [ "$MODE" != "--quick" ]; then
   echo "OK: brain"
   echo ""
 
+  echo "--- CodeGraph index (.codegraph/) ---"
+  if ! command -v codegraph >/dev/null 2>&1; then
+    echo "WARN: codegraph not on PATH — npm i -g @colbymchenry/codegraph, then re-run"
+  elif [ -d .codegraph ]; then
+    codegraph sync >/dev/null && echo "OK: codegraph synced" || echo "WARN: codegraph sync failed"
+  else
+    codegraph init -y >/dev/null && echo "OK: codegraph indexed" || echo "WARN: codegraph init failed"
+  fi
+  echo ""
+
   echo "--- Apply local D1 migrations ---"
   bun run db:migrate:local || { echo "FAIL: db:migrate:local"; exit 1; }
   echo ""
