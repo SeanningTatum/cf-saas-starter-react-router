@@ -56,6 +56,12 @@ Any change beyond one file runs as parallel sub-agents, not one long sequential 
 
 A multi-layer feature can run all of this as one workflow with [`/build-feature`](.claude/commands/build-feature.md). Stay sequential for a one-file change, an interface you do not know yet, a red baseline, or two lanes that need the same file.
 
+## Workflows
+
+| Workflow | Purpose |
+|----------|---------|
+| [`brand-init`](.claude/workflows/brand-init.js) | Give a fresh fork its own brand, in one run. Interview → three brand directions as live comps → you pick → tokens, fonts, all 55 primitives and the shared components redesigned → one PR. It asks you through `brain review`, not chat. Refuses if `DESIGN.md` exists unless you pass `redo: true`. Run: `Workflow({ name: "brand-init", args: { brief: "..." } })`. |
+
 ## Slash commands
 
 | Command | Purpose |
@@ -101,6 +107,8 @@ Any task that changes what a user sees loads at least one of these skills before
 | Critique — the render, before `brain verify` | the lead's own: `impeccable` `critique` (app screens) · `design-taste-frontend` `references/critique.md` loop (public pages) |
 | Finish pass before `brain verify`, any surface | `impeccable` `audit` / `harden` / `polish` |
 | Motion — anything that moves | `emil-design-eng` + `animate` (build) · `/review-animations` (critique) |
+
+A fresh fork runs the `brand-init` workflow first. After it, every UI agent reads `PRODUCT.md` and `DESIGN.md` before its first edit.
 
 **The critique gates the work.** Judge screenshots at desktop and mobile, not the source. App screens: fix every `impeccable` P0/P1, then critique again. Public pages: run the taste loop up to three rounds; a page still under 7.5 is reported as such, never rounded up. Paste the last critique into the verification body. Typecheck, tests and the browser walk all pass on a templated page; only the critique fails a design for being generic.
 

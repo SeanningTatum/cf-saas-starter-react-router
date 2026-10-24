@@ -63,7 +63,8 @@ if [ "${1:-}" = "--check" ]; then
   exit 1
 fi
 
-if [ ! -f .brain/brain.db ]; then
+# Ask the CLI, not the path: a worktree shares the main checkout's brain.
+if ! brain >/dev/null 2>&1; then
   brain init
 fi
 

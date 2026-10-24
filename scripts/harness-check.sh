@@ -14,6 +14,8 @@
 #        D2. .kimi-code/agents is a symlink onto .claude/agents (one roster, two CLIs)
 #        G. Every hook script referenced by .claude/settings.json exists and is executable
 #        H. The SessionStart skill restore passes its own tests
+#        I. Workflows: every command that launches one has its script, every script
+#           parses and names itself by filename, brand-init fences cover app/components/ui once
 
 set -uo pipefail
 
@@ -33,7 +35,8 @@ echo ""
 # shellcheck source=lib/brain-cli.sh
 . scripts/lib/brain-cli.sh
 
-if [ ! -f .brain/brain.db ]; then
+# Ask the CLI, not the path: a worktree shares the main checkout's brain.
+if ! brain >/dev/null 2>&1; then
   fail "no .brain/brain.db — brain state NOT checked (run ./scripts/brain-setup.sh)"
 else
   if brain check; then
@@ -136,6 +139,59 @@ for t in test-restore-skills; do
     fail "scripts/${t}.sh missing or not executable"
   fi
 done
+
+# I. Workflows. A command that launches a workflow by name needs the script; each
+#    script must parse and carry meta.name equal to its filename. Workflow scripts
+#    are bodies, not modules: top-level `return`, undeclared globals. Wrap the body
+#    in an async function so `node --check` sees valid ESM.
+WF_BAD=""
+WF_N=0
+for c in .claude/commands/*.md; do
+  while IFS= read -r wf; do
+    [ -z "$wf" ] && continue
+    [ -f ".claude/workflows/${wf}.js" ] || WF_BAD="$WF_BAD $(basename "$c"):${wf}.js(missing)"
+  done < <(awk '/Workflow\(\{/ {w=1} w && match($0, /name: *"[^"]+"/) {s=substr($0,RSTART,RLENGTH); sub(/^name: *"/,"",s); sub(/"$/,"",s); print s; w=0}' "$c")
+done
+for f in .claude/workflows/*.js; do
+  [ -f "$f" ] || continue
+  WF_N=$((WF_N+1))
+  base=$(basename "$f" .js)
+  if ! { echo 'async function __workflow(){'; sed 's/^export const meta/const meta/' "$f"; echo; echo '}'; } | node --input-type=module --check >/dev/null 2>&1; then
+    WF_BAD="$WF_BAD $base(syntax)"
+  fi
+  grep -Eq "^[[:space:]]*name:[[:space:]]*\"${base}\"" "$f" || WF_BAD="$WF_BAD $base(meta.name!=filename)"
+done
+if [ -z "$WF_BAD" ]; then
+  ok "workflows intact ($WF_N scripts parse, meta.name matches, launched names resolve)"
+else
+  fail "broken workflows:$WF_BAD"
+fi
+
+# I2. brand-init hardcodes the primitive fences. Every file in app/components/ui must
+#     appear exactly once as "<name>" inside the fence arrays, which the workflow marks with
+#     `// harness:primitive-fences:start` and `// harness:primitive-fences:end` (0 = a
+#     primitive escapes the redesign, 2+ = two lanes fight over it). Names elsewhere don't count.
+if [ -f .claude/workflows/brand-init.js ]; then
+  FENCE_FILE=.claude/workflows/brand-init.js
+  FENCE_TEXT=$(awk '/harness:primitive-fences:start/{f=1;next} /harness:primitive-fences:end/{f=0} f' "$FENCE_FILE")
+  S_N=$(grep -c 'harness:primitive-fences:start' "$FENCE_FILE" || true)
+  E_N=$(grep -c 'harness:primitive-fences:end' "$FENCE_FILE" || true)
+  if [ "$S_N" != "1" ] || [ "$E_N" != "1" ] || [ -z "$FENCE_TEXT" ]; then
+    fail "brand-init fence sentinels missing or malformed in $FENCE_FILE (need exactly one '// harness:primitive-fences:start' and one ':end' with the fence arrays between them)"
+  else
+    FENCE_BAD=""
+    for u in app/components/ui/*.tsx; do
+      n=$(basename "$u" .tsx)
+      c=$(printf '%s\n' "$FENCE_TEXT" | grep -o "\"${n}\"" | wc -l | tr -d ' ')
+      [ "$c" = "1" ] || FENCE_BAD="$FENCE_BAD ${n}(x${c})"
+    done
+    if [ -z "$FENCE_BAD" ]; then
+      ok "brand-init fences cover every app/components/ui primitive exactly once"
+    else
+      fail "brand-init fence mismatch:$FENCE_BAD"
+    fi
+  fi
+fi
 
 echo ""
 echo "=== Summary ==="
