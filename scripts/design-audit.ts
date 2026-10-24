@@ -13,17 +13,35 @@
  *   bun run design:audit -- --url http://localhost:5231/<route> --scope '[data-surface="<name>"]'
  *   bun run design:audit -- --url … --accent '#RRGGBB'      # accent economy check
  *
+ * Auth-gated routes (/admin, /dashboard): pass --login <email:password> (or set AUDIT_LOGIN) and the
+ * audit signs in through the app's /login form first. Seeded users come from scripts/seed-preview.ts
+ * (admin@preview.local, user@preview.local; password Password123!; run `bun run db:seed` first).
+ *
+ *   bun run design:audit -- --url http://localhost:5231/admin --login 'admin@preview.local:Password123!'
+ *
  * Exit code is 0 unless a HARD check fails (horizontal overflow, contrast below AA, motion that
  * ignores prefers-reduced-motion). Everything else reports and lets the human decide — a low
  * shadow count is a fact, not automatically a defect.
  */
 import { chromium, type Page } from "playwright";
+import {
+  clamp,
+  channel,
+  alphaOf,
+  oklchToRgba,
+  parseColour,
+  composite,
+  resolveBackground,
+  luminance,
+  contrastRatio,
+} from "./lib/colour";
 
 interface Args {
   url: string;
   scope: string;
   accent?: string;
   json: boolean;
+  login?: { email: string; password: string };
 }
 
 function parseArgs(): Args {
@@ -35,11 +53,22 @@ function parseArgs(): Args {
   const url = get("--url");
   if (!url) {
     console.error(
-      "usage: bun run design:audit -- --url <url> [--scope <selector>] [--accent <#hex>] [--json]"
+      "usage: bun run design:audit -- --url <url> [--scope <selector>] [--accent <#hex>] [--login <email:password>] [--json]"
     );
     process.exit(2);
   }
+  const rawLogin = get("--login") ?? process.env.AUDIT_LOGIN;
+  let login: Args["login"];
+  if (rawLogin) {
+    const at = rawLogin.indexOf(":");
+    if (at < 1) {
+      console.error("--login expects <email:password>");
+      process.exit(2);
+    }
+    login = { email: rawLogin.slice(0, at), password: rawLogin.slice(at + 1) };
+  }
   return {
+    login,
     url,
     scope: get("--scope") ?? "body",
     accent: get("--accent"),
@@ -52,32 +81,42 @@ const PROBE = `({ scopeSel, accent }) => {
   const scope = document.querySelector(scopeSel) || document.body;
   const els = Array.from(scope.querySelectorAll("*"));
 
+  ${clamp}
+  ${channel}
+  ${alphaOf}
+  ${oklchToRgba}
+  ${parseColour}
+  ${composite}
+  ${resolveBackground}
+  ${luminance}
+  ${contrastRatio}
   const cv = document.createElement("canvas");
   cv.width = cv.height = 1;
-  const ctx = cv.getContext("2d");
-  const toRgb = (color) => {
+  const ctx = cv.getContext("2d", { willReadFrequently: true });
+  // Read a CSS colour as [r, g, b, a]. Parse it directly; fall back to painting it on a transparent
+  // canvas (never on black, which would turn every translucent colour opaque) for lab, color-mix etc.
+  const toRgba = (color) => {
+    const parsed = parseColour(color);
+    if (parsed) return parsed;
     ctx.clearRect(0, 0, 1, 1);
-    ctx.fillStyle = "#000";
-    ctx.fillRect(0, 0, 1, 1);
     ctx.fillStyle = color;
     ctx.fillRect(0, 0, 1, 1);
     const [r, g, b, a] = ctx.getImageData(0, 0, 1, 1).data;
-    return [r, g, b, a];
+    return [r, g, b, a / 255];
   };
-  const lum = ([r, g, b]) => {
-    const f = (v) => { const s = v / 255; return s <= 0.03928 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4); };
-    return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b);
+  const WHITE = [255, 255, 255, 1];
+  // Background an element really shows: its own plus ancestors', composited over the nearest opaque one.
+  const bgOf = (el) => {
+    const layers = [];
+    for (let n = el; n; n = n.parentElement) layers.push(toRgba(getComputedStyle(n).backgroundColor));
+    return resolveBackground(layers, WHITE);
   };
-  const ratio = (fg, bg) => {
-    const l1 = lum(toRgb(fg)), l2 = lum(toRgb(bg));
-    const [hi, lo] = l1 > l2 ? [l1, l2] : [l2, l1];
-    return +((hi + 0.05) / (lo + 0.05)).toFixed(2);
-  };
+  const ratio = (fg, bg) => contrastRatio(toRgba(fg), bg);
   const isChromatic = (color) => {
-    const [r, g, b, a] = toRgb(color);
+    const [r, g, b, a] = toRgba(color);
     return a > 0 && Math.max(r, g, b) - Math.min(r, g, b) > 12;
   };
-  const key = (color) => toRgb(color).join(",");
+  const key = (color) => toRgba(color).map((v, i) => (i === 3 ? +v.toFixed(2) : v)).join(",");
 
   const surfaces = new Map();
   const fonts = new Map();
@@ -96,7 +135,7 @@ const PROBE = `({ scopeSel, accent }) => {
     const s = getComputedStyle(el);
     const text = (el.innerText || "").trim();
 
-    const bgA = toRgb(s.backgroundColor)[3];
+    const bgA = toRgba(s.backgroundColor)[3];
     if (bgA > 0) surfaces.set(key(s.backgroundColor), (surfaces.get(key(s.backgroundColor)) || 0) + 1);
     if (text) fonts.set(s.fontFamily.split(",")[0].replace(/["']/g, ""), (fonts.get(s.fontFamily.split(",")[0].replace(/["']/g, "")) || 0) + 1);
     if (parseFloat(s.borderTopLeftRadius) > 0) radii.set(s.borderTopLeftRadius, (radii.get(s.borderTopLeftRadius) || 0) + 1);
@@ -117,12 +156,14 @@ const PROBE = `({ scopeSel, accent }) => {
 
   // Contrast on the pairs that actually matter: body copy, and every button-ish element.
   const bodyEl = scope.querySelector("p") || scope;
-  const scopeBg = getComputedStyle(scope).backgroundColor;
-  const actions = Array.from(scope.querySelectorAll("a,button")).slice(0, 12).map((el) => {
-    const s = getComputedStyle(el);
-    const bg = toRgb(s.backgroundColor)[3] > 0 ? s.backgroundColor : scopeBg;
-    return { label: (el.innerText || "").trim().slice(0, 24), ratio: ratio(s.color, bg) };
-  });
+  // Elements with no text (an icon-only switch, a checkbox) have no text to read, so skip them.
+  const actions = Array.from(scope.querySelectorAll("a,button"))
+    .filter((el) => (el.innerText || "").trim())
+    .slice(0, 12)
+    .map((el) => ({
+      label: el.innerText.trim().slice(0, 24),
+      ratio: ratio(getComputedStyle(el).color, bgOf(el)),
+    }));
 
   return {
     surfaceLevels: [...surfaces.entries()].sort((a, b) => b[1] - a[1]).slice(0, 6).map(([c, n]) => ({ rgb: c, elements: n })),
@@ -134,7 +175,7 @@ const PROBE = `({ scopeSel, accent }) => {
     chromaticColours: hues.size,
     accent: accentKey ? { elements: accentPainted, shareOfPainted: +((accentPainted / Math.max(painted, 1)) * 100).toFixed(2) } : null,
     displaySizes: [...sizes.keys()].filter((px) => px >= 28).sort((a, b) => b - a),
-    bodyContrast: ratio(getComputedStyle(bodyEl).color, scopeBg),
+    bodyContrast: ratio(getComputedStyle(bodyEl).color, bgOf(bodyEl)),
     actionContrast: actions,
     tables: scope.querySelectorAll("table").length,
     dataRows: scope.querySelectorAll("tbody tr").length,
@@ -162,6 +203,23 @@ page.on("pageerror", (e) => jsErrors.push(String(e)));
 page.on("console", (m) => {
   if (m.type() === "error") jsErrors.push(m.text());
 });
+
+if (args.login) {
+  const loginUrl = new URL("/login", args.url).toString();
+  await page.goto(loginUrl, { waitUntil: "networkidle" });
+  await page.getByTestId("login-email").fill(args.login.email);
+  await page.getByTestId("login-password").fill(args.login.password);
+  await page.getByTestId("login-submit").click();
+  const left = await page
+    .waitForURL((u) => !u.pathname.endsWith("/login"), { timeout: 10_000 })
+    .then(() => true, () => false);
+  if (!left) {
+    console.error(`login as ${args.login.email} did not leave /login: wrong credentials or unseeded DB?`);
+    await browser.close();
+    process.exit(2);
+  }
+  jsErrors.length = 0; // errors from the login page are not findings on the audited page
+}
 
 await page.goto(args.url, { waitUntil: "networkidle" });
 await page.waitForTimeout(600);
