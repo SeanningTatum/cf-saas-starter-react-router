@@ -1092,6 +1092,9 @@ phase("Fix");
 
 const unresolved = []; // { file, why, from } things no lane could do: outside app/, or owned by another lane
 const noteUnresolved = (u) => { if (!unresolved.some((x) => x.file === u.file && x.from === u.from)) unresolved.push(u); };
+// A fix lane that returned nothing: everything it was handed is still owed.
+const failedLane = (name, items) =>
+  items.forEach((f) => noteUnresolved({ file: f.file || `(${f.source})`, why: `lane ${name} returned nothing; still open: [${f.severity}] ${f.issue}`, from: name }));
 const outsideApp = (f) => !!f.file && !f.file.startsWith("app/") && !f.source.startsWith("fence:");
 const offenderOf = laneByName;
 
@@ -1162,9 +1165,15 @@ async function fixLanes(items, tag) {
                 `\nFIX PASS ${tag}. This lane already built. Fix ONLY these open findings, inside your fence, and change nothing else:
 ${fs.map((f) => `  · [${f.severity}] ${f.source}: ${f.issue}${f.file ? ` (${f.file})` : ""}`).join("\n")}\n`
               );
-        return ask(prompt, { label: `fix:${tag}:${name}${n > 1 ? ":handoff" : ""}`, phase: "Fix", agentType: "ui-builder", schema: FILES_SCHEMA }).then((r) =>
-          toReport(name, lane, r, "fix lane returned nothing")
-        );
+        const opts = { label: `fix:${tag}:${name}${n > 1 ? ":handoff" : ""}`, phase: "Fix", agentType: "ui-builder", schema: FILES_SCHEMA };
+        // A lane that returns nothing gets one retry. If it is still empty, the work it was handed
+        // must not vanish with it: every assigned item goes to `unresolved`, which blocks Ship.
+        return ask(prompt, opts)
+          .then((r) => r || ask(prompt, { ...opts, label: `${opts.label}:retry` }))
+          .then((r) => {
+            if (!r) failedLane(name, fs);
+            return toReport(name, lane, r, "fix lane returned nothing twice");
+          });
       })
     );
   // Turn a wave's `needs` into next-wave items, orphan items or unresolved entries.
@@ -1209,6 +1218,7 @@ default prop value. No dev server and no browser in this lane. ${REPO_RULES}
 Return the files you changed, your cwd (\`git rev-parse --show-toplevel\`), and a report.`,
       { label: `fix:${tag}:orphans`, phase: "Fix", agentType: "ui-builder", schema: FILES_SCHEMA }
     );
+    if (!solo) failedLane("fix:orphans", orphanQ);
     for (const n of (solo && solo.needs) || []) noteUnresolved({ file: n.file, why: n.why, from: "fix:orphans" });
     reports.push({ ...toReport("fix:orphans", { owns: [] }, solo, "orphans fix returned nothing"), allow: orphanMayEdit });
   }
