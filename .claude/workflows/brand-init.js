@@ -1252,9 +1252,13 @@ const rerunAfter = async (reports) => {
 
 // First-build `needs` (a lane hit a file it does not own) are routed even when every check passes.
 {
-  const buildNeeds = [...lanes, { name: CONTRACT_LANE.name, needs: contract.needs || [] }].flatMap((l) =>
+  const allNeeds = [...lanes, { name: CONTRACT_LANE.name, needs: contract.needs || [] }].flatMap((l) =>
     (l.needs || []).filter((n) => ownerOf(n.file)?.name !== l.name).map((n) => ({ severity: "P1", source: `needs:${l.name}`, issue: n.why, file: n.file }))
   );
+  // No lane may edit outside app/, so those needs go straight to `unresolved` (escalated, blocks Ship)
+  // rather than into fixLanes, where they would only be logged.
+  allNeeds.filter(outsideApp).forEach((f) => noteUnresolved({ file: f.file, why: f.issue, from: f.source }));
+  const buildNeeds = allNeeds.filter((f) => !outsideApp(f));
   if (buildNeeds.length) {
     log(`Build handoff: ${buildNeeds.length} file(s) a lane needed but did not own`);
     const handoffReports = await fixLanes(buildNeeds, "handoff");
