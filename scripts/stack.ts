@@ -91,24 +91,23 @@ export function normalizePath(p: string): string {
   return s;
 }
 
-const matches = (fence: string, path: string) => (fence.endsWith("/") ? path.startsWith(fence) : path === fence);
+// A fence with or without a trailing "/" owns its children when it names a directory: the same rule the workflow's covers() uses.
+const matches = (fence: string, path: string) => (fence.endsWith("/") ? path.startsWith(fence) : path === fence || path.startsWith(`${fence}/`));
 
-const unquote = (s: string) => (s.length > 1 && s.startsWith('"') && s.endsWith('"') ? s.slice(1, -1) : s);
-
-/** Changed paths from `git status --porcelain=v1 -uall`. A rename gives the new path and records the old one. */
+/** Changed paths from `git status --porcelain=v1 -z -uall`: NUL-separated "XY path" entries, so odd filenames arrive raw, never quoted or escaped. A rename is "XY new" then "old"; it gives the new path and records the old one. */
 export function parsePorcelain(text: string): { paths: string[]; renamedFrom: Map<string, string> } {
   const paths: string[] = [];
   const renamedFrom = new Map<string, string>();
-  for (const line of text.split("\n")) {
-    if (line.length < 4 || line.startsWith("!!")) continue;
-    const rest = line.slice(3);
-    const arrow = rest.indexOf(" -> ");
-    if (arrow >= 0) {
-      const oldP = normalizePath(unquote(rest.slice(0, arrow)));
-      const newP = normalizePath(unquote(rest.slice(arrow + 4)));
-      paths.push(newP);
-      renamedFrom.set(newP, oldP);
-    } else paths.push(normalizePath(unquote(rest)));
+  const parts = text.split("\0");
+  for (let i = 0; i < parts.length; i++) {
+    const entry = parts[i];
+    if (entry.length < 4 || entry.startsWith("!!")) continue;
+    const newP = normalizePath(entry.slice(3));
+    paths.push(newP);
+    if (entry[0] === "R" || entry[0] === "C" || entry[1] === "R" || entry[1] === "C") {
+      const oldP = parts[++i];
+      if (oldP && entry[0] !== "C" && entry[1] !== "C") renamedFrom.set(newP, normalizePath(oldP));
+    }
   }
   return { paths, renamedFrom };
 }
@@ -171,12 +170,12 @@ function loadPlan(path: string | undefined, deps: Deps): Plan | Outcome {
 const isOutcome = (v: unknown): v is Outcome => typeof v === "object" && v !== null && "code" in v;
 
 function computeAssign(plan: Plan, deps: Deps): Assigned | Outcome {
-  const st = deps.git(["status", "--porcelain=v1", "-uall"]);
+  const st = deps.git(["status", "--porcelain=v1", "-z", "-uall"]);
   if (st.code !== 0) return gitFailure(st, "git status");
-  const df = deps.git(["diff", "--name-only", plan.base]);
+  const df = deps.git(["diff", "--name-only", "-z", plan.base]);
   if (df.code !== 0) return gitFailure(df, "git diff");
   const { paths, renamedFrom } = parsePorcelain(st.stdout);
-  const diffPaths = df.stdout.split("\n").map((l) => normalizePath(unquote(l))).filter(Boolean);
+  const diffPaths = df.stdout.split("\0").map(normalizePath).filter(Boolean);
   const changed = [...new Set([...paths, ...diffPaths])];
   return assignPaths(plan, changed, renamedFrom);
 }

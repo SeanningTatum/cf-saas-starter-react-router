@@ -27,7 +27,7 @@ Per flow: one golden path, one error path. Each spec has a comment naming the re
 1. Read the feature doc or flow description given, the config, and two existing specs.
 2. List the flows; for each, the golden and the error path; note flows you skip.
 3. Write the specs.
-4. Run `bunx playwright test e2e/<slug>.spec.ts`, on a free port if the config starts a server (`CI=1`, see the config for how to set the port). Fix the spec until it passes, or until the failure is the app's.
+4. Seed first: `bun run db:migrate:local && bun run db:seed` (idempotent; the config only migrates, and signed-in specs fail at login without the fixtures). Then run `bunx playwright test e2e/<slug>.spec.ts`, on a free port if the config starts a server (`CI=1`, see the config for how to set the port). Fix the spec until it passes, or until the failure is the app's.
 5. Run twice. A spec that passes once and fails once is flaky: fix it before reporting.
 
 ## Output

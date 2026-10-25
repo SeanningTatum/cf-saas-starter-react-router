@@ -176,7 +176,7 @@ const pre = await agent(
 ${recordLine}
   8. Does app/services/analytics.ts exist -> has_analytics.
   9. CodeGraph: \`./scripts/codegraph.sh ensure\` (it never fails), then \`./scripts/codegraph.sh status\` -> has_codegraph (true when it prints index stats, false on any error).
- 10. Baseline (Bash timeout 600000 ms) on the base commit, not on whatever is checked out. Note the current position (\`git symbolic-ref -q --short HEAD\`, else \`git rev-parse HEAD\`), \`git switch --detach <base_sha>\`, run \`./scripts/verify.sh\` (even if slow), then switch back to the noted position (\`git switch <branch>\`, or \`git switch --detach <sha>\`) even when the gates fail. For each gate it reports, return { name, pass, tail } (last 15 lines of a failing gate, "" for a passing one).
+ 10. Baseline (Bash timeout 600000 ms) on the base commit, not on whatever is checked out. Note the current position (\`git symbolic-ref -q --short HEAD\`, else \`git rev-parse HEAD\`), \`git switch --detach <base_sha>\`, run \`CI=1 ./scripts/verify.sh\` (even if slow; CI=1 because the base commit's verify.sh may lack the e2e fix and the dev server would ask for Cloudflare credentials), then switch back to the noted position (\`git switch <branch>\`, or \`git switch --detach <sha>\`) even when the gates fail. For each gate it reports, return { name, pass, tail } (last 15 lines of a failing gate, "" for a passing one).
 Return ok=false with a one-line reason at the first failure in 0-6; items 7-10 never fail the run.`,
   {
     label: "preflight",
@@ -407,7 +407,8 @@ const stackPlanFile = `${outDir()}/stack.json`;
 const stackPlan = {
   base: pre.base_sha, // the commit the work starts from; the local BASE branch may lag origin
   rest: lastPr.n,
-  exclude: [...pre.untracked, ".verify/", "tmp/"],
+  // Untracked files stay out unless a fence names them (plan-feature leaves its prototypes uncommitted for PR 1).
+  exclude: [...pre.untracked.filter((u) => !covers(allFence(), norm(u))), ".verify/", "tmp/"],
   prs: prs.map((p) => ({
     n: p.n,
     branch: p.branch,
@@ -603,7 +604,7 @@ const reviewer = (key, agentType, note) => (round) => () =>
 
 const CHECKS = {
   gates: (round) => () =>
-    sh(`Run \`./scripts/verify.sh\` (every gate: typecheck, unit tests, non-negotiables, harness, build, e2e). For each gate return { name, pass, tail } — tail is the last 25 lines of a failing gate verbatim, "" for a passing one. Fix nothing.`, {
+    sh(`Run \`CI=1 ./scripts/verify.sh\` (every gate: typecheck, unit tests, non-negotiables, harness, build, e2e). For each gate return { name, pass, tail } — tail is the last 25 lines of a failing gate verbatim, "" for a passing one. Fix nothing.`, {
       label: `review:gates:${round}`,
       phase: "Review",
       schema: GATES,

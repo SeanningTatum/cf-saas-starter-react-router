@@ -39,6 +39,13 @@ describe("assignPaths", () => {
     expect(r.assignments[1].paths).toEqual(["app/trpc/routes/a.ts"]);
   });
 
+  it("a fence without a trailing slash still owns its children: 'app/repositories' must claim 'app/repositories/user.ts'", () => {
+    const p: Plan = { ...noRest, prs: [{ ...plan.prs[0], fence: ["app/repositories"] }] };
+    const r = assignPaths(p, ["app/repositories/user.ts", "app/repositoriesX/a.ts"]);
+    expect(r.assignments[0].paths).toEqual(["app/repositories/user.ts"]);
+    expect(r.unassigned).toEqual(["app/repositoriesX/a.ts"]);
+  });
+
   it("a path two fences match is reported as an overlap and assigned to neither", () => {
     const p: Plan = { ...noRest, prs: [{ ...plan.prs[0], fence: ["app/"] }, { ...plan.prs[1], fence: ["app/db/schema.ts"] }, plan.prs[2]] };
     const r = assignPaths(p, ["app/db/schema.ts"]);
@@ -66,7 +73,7 @@ describe("exclude", () => {
     const { deps, calls } = stub(
       (a) =>
         a[0] === "status"
-          ? { stdout: "?? plans/proto.html\n?? notes.md\n M app/db/schema.ts\n" }
+          ? { stdout: "?? plans/proto.html\0?? notes.md\0 M app/db/schema.ts\0" }
           : a[0] === "rev-list"
             ? { stdout: "0\n" }
             : {},
@@ -87,7 +94,7 @@ describe("exclude", () => {
 
 describe("stack assign", () => {
   it("a rename counts as the new path and carries the old path, so the deletion is staged with it", () => {
-    const { deps } = stub((a) => (a[0] === "status" ? { stdout: "R  app/old.ts -> app/repositories/new.ts\n" } : { stdout: "app/old.ts\napp/repositories/new.ts\n" }));
+    const { deps } = stub((a) => (a[0] === "status" ? { stdout: "R  app/repositories/new.ts\0app/old.ts\0" } : { stdout: "app/old.ts\0app/repositories/new.ts\0" }));
     const o = run(["assign", "--plan", "p.json"], deps);
     expect((o.out as any).assignments[0].paths).toEqual(["app/repositories/new.ts", "app/old.ts"]);
     expect((o.out as any).assignments[2].paths).toEqual([]);
@@ -95,11 +102,17 @@ describe("stack assign", () => {
   });
 
   it("deleted files (only in 'git diff --name-only') and untracked files (only in porcelain) are both assigned", () => {
-    const { deps, calls } = stub((a) => (a[0] === "status" ? { stdout: "?? app/routes/new.tsx\n" } : { stdout: "app/repositories/gone.ts\n" }));
+    const { deps, calls } = stub((a) => (a[0] === "status" ? { stdout: "?? app/routes/new.tsx\0" } : { stdout: "app/repositories/gone.ts\0" }));
     const o = run(["assign", "--plan", "p.json"], deps);
     expect((o.out as any).assignments[0].paths).toEqual(["app/repositories/gone.ts"]);
     expect((o.out as any).assignments[2].paths).toEqual(["app/routes/new.tsx"]);
-    expect(joined(calls)).toEqual(["status --porcelain=v1 -uall", "diff --name-only main"]);
+    expect(joined(calls)).toEqual(["status --porcelain=v1 -z -uall", "diff --name-only -z main"]);
+  });
+
+  it("reads filenames raw from -z output: an escaped name like caf\\303\\251.svg would make `git add` fail mid-split", () => {
+    const { deps } = stub((a) => (a[0] === "status" ? { stdout: "?? public/café.svg\0" } : {}));
+    const o = run(["assign", "--plan", "p.json"], deps);
+    expect((o.out as any).assignments[2].paths).toEqual(["public/café.svg"]);
   });
 
   it("changes nothing: no git call that writes", () => {
@@ -118,7 +131,7 @@ describe("stack assign", () => {
 describe("stack split", () => {
   const changed = (a: string[]) =>
     a[0] === "status"
-      ? { stdout: " M app/db/schema.ts\n?? app/trpc/routes/x.ts\n?? app/routes/x.tsx\n" }
+      ? { stdout: " M app/db/schema.ts\0?? app/trpc/routes/x.ts\0?? app/routes/x.tsx\0" }
       : a[0] === "rev-list"
         ? { stdout: "0\n" }
         : a[0] === "rev-parse"
@@ -149,7 +162,7 @@ describe("stack split", () => {
   });
 
   it("refuses with exit 3 and touches no branch when a path is unassigned", () => {
-    const { deps, calls } = stub((a) => (a[0] === "status" ? { stdout: "?? stray.txt\n" } : {}), noRest);
+    const { deps, calls } = stub((a) => (a[0] === "status" ? { stdout: "?? stray.txt\0" } : {}), noRest);
     const o = run(["split", "--plan", "p.json"], deps);
     expect(o.code).toBe(3);
     expect(o.err?.code).toBe("DIRTY_UNASSIGNED");
@@ -159,7 +172,7 @@ describe("stack split", () => {
 
   it("refuses on overlapping fences before any write", () => {
     const p: Plan = { ...plan, prs: [{ ...plan.prs[0], fence: ["app/"] }, ...plan.prs.slice(1)] };
-    const { deps, calls } = stub((a) => (a[0] === "status" ? { stdout: "?? app/routes/x.tsx\n" } : {}), p);
+    const { deps, calls } = stub((a) => (a[0] === "status" ? { stdout: "?? app/routes/x.tsx\0" } : {}), p);
     const o = run(["split", "--plan", "p.json"], deps);
     expect(o.code).toBe(3);
     expect(o.err?.error).toContain("overlap");
@@ -183,7 +196,7 @@ describe("stack split", () => {
   });
 
   it("refuses a PR whose fence matched nothing: an empty commit would fail mid-stack", () => {
-    const { deps } = stub((a) => (a[0] === "status" ? { stdout: " M app/db/schema.ts\n" } : changed(a)), noRest);
+    const { deps } = stub((a) => (a[0] === "status" ? { stdout: " M app/db/schema.ts\0" } : changed(a)), noRest);
     const o = run(["split", "--plan", "p.json"], deps);
     expect(o.err?.code).toBe("EMPTY_PR");
   });
