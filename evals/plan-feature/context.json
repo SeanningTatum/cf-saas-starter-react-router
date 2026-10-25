@@ -1,0 +1,25 @@
+{
+  "product": "A SaaS starter that a developer forks to build their own SaaS. It runs on Cloudflare Workers with React Router v7, tRPC, D1 with Drizzle, Better Auth, Effect TS and ShadCN/Tailwind. It ships email and password auth, an admin dashboard (user list, ban and unban), file upload to R2, analytics, i18n (en, zh) and dark mode. Two kinds of people use it: the developer who forks it and extends it, and the end users of the SaaS that developer builds, who sign up, use the dashboard and upload files; admins manage users.",
+  "features": [
+    { "slug": "auth", "status": "shipped", "summary": "Email and password sign-up and login with Better Auth; roles user and admin; banned users cannot sign in." },
+    { "slug": "admin-dashboard", "status": "shipped", "summary": "Admin-only area at /admin with a users table, ban and unban actions, and an analytics overview." },
+    { "slug": "file-upload", "status": "shipped", "summary": "Signed-in users upload files to R2 through /api/upload-file; the bucket repository stores and lists them." },
+    { "slug": "analytics", "status": "shipped", "summary": "Event tracking through app/repositories/analytics.ts and the analytics tRPC router; admin overview reads it." },
+    { "slug": "i18n", "status": "shipped", "summary": "Locale files in app/locales (en, zh); the locale is set through /api/set-locale." },
+    { "slug": "dark-mode", "status": "shipped", "summary": "Light and dark themes through tokens in app/app.css." },
+    { "slug": "brand-init", "status": "shipped", "summary": "Harness workflow that gives a fork its own brand." },
+    { "slug": "ship-stack", "status": "planned", "summary": "Harness workflow that ships a plan as stacked PRs." }
+  ],
+  "decisions": [
+    { "text": "Effect TS is the default; no throw and no try/catch outside Effect.tryPromise.", "source": "AGENTS.md#five-non-negotiables" },
+    { "text": "Validation uses Effect Schema only; Zod is not allowed.", "source": "AGENTS.md#five-non-negotiables" },
+    { "text": "Failures are tagged errors in app/models/errors/, mapped in tagToTRPC in app/lib/effect-trpc.ts.", "source": "AGENTS.md#five-non-negotiables" },
+    { "text": "Every helper and repository ships with a unit test in the same diff.", "source": "AGENTS.md#five-non-negotiables" },
+    { "text": "Runtime is Cloudflare Workers, not Node; bindings come through the CloudflareEnv Tag or context.cloudflare.env, never process.env.", "source": "AGENTS.md#five-non-negotiables" },
+    { "text": "Changes to tables or user-visible data extend the fixtures in scripts/seed-preview.ts.", "source": "AGENTS.md#when-you-change-something" },
+    { "text": "The workflow plans and audits tickets; it never writes application code.", "source": "plans/plan-feature.html" },
+    { "text": "Uploads go to R2 through app/repositories/bucket.ts; there is no other file store.", "source": "app/repositories/bucket.ts" },
+    { "text": "Admin actions live in app/trpc/routes/admin.ts and are limited to the admin role.", "source": "app/trpc/routes/admin.ts" },
+    { "text": "User-facing strings live in app/locales/{en,zh}; new copy needs both.", "source": "app/locales" }
+  ]
+}
