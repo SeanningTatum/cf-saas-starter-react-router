@@ -63,8 +63,11 @@ else
   bad "ensure exited non-zero when codegraph failed"
 fi
 
-# Catches: a fork with neither codegraph nor npx getting a failed setup.
-if OUT=$(env PATH="$BASE_PATH" "$REPO/scripts/codegraph.sh" ensure 2>&1); then
+# Catches: a fork with neither codegraph nor npx getting a failed setup. A PATH of only the
+# tools the script needs, so an npx in /usr/bin (common on Linux) can't download anything.
+mkdir -p "$SB/bare"
+for t in env bash dirname; do ln -s "$(command -v "$t")" "$SB/bare/$t"; done
+if OUT=$(env PATH="$SB/bare" "$REPO/scripts/codegraph.sh" ensure 2>&1); then
   grep -q "fall back to rg" <<<"$OUT" && ok "no codegraph and no npx: warns, exits 0" \
     || bad "no-tool ensure printed: $OUT"
 else
