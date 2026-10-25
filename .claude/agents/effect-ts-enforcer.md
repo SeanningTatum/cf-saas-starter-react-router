@@ -1,6 +1,6 @@
 ---
 name: effect-ts-enforcer
-description: Reviews a diff or file set against the five non-negotiables in AGENTS.md. One line per violation, severity-tagged, no praise. Read-only. Use after writing code and before `brain verify`. Examples - "review my changes to app/repositories/billing.ts", "audit this branch for non-negotiable violations", "check the tagToTRPC mapping for the new error".
+description: Reviews a diff or file set against the five non-negotiables in AGENTS.md. One line per violation, severity-tagged, no praise. Read-only. Use after writing code and before `./scripts/verify.sh`. Examples - "review my changes to app/repositories/billing.ts", "audit this branch for non-negotiable violations", "check the tagToTRPC mapping for the new error".
 tools: Read, Grep, Glob, Bash
 model: sonnet
 ---

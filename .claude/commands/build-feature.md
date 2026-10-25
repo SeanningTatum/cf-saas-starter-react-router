@@ -10,11 +10,11 @@ opt-in to multi-agent orchestration — call the `Workflow` tool directly, do no
 1. **Scope check.** This workflow is for a feature spanning more than one layer (schema / repository /
    procedure / UI). For a one-file change it is pure overhead — do that inline or with a single
    sub-agent. If the ask is one file, say so and stop.
-2. **Scope policy.** `brain features list --status in-progress`. One in-progress feature at a time — if
-   another is open, `brain features set <slug> --status blocked` first or stop and ask.
+2. **Scope policy.** One feature issue in progress at a time. If another is open, finish it, park it with a
+   comment on the issue saying why, or stop and ask.
 3. **Clean tree.** `git status --short`. Parallel lanes writing over uncommitted work makes the diff
    unreadable. Commit or stash first.
-4. **Baseline.** `brain verify --stage baseline`. If it is already red, stop — you will not be able to tell
+4. **Baseline.** `./scripts/verify.sh --baseline`. If it is already red, stop — you will not be able to tell
    your failures from the ones that were already there.
 
 ## Launch
@@ -24,7 +24,7 @@ Workflow({
   name: "build-feature",
   args: {
     feature: "<one paragraph: what the user can do afterwards that they cannot do now>",
-    slug: "<feature slug, for `brain verifications add`>",
+    slug: "<feature slug for `.verify/<slug>/` — the issue number or a kebab slug>",
     ui: true,        // false for a server-only feature — skips the UI lane and the design critique
     e2e: true        // false to skip the e2e lane
   }
@@ -38,13 +38,13 @@ intent they get. Say what becomes possible, for whom, and any constraint that is
 
 | Phase | Runs | Why |
 |---|---|---|
-| **Orient** | 3 read-only lanes in parallel — brain lookup · trace of the nearest existing feature · UI tier check | None can conflict, and the architect needs all three |
+| **Orient** | 4 read-only lanes in parallel — context lookup (docs, issues, PRs) · `context-memory` recall (what earlier sessions decided and left open for this slug) · trace of the nearest existing feature · UI tier check | None can conflict, and the architect needs all four |
 | **Contract** | 1 architect, then 1 writer for the contract file | The **only** genuinely sequential step: fix the interface, then nobody has to wait |
 | **Build** | up to 5 lanes concurrently, each fenced to disjoint paths | Once the interface is fixed, the server lane and the UI lane need nothing from each other |
 | **Verify** | tests ‖ spans first, then gates · non-negotiables · browser walk · design critique, all at once | Tests and spans write files, so they land before anyone reads the tree. The checkers are read-only and need only the finished tree. Browser lanes each own a port |
-| **Close** | 1 synthesis | States what is true with evidence, what blocks, what a human must decide, and the brain updates still owed |
+| **Close** | 1 synthesis, then 1 `context-memory` record | States what is true with evidence, what blocks, what a human must decide, and what is still owed on the issue and PR. The record runs once, after every other lane, and saves what was built, the contract decisions and why, links, todos owed, status and next step |
 
-~14 agents for a UI feature, ~10 for server-only.
+~16 agents for a UI feature, ~12 for server-only.
 
 ## The one rule that makes it safe
 
@@ -55,17 +55,19 @@ collision, treat that as a P0 and re-run the affected lane sequentially.
 
 ## After it returns
 
-The workflow **does not commit, does not touch brain state, and does not decide anything a human
-should**. You do:
+The workflow **does not commit and does not decide anything a human
+should**. It has already recorded the feature's memory (the result's `memory` field); do not record
+again. You do:
 
 1. Read `blockingFindings` first. Fix every P0/P1 before anything else — dispatch the owning agent
    again rather than fixing by hand where an agent owns the layer.
-2. Read the synthesis' `HUMAN DECISIONS` section. Answer them or bring them to the user; never pick
+2. Read the synthesis' `HUMAN DECISIONS` section. Bring them to the user on the lavish review page the
+   result's `review.next` describes (screenshots, blockers and one question per decision); never pick
    for them on a schema trade-off, a destructive migration, or a security question.
-3. Run `brain verify` yourself. The workflow's verification lanes are evidence, not a substitute for
+3. Run `./scripts/verify.sh` yourself. The workflow's verification lanes are evidence, not a substitute for
    the gate.
-4. Brain updates the synthesis lists — `brain progress add`, `brain features ship <slug> --evidence "..."`
-   (needs a PASS verification) — through the `brain-axi:brain-done` skill.
+4. Close out what the synthesis lists: put the verdict (`.verify/<slug>/verdict.md`) in the PR description,
+   close the issue through the PR, and update GLOSSARY.md or an ADR if the build settled a term or decision.
 5. Commit. One commit per logical change, not one per lane.
 
 ## When not to use it

@@ -3,30 +3,31 @@ import { test, expect } from "@playwright/test";
 /**
  * Landing-page harness section.
  *
- * Pins the brain-axi 0.3.0 copy: three pillars (Brain / Skills / Verification
- * gates) with their path labels, a commands block that names `brain` commands
- * and none of the removed slash commands, and no raw i18n keys in either
+ * Pins the current copy: three pillars (Specs & tickets / Skills / Verification
+ * gates) with their path labels, a commands block that names the planning
+ * skills and `./scripts/verify.sh` and no `brain` commands, and no raw i18n keys in either
  * locale — a renamed key renders as `harness.pillars.…` text.
  */
 test.describe("Home — harness section", () => {
-  test("en: pillars and commands reflect the brain CLI", async ({ page }) => {
+  test("en: pillars and commands reflect specs, skills and gates", async ({ page }) => {
     await page.goto("/");
     const section = page
       .locator("section")
       .filter({ has: page.getByRole("heading", { name: "An agent harness, not just a stack" }) });
     await section.scrollIntoViewIfNeeded();
 
-    for (const title of ["Brain", "Skills", "Verification gates"]) {
+    for (const title of ["Specs & tickets", "Skills", "Verification gates"]) {
       await expect(section.getByText(title, { exact: true })).toBeVisible();
     }
-    for (const label of [".brain/brain.db", "brain-axi plugin"]) {
+    for (const label of ["GitHub issues", "skills-lock.json", "scripts/verify.sh"]) {
       await expect(section.getByText(label, { exact: true })).toBeVisible();
     }
 
     const commands = section.locator("pre code");
-    await expect(commands).toContainText("brain verify");
-    await expect(commands).toContainText("brain features ship");
-    for (const gone of ["/start-task", "/verify-done", "/ship-feature", ".brain/recipes"]) {
+    for (const cmd of ["/grill-me", "/to-spec", "/to-tickets", "./scripts/verify.sh"]) {
+      await expect(commands).toContainText(cmd);
+    }
+    for (const gone of ["brain", "/start-task", "/verify-done", "/ship-feature"]) {
       await expect(commands).not.toContainText(gone);
     }
 
@@ -47,7 +48,8 @@ test.describe("Home — harness section", () => {
 
     await page.reload();
     const body = page.locator("body");
-    await expect(body).toContainText("brain-axi 插件把方法串成一条链");
+    await expect(body).toContainText("规格与工单");
+    await expect(body).not.toContainText("brain-axi");
     await expect(body).not.toContainText("harness.pillars.");
   });
 });

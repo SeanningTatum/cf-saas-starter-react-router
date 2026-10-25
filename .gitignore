@@ -59,10 +59,8 @@ worker-configuration.d.ts
 # feature-verifier throwaway Playwright scripts (see .claude/agents/feature-verifier.md)
 tmp/
 
-# brain-axi local state
-.brain/brain.db
-.brain/brain.db-wal
-.brain/brain.db-shm
-.brain/brain.db.bak-v*
-.brain/export.toon
-.brain/shots/
+# feature-verifier screenshots and verdicts
+/.verify/
+
+# lavish review pages written outside .verify/
+/.lavish/

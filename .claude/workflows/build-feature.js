@@ -5,17 +5,17 @@ export const meta = {
   whenToUse:
     "A feature with more than one layer (schema/repo/procedure/UI) where the lanes can proceed against a fixed contract. Overkill for a one-file change.",
   phases: [
-    { title: "Orient", detail: "brain lookup + nearest existing feature + design prep, in parallel" },
+    { title: "Orient", detail: "context lookup + memory recall + nearest existing feature + design prep, in parallel" },
     { title: "Contract", detail: "architect fixes the interface every lane builds against" },
     { title: "Build", detail: "lanes own disjoint files and run concurrently" },
     { title: "Verify", detail: "tests + spans first, then gates, non-negotiables, design critique, browser walk at once" },
-    { title: "Close", detail: "synthesis + what still needs a human" },
+    { title: "Close", detail: "synthesis, then one memory record of what was built, decided and still owed" },
   ],
 };
 
 /**
  * WHY THIS EXISTS
- *   Sequentially, a feature is: read the brain → design → schema → repo → procedure → UI → tests →
+ *   Sequentially, a feature is: read the repo's context → design → schema → repo → procedure → UI → tests →
  *   verify. Most of that ordering is a *compile* dependency, not an *information* dependency. Once
  *   the interface is fixed, the server lane and the UI lane need nothing from each other, and every
  *   verification lane needs only the finished tree. So the only truly sequential steps are: fix the
@@ -40,7 +40,7 @@ if (!input.feature) {
 }
 
 const REPO_RULES = `Repo conventions are non-negotiable. Copy the pattern of the nearest existing file in
-the same layer, and run \`brain search "<topic>"\` for any convention recorded in the brain. The five
+the same layer, and check AGENTS.md, GLOSSARY.md and docs/adr/ (if present) for any convention recorded there. The five
 that fail CI (AGENTS.md "Five non-negotiables"): Effect TS (no throw, no
 try/catch outside Effect.tryPromise), Effect Schema (no Zod), tagged errors in app/models/errors
 mapped in tagToTRPC, a unit test for every helper and repository, and Cloudflare bindings (never
@@ -64,12 +64,17 @@ const CONTEXT_SCHEMA = {
   additionalProperties: false,
 };
 
-// Three read-only lanes. None of them can conflict, and the architect needs all three.
+// Read-only lanes. None of them can conflict, and the architect needs all of them.
 const orient = await parallel([
   () =>
     agent(
-      `Feature to build: ${feature}\n\nCheck the brain for anything already settled about it. Run \`brain features list\`, \`brain search "<keywords from the feature>"\` and \`brain docs list\`, open the relevant hits with \`brain features view <slug>\` / \`brain docs view <ref>\`, and report what bears on this feature (existing feature rows, decisions, docs, recent checkpoints) and why. Say "nothing recorded" if the brain has nothing. Read only; do not suggest code.`,
-      { label: "brain:lookup", phase: "Orient", agentType: "Explore" }
+      `Feature to build: ${feature}\n\nLook up what the repo already knows about it. Read AGENTS.md, GLOSSARY.md and docs/adr/ if they exist, and docs/. Find the GitHub issue for the feature (\`gh issue view <n>\`, or \`gh issue list --search "<keywords from the feature>"\`) and related PRs (\`gh pr list --search "<keywords>" --state all\`). Report what bears on this feature (terms, decisions, docs, issue and PR threads) and why. Say "nothing recorded" if there is nothing. Read only; do not suggest code.`,
+      { label: "context:lookup", phase: "Orient", agentType: "Explore" }
+    ),
+  () =>
+    agent(
+      `recall ${slug || "(no slug given)"}\n\nFeature text, so you can match by topic if the slug is unknown or has no file: ${feature}\n\nRead only. Return the recall brief, or "nothing recorded".`,
+      { label: "memory:recall", phase: "Orient", agentType: "context-memory" }
     ),
   () =>
     agent(
@@ -137,7 +142,7 @@ const CONTRACT_SCHEMA = {
 const contract = await agent(
   `Feature: ${feature}
 
-Orientation from three read-only lanes:
+Orientation from the read-only lanes (context lookup, memory recall, nearest feature, UI tier check). The memory recall is what earlier sessions recorded about this feature: decisions that still bind, open todos, where work stopped.
 ${orientNotes.map((n, i) => `--- lane ${i + 1} ---\n${typeof n === "string" ? n : JSON.stringify(n)}`).join("\n\n")}
 
 ${REPO_RULES}
@@ -276,8 +281,8 @@ const checks = await parallel([
     agent(
       `Run the declared gates on the working tree for: ${feature}
 
-Run \`brain verify\` (typecheck, test, non-negotiables, harness, build, e2e — declared by
-scripts/brain-setup.sh; \`brain verify list\` shows them), then check each acceptance item the
+Run \`./scripts/verify.sh\` (typecheck, test, non-negotiables, harness, build, e2e;
+\`./scripts/verify.sh --list\` shows the gates), then check each acceptance item the
 architect specified:
   · ${acceptance}
 
@@ -299,15 +304,15 @@ tails. Do not fix anything.`,
 
 Golden path plus one error path, driven through the LIVE app with the Playwright CLI on a port you
 own. Use \`CI=1 bun run dev --port <free port>\`. Screenshot every step under
-.brain/shots/${slug || "<slug>"}/, and record the verdict with \`brain verifications add ${slug || "<slug>"} --verdict <V>
---body-from <file> --shot <png>::"<caption>" --verified-by feature-verifier\`. Return PASS/FAIL and the screenshot paths.`,
+.verify/${slug || "<slug>"}/, and write the verdict to .verify/${slug || "<slug>"}/verdict.md (first line
+\`Verdict: PASS|FAIL|BLOCKED\`). Return PASS/FAIL and the screenshot paths.`,
             { label: "verify:browser-walk", phase: "Verify", agentType: "feature-verifier" }
           ),
         () =>
           agent(
             `Critique the rendered surface for: ${feature}
 
-The build lane should have left screenshots — find them under .brain/shots/ (or say they are
+The build lane should have left screenshots — find them under .verify/ (or say they are
 missing in your report). Load the lead design skill for the surface and run its critique on the
 screenshots: \`impeccable:impeccable\` \`critique\` for app screens, the \`taste-skill:design-taste-frontend\` critique loop
 (references/critique.md) for public pages. Judge pixels only; do not read the route source and do
@@ -347,13 +352,46 @@ Produce, in this order:
 3. LANE COLLISIONS — any sign two lanes touched the same file or drifted from the contract.
 4. HUMAN DECISIONS — anything a person must choose (schema trade-off, destructive migration, a
    design direction, a security question). Never decide these yourself.
-5. BRAIN — the exact brain updates still owed, as commands: \`brain progress add\`, \`brain features
-   ship <slug> --evidence\` (needs a PASS verification), any \`brain docs set\`. List them; do not
+5. STILL OWED — what is left on the GitHub issue and PR: the PR description with the verdict
+   (.verify/<slug>/verdict.md), the issue to close, any GLOSSARY.md or docs/adr/ update. List them; do not
    perform them.
 
 Be blunt about what is unfinished. A confident summary of a broken tree is worse than no summary.`,
   { label: "close:synthesis", phase: "Close", effort: "high" }
 );
+
+// One writer, once, after every other lane has finished. Status stays in-progress unless every
+// verdict is green and nothing blocks; only the PR remains then.
+const allGreen = blocking.length === 0 && verdicts.length > 0 &&
+  verdicts.every((v) => typeof v === "string" || !v.verdict || v.verdict === "PASS");
+const memory = await agent(
+  `record ${slug || "(derive a kebab slug from the feature text)"}
+
+Mode: record. Merge these facts; do not copy code facts or what the issue already says.
+
+Feature: ${feature}
+
+Built: lanes ${lanes.map((l) => l.name).join(", ") || "none"}; contract file ${contract.contractFile ?? "none"}.
+Decisions made in the contract step (record each with the why; the contract below is the source):
+${contract.interface}
+Acceptance the architect set:
+  · ${acceptance || "none"}
+
+Links: branch = the current git branch (run \`git branch --show-current\`); issue = find it with gh if the feature text names one; verdict path .verify/${slug || "<slug>"}/verdict.md${hasUi ? "" : " (server-only: no browser walk, so no verdict file)"}.
+
+Outcome of this run (synthesis, from the Close step). Take Todo items from its STILL OWED, BLOCKING and HUMAN DECISIONS sections:
+${summary}
+
+Status: ${allGreen ? "everything is green and only the PR remains: set in-progress, with the PR as the next step" : "in-progress (blockers or unfinished items remain)"}.
+Next step: the first open item above; otherwise commit, open the PR with the verdict in the body, and close the issue through it.
+Return the file path and your three-line summary.`,
+  { label: "memory:record", phase: "Close", agentType: "context-memory" }
+);
+
+// The main thread shows the result on a lavish review page, so the user sees the screenshots and
+// answers HUMAN DECISIONS in one place. Workflow agents cannot long-poll the user, so the page is
+// written and polled after the run returns.
+const reviewPage = `.verify/${slug || "build-feature"}/review.html`;
 
 return {
   feature,
@@ -362,4 +400,9 @@ return {
   blockingFindings: blocking,
   verdicts: verdicts.map((v) => (v && v.verdict) || "see report"),
   summary,
+  memory,
+  review: {
+    page: reviewPage,
+    next: `${hasUi ? "" : "Server-only: skip the page and report in chat unless the synthesis lists HUMAN DECISIONS. "}Write ${reviewPage} (run \`npx -y lavish-axi playbook explanation\` and \`playbook input\` first; style it with the app's tokens from app/app.css): the synthesis' STATE at the top; BLOCKING as a table, most severe first; the browser-walk and design-critique screenshots from .verify/${slug || "<slug>"}/ (relative paths, never a leading /); one question per HUMAN DECISION, each with its options, your recommendation preselected and its own submit that calls window.lavish.queuePrompt once; STILL OWED as a list. Open it with \`npx -y lavish-axi ${reviewPage}\`, then run \`npx -y lavish-axi poll ${reviewPage}\` in the foreground and re-run it if it times out. Act on what comes back, reply with \`npx -y lavish-axi reply ${reviewPage} --agent-reply "<what you did>"\`, and poll again until the user ends the session. Never run \`lavish-axi share\`. If lavish will not start, report in chat.`,
+  },
 };

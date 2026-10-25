@@ -32,25 +32,10 @@ jobs:
       - name: Apply local D1 migrations
         run: bun run db:migrate:local
 
-      - name: Setup Node 24
-        # brain-axi 0.3.0 stores the brain with the built-in node:sqlite (Node >= 24).
-        uses: actions/setup-node@v4
-        with:
-          node-version: "24"
-
-      - name: Install brain-axi CLI
-        # Pinned for reproducible CI — bump deliberately when adopting a newer CLI.
-        run: npm i -g github:SeanningTatum/brain-axi#v0.3.0
-
-      - name: Create brain + declare gates
-        # brain.db is gitignored, so CI builds a fresh one; scripts/brain-setup.sh
-        # is the tracked list of gates, shared with init.sh and local checkouts.
-        run: ./scripts/brain-setup.sh
-
       - name: Baseline gates
-        # One entry point: brain-setup.sh owns WHICH gates run, so adding one is a
+        # One entry point: scripts/verify.sh owns WHICH gates run, so adding one is a
         # one-line change there rather than a workflow change.
-        run: brain verify --stage baseline
+        run: ./scripts/verify.sh --baseline
 
   build:
     name: Build (Cloudflare Workers)
@@ -68,25 +53,13 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
-      - name: Setup Node 24
-        # brain-axi 0.3.0 stores the brain with the built-in node:sqlite (Node >= 24).
-        uses: actions/setup-node@v4
-        with:
-          node-version: "24"
-
-      - name: Install brain-axi CLI
-        run: npm i -g github:SeanningTatum/brain-axi#v0.3.0
-
-      - name: Create brain + declare gates
-        run: ./scripts/brain-setup.sh
-
       # Through the declared gate, not a hardcoded command, so CI cannot drift
-      # from what scripts/brain-setup.sh declares.
+      # from what scripts/verify.sh declares.
       - name: Build
-        run: brain verify --only build
+        run: ./scripts/verify.sh --only build
 
   # Thin, stable smoke specs (auth + critical paths) — the automated regression net.
-  # Feature-level proof is the feature-verifier sub-agent → `brain verifications add` (not run in CI).
+  # Feature-level proof is the feature-verifier sub-agent → .verify/<slug>/verdict.md in the PR (not run in CI).
   e2e:
     name: E2E smoke (Playwright)
     runs-on: ubuntu-latest
@@ -106,24 +79,12 @@ jobs:
       - name: Apply local D1 migrations
         run: bun run db:migrate:local
 
-      - name: Setup Node 24
-        # brain-axi 0.3.0 stores the brain with the built-in node:sqlite (Node >= 24).
-        uses: actions/setup-node@v4
-        with:
-          node-version: "24"
-
-      - name: Install brain-axi CLI
-        run: npm i -g github:SeanningTatum/brain-axi#v0.3.0
-
-      - name: Create brain + declare gates
-        run: ./scripts/brain-setup.sh
-
       - name: Install Playwright browsers
         run: bunx playwright install --with-deps chromium
 
       # Declared gate, same reason as `build` above.
       - name: Run e2e tests
-        run: brain verify --only e2e
+        run: ./scripts/verify.sh --only e2e
 
       - name: Upload Playwright report
         if: always()
@@ -135,10 +96,10 @@ jobs:
 
 # The dedicated `non-negotiables` job that stood here was DELETED, not moved: it
 # re-ran `check-non-negotiables.ts` over the same tree the `baseline` job had
-# already swept via `brain verify --stage baseline`, with no caching between
+# already swept via `./scripts/verify.sh --baseline`, with no caching between
 # them. Its one unique step — the selftest, which proves the gate can fail
 # before anyone trusts that it passed — is now a declared gate
-# (`non-negotiables-selftest` in scripts/brain-setup.sh), so it runs in baseline
+# (`non-negotiables-selftest` in scripts/verify.sh), so it runs in baseline
 # alongside the sweep and that script stays the single answer to "which gates
 # run".
 #

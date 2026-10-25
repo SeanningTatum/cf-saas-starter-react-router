@@ -1,6 +1,6 @@
 # Sub-agents
 
-Project sub-agents for repo-specific work. The method (start, plan, execute, verify, done) comes from the brain-axi skills; the order of the waves is in AGENTS.md ("Delegate in parallel") and [`/build-feature`](../commands/build-feature.md).
+Project sub-agents for repo-specific work. Planning uses Matt Pocock's skills (`/grill-me` or `/grill-with-docs`, `/to-spec`, `/to-tickets`); the order of the waves is in AGENTS.md ("Delegate in parallel") and [`/build-feature`](../commands/build-feature.md).
 
 ## Roster
 
@@ -9,8 +9,9 @@ Project sub-agents for repo-specific work. The method (start, plan, execute, ver
 | [`ui-builder`](ui-builder.md) | Any user-visible work, inside a file fence the caller sets (runs on `opus`) |
 | [`test-author`](test-author.md) | After a feature or fix: write or update the unit tests (runs on `opus`) |
 | [`span-instrumenter`](span-instrumenter.md) | After adding an endpoint, repo method or service call: add or audit tracing spans |
-| [`effect-ts-enforcer`](effect-ts-enforcer.md) | Before `brain verify`: read-only review against the five non-negotiables |
-| [`feature-verifier`](feature-verifier.md) | Any user-visible flow: browser walk, screenshots, verdict via `brain verifications add` |
+| [`effect-ts-enforcer`](effect-ts-enforcer.md) | Before `./scripts/verify.sh`: read-only review against the five non-negotiables |
+| [`context-memory`](context-memory.md) | Start of any task (recall, read-only) and its end (record, one writer): per-feature context, decisions, links, todos, where work stopped — stored outside the repo |
+| [`feature-verifier`](feature-verifier.md) | Any user-visible flow: browser walk, screenshots, verdict in `.verify/<slug>/verdict.md` |
 
 Plugin agents (enabled in `.claude/settings.json`; names carry the plugin prefix):
 

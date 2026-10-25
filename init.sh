@@ -26,11 +26,6 @@ if [ "$MODE" != "--baseline" ] && [ "$MODE" != "--quick" ]; then
   ./scripts/restore-skills.sh || echo "WARN: skill restore failed — frontend design skills unavailable until it succeeds"
   echo ""
 
-  echo "--- Brain (.brain/brain.db + declared gates) ---"
-  ./scripts/brain-setup.sh >/dev/null || { echo "FAIL: brain-setup (needs Node >= 24)"; exit 1; }
-  echo "OK: brain"
-  echo ""
-
   echo "--- Apply local D1 migrations ---"
   bun run db:migrate:local || { echo "FAIL: db:migrate:local"; exit 1; }
   echo ""
@@ -62,9 +57,10 @@ echo "typecheck:     $([ $TC_RC -eq 0 ] && echo PASS || echo FAIL)"
 echo "test:          $([ $TEST_RC -eq 0 ] && echo PASS || echo FAIL)"
 echo "harness-check: $([ $HARNESS_RC -eq 0 ] && echo PASS || echo FAIL)"
 echo ""
-echo "Brain entry points:"
+echo "Entry points:"
 echo "  - CLAUDE.md (read first)"
-echo "  - brain (dashboard) · brain progress (checkpoints) · brain features (feature state)"
+echo "  - gh issue list --label ready-for-agent (work to pick up)"
+echo "  - ./scripts/verify.sh (every gate before done)"
 echo ""
 
 if [ $TC_RC -ne 0 ] || [ $TEST_RC -ne 0 ] || [ $HARNESS_RC -ne 0 ]; then

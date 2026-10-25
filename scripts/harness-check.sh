@@ -1,19 +1,13 @@
 #!/usr/bin/env bash
 # Harness invariant checker. Deterministic. No LLM. Exit non-zero on any violation.
 #
-# Two layers:
-#   1. Brain-state invariants: `brain check` (brain-axi 0.3.0) over .brain/brain.db —
-#        SQLite integrity, foreign keys, search index, shipped ⇒ verified, plan/shot hashes —
-#        then `brain-setup.sh --check` (the db's gates match the tracked list).
-#        Uses the same CLI runner as brain-setup.sh (scripts/lib/brain-cli.sh). A missing
-#        brain.db FAILS: a check that did not run must never render like one that passed.
-#   2. Repo-specific supplement (below) — invariants brain-axi does not own:
+# Checks:
 #        B. init.sh exists and is executable
 #        C. CLAUDE.md and AGENTS.md are the same file (symlink / byte-identical)
 #        D. Every .claude/agents/*.md has YAML frontmatter with name + description
 #        D2. .kimi-code/agents is a symlink onto .claude/agents (one roster, two CLIs)
 #        G. Every hook script referenced by .claude/settings.json exists and is executable
-#        H. The SessionStart skill restore passes its own tests
+#        H. The SessionStart skill restore and the context-memory store resolver pass their own tests
 #        I. Workflows: every command that launches one has its script, every script
 #           parses and names itself by filename, brand-init fences cover app/components/ui once
 
@@ -28,31 +22,7 @@ FAIL_COUNT=0
 ok()   { echo "  ✓ $1"; PASS_COUNT=$((PASS_COUNT+1)); }
 fail() { echo "  ✗ $1"; FAIL_COUNT=$((FAIL_COUNT+1)); FAIL=1; }
 
-# --- Layer 1: brain-axi CLI ---------------------------------------------------
-echo "=== brain check (brain-axi CLI) ==="
-echo ""
-
-# shellcheck source=lib/brain-cli.sh
-. scripts/lib/brain-cli.sh
-
-# Ask the CLI, not the path: a worktree shares the main checkout's brain.
-if ! brain >/dev/null 2>&1; then
-  fail "no .brain/brain.db — brain state NOT checked (run ./scripts/brain-setup.sh)"
-else
-  if brain check; then
-    ok "brain check passed"
-  else
-    fail "brain check reported violations (see output above)"
-  fi
-  if GATES_OUT=$(./scripts/brain-setup.sh --check 2>&1); then
-    ok "$GATES_OUT"
-  else
-    fail "$GATES_OUT"
-  fi
-fi
-
-echo ""
-echo "=== repo-specific supplement ==="
+echo "=== harness invariants ==="
 echo ""
 
 # B. init.sh executable
@@ -126,13 +96,13 @@ else
   fail "broken hook wiring:$HOOK_BAD"
 fi
 
-# H. Hook behaviour tests (SessionStart skill restore)
-for t in test-restore-skills; do
+# H. Script behaviour tests (SessionStart skill restore, context-memory store resolver)
+for t in test-restore-skills test-memory-dir; do
   if [ -x "scripts/${t}.sh" ]; then
     if T_OUT=$("./scripts/${t}.sh" 2>&1); then
-      ok "${t#test-} hook tests pass ($(grep -c '✓' <<<"$T_OUT") checks)"
+      ok "${t#test-} tests pass ($(grep -c '✓' <<<"$T_OUT") checks)"
     else
-      fail "${t#test-} hook tests failed:"
+      fail "${t#test-} tests failed:"
       printf '%s\n' "$T_OUT" | sed 's/^/      /'
     fi
   else
@@ -199,7 +169,7 @@ echo "passed: $PASS_COUNT"
 echo "failed: $FAIL_COUNT"
 echo ""
 if [ "$FAIL" -eq 0 ]; then
-  echo "Harness invariants intact (brain check + repo supplement)."
+  echo "Harness invariants intact."
   exit 0
 else
   echo "Harness has violations. Fix before declaring work done."

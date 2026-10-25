@@ -39,7 +39,7 @@ describe("home route i18n keys", () => {
   it("references at least the harness pillars", () => {
     expect(usedKeys).toEqual(
       expect.arrayContaining([
-        "harness.pillars.brain.title",
+        "harness.pillars.specs.title",
         "harness.pillars.skills.title",
         "harness.pillars.gates.title",
       ])

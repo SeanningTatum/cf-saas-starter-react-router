@@ -1,21 +1,21 @@
 export const meta = {
   name: "brand-init",
   description:
-    "Give a fork its own brand in one run — preflight, brief, three comps drawn and critiqued in parallel, a pick through brain review, tokens and every primitive rebuilt on disjoint fences, checks, fix rounds, DESIGN.md, then brain records, one commit and one PR",
+    "Give a fork its own brand in one run — preflight, brief, three comps drawn and critiqued in parallel, your pick on a lavish review page, tokens and every primitive rebuilt on disjoint fences, checks, fix rounds, DESIGN.md, one commit and one PR",
   whenToUse:
     "A fresh fork that still wears the starter's look. Not for one colour or one component, not on a repo with live users whose brand is not changing (it rewrites 55 primitives), not as a throwaway exploration on a branch you care about.",
   phases: [
-    { title: "Preflight", detail: "clean tree, green baseline, one feature in progress, no brand yet, branch off main" },
-    { title: "Brief", detail: "the impeccable init interview as a brain review; writes PRODUCT.md" },
+    { title: "Preflight", detail: "clean tree, green baseline, no brand yet, branch off main" },
+    { title: "Brief", detail: "the impeccable init interview; asks you in chat, then writes PRODUCT.md" },
     { title: "Draw", detail: "taste draws the directions, then one comp lane per direction in parallel" },
     { title: "Critique", detail: "taste loop, impeccable critique, motion review per comp; sameness check; one redraw" },
-    { title: "Pick", detail: "the user picks a comp (and the home question) in a brain review" },
+    { title: "Pick", detail: "the run stops and returns the comps; you pick one (and answer the home question) on a lavish review page" },
     { title: "Contract", detail: "one lane writes tokens into app/app.css and the font link into app/root.tsx" },
     { title: "Build", detail: "primitive and shared lanes own disjoint files and run concurrently; fence check" },
     { title: "Check", detail: "design critiques, motion review, gates and a browser walk at once" },
     { title: "Fix", detail: "up to two rounds: owning lane per open finding, re-run every check the changes could affect; escalate the rest" },
     { title: "Close", detail: "polish, DESIGN.md, synthesis" },
-    { title: "Ship", detail: "brain verify, verification, docs, progress, one commit, one PR; no merge" },
+    { title: "Ship", detail: "verify gates, verdict file, one commit, one PR with the verdict in the body; no merge" },
   ],
 };
 
@@ -25,19 +25,50 @@ export const meta = {
  *   workflow: there is no slash command in front of it. It draws three rival comps in parallel, lets
  *   critics judge them on pixels, asks the user to pick, then turns the winner into the real design
  *   system. The token layer is the one sequential step; after it, 55 primitives and a few shared
- *   components share no file, so they build in parallel. It ends by recording the work in the brain
- *   and opening a PR, so everything lives in one place.
+ *   components share no file, so they build in parallel. It ends by writing a verdict file
+ *   and opening a PR with the verdict in its body, so everything lives in one place.
  *
  * HOW THE HUMAN STEPS WORK
- *   Agents cannot chat with the user, but they can ask through `brain review`. An agent writes an
- *   HTML plan, runs `brain review open <file> --feature brand-init`, then `brain review poll <file>`
- *   (long-polls until the user answers in the browser; run it again on timeout) and returns the
- *   answers. Every human step is that: the brief, the pick, and an escalation.
+ *   Agents inside a workflow cannot chat with the user, and a script has no ask-the-user call. So
+ *   when the run needs an answer it STOPS and RETURNS what it needs, as { status: "needs-input" |
+ *   "needs-pick" | "needs-accept", ... }. The main thread asks the user, then runs the
+ *   workflow again with the answer added to `args` and `resumeFromRunId` set to the stopped run's id:
+ *   every agent that already finished returns its cached result, so the run picks up where it stopped.
+ *   Keep every other arg the same on the re-run.
+ *
+ *   needs-input is words, so it is asked in chat. needs-pick and needs-accept are about pixels, so
+ *   the stop also returns `review`: an HTML page path under .verify/brand-init/ for the main thread
+ *   to write, open with lavish (`npx -y lavish-axi <page>`) and long-poll (`npx -y lavish-axi poll
+ *   <page>`) for the user's answer. The `next` field says what goes on the page. If lavish will not
+ *   start, ask in chat instead. Never run `lavish-axi share`: it publishes to a third-party host.
+ *
+ *     Workflow({ name: "brand-init", resumeFromRunId: "<runId of the stopped run>",
+ *                args: { ...theSameArgs, answers: {...} } })        // after needs-input
+ *     Workflow({ ..., args: { ...theSameArgs, answers, pick: 2, rebuildHome: true } })  // after needs-pick
+ *     Workflow({ ..., args: { ...theSameArgs, answers, pick, accept: { "post-fix": true } } })  // after needs-accept
+ *
+ *   The three stops:
+ *     needs-input  The Brief phase has open questions. Returns { status, questions: [{ id, question,
+ *                  draft }] } where draft is the answer the run guessed from the repo. Re-run with
+ *                  args.answers = { <id>: "<answer>" } (any id left out keeps its draft).
+ *     needs-pick   Three comps are drawn and critiqued. Returns { status, round, comps: [{ id, name,
+ *                  html, screenshot, tasteScore, pitch, ... }], needs: ["pick", "rebuildHome"], question }.
+ *                  The comps are files the user can open (comp.html and screenshots under
+ *                  .verify/brand-init/). Re-run with args.pick = <comp id> (or "none" to draw three
+ *                  more; round 2 reads args.pick2 instead) and args.rebuildHome = true|false.
+ *     needs-accept Findings survived the fix rounds. Returns { status, tag, why, items, evidence }.
+ *                  Re-run with args.accept = { "<tag>": true } to ship with them open, false to stop.
  *
  * THE RULE THAT KEEPS IT SAFE
  *   Parallel writers own **disjoint paths**. The fences are hardcoded below, every lane prompt
  *   repeats its own, and after the Build phase the script compares what each lane says it changed
  *   (plus the git diff) against the fences. A lane that edits outside its fence is a P0.
+ *
+ * MEMORY
+ *   The context-memory agent keeps the thread between sessions. Preflight runs one read-only recall
+ *   (logged and returned, never fed to a later prompt, so resumed runs keep their cache). Each stop
+ *   records where it stopped and what it waits for, and Ship records the outcome. Prompts carry no
+ *   clock, so a replayed stop does not write twice.
  *
  * THE LIMITS
  *   It never merges. It commits once and opens one PR.
@@ -48,23 +79,34 @@ export const meta = {
  *     brief?: string,        a line about the product, to prefill the interview
  *     sector?: string,       closest taste sector, if you already know it
  *     redo?: boolean,        replace an existing DESIGN.md; the old brand becomes the anti-reference
- *     rebuildHome?: boolean  leave unset to ask on the pick card }
+ *     rebuildHome?: boolean, leave unset and the needs-pick stop asks for it
+ *     answers?: object,      { <question id>: "<answer>" } from a needs-input stop
+ *     pick?: number|"none",  the chosen comp id for round 1, or "none" to draw three more
+ *     pick2?: number|"none", the same for round 2 (the fresh three)
+ *     why?: object,          { <comp id>: "<why the user passed on it>" }, optional, goes in the PR
+ *     accept?: object }      { <tag>: true|false } from a needs-accept stop
  */
 const input = args && typeof args === "object" ? args : {};
-for (const [k, t] of [["brief", "string"], ["sector", "string"], ["root", "string"], ["redo", "boolean"], ["rebuildHome", "boolean"]]) {
+for (const [k, t] of [["brief", "string"], ["sector", "string"], ["root", "string"], ["redo", "boolean"], ["rebuildHome", "boolean"], ["answers", "object"], ["why", "object"], ["accept", "object"]]) {
   if (input[k] !== undefined && typeof input[k] !== t) {
     log(`brand-init: args.${k} must be a ${t}, got ${JSON.stringify(input[k])}. Nothing ran.`);
     return { error: `args.${k} must be a ${t}` };
   }
 }
+for (const k of ["pick", "pick2"]) {
+  if (input[k] !== undefined && typeof input[k] !== "number" && input[k] !== "none") {
+    log(`brand-init: args.${k} must be a comp id (number) or "none", got ${JSON.stringify(input[k])}. Nothing ran.`);
+    return { error: `args.${k} must be a comp id or "none"` };
+  }
+}
 const redo = input.redo === true;
 const slug = "brand-init";
 let ROOT = ""; // absolute repo root, resolved by Preflight; every later agent is fenced to it
-let outDir = ""; // <ROOT>/.brain/shots/brand-init, set after Preflight
+let outDir = ""; // <ROOT>/.verify/brand-init, set after Preflight
 const product = "PRODUCT.md";
 
 const REPO_RULES = `Repo rules: the tokens in app/app.css beat every skill. Use semantic tokens only: no raw
-hex and no arbitrary Tailwind values in app code. Do not run git commit and do not write to the brain
+hex and no arbitrary Tailwind values in app code. Do not run git commit
 unless your task says so. Dev servers: \`CI=1 bun run dev --port <port>\` on the port you were given.
 Skills: load them by plain name (\`impeccable\`, \`design-taste-frontend\`, \`animate\`, \`emil-design-eng\`).
 If the Skill tool says "Unknown skill", try the plugin-qualified name (\`impeccable:impeccable\`,
@@ -76,19 +118,6 @@ not binding. The chosen direction replaces all of it, shapes, density, voice and
 included; never follow a DESIGN.md rule that disagrees with the direction.`
     : ""
 }`;
-
-// How an agent talks to the user. Used by every human step.
-const REVIEW_HOWTO = `HOW TO ASK THE USER (the only way you can): write ONE self-contained HTML file, using the
-\`brain-axi:brain-plan\` skill's style block and decision-card snippet (\`brain playbook plan --ref style\`
-and \`--ref decision-card\` if the skill is not loaded). <file> is always the
-ABSOLUTE path under <ROOT>/plans/ that your task gives. Then, in the foreground:
-    brain review open <file> --feature brand-init
-    brain review poll <file>
-The poll long-polls until the user answers in the browser. Never background it and never stop while it
-waits: on a timeout, run it again. Answers arrive as \`decision\` prompts. If the user adds a comment,
-apply it to the same file and poll again with \`--agent-reply "<what you changed>"\`. Stop on
-\`ended_by: user\`. When every decision is in, run \`brain review end <file>\`. Report only what the user
-actually answered; never fill in an answer for them.`;
 
 const FINDINGS = {
   type: "array",
@@ -129,7 +158,7 @@ except where an item says to.
     typeof input.root === "string"
       ? `The caller gave root ${JSON.stringify(input.root)}. Run \`git -C <that> rev-parse --is-inside-work-tree\`; it must print true, else fail with "args.root is not a git work tree". ROOT is \`git -C <that> rev-parse --show-toplevel\`.`
       : "Run `git rev-parse --show-toplevel` in your starting directory. That is ROOT. Do not look for another checkout or a .claude/worktrees/* tree."
-  } ROOT must be an absolute path. Then \`cd\` to ROOT: items 1 to 7 run there, and so does every later step of
+  } ROOT must be an absolute path. Then \`cd\` to ROOT: items 1 to 5 run there, and so does every later step of
      this run. Return ROOT in \`root\`.
   1. Brand check. If DESIGN.md exists at ROOT and redo is ${redo}: when redo is false, fail with
      exactly: A brand exists. Run Workflow({ name: "brand-init", args: { redo: true } }) to replace it.
@@ -139,15 +168,11 @@ except where an item says to.
      that writes DESIGN.md at Close) and \`find ~/.claude/plugins -path '*taste-skill*' -name draw.mjs | head -1\`
      (the comp renderer). If either prints nothing, fail with exactly: Missing plugin. Run
      claude plugin install impeccable@impeccable and claude plugin install taste-skill@taste-skill, then restart.
-  3. Clean tree. \`git status --short\`. Ignore anything under .brain/ and any plans/brand-*.html. If
+  3. Clean tree. \`git status --short\`. Ignore anything under .verify/. If
      anything else is dirty, fail and name the files: parallel lanes writing over uncommitted work make
      the diff unreadable.
-  4. Baseline. \`brain verify --stage baseline\`. If red, fail and name the failing gate.
-  5. Scope policy. \`brain features list --status in-progress\`. If a feature other than brand-init is
-     open, fail and name it. Do not block it for the user.
-  6. Claim the feature: \`brain features add brand-init --name "Brand init"\` (skip if it exists), then
-     \`brain features set brand-init --status in-progress\`.
-  7. Branch. If on main, \`git switch -c feat/brand-init\`. Otherwise stay.
+  4. Baseline. \`./scripts/verify.sh --baseline\`. If red, fail and name the failing gate.
+  5. Branch. If on main, \`git switch -c feat/brand-init\`. Otherwise stay.
 Return ok=false with a one-line reason for the first failure, else ok=true. Always return root when you found it.`,
   {
     label: "preflight",
@@ -170,46 +195,113 @@ if (typeof pre.root !== "string" || !pre.root.startsWith("/") || (typeof input.r
   return { error: "preflight did not resolve an absolute repo root" };
 }
 ROOT = pre.root.replace(/\/+$/, "");
-outDir = `${ROOT}/.brain/shots/brand-init`;
-const plansDir = `${ROOT}/plans`;
+outDir = `${ROOT}/.verify/brand-init`;
 
 // Workflow agents start in the launching session's cwd, which can be a different checkout from the
 // one this run builds in. Every agent after Preflight gets this preamble first.
 const ROOT_PREAMBLE = `ROOT = ${ROOT}
 Work only inside ${ROOT}. cd there first. Every path in this task is relative to ${ROOT}. Never read or write another checkout.
-That covers the comp and screenshot dirs (${ROOT}/.brain/shots/...), PRODUCT.md, DESIGN.md, plans/, git commands, dev servers and brain commands.`;
+That covers the comp and screenshot dirs (${ROOT}/.verify/...), PRODUCT.md, DESIGN.md, git commands and dev servers.`;
 const ask = (prompt, opts) => agent(`${ROOT_PREAMBLE}\n\n${prompt}`, opts);
 log(`Pre-flight green on ${pre.branch}, root ${ROOT}`);
+
+// ---- Working memory (context-memory agent) ----------------------------------------------------
+// recall is read-only. Its brief is logged and returned in the final result, and goes into NO later
+// prompt: a re-run (resumeFromRunId) replays agents from cache only when their prompt is unchanged,
+// and recall output can differ between runs. The record calls below are different: each prompt is
+// built only from values the run already holds for that stop (cached agent results and args), with
+// no clock, so a re-run replays them from cache instead of writing twice. The agent adds the date.
+const remember = (prompt, label, phaseName) =>
+  ask(prompt, { label, phase: phaseName, agentType: "context-memory", effort: "low" });
+const recalled = await remember(
+  `Mode: recall. Slug: ${slug}. Read-only: change nothing. Return the brief for this feature (what was decided, what is open, where the last brand-init run stopped), or "nothing recorded".`,
+  "memory:recall",
+  "Preflight"
+);
+log(`Memory recall: ${recalled ? String(recalled).slice(0, 300).replace(/\s+/g, " ") : "returned nothing"}`);
 
 // =============================================================================================
 phase("Brief");
 
-const brief = await ask(
-  `Run the impeccable \`init\` interview, but through a brain review instead of chat.
+// Step 1 reads the repo and drafts every answer. It writes nothing, and its prompt does not change
+// between a first run and a re-run, so a resumed run gets it from cache.
+const interview = await ask(
+  `Prepare the impeccable \`init\` interview. Do NOT write any file and do NOT ask the user anything: you
+cannot reach them. Draft the answers instead.
 
 Load \`impeccable\` and read its \`init\` instructions to get the questions it asks about the
-product, the users and the tone. ${redo ? "This is a redo: also ask what the old brand (DESIGN.md) got wrong." : ""}
-Prefill the answers where you can:
+product, the users and the tone. ${redo ? "This is a redo: also include a question on what the old brand (DESIGN.md) got wrong." : ""}
+Draft an answer to each one from:
   · args.brief: ${JSON.stringify(input.brief ?? null)}
   · args.sector: ${JSON.stringify(input.sector ?? null)}
   · the repo (${ROOT}): README.md, AGENTS.md, package.json, app/routes/home.tsx, the i18n locale files.
 
 ${
-  "PRODUCT.md exists at " + ROOT + "/PRODUCT.md? Check. If it does and redo is " + redo + ": when redo is false, SHOW the existing PRODUCT.md in the review for confirm or edit instead of asking afresh; when redo is true, prefill from it."
+  "PRODUCT.md exists at " + ROOT + "/PRODUCT.md? Check. If it does and redo is " + redo + ": when redo is false, use its content as the drafts and mark them confident; when redo is true, prefill from it."
 }
 
-Write ${plansDir}/brand-brief.html: each question a review prompt (a decision card or a text field) with
-your prefilled answer visible and editable.
+Return every question with a short stable id, the question text, your draft answer, and confident:
+true only when the repo or args.brief states the answer outright. Mark a guess confident=false: the user
+will be asked about those.`,
+  {
+    label: "brief:interview",
+    phase: "Brief",
+    schema: {
+      type: "object",
+      required: ["questions"],
+      properties: {
+        questions: {
+          type: "array",
+          items: {
+            type: "object",
+            required: ["id", "question", "draft", "confident"],
+            properties: { id: { type: "string" }, question: { type: "string" }, draft: { type: "string" }, confident: { type: "boolean" } },
+            additionalProperties: false,
+          },
+        },
+      },
+      additionalProperties: false,
+    },
+  }
+);
+if (!interview || !interview.questions.length) {
+  log("Brief agent returned no questions — no PRODUCT.md to design from.");
+  return { error: "brief agent returned nothing" };
+}
+const given = input.answers && typeof input.answers === "object" ? input.answers : {};
+const unanswered = interview.questions.filter((q) => !q.confident && typeof given[q.id] !== "string");
+if (unanswered.length) {
+  log(`Brief: ${unanswered.length} question(s) need the user. Stopping; re-run with args.answers.`);
+  const memInput = await remember(
+    `Mode: record. Slug: ${slug}. Status: in-progress.
+Where it stopped: Brief phase, status needs-input. PRODUCT.md is not written yet.
+Waiting for: the user's answers to ${unanswered.length} interview question(s), ids ${unanswered.map((q) => q.id).join(", ")}.
+Next step: re-run Workflow brand-init with resumeFromRunId set to this run and args.answers = { <id>: "<answer>" }.
+Context: redo=${redo}; args.brief=${JSON.stringify(input.brief ?? null)}; args.sector=${JSON.stringify(input.sector ?? null)}; checkout ${ROOT}.
+Todo: answer the open interview questions.`,
+    "memory:record:needs-input",
+    "Brief"
+  );
+  return {
+    memory: memInput,
+    status: "needs-input",
+    questions: unanswered.map((q) => ({ id: q.id, question: q.question, draft: q.draft })),
+    next: "Ask the user these in chat (show each draft, ask them to confirm or correct). Then re-run with resumeFromRunId set to this run and args.answers = { <id>: \"<answer>\" }. Ids left out keep their draft.",
+  };
+}
+const finalAnswers = interview.questions.map((q) => ({ id: q.id, question: q.question, answer: typeof given[q.id] === "string" ? given[q.id] : q.draft }));
 
-${REVIEW_HOWTO}
+const brief = await ask(
+  `Write ${ROOT}/PRODUCT.md from these interview answers, in the format impeccable \`init\` writes. The user
+has settled them; do not change an answer. Write nothing else.
 
-When the user has answered, write ${ROOT}/PRODUCT.md from their answers (the format impeccable
-\`init\` writes). Write nothing else except ${plansDir}/brand-brief.html.
+${JSON.stringify(finalAnswers, null, 1)}
+
 Return a one-line "oneLine" describing the product for a taste brief, and the closest "sector" (run
 \`find ~/.claude/plugins -path '*taste-skill*' -name draw.mjs | head -1\` for the script, then
 \`node <script> --list sectors\`; use args.sector when it was given and valid).`,
   {
-    label: "brief:interview",
+    label: "brief:write",
     phase: "Brief",
     schema: {
       type: "object",
@@ -220,7 +312,7 @@ Return a one-line "oneLine" describing the product for a taste brief, and the cl
   }
 );
 if (!brief) {
-  log("Brief agent returned nothing — no PRODUCT.md to design from.");
+  log("Brief writer returned nothing — no PRODUCT.md to design from.");
   return { error: "brief agent returned nothing" };
 }
 
@@ -495,65 +587,6 @@ Return the pairs of comp ids a stranger would call the same brand. Empty list if
   return { comps, failed, similar, drawIds: deal.drawIds };
 }
 
-async function pickRound(round, comps, failed, similar, again) {
-  phase("Pick");
-  const file = round === 1 ? `${plansDir}/brand-pick.html` : `${plansDir}/brand-pick-2.html`;
-  const askHome = typeof input.rebuildHome !== "boolean";
-  const pick = await ask(
-    `Ask the user to pick a brand. Write ${file}, tier small.${again ? ` (The first poll ended without an answer. The old session is closed: run \`brain review open ${file} --feature brand-init --reopen\`, say at the top that no comp was ticked last time, and poll again.)` : ""}
-
-One card per comp: name, comp.html inlined in an <iframe srcdoc> (or its markup, if small), the four
-screenshots (embed them as data URIs so the file is self-contained), the taste score, the impeccable
-findings, the motion verdict, the AA result. Print scores as returned, even under 7.5.
-
-Comps:
-${comps.map((c) => `--- comp ${c.id}: ${c.tokens && c.tokens.name} ---\nhtml: ${c.html}\nscreenshots: ${c.screenshots.join(", ")}\nredrawn for sameness: ${c.redrawn}\ncritique: ${JSON.stringify(c.critique)}\ncontrastAA: ${JSON.stringify(c.contrastAA)}`).join("\n\n")}
-
-Also print: a note on each redrawn comp; "Lane N failed: <reason>" for each of ${JSON.stringify(failed)};
-a line for each pair in ${JSON.stringify(similar)} that the critics judged alike.
-
-Decision 1, pick: one radio per surviving comp plus "None of these — draw three more". Pre-check none.
-Say in one sentence which comp you would pick and why.
-${
-  askHome
-    ? 'Decision 2, rebuild home?: one radio, "Yes (recommended)" / "No". Say what yes costs: one more lane, and app/routes/home.tsx changes.'
-    : `No second decision: rebuild home is already set to ${input.rebuildHome} by the caller.`
-}
-
-${REVIEW_HOWTO}
-
-Return decision "pick" with the chosen comp id, "none" (pick null) only if the user chose "None of these",
-or "unanswered" if the review ended without a choice. A free-text approval with no radio ticked
-("LGTM", "go with this", "this direction") accepts what the card recommends: the comp you said you
-would pick, and the recommended home answer. A message that names a different comp picks that one. Also return the home answer as a boolean (${askHome ? "from decision 2" : `${input.rebuildHome}`}), and for every comp that was NOT
-chosen a one-line "why" built from the critiques and anything the user wrote; do not invent a reason.`,
-    {
-      label: `pick:round-${round}`,
-      phase: "Pick",
-      schema: {
-        type: "object",
-        required: ["decision", "pick", "rebuildHome", "rejected"],
-        properties: {
-          decision: { type: "string", enum: ["pick", "none", "unanswered"] },
-          pick: { type: ["number", "null"] },
-          rebuildHome: { type: "boolean" },
-          rejected: {
-            type: "array",
-            items: {
-              type: "object",
-              required: ["id", "why"],
-              properties: { id: { type: "number" }, why: { type: "string" } },
-              additionalProperties: false,
-            },
-          },
-        },
-        additionalProperties: false,
-      },
-    }
-  );
-  return pick;
-}
-
 let sector = brief.sector;
 let rejectedAll = [];
 let winner = null;
@@ -574,30 +607,76 @@ for (let round = 1; round <= 2; round++) {
     log("Every comp lane failed twice — nothing to pick from.");
     return { error: "every comp lane failed", failed: r.failed };
   }
-  let p = await pickRound(round, r.comps, r.failed, r.similar, false);
-  // An unanswered review, or an id that matches no surviving comp, is not "None of these".
-  const valid = (x) => x && (x.decision === "none" || (x.decision === "pick" && r.comps.some((c) => c.id === x.pick)));
-  if (!valid(p)) {
-    log("Pick unanswered or unknown — polling once more, not redrawing");
-    p = await pickRound(round, r.comps, r.failed, r.similar, true);
+  // The user picks on a review page. Stop and return the comps; the re-run brings args.pick (round 1) or args.pick2.
+  const pickKey = round === 1 ? "pick" : "pick2";
+  const pickArg = input[pickKey];
+  const known = pickArg === "none" || (typeof pickArg === "number" && r.comps.some((c) => c.id === pickArg));
+  const needs = [];
+  if (!known) needs.push(pickKey);
+  if (pickArg !== "none" && typeof input.rebuildHome !== "boolean") needs.push("rebuildHome");
+  if (needs.length) {
+    phase("Pick");
+    log(`Pick: round ${round}, ${r.comps.length} comp(s) ready. Stopping; re-run with ${needs.map((n) => "args." + n).join(" and ")}.`);
+    const memPick = await remember(
+      `Mode: record. Slug: ${slug}. Status: in-progress.
+Where it stopped: Pick phase, round ${round}, status needs-pick. PRODUCT.md is written; ${r.comps.length} comp(s) drawn and critiqued.
+Waiting for: the user's choice (${needs.join(" and ")}): a comp id or "none", ${needs.includes("rebuildHome") ? "and whether to rebuild the home page" : "rebuildHome already answered"}.
+Comps (id, name, html, taste score):
+${r.comps.map((c) => `  · ${c.id}, ${(c.tokens && c.tokens.name) || "unnamed"}, ${c.html}, taste ${c.critique.taste.score}`).join("\n")}
+Comps that failed to draw: ${r.failed.length ? r.failed.map((f) => f.id).join(", ") : "none"}. Flagged as look-alikes: ${r.similar.length ? JSON.stringify(r.similar) : "none"}.
+Comp files live under ${outDir}/ (local, not committed).
+Next step: re-run Workflow brand-init with resumeFromRunId set to this run and args.${needs.includes("rebuildHome") && needs.length === 1 ? "rebuildHome" : needs.join(" and args.")}.`,
+      "memory:record:needs-pick",
+      "Pick"
+    );
+    return {
+      memory: memPick,
+      status: "needs-pick",
+      round,
+      needs,
+      comps: r.comps.map((c) => ({
+        id: c.id,
+        name: c.tokens && c.tokens.name,
+        html: c.html,
+        screenshot: c.screenshots.find((s) => /desktop-light/.test(s)) || c.screenshots[0] || null,
+        screenshots: c.screenshots,
+        tasteScore: c.critique.taste.score,
+        pitch: [c.tokens && c.tokens.name, c.tokens && c.tokens.voice && c.tokens.voice[0]].filter(Boolean).join(" — "),
+        motion: c.critique.motion.verdict,
+        contrastAA: c.contrastAA,
+        openFindings: c.critique.impeccable.findings.filter((f) => f.severity === "P0" || f.severity === "P1").length,
+        redrawn: c.redrawn,
+      })),
+      failed: r.failed,
+      similar: r.similar,
+      question: `Which comp should be the brand? Look at each comp and its screenshots. Pick a comp id, or "none" to draw three more.${typeof input.rebuildHome === "boolean" ? "" : " Also: rebuild the home page too (one more lane; app/routes/home.tsx changes)? Yes is recommended."}`,
+      review: `${outDir}/pick-${round}.html`,
+      next: `Write the review page at ${outDir}/pick-${round}.html (run \`npx -y lavish-axi playbook comparison\` and \`playbook input\` first; style it with the app's tokens from app/app.css). One card per comp: the comp itself in an iframe (src = its comp.html path relative to the page, e.g. "a/comp.html", never a leading /), its desktop and mobile shots (relative paths), name, pitch, taste score, motion verdict, contrast and open P0/P1 count; mark look-alikes from \`similar\`. Below the cards ONE form: a radio per comp id plus "None of these — draw three more"${typeof input.rebuildHome === "boolean" ? "" : ", a yes/no for rebuilding the home page (yes preselected)"}, an optional "why not" note per comp, and one submit that calls window.lavish.queuePrompt once with data { ${pickKey}, ${typeof input.rebuildHome === "boolean" ? "" : "rebuildHome, "}why }. Open it with \`npx -y lavish-axi <page>\`, tell the user it is open, then run \`npx -y lavish-axi poll <page>\` in the foreground and re-run it if it times out. Read the answer, post \`npx -y lavish-axi reply <page> --agent-reply "<what happens next>"\`, then re-run with resumeFromRunId set to this run and args.${pickKey} = <comp id as a number> or "none"${typeof input.rebuildHome === "boolean" ? "" : ", and args.rebuildHome = true|false"}. Keep every other arg. Optional: args.why = { <comp id>: "<why they passed>" }. If lavish will not start, ask in chat instead.`,
+    };
   }
-  if (!valid(p)) {
-    log("Still no usable pick — stopping rather than guessing a brand.");
-    return { error: "no usable pick from the user", comps: r.comps };
-  }
+  const p = {
+    decision: pickArg === "none" ? "none" : "pick",
+    pick: pickArg === "none" ? null : pickArg,
+    rebuildHome: input.rebuildHome === true,
+    rejected: r.comps.map((c) => {
+      const said = input.why && typeof input.why[c.id] === "string" ? input.why[c.id] : null;
+      const top = c.critique.impeccable.findings.find((f) => f.severity === "P0" || f.severity === "P1");
+      return { id: c.id, why: said || `not picked; taste ${c.critique.taste.score}${top ? `, open ${top.severity}: ${top.issue}` : ""}` };
+    }),
+  };
   const chosen = p.decision === "pick" ? r.comps.find((c) => c.id === p.pick) : null;
   if (chosen) {
     winner = chosen;
-    rebuildHome = typeof input.rebuildHome === "boolean" ? input.rebuildHome : p.rebuildHome;
+    rebuildHome = input.rebuildHome === true;
     rejectedAll = [...rejectedAll, ...p.rejected.filter((x) => x.id !== chosen.id)];
     break;
   }
-  rejectedAll = [...rejectedAll, ...r.comps.map((c) => ({ id: c.id, why: (p.rejected.find((x) => x.id === c.id) || {}).why || "rejected with the round" }))];
+  rejectedAll = [...rejectedAll, ...p.rejected];
   avoid = r.drawIds;
   if (round === 2) {
     log("The user rejected both sets. Not drawing a third time on my own.");
     return {
-      error: "both sets of comps rejected — ask the user what they want to see",
+      error: "both sets of comps rejected — ask the user what they want to see, then start a fresh run",
       comps: r.comps,
       rejected: rejectedAll,
     };
@@ -660,7 +739,7 @@ const BUILD_LANES = [
 const ALL_FENCES = [...CONTRACT_FENCE, ...BUILD_LANES.flatMap((l) => l.owns)];
 
 // Paths no lane owns but that may legitimately change while the run is live.
-const IGNORED_PREFIXES = [".brain/", "plans/", ".react-router/", "node_modules/", ".wrangler/", "test-results/", "playwright-report/"];
+const IGNORED_PREFIXES = [".verify/", "plans/", ".react-router/", "node_modules/", ".wrangler/", "test-results/", "playwright-report/"];
 
 // Paths the sequential fix:orphans lane may edit: app/ code that no lane owns. Never tests or config.
 const orphanMayEdit = (path) =>
@@ -674,8 +753,8 @@ const CONTRACT_LANE = { name: "contract:tokens", owns: CONTRACT_FENCE };
 const laneByName = (n) => (n === CONTRACT_LANE.name ? CONTRACT_LANE : BUILD_LANES.find((l) => l.name === n) || null);
 const ownerOf = (path) => BUILD_LANES.find((l) => inFence(path, l.owns)) || (inFence(path, CONTRACT_FENCE) ? CONTRACT_LANE : null);
 
-// Files the run itself writes outside every fence: the brief, the brand docs, the plans.
-const allowed = (path) => path === "PRODUCT.md" || path === "DESIGN.md" || path.startsWith("DESIGN.") || /^plans\/brand-[^/]*\.html$/.test(path);
+// Files the run itself writes outside every fence: the brief and the brand docs.
+const allowed = (path) => path === "PRODUCT.md" || path === "DESIGN.md" || path.startsWith("DESIGN.");
 // Paths that were already dirty before the contract lane ran; filled by the snapshot below.
 const preDirty = new Set();
 const exempt = (path) => ignored(path) || allowed(path) || preDirty.has(path) || orphanTouched.has(path);
@@ -1003,11 +1082,11 @@ that prefers-reduced-motion collapses them. ${FIND_NOTE}`,
       ),
   },
   {
-    name: "brain verify gates",
+    name: "verify gates",
     run: () =>
       ask(
-        `Run the declared gates on the working tree. Run \`brain verify\` (typecheck, test, non-negotiables,
-harness, build, e2e; \`brain verify list\` shows them). Typecheck must pass with NO call-site edits
+        `Run the declared gates on the working tree. Run \`./scripts/verify.sh\` (typecheck, test, non-negotiables,
+harness, build, e2e; \`./scripts/verify.sh --list\` shows them). Typecheck must pass with NO call-site edits
 outside app/components/ — if it fails in a route, that is a P1 naming the export that changed.
 Report each gate pass/fail with verbatim output tails. Do not fix anything. For anything needing a
 dev server use CI=1 and a free port of your own, and stop it before you return. ${FIND_NOTE}`,
@@ -1022,7 +1101,7 @@ dev server use CI=1 and a free port of your own, and stop it before you return. 
         `Prove the branded app still works: walk sign-up, the dashboard, and admin users through the LIVE
 app, golden path each, with the Playwright CLI.
 ${browserRules("walk", 5284)}
-Do NOT run \`brain verifications add\` — the Ship phase records it. Return PASS or FAIL, put the screenshot
+Do NOT write a verdict file — the Ship phase does. Return PASS or FAIL, put the screenshot
 paths in evidence. ${FIND_NOTE}`,
         { label: "check:browser-walk", phase: "Check", agentType: "feature-verifier", schema: VERDICT_SCHEMA }
       ),
@@ -1032,8 +1111,8 @@ paths in evidence. ${FIND_NOTE}`,
 const results = {}; // check name -> latest result (null if the agent returned nothing)
 // The gates run first and alone (they build and run e2e), then every browser check one at a time.
 async function runChecks(defs) {
-  const gates = defs.filter((c) => c.name === "brain verify gates");
-  const rest = defs.filter((c) => c.name !== "brain verify gates");
+  const gates = defs.filter((c) => c.name === "verify gates");
+  const rest = defs.filter((c) => c.name !== "verify gates");
   if (gates.length) results[gates[0].name] = await gates[0].run();
   for (const c of rest) results[c.name] = await c.run();
 }
@@ -1064,40 +1143,42 @@ const openBlocking = () => [
 
 // ---- Escalation: whatever is still open goes to the user, never rounded up --------------------
 const escalations = [];
+// The answer comes from args.accept[tag]. With no answer the run stops: escalate returns { pending },
+// and the caller returns it from the script so the main thread can ask the user on a review page.
 async function escalate(items, why, tag) {
-  log(`${items.length} item(s) ${why} — escalating to the user`);
-  const answer =
-    (await ask(
-      `Escalate to the user. Write ${plansDir}/brand-escalation.html, tier small.
-
-These findings ${why}. Show each one as scored, with its severity, source and file, and the relevant
-screenshots (desktop and mobile) from ${outDir}/check/ embedded as data URIs. Do not round up, do not
-call anything fine.
-
-${JSON.stringify(items, null, 1)}
-
-One decision card: "Ship with these open (I accept the risk)" or "Stop here (I will decide what to fix)".
-Pre-check neither. Add a free-text field for the user's reasoning.
-
-${REVIEW_HOWTO}
-
-Return the choice as accept or stop, and the user's notes verbatim. If the review ended without a
-choice, return stop.`,
-      {
-        label: `fix:escalation:${tag}`,
-        phase: tag === "post-close" ? "Close" : "Fix",
-        schema: {
-          type: "object",
-          required: ["decision", "notes"],
-          properties: { decision: { type: "string", enum: ["accept", "stop"] }, notes: { type: "string" } },
-          additionalProperties: false,
-        },
-      }
-    )) ?? { decision: "stop", notes: "escalation agent returned nothing" };
+  const said = input.accept && typeof input.accept[tag] === "boolean" ? input.accept[tag] : null;
+  if (said === null) {
+    log(`${items.length} item(s) ${why} — stopping to ask the user (${tag})`);
+    const memAccept = await remember(
+      `Mode: record. Slug: ${slug}. Status: in-progress.
+Where it stopped: needs-accept (${tag}) with winning comp ${winner.id} ("${(winner.tokens && winner.tokens.name) || "unnamed"}", taste ${winner.critique.taste.score}) built on ${ROOT}.
+Waiting for: the user to accept the risk and ship, or stop. These findings ${why}:
+${items.map((i) => `  · [${i.severity}] ${i.source}: ${i.issue}${i.file ? ` (${i.file})` : ""}`).join("\n")}
+Evidence: ${outDir}/check/ (local screenshots).
+Next step: re-run Workflow brand-init with resumeFromRunId set to this run and args.accept = { ...args.accept, "${tag}": true|false }.
+Todo: decide on the open findings above.`,
+      "memory:record:needs-accept:" + tag,
+      tag === "post-fix" ? "Fix" : "Close"
+    );
+    return {
+      pending: {
+        memory: memAccept,
+        status: "needs-accept",
+        tag,
+        why: `These findings ${why}`,
+        items,
+        evidence: `${outDir}/check/ (screenshots, one folder per check)`,
+        review: `${outDir}/accept-${tag}.html`,
+        next: `Write the review page at ${outDir}/accept-${tag}.html (run \`npx -y lavish-axi playbook table\` and \`playbook input\` first; style it with the app's tokens from app/app.css). One row per item as scored, with its severity, source, issue and file; do not round up. Beside each row, the screenshots from ${outDir}/check/ that show it (relative paths, never a leading /). Leave annotation on so the user can point at a screenshot. End with ONE form: "Ship with these open (accept the risk)" or "Stop", and one submit that calls window.lavish.queuePrompt once with data { accept: true|false }. Open it with \`npx -y lavish-axi <page>\`, tell the user it is open, then run \`npx -y lavish-axi poll <page>\` in the foreground and re-run it if it times out. Read the answer and any notes, post \`npx -y lavish-axi reply <page> --agent-reply "<what happens next>"\`, then re-run with resumeFromRunId set to this run and args.accept = { ...args.accept, "${tag}": true|false }. Keep every other arg. If lavish will not start, show the items in chat and ask there.`,
+      },
+    };
+  }
+  log(`${items.length} item(s) ${why} — user ${said ? "accepted" : "declined"} (${tag})`);
+  const answer = { decision: said ? "accept" : "stop", notes: said ? "accepted by the user" : "stopped by the user" };
   escalations.push({
     ...answer,
     about: items.map((i) => `${i.source}: ${i.issue}`),
-    gates: items.filter((i) => i.source === "brain verify gates").map((i) => i.issue),
+    gates: items.filter((i) => i.source === "verify gates").map((i) => i.issue),
   });
   return answer;
 }
@@ -1258,7 +1339,7 @@ Return the files you changed, your cwd (\`git rev-parse --show-toplevel\`), and 
 const affectedChecks = (files) => {
   const names = new Set();
   if (!files.length) return names;
-  names.add("brain verify gates");
+  names.add("verify gates");
   for (const f of files) {
     if (f === "app/app.css" || f === "app/root.tsx" || f.startsWith("app/components/")) {
       ["impeccable critique", "taste critique (home)", "feature-verifier walk", "review-animations"].forEach((n) => names.add(n));
@@ -1369,7 +1450,10 @@ const stillOpen = openBlocking().map((f) =>
 for (const u of unresolved) {
   stillOpen.push({ severity: "P1", source: `unresolved:${u.from}`, issue: `needs a human or a separate task: ${u.why}`, file: u.file });
 }
-if (stillOpen.length) await escalate(stillOpen, "survived two fix rounds", "post-fix");
+if (stillOpen.length) {
+  const e = await escalate(stillOpen, "survived two fix rounds", "post-fix");
+  if (e.pending) return e.pending;
+}
 let mayShip = !stillOpen.length || accepted();
 
 // ---------------------------------------------------------------------------------------------
@@ -1396,7 +1480,8 @@ Return the files you changed, your cwd (\`git rev-parse --show-toplevel\`), and 
   // Polish may not edit outside its fence, and no fix round follows it, so a `needs` item can only go to the user.
   const polishNeeds = ((polish && polish.needs) || []).map((n) => ({ severity: "P1", source: "needs:close:polish", issue: `needs a human or a separate task: ${n.why}`, file: n.file }));
   if (polishNeeds.length) {
-    await escalate(polishNeeds, "were outside the polish lane's fence", "post-close");
+    const e = await escalate(polishNeeds, "were outside the polish lane's fence", "post-close-polish");
+    if (e.pending) return e.pending;
     if (!accepted()) mayShip = false;
   }
 
@@ -1439,11 +1524,12 @@ ${redo ? "This is a redo: replace the old DESIGN.md outright. Carry nothing over
   const fresh = fenceViolations.filter((v) => !before.has(v.path));
   fresh.forEach((v) => log(`P0 FENCE VIOLATION after Close: ${v.lane} touched ${v.path}`));
   if (fresh.length) {
-    await escalate(
+    const e = await escalate(
       fresh.map((v) => ({ severity: "P0", source: `fence:${v.lane}`, issue: `edited ${v.path}, outside its fence`, file: v.path })),
       "appeared after polish and DESIGN.md",
-      "post-close"
+      "post-close-fence"
     );
+    if (e.pending) return e.pending;
     if (!accepted()) mayShip = false;
   }
 
@@ -1458,7 +1544,8 @@ ${redo ? "This is a redo: replace the old DESIGN.md outright. Carry nothing over
       .map((f) => (outsideApp(f) ? { ...f, issue: `needs a human or a separate task (outside app/): ${f.issue}` } : f))
       .filter((f) => !asked.has(`${f.source}: ${f.issue}`));
     if (fresh2.length) {
-      await escalate(fresh2, "appeared in the final check pass after polish and DESIGN.md", "post-close");
+      const e = await escalate(fresh2, "appeared in the final check pass after polish and DESIGN.md", "post-close-final");
+      if (e.pending) return e.pending;
       if (!accepted()) mayShip = false;
     }
   }
@@ -1506,7 +1593,7 @@ Be blunt about what is unfinished.`,
 // ---------------------------------------------------------------------------------------------
 phase("Ship");
 
-// One shape on every path: { shipped, reason?, gatesGreen?, verificationRecorded?, commit?, pr? }.
+// One shape on every path: { shipped, reason?, gatesGreen?, verdictWritten?, commit?, pr? }.
 let ship = { shipped: false, reason: "open P0/P1 or a missing DESIGN.md, and the user did not accept them" };
 if (mayShip) {
   const lastCritique = results["impeccable critique"] ? JSON.stringify(results["impeccable critique"], null, 1) : "(the impeccable critique returned nothing)";
@@ -1514,29 +1601,29 @@ if (mayShip) {
   const motionRes = results["review-animations"];
   // Everything any lane reported changing (fix:orphans edits land outside ALL_FENCES) is staged too.
   const reportedFiles = [...new Set([...lanes.flatMap((l) => l.files || []), ...contract.files, ...polishFiles, ...orphanTouched])].filter((f) => !ignored(f));
-  const STAGE = [...new Set([...ALL_FENCES, ...reportedFiles])].concat(["PRODUCT.md", "DESIGN.md", "DESIGN.* (its sidecar, if the documenter wrote one)", "plans/brand-pick*.html"]);
+  const STAGE = [...new Set([...ALL_FENCES, ...reportedFiles])].concat(["PRODUCT.md", "DESIGN.md", "DESIGN.* (its sidecar, if the documenter wrote one)"]);
   const shipped = await ask(
-    `Ship the brand. You own the brain writes, the commit and the PR for this run.
+    `Ship the brand. You own the verdict file, the commit and the PR for this run.
 
 ${DESIGN_BRIEF}
 
 Open findings the user explicitly accepted in an escalation review: ${accepted() ? "YES — " + JSON.stringify(escalations) : "no"}.
 
 Steps, in order:
-  1. \`brain verify\` (every gate, including build and e2e). Also \`bun run typecheck\` and confirm no
+  1. \`./scripts/verify.sh\` (every gate, including build and e2e). Also \`bun run typecheck\` and confirm no
      call site outside app/components/ changed.
   2. IF ANY GATE IS RED: ${
       acceptedGateFailures().length
         ? `continue ONLY if every red gate was already failing in this evidence the user saw and accepted:
 ${JSON.stringify(acceptedGateFailures())}
-     Then skip the verification and the ship below, and say in the PR which gate failed. Any OTHER red gate:
+     Then skip the verdict and the commit below, and say in the PR which gate failed. Any OTHER red gate:
      STOP as below.`
         : "STOP."
-    } STOP means: change nothing, write nothing to the brain, commit nothing, push nothing, open no PR.
+    } STOP means: change nothing, write no verdict file, commit nothing, push nothing, open no PR.
      Return shipped=false, gatesGreen=false and the failing gate in reason.
      IF every gate is green:
-     · \`brain verifications add brand-init --verdict PASS --body-from <file> --shot <png>::"<caption>"\`
-       (screenshots under ${outDir}/check/<lane>/, one folder per check). The body pastes the last impeccable
+     · Write ${outDir}/verdict.md: a first line \`Verdict: PASS\` (or FAIL, or PARTIAL), then the steps and
+       findings (screenshots under ${outDir}/check/<lane>/, one folder per check; list their paths). The body pastes the last impeccable
        critique WHOLE (AGENTS.md rule), then the review-animations verdict, then the feature-verifier
        walk, then the fix rounds that ran. If a P0/P1 was accepted by the user, say so and write the
        verdict as the facts are; do not write PASS over an unresolved P0/P1 — use FAIL or PARTIAL.
@@ -1545,33 +1632,32 @@ ${lastCritique}
        review-animations: ${motionRes ? JSON.stringify(motionRes) : "returned nothing"}
        walk: ${walk ? JSON.stringify(walk) : "returned nothing"}
        Escalation answers: ${escalations.length ? JSON.stringify(escalations) : "none"}
-     · \`brain features ship brand-init --evidence "<one line>"\` only if that verification is a PASS.
-  3. \`brain docs set codebase design-system\`: the winner and why (cite its taste score and
-     critique), then the comps that lost and why:
+     · The design-system decision lives in DESIGN.md (already written). Do not edit it. Keep this for the PR body: the winner and why (cite its taste score and
+       critique), then the comps that lost and why:
 ${rejected.length ? rejected.map((r) => `       · comp ${r.id}: ${r.why}`).join("\n") : "       · (none)"}
-  4. \`brain progress add --summary "..." --next "..."\`.
-  5. Extend scripts/seed-preview.ts only if the run changed seeded data (it should not); stage it only then.
-  6. ONE commit, one PR. Stage EXPLICIT paths with \`git add -- <paths>\`, never a wholesale \`git add app/\` or \`-A\`:
+  4. Extend scripts/seed-preview.ts only if the run changed seeded data (it should not); stage it only then.
+  5. ONE commit, one PR. Stage EXPLICIT paths with \`git add -- <paths>\`, never a wholesale \`git add app/\` or \`-A\`:
 ${STAGE.map((p) => `       · ${p}`).join("\n")}
      After \`git add\`, run \`git status --porcelain\`. These files were reported changed by a lane:
 ${reportedFiles.map((p) => `       · ${p}`).join("\n") || "       · (none)"}
      If ANY of them still shows as modified or untracked and not staged, do NOT commit: stop and return shipped=false
      with a reason naming each unstaged file. (A file with no change against HEAD is fine.)
-     Do NOT stage plans/brand-brief.html, plans/brand-escalation.html, anything under .brain/, or draw
+     Do NOT stage anything under .verify/ (the comps, screenshots and verdict.md stay local), or draw
      files. Check \`git status --short\` afterwards: anything modified and unstaged that is not one of
      those is a surprise, so name it in your note. Commit message:
      \`feat(brand): ${tokens.name ?? "new"} brand — tokens, primitives, DESIGN.md\`, ending with the line:
      Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>
      Push the branch and open the PR with the \`engineering-toolkit:pr-format\` skill's layout: the pick
      screenshots (desktop and mobile, light and dark) and the final critique summary in the body, the
-     rejected comps and why, and any open finding named plainly. End the PR body with:
+     contents of ${outDir}/verdict.md, the winning comp and why it won (its taste score), the list of
+     screenshot paths, the rejected comps and why, and any open finding named plainly. End the PR body with:
      🤖 Generated with [Claude Code](https://claude.com/claude-code)
-  7. DO NOT MERGE.
+  6. DO NOT MERGE.
 
 Synthesis to ground your account:
 ${synthesis}
 
-Return shipped (true only if a commit and a PR exist), gatesGreen, verificationRecorded, the commit sha,
+Return shipped (true only if a commit and a PR exist), gatesGreen, verdictWritten, the commit sha,
 the PR url, and a reason when shipped is false or anything went wrong.`,
     {
       label: "ship:record-commit-pr",
@@ -1583,7 +1669,7 @@ the PR url, and a reason when shipped is false or anything went wrong.`,
           shipped: { type: "boolean" },
           reason: { type: "string" },
           gatesGreen: { type: "boolean" },
-          verificationRecorded: { type: "boolean" },
+          verdictWritten: { type: "boolean" },
           commit: { type: "string" },
           pr: { type: "string" },
         },
@@ -1593,6 +1679,24 @@ the PR url, and a reason when shipped is false or anything went wrong.`,
   );
   ship = shipped ?? { shipped: false, reason: "ship agent returned nothing" };
 }
+
+// One writer, once, after every other lane. Status is done only when a PR exists.
+const memFinal = await remember(
+  `Mode: record. Slug: ${slug}. Status: ${ship.shipped ? "done (PR open, not merged: the user merges)" : "blocked"}.
+Winner: comp ${winner.id} ("${tokens.name ?? "unnamed"}"), taste score ${winner.critique.taste.score} (scored, not rounded). Rebuilt home: ${rebuildHome ? "yes" : "no"}. Redo of an existing brand: ${redo}.
+Why it won: the user picked it on the review page after the critiques; taste notes: ${JSON.stringify(winner.critique.taste.notes ?? "")}
+Rejected comps and why:
+${rejected.length ? rejected.map((r) => `  · comp ${r.id}: ${r.why}`).join("\n") : "  · (none)"}
+Links: PR ${ship.pr ?? "none"}; commit ${ship.commit ?? "none"}; verdict ${ship.verdictWritten ? outDir + "/verdict.md (local, not committed)" : "not written"}; DESIGN.md ${mayShip ? "written" : "not written"}.
+Ship: shipped=${ship.shipped}${ship.reason ? `; reason: ${ship.reason}` : ""}.
+Todo (follow-ups still owed):
+${finalBlocking.length ? finalBlocking.map((f) => `  · [${f.severity}] ${f.source}: ${f.issue}`).join("\n") : "  · no open blocking findings"}
+${unresolved.length ? unresolved.map((u) => `  · ${u.file}: ${u.why}`).join("\n") : ""}
+${ship.shipped ? "  · merge the PR after review" : "  · resolve the blockers above and re-run, or fix by hand"}
+Next step: ${ship.shipped ? "user reviews and merges the PR" : "see Todo"}.`,
+  "memory:record:ship",
+  "Ship"
+);
 
 return {
   pick: winner.id,
@@ -1616,4 +1720,5 @@ return {
   designMd: mayShip ? "DESIGN.md" : null,
   synthesis,
   ship,
+  memory: { recalled: recalled ?? null, recorded: memFinal ?? null },
 };

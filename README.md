@@ -6,16 +6,16 @@
 [![Effect TS](https://img.shields.io/badge/typed-Effect%20TS-1E1E2C)](https://effect.website/)
 [![TypeScript](https://img.shields.io/badge/typescript-strict-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 
-> **The harness-first, AI-first SaaS starter.** Cloudflare Workers + React Router v7 + tRPC + D1 + Drizzle + Better Auth + Effect TS + ShadCN. Same runtime on your laptop and at the edge. Drop in any agent (Claude Code, Cursor, Codex) and ship real features with a queryable brain, chained skills, and deterministic verification gates.
+> **The harness-first, AI-first SaaS starter.** Cloudflare Workers + React Router v7 + tRPC + D1 + Drizzle + Better Auth + Effect TS + ShadCN. Same runtime on your laptop and at the edge. Drop in any agent (Claude Code, Cursor, Codex) and ship real features with specs and tickets in GitHub issues, planning skills, and deterministic verification gates.
 
 **Three pillars:**
 1. **Harness-first** — agents stay coherent across sessions via the [5-subsystem framework](#harness--the-system-around-the-agent): instructions, state, verification, scope, lifecycle.
-2. **AI-first** — six project-local sub-agents, the brain-axi skills, seven declared gates, five AST-checked non-negotiables.
+2. **AI-first** — six project-local sub-agents, Matt Pocock's planning skills, seven gates, five AST-checked non-negotiables.
 3. **DX that just works** — `bun install` + `bun run dev` and you're live. `bun run scripts/first-time-setup.ts` gets you from zero to deployed Worker in ~3 minutes. Local dev runs the same Workers runtime that ships to production.
 
 📦 **Latest release:** [`v1.2.0` — The Boilerplate Audited Itself](https://github.com/SeanningTatum/cf-saas-starter-react-router/releases/tag/v1.2.0)
 
-If you're a human, scroll to [Quick Start](#quick-start). If you're an agent, scroll to [How To Work In This Repo](#how-to-work-in-this-repo) — it tells you how to read the brain before writing code.
+If you're a human, scroll to [Quick Start](#quick-start). If you're an agent, scroll to [How To Work In This Repo](#how-to-work-in-this-repo) — it tells you how to read the project state before writing code.
 
 ---
 
@@ -34,8 +34,8 @@ If you're a human, scroll to [Quick Start](#quick-start). If you're an agent, sc
 - **Background:** Cloudflare Workflows (`ExampleWorkflow`)
 
 **Agent harness**
-- `.brain/brain.db` — the [brain-axi](https://github.com/SeanningTatum/brain-axi) brain: features, checkpoints, run notes, verifications (local, gitignored)
-- `scripts/brain-setup.sh` — creates the brain and declares the gates `brain verify` and CI run
+- GitHub issues and PRs — specs, tickets and verdicts; the project state
+- `scripts/verify.sh` — runs the gates; CI runs the same ones
 - `.githooks/pre-commit` — typecheck + tests block broken commits (no-dep, auto-installs)
 - `CLAUDE.md` → `AGENTS.md` — one file (symlink), the agent entry point
 
@@ -94,13 +94,13 @@ Read [`CLAUDE.md`](CLAUDE.md) once. It points to everything else.
 
 ### For agents
 
-You're working in a codebase with strict conventions. Skipping the brain will cost rework. The [brain-axi](https://github.com/SeanningTatum/brain-axi) plugin skills carry the method, and each hands off to the next:
+You're working in a codebase with strict conventions. Skipping the plan will cost rework. Project state lives in GitHub issues and PRs, plus `AGENTS.md`, `GLOSSARY.md` and `docs/adr/`. The steps:
 
-1. **Start — `brain-axi:brain-start`.** Reads brain state (`brain`, `brain progress`, `brain features`), frames the task, checks scope (one feature in progress), runs `brain verify --stage baseline`, claims the feature.
-2. **Plan — `brain-axi:brain-grill` → `brain-axi:brain-plan`** when the task carries a decision. Plans are HTML, reviewed in the browser with `brain review open`.
-3. **Work — `brain-axi:brain-execute`.** Logs each step verbatim with `brain runs append`. Frontend work loads the design skill for its lane (see [Design skills](#design-skills) below).
-4. **Verify — `brain-axi:brain-verify`.** An independent walk of every acceptance criterion; the `feature-verifier` sub-agent drives the browser and records the verdict with `brain verifications add`.
-5. **Done — `brain-axi:brain-done`.** `brain verify` (every gate) + `brain check` green, a checkpoint, then `brain features ship <slug> --evidence "..."` — which refuses without a PASS verification.
+1. **Start.** Read the issue (`gh issue view`), the docs above, and the open PRs. Run `./scripts/verify.sh --baseline` so you know the tree is green before you touch it.
+2. **Plan** when the task carries a decision. `/grill-me` interviews you until the design is clear; `/grill-with-docs` does the same and also writes `GLOSSARY.md` and ADRs. `/to-spec` writes the spec as a GitHub issue. `/to-tickets` cuts it into vertical-slice issues with blocking links.
+3. **Work.** One ticket at a time. Frontend work loads the design skill for its lane (see [Design skills](#design-skills) below).
+4. **Verify.** The `feature-verifier` sub-agent walks the flow in a browser, saves screenshots to `.verify/<slug>/`, and writes a PASS / FAIL / BLOCKED verdict you paste into the PR.
+5. **Done.** `./scripts/verify.sh` is green and the verdict is PASS. Merge the PR that closes the issue.
 
 **The five non-negotiables** (enforced by the `non-negotiables` gate, [`scripts/check-non-negotiables.ts`](scripts/check-non-negotiables.ts)):
 
@@ -116,43 +116,36 @@ You're working in a codebase with strict conventions. Skipping the brain will co
 
 This repo follows the [walkinglabs 5-subsystem harness framework](https://github.com/walkinglabs/learn-harness-engineering/tree/main/skills/harness-creator). The harness is everything that keeps coding agents reliable across sessions: instructions, state, verification, scope, and lifecycle.
 
-State lives in the brain: one SQLite file, `.brain/brain.db`, read and written by the **[brain-axi](https://github.com/SeanningTatum/brain-axi) CLI** (`brain`) with token-efficient TOON output. The file is **gitignored** — each checkout has its own, and a clone starts empty. Setup needs Node ≥ 24:
-
-```bash
-npm i -g github:SeanningTatum/brain-axi#v0.3.0
-claude plugin marketplace add SeanningTatum/brain-axi
-claude plugin install brain-axi@SeanningTatum
-./scripts/brain-setup.sh     # create .brain/brain.db + declare the gates (init.sh runs it too)
-```
+State lives in GitHub: the spec is an issue, each ticket is an issue, and a merged PR ships it. Nothing sits in a local database, so a fresh clone sees the same plan. Lasting rules go in `AGENTS.md`, `GLOSSARY.md` or an ADR in `docs/adr/`. Planning uses [Matt Pocock's skills](https://github.com/mattpocock/skills) (installed from [`skills-lock.json`](skills-lock.json)); no extra setup beyond `gh` signed in.
 
 | Subsystem | Artifacts |
 |-----------|-----------|
-| **Instructions** | [`CLAUDE.md`](CLAUDE.md) / [`AGENTS.md`](AGENTS.md), the brain-axi plugin skills, `brain docs` / `brain search` |
-| **State** | `.brain/brain.db` — features (`brain features`), checkpoints (`brain progress`), run notes (`brain runs`), verifications (`brain verifications`) |
-| **Verification** | Gates declared in [`scripts/brain-setup.sh`](scripts/brain-setup.sh) and run by `brain verify`; `brain check` + [`scripts/harness-check.sh`](scripts/harness-check.sh); `feature-verifier` browser walks |
-| **Scope** | One in-progress feature at a time; ≤2 features per diff |
-| **Lifecycle** | [`init.sh`](init.sh), the plugin's SessionStart `brain context`, [`.claude/hooks/session-start.sh`](.claude/hooks/session-start.sh) (skill restore + pointers) |
+| **Instructions** | [`CLAUDE.md`](CLAUDE.md) / [`AGENTS.md`](AGENTS.md), Matt Pocock's skills, `GLOSSARY.md`, `docs/adr/` |
+| **State** | GitHub issues (spec and tickets) and PRs (verdicts); `gh issue list`, `gh pr list` |
+| **Verification** | Gates run by [`scripts/verify.sh`](scripts/verify.sh); [`scripts/harness-check.sh`](scripts/harness-check.sh); `feature-verifier` browser walks |
+| **Scope** | One ticket at a time; ≤2 features per diff |
+| **Lifecycle** | [`init.sh`](init.sh), [`.claude/hooks/session-start.sh`](.claude/hooks/session-start.sh) (skill restore + pointers) |
 
 ### Gates
 
-| Gate | Command | Stages |
+| Gate | Command | Runs in |
 |------|---------|--------|
-| typecheck | `bun run typecheck` | bootstrap, baseline, verify |
-| test | `bun run test` | bootstrap, baseline, verify |
-| non-negotiables-selftest | `bun run scripts/check-non-negotiables.ts --selftest` | baseline, verify |
-| non-negotiables | `bun run scripts/check-non-negotiables.ts` | baseline, verify |
-| harness | `./scripts/harness-check.sh` | baseline, verify |
-| build | `bun run build` | verify |
-| e2e | `bun run test:e2e` | verify |
+| typecheck | `bun run typecheck` | baseline, full |
+| test | `bun run test` | baseline, full |
+| non-negotiables-selftest | `bun run scripts/check-non-negotiables.ts --selftest` | baseline, full |
+| non-negotiables | `bun run scripts/check-non-negotiables.ts` | baseline, full |
+| harness | `./scripts/harness-check.sh` | baseline, full |
+| build | `bun run build` | full |
+| e2e | `bun run test:e2e` | full |
 
-`brain verify --stage baseline` runs the quick set; bare `brain verify` runs them all. CI runs the same declared gates, so adding one is a one-line change in `scripts/brain-setup.sh`.
+`./scripts/verify.sh --baseline` runs the quick set; bare `./scripts/verify.sh` runs them all. CI runs the same script, so adding a gate is a one-line change there.
 
 ### Slash commands
 
 | Command | What it does |
 |---------|--------------|
 | [`/build-feature`](.claude/commands/build-feature.md) | Multi-layer feature build with the sub-agents fanned out in parallel on disjoint paths, then parallel verification. |
-| [`/harness-check`](.claude/commands/harness-check.md) | `brain check` + repo supplement (CLAUDE↔AGENTS symlink, sub-agent frontmatter, hook wiring) via [`scripts/harness-check.sh`](scripts/harness-check.sh) — no LLM, exits non-zero on drift. |
+| [`/harness-check`](.claude/commands/harness-check.md) | Repo invariants (CLAUDE↔AGENTS symlink, sub-agent frontmatter, hook wiring) via [`scripts/harness-check.sh`](scripts/harness-check.sh) — no LLM, exits non-zero on drift. |
 
 ### Project-local sub-agents ([`.claude/agents/`](.claude/agents/))
 
@@ -162,6 +155,7 @@ claude plugin install brain-axi@SeanningTatum
 | [`test-author`](.claude/agents/test-author.md) | After a change — write the tests that pin it |
 | [`span-instrumenter`](.claude/agents/span-instrumenter.md) | After adding a procedure, repo method or service — add tracing spans |
 | [`ui-builder`](.claude/agents/ui-builder.md) | Any user-visible work |
+| [`context-memory`](.claude/agents/context-memory.md) | Keep per-feature working memory — context, decisions, links, todos — shared by every worktree |
 | [`feature-verifier`](.claude/agents/feature-verifier.md) | Walk a user-visible flow in the browser and record the verdict |
 
 See [`.claude/agents/README.md`](.claude/agents/README.md) for invocation flow + complementary plugin agents.
@@ -213,16 +207,15 @@ app/
 ├── runtime.ts        ManagedRuntime composition (services + repos)
 ├── root.tsx          Root layout
 └── entry.{client,server}.tsx
-.brain/               brain.db — local brain-axi state (gitignored)
 .githooks/            Git hooks (pre-commit gate)
 .claude/              Claude Code config — settings, hooks, agents/, commands/
 drizzle/              SQL migrations
 e2e/                  Playwright tests
 public/               Static assets
-scripts/              Setup / teardown / seed + brain-setup.sh + harness-check.sh
+scripts/              Setup / teardown / seed + verify.sh + harness-check.sh
 workers/app.ts        Cloudflare Workers entrypoint
 workflows/            Cloudflare Workflow definitions
-init.sh               Harness bootstrap — install + brain + migrate + typecheck + test
+init.sh               Harness bootstrap — install + skills + migrate + typecheck + test
 ```
 
 ---
@@ -230,10 +223,10 @@ init.sh               Harness bootstrap — install + brain + migrate + typechec
 ## Commands
 
 ```bash
-./init.sh                     # Harness bootstrap — install + brain + migrate + typecheck + test
+./init.sh                     # Harness bootstrap — install + skills + migrate + typecheck + test
 ./init.sh --baseline          # Baseline only (typecheck + test + harness-check)
 ./init.sh --quick             # Skip install + migrate (assume already done)
-./scripts/harness-check.sh    # brain check + repo invariants (also: /harness-check)
+./scripts/harness-check.sh    # repo invariants (also: /harness-check)
 
 bun run dev                   # Dev server (auto-runs local DB migrations) → :5173
 bun run build                 # Production build
@@ -458,7 +451,7 @@ CLOUDFLARE_ENV=preview bun run build \
 1. Branch off `main`
 2. Read [`AGENTS.md`](AGENTS.md) before starting
 3. Pre-commit gate runs typecheck + tests automatically
-4. Run `brain verify` — every declared gate green
+4. Run `./scripts/verify.sh` — every gate green
 5. Open the PR
 
 When in doubt: read first, code second.
