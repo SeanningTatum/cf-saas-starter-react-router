@@ -251,13 +251,15 @@ async function edit(ref: Ref, p: Parsed, deps: Deps): Promise<Outcome> {
     }
     // The bound is our own completed write, not the clock before we ran: an edit that lands while
     // `gh issue edit` is in flight sits after writeAt but before our edit. With no own edit on
-    // record (an unchanged body creates none), fall back to the pre-write clock.
+    // record (an unchanged body creates none), fall back to the pre-write clock. GitHub stamps edits
+    // to the second, so an edit in the same second as the bound is a conflict too: one of the two
+    // writes overwrote the other.
     const ours = nodes
       .filter((n) => n.editor?.login === me && n.editedAt > expect)
       .sort((a, b) => (a.editedAt < b.editedAt ? 1 : -1))[0];
     const bound = ours && ours.editedAt > writeAt ? ours.editedAt : writeAt;
     const other = nodes
-      .filter((n) => n.editor?.login !== me && n.editedAt > expect && n.editedAt < bound)
+      .filter((n) => n.editor?.login !== me && n.editedAt > expect && n.editedAt <= bound)
       .sort((a, b) => (a.editedAt < b.editedAt ? 1 : -1))[0];
     if (other) {
       const err = bad(
