@@ -43,6 +43,30 @@
       "Bash(git clean -fdx:*)"
     ]
   },
+  "skillOverrides": {
+    "embedded-captions": "off",
+    "faceless-explainer": "off",
+    "figma": "off",
+    "general-video": "off",
+    "hyperframes": "off",
+    "hyperframes-animation": "off",
+    "hyperframes-cli": "off",
+    "hyperframes-core": "off",
+    "hyperframes-creative": "off",
+    "hyperframes-keyframes": "off",
+    "hyperframes-registry": "off",
+    "media-use": "off",
+    "motion-graphics": "off",
+    "music-to-video": "off",
+    "pr-to-video": "off",
+    "product-launch-video": "off",
+    "recipe-box": "off",
+    "reel-to-recipe": "off",
+    "remotion-to-hyperframes": "off",
+    "slideshow": "off",
+    "talking-head-recut": "off",
+    "video-watcher": "off"
+  },
   "hooks": {
     "SessionStart": [
       {

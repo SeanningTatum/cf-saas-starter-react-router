@@ -11,10 +11,10 @@ export const meta = {
     { title: "Critique", detail: "taste loop, impeccable critique, motion review per comp; sameness check; one redraw" },
     { title: "Pick", detail: "the run stops and returns the comps; you pick one (and answer the home question) on a lavish review page" },
     { title: "Contract", detail: "one lane writes tokens into app/app.css and the font link into app/root.tsx" },
-    { title: "Build", detail: "primitive and shared lanes own disjoint files and run concurrently; fence check" },
+    { title: "Build", detail: "primitive and shared lanes own disjoint files and run concurrently; fence check; one polish pass so the first check wave covers it" },
     { title: "Check", detail: "design critiques, motion review, gates and a browser walk at once" },
     { title: "Fix", detail: "up to two rounds: owning lane per open finding, re-run every check the changes could affect; escalate the rest" },
-    { title: "Close", detail: "polish, DESIGN.md, synthesis" },
+    { title: "Close", detail: "DESIGN.md, fence check, synthesis" },
     { title: "Ship", detail: "verify gates, verdict file, one commit, one PR with the verdict in the body; no merge" },
   ],
 };
@@ -105,12 +105,11 @@ let ROOT = ""; // absolute repo root, resolved by Preflight; every later agent i
 let outDir = ""; // <ROOT>/.verify/brand-init, set after Preflight
 const product = "PRODUCT.md";
 
+const SKILL_RULE = "Load skills by plain name (`impeccable`, `design-taste-frontend`, `animate`, `emil-design-eng`); only on \"Unknown skill\" use `impeccable:impeccable` or `taste-skill:design-taste-frontend`. Load each once.";
 const REPO_RULES = `Repo rules: the tokens in app/app.css beat every skill. Use semantic tokens only: no raw
 hex and no arbitrary Tailwind values in app code. Do not run git commit
 unless your task says so. Dev servers: \`CI=1 bun run dev --port <port>\` on the port you were given.
-Skills: load them by plain name (\`impeccable\`, \`design-taste-frontend\`, \`animate\`, \`emil-design-eng\`).
-If the Skill tool says "Unknown skill", try the plugin-qualified name (\`impeccable:impeccable\`,
-\`taste-skill:design-taste-frontend\`) before giving up.${
+Skills: ${SKILL_RULE}${
   redo
     ? `
 This is a redo: DESIGN.md at the repo root describes the OLD brand, the one this run replaces. It is
@@ -151,8 +150,8 @@ async function twice(fn, what) {
 phase("Preflight");
 
 const pre = await agent(
-  `Pre-flight for /brand-init. Check each item, in order, and stop at the first failure. Fix nothing
-except where an item says to.
+  `Pre-flight for /brand-init. Run these numbered steps in order and stop at the first failure. Fix nothing
+except where a step says to.
 
   0. Root. ${
     typeof input.root === "string"
@@ -177,6 +176,8 @@ Return ok=false with a one-line reason for the first failure, else ok=true. Alwa
   {
     label: "preflight",
     phase: "Preflight",
+    agentType: "runner",
+    effort: "low",
     schema: {
       type: "object",
       required: ["ok", "reason", "branch", "root"],
@@ -229,6 +230,7 @@ const interview = await ask(
   `Prepare the impeccable \`init\` interview. Do NOT write any file and do NOT ask the user anything: you
 cannot reach them. Draft the answers instead.
 
+${SKILL_RULE}
 Load \`impeccable\` and read its \`init\` instructions to get the questions it asks about the
 product, the users and the tone. ${redo ? "This is a redo: also include a question on what the old brand (DESIGN.md) got wrong." : ""}
 Draft an answer to each one from:
@@ -361,7 +363,7 @@ Write:
   · shots/desktop-light.png, desktop-dark.png, mobile-light.png, mobile-dark.png — real screenshots
     of comp.html (Playwright CLI, headless), plus shots/desktop-1920-light.png: at 1920 the content
     must sit in a max-width page container, not run edge to edge.
-Do not write critique.md; the critics do.
+Do not write a critique file; the critics return theirs as JSON.
 
 ${REPO_RULES}
 Return the ABSOLUTE comp.html path, the tokens object you wrote, and the ABSOLUTE screenshot paths.`;
@@ -373,6 +375,7 @@ async function critique(comp) {
   const taste = await ask(
     `Run the taste look-and-fix loop on the LANDING HERO of ${comp.html}.
 
+${SKILL_RULE}
 Load \`design-taste-frontend\` and follow its references/critique.md loop: screenshot at
 desktop (1440 and 1920) and mobile, score, fix, repeat — AT MOST 3 rounds. You may edit only ${dir}/comp.html,
 ${dir}/tokens.json and ${dir}/shots/. When a fix changes a colour, font, radius, density, motion value, voice line
@@ -398,6 +401,7 @@ contents of ${dir}/tokens.json after your last edit (read the file back).`,
       ask(
         `Critique the DASHBOARD screen and the PRIMITIVES STRIP of ${comp.html}. Read-only: do not edit.
 
+${SKILL_RULE}
 Load \`impeccable\` and run its \`critique\` on the screenshots in ${dir}/shots/ (judge pixels,
 not source). Report each issue with a P0-P3 severity.
 
@@ -427,6 +431,7 @@ and contrastAA.dark as booleans (true only if every pair passes AA).`,
       ask(
         `Review the motion in ${comp.html}. Read-only: do not edit.
 
+${SKILL_RULE}
 Load the \`emil-design-eng\` skill and judge the motion by its rules (\`review-animations\` is
 user-only: the Skill tool refuses it). Check easing, duration, purpose, and that
 prefers-reduced-motion collapses the motion. Return verdict PASS or FAIL with notes.`,
@@ -450,12 +455,6 @@ prefers-reduced-motion collapses the motion. Return verdict PASS or FAIL with no
     contrastAA: imp ? imp.contrastAA : { light: false, dark: false },
   };
 
-  await ask(
-    `Write ${dir}/critique.md from this critique JSON. Plain markdown: one section each for Landing
-(taste score, shown as scored), Dashboard and primitives (findings by severity), Motion, Contrast.
-Write only that file.\n\n${JSON.stringify(result, null, 1)}`,
-    { label: `critique:${comp.id}:notes`, phase: "Critique", effort: "low" }
-  );
   // The loop may have changed the comp and its tokens.json; carry the file's current contents forward.
   result.tokens = taste && taste.tokens && typeof taste.tokens === "object" ? taste.tokens : comp.tokens;
   return result;
@@ -692,29 +691,61 @@ const rejected = rejectedAll;
 
 const ui = (names) => names.map((n) => `app/components/ui/${n}.tsx`);
 
-// Hardcoded fences. The four primitive families cover all 55 files in app/components/ui once.
+// Hardcoded fences. The nine primitive lanes cover all 55 files in app/components/ui once.
 const CONTRACT_FENCE = ["app/app.css", "app/root.tsx"];
 const BUILD_LANES = [
   // harness:primitive-fences:start
+  // Each primitive lane owns at most 10 files, grouped by kind. `motion` = the lane owns something that
+  // moves, so it alone loads the two motion skills.
   {
-    name: "primitives:actions-forms",
-    owns: ui(["button", "button-group", "toggle", "toggle-group", "input", "input-group", "input-otp", "textarea", "label", "field", "form", "checkbox", "radio-group", "switch", "slider", "select", "native-select", "combobox", "calendar", "kbd"]),
+    name: "primitives:buttons-toggles",
+    motion: true,
+    owns: ui(["button", "button-group", "toggle", "toggle-group", "switch", "kbd"]),
   },
   {
-    name: "primitives:overlays-feedback",
-    owns: ui(["dialog", "alert-dialog", "sheet", "drawer", "popover", "hover-card", "tooltip", "dropdown-menu", "context-menu", "menubar", "command", "alert", "sonner", "progress", "skeleton", "spinner", "empty"]),
+    name: "primitives:text-fields",
+    motion: false,
+    owns: ui(["input", "input-group", "input-otp", "textarea", "label", "field", "form"]),
   },
   {
-    name: "primitives:layout-nav",
-    owns: ui(["accordion", "collapsible", "tabs", "navigation-menu", "breadcrumb", "pagination", "sidebar", "separator", "scroll-area", "resizable", "aspect-ratio", "card"]),
+    name: "primitives:choice-pickers",
+    motion: true,
+    owns: ui(["checkbox", "radio-group", "slider", "select", "native-select", "combobox", "calendar"]),
+  },
+  {
+    name: "primitives:dialogs-sheets",
+    motion: true,
+    owns: ui(["dialog", "alert-dialog", "sheet", "drawer"]),
+  },
+  {
+    name: "primitives:menus-popovers",
+    motion: true,
+    owns: ui(["popover", "hover-card", "tooltip", "dropdown-menu", "context-menu", "menubar", "command"]),
+  },
+  {
+    name: "primitives:feedback",
+    motion: true,
+    owns: ui(["alert", "sonner", "progress", "skeleton", "spinner", "empty"]),
+  },
+  {
+    name: "primitives:disclosure-nav",
+    motion: true,
+    owns: ui(["accordion", "collapsible", "tabs", "navigation-menu", "breadcrumb", "pagination"]),
+  },
+  {
+    name: "primitives:layout",
+    motion: true, // the sidebar collapses
+    owns: ui(["sidebar", "separator", "scroll-area", "resizable", "aspect-ratio", "card"]),
   },
   {
     name: "primitives:data-display",
+    motion: false,
     owns: ui(["table", "chart", "avatar", "badge", "item", "carousel"]),
   },
   // harness:primitive-fences:end
   {
     name: "shared",
+    motion: true, // theme-toggle and file-upload animate
     owns: [
       "app/components/feature-card.tsx",
       "app/components/file-upload.tsx",
@@ -727,6 +758,7 @@ const BUILD_LANES = [
   {
     // App shells and brand copy. Runs after the parallel wave (it imports the wordmark that `shared` writes).
     name: "shell",
+    motion: false,
     owns: [
       "app/routes/admin/layout/**",
       "app/routes/authentication/components/auth-shell.tsx",
@@ -734,7 +766,7 @@ const BUILD_LANES = [
       "app/locales/zh/**",
     ],
   },
-  ...(rebuildHome ? [{ name: "home", owns: ["app/routes/home.tsx"] }] : []),
+  ...(rebuildHome ? [{ name: "home", motion: true, owns: ["app/routes/home.tsx"] }] : []),
 ];
 const ALL_FENCES = [...CONTRACT_FENCE, ...BUILD_LANES.flatMap((l) => l.owns)];
 
@@ -802,11 +834,13 @@ phase("Contract");
 // Snapshot what is dirty before any lane writes, so every later diff can subtract it. PRODUCT.md
 // (written by Brief, untracked) lands here, and nothing may revert or delete it.
 const snap = await ask(
-  `List every path that differs from HEAD right now, repo-relative, including untracked files: run
-\`git status --porcelain\` (for a rename, give the new path). Read-only; change nothing.`,
+  `Run these steps. Read-only; change nothing.
+  1. \`git status --porcelain\`
+  2. Return \`paths\`: every path in that output, repo-relative, untracked files included (for a rename, the new path).`,
   {
     label: "contract:snapshot",
     phase: "Contract",
+    agentType: "runner",
     effort: "low",
     schema: {
       type: "object",
@@ -897,7 +931,11 @@ No dev server and no browser in this lane: the Check phase drives the browser, a
 share one Vite cache and corrupt each other. Verify with \`bun run typecheck\` only. If you need a file
 you do not own, do not edit it: return it in \`needs\`. Return your cwd (\`git rev-parse --show-toplevel\`).
 
-Skills: ${lane.name === "home" ? "load `design-taste-frontend` as lead (public page), and" : "load `impeccable` as lead, and"} \`animate\` + \`emil-design-eng\` for anything that moves. Motion uses the --ease-* and --duration-* tokens.
+Skills: load ${lane.name === "home" ? "`design-taste-frontend` as lead (public page)" : "`impeccable` as lead"}.${
+  lane.motion
+    ? " This lane owns something that moves: also load `animate` and `emil-design-eng`. Motion uses the --ease-* and --duration-* tokens."
+    : " This lane owns nothing that moves: do NOT load `animate` or `emil-design-eng`."
+}
 ${extra ?? ""}
 ${REPO_RULES}
 Return the files you changed and a one-line-per-file report.`;
@@ -943,12 +981,14 @@ if (built.some((b) => !b)) log(`WARNING: ${built.filter((b) => !b).length} build
 let fenceViolations = [];
 async function fenceCheck(reports, phaseName) {
   const diff = await ask(
-    `List every file that differs from HEAD in the working tree, repo-relative, including untracked
-files: run \`git status --porcelain\` and \`git diff --name-only HEAD\`. Read-only; change nothing.
-Return the paths.`,
+    `Run these steps. Read-only; change nothing.
+  1. \`git status --porcelain\`
+  2. \`git diff --name-only HEAD\`
+  3. Return \`paths\`: every repo-relative path from either output, untracked files included, each once.`,
     {
       label: "build:fence-diff",
       phase: phaseName,
+      agentType: "runner",
       effort: "low",
       schema: {
         type: "object",
@@ -1001,6 +1041,40 @@ fenceViolations = await fenceCheck(
 );
 fenceViolations.forEach((v) => log(`P0 FENCE VIOLATION: ${v.lane} touched ${v.path}`));
 
+// Polish runs once here, after the build lanes and their fence check, so the first check wave and the fix
+// rounds cover what it changes. It runs alone, so it gets the one browser port. Its `needs` join the build
+// lanes' `needs` in the handoff below.
+const polish = await ask(
+  `Finish pass on the branded app. Load \`impeccable\` and run \`polish\` (then \`audit\`
+if time allows) on the kitchen-sink route, dashboard and admin users.
+
+You are the only agent running now. Dev server: \`CI=1 bun run dev --port 5280\` (yours alone). Save screenshots under
+${outDir}/polish/ (create it). Stop your dev server and close the browser before you return.
+
+FILE FENCE — you may edit only these paths:
+${ALL_FENCES.map((p) => `  · ${p}`).join("\n")}
+Anything outside them: do not edit; return it in \`needs\`. Keep every export, prop and variant name.
+
+${REPO_RULES}
+Return the files you changed, your cwd (\`git rev-parse --show-toplevel\`), and a report.`,
+  { label: "build:polish", phase: "Build", agentType: "ui-builder", schema: FILES_SCHEMA }
+);
+if (!polish) log("WARNING: polish lane returned nothing");
+const polishReport = polish ? polish.report : "polish lane returned nothing";
+const polishFiles = polish ? polish.files : [];
+const polishLane = {
+  name: "polish",
+  owns: ALL_FENCES,
+  files: polishFiles,
+  cwd: polish ? polish.cwd : undefined,
+  changedDefaults: polish ? polish.changedDefaults ?? [] : [],
+  needs: polish ? polish.needs ?? [] : [],
+  report: polishReport,
+};
+lanes.push(polishLane);
+fenceViolations = await fenceCheck([polishLane], "Build");
+fenceViolations.forEach((v) => log(`P0 FENCE VIOLATION after polish: ${v.lane} touched ${v.path}`));
+
 // ---------------------------------------------------------------------------------------------
 phase("Check");
 
@@ -1039,6 +1113,7 @@ ${CHECK_INPUTS}
 
 Drive ${SURFACES}
 ${browserRules("impeccable-critique", 5281)}
+${SKILL_RULE}
 Load \`impeccable\` and run \`critique\` on the screenshots. Judge pixels. Does it match the chosen comp
 (${compDir}/shots/)? ${WIDE_CHECK} Report every issue P0-P3. ${FIND_NOTE}`,
         { label: "check:impeccable-critique", phase: "Check", schema: VERDICT_SCHEMA }
@@ -1057,6 +1132,7 @@ ${CHECK_INPUTS}
 
 Screenshot / ${VIEWPORTS}.
 ${browserRules("taste-home", 5282)}
+${SKILL_RULE}
 Load \`design-taste-frontend\` and run its references/critique.md loop, at most 3 rounds, scoring only (no
 fixing). ${WIDE_CHECK} A score under 7.5 is reported as scored and is a P1; never round up. Put the score and the
 last critique in evidence.`,
@@ -1075,6 +1151,7 @@ last critique in evidence.`,
 ${CHECK_INPUTS}
 
 ${browserRules("motion", 5283)}
+${SKILL_RULE}
 Load the \`emil-design-eng\` skill (not \`review-animations\`, which the Skill tool refuses) and judge by its rules the primitives that move (dialog, sheet, dropdown-menu, tabs, accordion, sonner, button
 press states). Check that the durations and easings come from the --duration-* / --ease-* tokens and
 that prefers-reduced-motion collapses them. ${FIND_NOTE}`,
@@ -1085,12 +1162,15 @@ that prefers-reduced-motion collapses them. ${FIND_NOTE}`,
     name: "verify gates",
     run: () =>
       ask(
-        `Run the declared gates on the working tree. Run \`./scripts/verify.sh\` (typecheck, test, non-negotiables,
-harness, build, e2e; \`./scripts/verify.sh --list\` shows them). Typecheck must pass with NO call-site edits
-outside app/components/ — if it fails in a route, that is a P1 naming the export that changed.
-Report each gate pass/fail with verbatim output tails. Do not fix anything. For anything needing a
-dev server use CI=1 and a free port of your own, and stop it before you return. ${FIND_NOTE}`,
-        { label: "check:gates", phase: "Check", schema: VERDICT_SCHEMA }
+        `Run these steps. Fix nothing.
+  1. \`./scripts/verify.sh\` (typecheck, test, non-negotiables, harness, build, e2e; \`./scripts/verify.sh --list\` shows them).
+     Anything that needs a dev server: \`CI=1\` and a free port of your own; stop it before you return.
+  2. For each gate, note pass or fail and keep the last 20 lines of its output.
+  3. Return verdict PASS only if every gate passed, else FAIL. For each failing gate return one P1 finding: the gate name
+     and the first error lines as \`issue\`. If a typecheck error sits in a file outside app/components/, put that file in \`file\`
+     and name the export that changed. ${FIND_NOTE}
+  4. Put the output tails in \`evidence\`.`,
+        { label: "check:gates", phase: "Check", agentType: "runner", effort: "low", schema: VERDICT_SCHEMA }
       ),
   },
   {
@@ -1413,14 +1493,15 @@ for (let round = 1; round <= 2 && openBlocking().length; round++) {
   }
   if (strays.length) {
     const r = await ask(
-      `Restore these files, which no lane may edit:
+      `Restore these files, which no lane may edit. For each path, in order:
 ${strays.map((v) => `  · ${v.path} (touched by ${v.lane})`).join("\n")}
-For a tracked file: \`git checkout HEAD -- <path>\`. For an untracked file: delete it ONLY if it is under app/;
-anywhere else leave it and say so. Never touch these paths, which were dirty before the build:
-${[...preDirty].join(", ") || "(none)"}.
-A path inside some lane's fence holds that lane's work: do not git checkout it; leave it and say so.
-Touch nothing else. Return the files you changed, the paths you restored or deleted in \`reverted\`, your cwd, and a report.`,
-      { label: `fix:${round}:revert-strays`, phase: "Fix", effort: "low", schema: FILES_SCHEMA }
+  1. If the path is in this list, skip it (dirty before the build): ${[...preDirty].join(", ") || "(none)"}.
+  2. If the path sits inside a lane's fence, skip it and say so: it holds that lane's work.
+  3. If it is tracked: \`git checkout HEAD -- <path>\`.
+  4. If it is untracked: delete it ONLY if it is under app/; anywhere else leave it and say so.
+  5. Touch nothing else.
+Return \`files\` and \`reverted\` (the paths you restored or deleted), \`cwd\` (\`git rev-parse --show-toplevel\`), and a one-line \`report\`.`,
+      { label: `fix:${round}:revert-strays`, phase: "Fix", agentType: "runner", effort: "low", schema: FILES_SCHEMA }
     );
     if (!r) log("WARNING: revert agent returned nothing");
     repairs.push({ name: "revert-strays", owns: [], files: r ? r.files : [], cwd: r ? r.cwd : undefined, reverted: r ? r.reverted ?? [] : [], report: r ? r.report : "revert agent returned nothing" });
@@ -1459,33 +1540,10 @@ let mayShip = !stillOpen.length || accepted();
 // ---------------------------------------------------------------------------------------------
 phase("Close");
 
-// Polish is a finish pass, not a fix round; skip it when something is still on fire.
-let polishReport = "skipped: open P0/P1 and the user did not accept them";
-let polishFiles = []; // files the polish lane reported changing; Ship stages them
+// Polish ran in Build and the Check wave and fix rounds covered it. DESIGN.md writes no app file, so no
+// check reruns after it; the fence check below still runs once after the documenter.
 if (mayShip) {
-  const polish = await ask(
-    `Finish pass on the branded app. Load \`impeccable\` and run \`polish\` (then \`audit\`
-if time allows) on the kitchen-sink route, dashboard and admin users.
-
-FILE FENCE — you may edit only these paths:
-${ALL_FENCES.map((p) => `  · ${p}`).join("\n")}
-Anything outside them: STOP and report it, do not edit. Keep every export, prop and variant name.
-
-${REPO_RULES}
-Return the files you changed, your cwd (\`git rev-parse --show-toplevel\`), and a report.`,
-    { label: "close:polish", phase: "Close", agentType: "ui-builder", schema: FILES_SCHEMA }
-  );
-  polishReport = polish ? polish.report : "polish lane returned nothing";
-  polishFiles = polish ? polish.files : [];
-  // Polish may not edit outside its fence, and no fix round follows it, so a `needs` item can only go to the user.
-  const polishNeeds = ((polish && polish.needs) || []).map((n) => ({ severity: "P1", source: "needs:close:polish", issue: `needs a human or a separate task: ${n.why}`, file: n.file }));
-  if (polishNeeds.length) {
-    const e = await escalate(polishNeeds, "were outside the polish lane's fence", "post-close-polish");
-    if (e.pending) return e.pending;
-    if (!accepted()) mayShip = false;
-  }
-
-  // DESIGN.md comes from the shipped artifact, so it must follow polish.
+  // DESIGN.md comes from the shipped artifact, so it follows the checked, polished tree.
   const doc = await ask(
     `Write ${ROOT}/DESIGN.md from the SHIPPED app, not from intentions. Read app/app.css,
 app/root.tsx, app/components/ui/ and app/components/brand/, and the chosen comp at ${compDir}.
@@ -1515,39 +1573,19 @@ ${redo ? "This is a redo: replace the old DESIGN.md outright. Carry nothing over
     mayShip = false;
   }
 
-  // Polish and the documenter ran after the Fix-phase check, so check the whole tree again.
+  // The documenter ran after the last check, so check the whole tree once more for strays.
   const before = new Set(fenceViolations.map((v) => v.path));
-  fenceViolations = await fenceCheck(
-    [{ name: "close:polish", owns: ALL_FENCES, files: polish ? polish.files : [], cwd: polish ? polish.cwd : undefined }, { name: "close:design-md", owns: [], files: [] }],
-    "Close"
-  );
+  fenceViolations = await fenceCheck([{ name: "close:design-md", owns: [], files: doc ? doc.files : [] }], "Close");
   const fresh = fenceViolations.filter((v) => !before.has(v.path));
   fresh.forEach((v) => log(`P0 FENCE VIOLATION after Close: ${v.lane} touched ${v.path}`));
   if (fresh.length) {
     const e = await escalate(
       fresh.map((v) => ({ severity: "P0", source: `fence:${v.lane}`, issue: `edited ${v.path}, outside its fence`, file: v.path })),
-      "appeared after polish and DESIGN.md",
+      "appeared after the DESIGN.md pass",
       "post-close-fence"
     );
     if (e.pending) return e.pending;
     if (!accepted()) mayShip = false;
-  }
-
-  // Polish and DESIGN.md came after the last check, so no earlier verdict covers the tree Ship would commit.
-  // Run the FULL set once more (gates alone, then the browser checks one at a time). New P0/P1 are escalated,
-  // never auto-fixed. Ship reads only these latest verdicts.
-  if (mayShip) {
-    log("Final pass: re-running every check on the polished tree");
-    await runChecks(CHECKS);
-    const asked = new Set(escalations.flatMap((e) => e.about));
-    const fresh2 = openBlocking()
-      .map((f) => (outsideApp(f) ? { ...f, issue: `needs a human or a separate task (outside app/): ${f.issue}` } : f))
-      .filter((f) => !asked.has(`${f.source}: ${f.issue}`));
-    if (fresh2.length) {
-      const e = await escalate(fresh2, "appeared in the final check pass after polish and DESIGN.md", "post-close-final");
-      if (e.pending) return e.pending;
-      if (!accepted()) mayShip = false;
-    }
   }
 }
 
@@ -1645,8 +1683,8 @@ ${reportedFiles.map((p) => `       · ${p}`).join("\n") || "       · (none)"}
      Do NOT stage anything under .verify/ (the comps, screenshots and verdict.md stay local), or draw
      files. Check \`git status --short\` afterwards: anything modified and unstaged that is not one of
      those is a surprise, so name it in your note. Commit message:
-     \`feat(brand): ${tokens.name ?? "new"} brand — tokens, primitives, DESIGN.md\`, ending with the line:
-     Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>
+     \`feat(brand): ${tokens.name ?? "new"} brand — tokens, primitives, DESIGN.md\`, ending with the
+     Co-Authored-By line for the model you run as (\`Co-Authored-By: <your model name> <noreply@anthropic.com>\`).
      Push the branch and open the PR with the \`engineering-toolkit:pr-format\` skill's layout: the pick
      screenshots (desktop and mobile, light and dark) and the final critique summary in the body, the
      contents of ${outDir}/verdict.md, the winning comp and why it won (its taste score), the list of

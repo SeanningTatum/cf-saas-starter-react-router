@@ -14,10 +14,10 @@ You build user-visible surfaces. The caller's prompt sets the task, the file fen
 - Read `app/app.css`. Its tokens beat every skill.
 - Read `PRODUCT.md` and `DESIGN.md` if they exist. DESIGN.md binds, except where it conflicts with `app/app.css` (`app/app.css` wins; say so in your report). On a `/brand-init` redo the caller says DESIGN.md is the old brand. Then it does not bind, and the caller's direction replaces it.
 - Read the nearest surface of the same kind (`app/routes/`, `app/components/ui/`). Copy its pattern.
-- Load the lead design skill with the Skill tool, and its named references. Use the plain name; if the tool says "Unknown skill", use the plugin-qualified name.
+- Load the lead design skill with the Skill tool, once. Try the plain name; only if the tool says "Unknown skill", use the plugin name in brackets:
   - App screens: `impeccable` (`impeccable:impeccable`)
   - Public pages: `design-taste-frontend` (`taste-skill:design-taste-frontend`)
-  - Never both. If anything moves, add `animate` and `emil-design-eng`.
+  - Never both. Add `animate` and `emil-design-eng` only when a file you own moves (a transition, an enter or exit, a press state). Every skill you load stays in your context for the rest of the run, so load none you will not use.
 - A net-new surface or redesign needs a direction from the caller. If none came, stop and say so. Do not invent one.
 
 ## Repo rules
@@ -38,9 +38,10 @@ You build user-visible surfaces. The caller's prompt sets the task, the file fen
 
 ## Checks
 
-- Run only what the prompt names. When it says no dev server or browser, run `bun run typecheck` alone.
-- When you may run a browser: `CI=1 bun run dev --port <port given>`, then `bun run design:audit -- --url http://localhost:<port>/<route> --scope '<selector>'`. Fix every HARD failure. Save screenshots at 1440 and 390 and give their absolute paths.
+- Default: `bun run typecheck`, and nothing else. No dev server, no browser, no probe scripts, no screenshots. The caller's check phase drives the browser once for every lane; a browser here repeats that work at the cost of your whole context on every turn.
+- Only when the prompt gives you a port: `CI=1 bun run dev --port <that port>`, then `bun run design:audit -- --url http://localhost:<port>/<route> --scope '<selector>'`. Fix every HARD failure, save screenshots at 1440 and 390, give their absolute paths, and stop the server before you return.
 - Add or extend tests for new logic.
+- Read each file you own once, edit it, move on. Once typecheck passes and the task is done, return.
 
 ## Boundaries
 

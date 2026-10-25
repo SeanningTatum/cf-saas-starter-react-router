@@ -38,13 +38,13 @@ intent they get. Say what becomes possible, for whom, and any constraint that is
 
 | Phase | Runs | Why |
 |---|---|---|
-| **Orient** | 4 read-only lanes in parallel — context lookup (docs, issues, PRs) · `context-memory` recall (what earlier sessions decided and left open for this slug) · trace of the nearest existing feature · UI tier check | None can conflict, and the architect needs all four |
-| **Contract** | 1 architect, then 1 writer for the contract file | The **only** genuinely sequential step: fix the interface, then nobody has to wait |
-| **Build** | up to 5 lanes concurrently, each fenced to disjoint paths | Once the interface is fixed, the server lane and the UI lane need nothing from each other |
-| **Verify** | tests ‖ spans first, then gates · non-negotiables · browser walk · design critique, all at once | Tests and spans write files, so they land before anyone reads the tree. The checkers are read-only and need only the finished tree. Browser lanes each own a port |
+| **Orient** | 3 read-only lanes in parallel — context lookup (docs, issues, PRs, plus the memory recall: what earlier sessions decided and left open for this slug) · trace of the nearest existing feature · UI tier check | None can conflict, and the contract agent needs all three |
+| **Contract** | 1 agent that fixes the interface and writes the contract file itself | The **only** genuinely sequential step: fix the interface, then nobody has to wait. The script fails if the agent names a file it did not write |
+| **Build** | one lane per contract lane, all concurrently (the runtime queues past its limit), each fenced to disjoint paths | Once the interface is fixed, the server lane and the UI lane need nothing from each other. UI lanes run no browser; they check with typecheck only |
+| **Verify** | tests ‖ spans first, then gates (`runner`, low effort) · non-negotiables (judgment only, since the gates already run the AST script) · browser walk then design critique, chained | Tests and spans write files, so they land before anyone reads the tree. The walk owns the one dev server and browser and leaves screenshots in `.verify/<slug>/`; the critique judges those screenshots and opens no browser |
 | **Close** | 1 synthesis, then 1 `context-memory` record | States what is true with evidence, what blocks, what a human must decide, and what is still owed on the issue and PR. The record runs once, after every other lane, and saves what was built, the contract decisions and why, links, todos owed, status and next step |
 
-~16 agents for a UI feature, ~12 for server-only.
+About 15 agents for a UI feature (3 build lanes), about 11 for server-only (2 build lanes).
 
 ## The one rule that makes it safe
 

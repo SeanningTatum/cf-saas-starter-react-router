@@ -12,6 +12,7 @@ Project sub-agents for repo-specific work. Planning uses Matt Pocock's skills (`
 | [`effect-ts-enforcer`](effect-ts-enforcer.md) | Before `./scripts/verify.sh`: read-only review against the five non-negotiables |
 | [`context-memory`](context-memory.md) | Start of any task (recall, read-only) and its end (record, one writer): per-feature context, decisions, links, todos, where work stopped — stored outside the repo |
 | [`feature-verifier`](feature-verifier.md) | Any user-visible flow: browser walk, screenshots, verdict in `.verify/<slug>/verdict.md` |
+| [`runner`](runner.md) | A workflow step that needs a shell but no judgment: a git snapshot, a gate run, a commit (runs on `haiku`) |
 
 Plugin agents (enabled in `.claude/settings.json`; names carry the plugin prefix):
 
@@ -32,6 +33,14 @@ Use a project agent for the non-negotiables, this repo's UI rules and its verifi
 - Grant the fewest tools. `effect-ts-enforcer` has no `Edit` or `Write`.
 - Default `model: sonnet`. `test-author` and `ui-builder` use `opus`: choosing which tests to write, and building UI to a brand, take judgment a cheaper model lacks.
 - Add an agent only for a recurring task with long instructions and structured output. Otherwise work in the main thread.
+
+## Token cost
+
+Measured on the brand-init trial run (2026-10-24, 87.5M tokens through models): the cost of an agent is its turns times its context, because every turn re-reads the whole context.
+
+- A workflow `agent()` call with no `agentType` starts at about 40k tokens (every tool, the full skill list, AGENTS.md). An agent with a short `tools:` list starts at 10–30k. Give every workflow step an `agentType`; use `runner` for shell-only steps.
+- Writer lanes run long. A 20-file lane went 72 turns and 10.5M tokens; most of that came after typecheck passed, on browser checks the check phase repeats. Keep a lane to about 10 files and keep the browser out of it.
+- Every loaded skill stays in context for every later turn. Load only the ones the task needs, once each.
 
 ## Kimi Code
 
