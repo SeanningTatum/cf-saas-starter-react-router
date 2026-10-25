@@ -56,6 +56,21 @@ OV_OUT=$(cd "$REPO" && CONTEXT_MEMORY_DIR="$SB/override" "$SCRIPT")
 [ "$OV_OUT" = "$SB/override" ] && [ -d "$SB/override" ] && ok "CONTEXT_MEMORY_DIR overrides and is created" \
   || bad "override printed '$OV_OUT'"
 
+# Catches: the MEMORY.md pointer following an override to <override>/../MEMORY.md.
+IX_OUT=$(cd "$REPO" && CONTEXT_MEMORY_DIR="$SB/override" "$SCRIPT" --index)
+[ "$IX_OUT" = "$HOME/.claude/projects/$SLUG/memory/MEMORY.md" ] && ok "--index stays in auto memory under an override" \
+  || bad "--index printed '$IX_OUT'"
+
+# Catches: the default store linked by an absolute path, which breaks when HOME moves.
+LN_OUT=$(cd "$REPO/.claude/worktrees/wt" && CONTEXT_MEMORY_DIR= "$SCRIPT" --link)
+[ "$LN_OUT" = "features/INDEX.md" ] && ok "--link is relative for the default store" \
+  || bad "--link printed '$LN_OUT', want 'features/INDEX.md'"
+
+# Catches: an overridden store linked as features/INDEX.md, which points at the wrong folder.
+LO_OUT=$(cd "$REPO" && CONTEXT_MEMORY_DIR="$SB/override" "$SCRIPT" --link)
+[ "$LO_OUT" = "$SB/override/INDEX.md" ] && ok "--link is absolute for an overridden store" \
+  || bad "--link printed '$LO_OUT', want '$SB/override/INDEX.md'"
+
 # Catches: a silent success outside a repo, which would scatter memory into a bogus dir.
 if (cd "$SB" && CONTEXT_MEMORY_DIR= "$SCRIPT" >/dev/null 2>&1); then
   bad "outside a repo it exited 0"

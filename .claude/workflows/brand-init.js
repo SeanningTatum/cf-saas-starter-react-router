@@ -270,8 +270,10 @@ if (!interview || !interview.questions.length) {
   log("Brief agent returned no questions — no PRODUCT.md to design from.");
   return { error: "brief agent returned nothing" };
 }
-const given = input.answers && typeof input.answers === "object" ? input.answers : {};
-const unanswered = interview.questions.filter((q) => !q.confident && typeof given[q.id] !== "string");
+const resumed = input.answers && typeof input.answers === "object";
+const given = resumed ? input.answers : {};
+// A resume with args.answers settles the brief: an id left out keeps its draft.
+const unanswered = resumed ? [] : interview.questions.filter((q) => !q.confident);
 if (unanswered.length) {
   log(`Brief: ${unanswered.length} question(s) need the user. Stopping; re-run with args.answers.`);
   const memInput = await remember(

@@ -18,10 +18,10 @@ Run `./scripts/memory-dir.sh` first. It prints the directory (and creates it). E
 └── <slug>.md       one file per feature
 ```
 
-`<dir>/../MEMORY.md` is Claude Code's auto-memory index, loaded into every main session. You own exactly one line in it, and nothing else there:
+Claude Code's auto-memory index, loaded into every main session, is at `./scripts/memory-dir.sh --index`; it is not always `<dir>/..`, since `CONTEXT_MEMORY_DIR` can move the store. You own exactly one line in it, and nothing else there. Its link is `./scripts/memory-dir.sh --link`:
 
 ```
-- [Feature memory](features/INDEX.md) — active: <slug, or "none"> — next: <one line>
+- [Feature memory](<link>) — active: <slug, or "none"> — next: <one line>
 ```
 
 ### INDEX.md
