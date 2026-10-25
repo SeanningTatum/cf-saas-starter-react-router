@@ -206,6 +206,16 @@ function split(plan: Plan, deps: Deps): Outcome {
       `start from ${plan.base} with the work uncommitted, or restack the existing commits instead`,
     );
 
+  const staged = deps.git(["diff", "--cached", "--name-only"]);
+  if (staged.code !== 0) return gitFailure(staged, "git diff --cached");
+  if (staged.stdout.trim())
+    return bad(
+      3,
+      "STAGED_FILES",
+      `staged files would land in the first PR's commit: ${staged.stdout.trim().split("\n").join(", ")}`,
+      "unstage them (git restore --staged .), then retry; split stages each PR's own paths",
+    );
+
   const branches: { n: number; branch: string; sha: string; paths: string[] }[] = [];
   for (const pr of plan.prs) {
     const paths = a.assignments.find((x) => x.n === pr.n)!.paths;

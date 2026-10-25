@@ -11,7 +11,9 @@ const review = (over: Record<string, unknown> = {}) => ({
   body: "reviewed",
   ...over,
 });
-const summaryBody = (n: number) => `<!-- greptile_summary -->\nGreptile summary\n**Confidence Score: ${n}/5**`;
+const summaryBody = (n: number, sha = SHA) =>
+  `<!-- greptile_summary -->\nGreptile summary\n**Confidence Score: ${n}/5**\nLast reviewed commit: https://github.com/a/b/commit/${sha}`;
+const bot = { login: "greptile-apps[bot]" };
 
 interface World {
   /** reviews returned on each poll, by poll index (last one repeats) */
@@ -113,7 +115,7 @@ describe("pr-review-wait", () => {
   it("reads confidence from the LAST summary comment: a retrigger posts a newer summary", async () => {
     const { deps } = harness({
       reviews: [[review()]],
-      issueComments: [{ body: summaryBody(2) }, { body: "unrelated 5/5" }, { body: summaryBody(4) }],
+      issueComments: [{ user: bot, body: summaryBody(2) }, { user: bot, body: "unrelated 5/5" }, { user: bot, body: summaryBody(4) }],
     });
     const o = await run(["5"], deps);
     expect((o.out as any).confidence).toBe(4);
@@ -122,6 +124,16 @@ describe("pr-review-wait", () => {
 
   it("confidence is null, not 0, when no summary comment exists", async () => {
     const { deps } = harness({ reviews: [[review()]], issueComments: [{ body: "Confidence Score: 3/5 but no marker" }] });
+    const o = await run(["5"], deps);
+    expect((o.out as any).confidence).toBeNull();
+    expect((o.out as any).summary).toBe("");
+  });
+
+  it("ignores a marker comment from a human or tied to another commit: no score beats a wrong one", async () => {
+    const { deps } = harness({
+      reviews: [[review()]],
+      issueComments: [{ user: { login: "someone" }, body: summaryBody(1) }, { user: bot, body: summaryBody(2, "old999") }],
+    });
     const o = await run(["5"], deps);
     expect((o.out as any).confidence).toBeNull();
     expect((o.out as any).summary).toBe("");

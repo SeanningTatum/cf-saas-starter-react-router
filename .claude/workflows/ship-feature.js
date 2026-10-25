@@ -83,6 +83,8 @@ if (input.slug !== undefined && !SLUG.test(input.slug)) {
   return { error: "args.slug must be kebab-case" };
 }
 const BASE = input.base || "main";
+// POSIX single-quote: nothing inside is expanded, so ticket or plan text can never run as a command.
+const shq = (v) => `'${String(v).replace(/'/g, `'\\''`)}'`;
 const GREPTILE_ROUNDS = Math.max(0, Math.min(5, input.greptileRounds ?? 3));
 const COAUTHOR = "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>";
 
@@ -156,7 +158,7 @@ const ARCHITECT = obj({
 phase("Preflight");
 
 const recordLine = input.record
-  ? `  7. Record. The caller gave ${JSON.stringify(input.record)}. It must exist (relative to ROOT). Return its absolute path as record_path.`
+  ? `  7. Record. The caller gave ${shq(input.record)}. It must exist (relative to ROOT). Return its absolute path as record_path.`
   : input.ticket
     ? `  7. Record. Find the issue comment whose body starts with \`<!-- plan-feature:decision-record -->\` (\`gh issue view <n> --json comments\`; the last one wins). If there is one, write its body WITHOUT that first marker line to ROOT/.verify/_intake/record-<issue number>.md (mkdir -p) and return that absolute path as record_path. Else record_path "".`
     : "  7. Record. None (prompt input): record_path \"\".";
@@ -164,17 +166,17 @@ const recordLine = input.record
 const pre = await agent(
   `Pre-flight for ship-feature. Check each item in order and stop at the first failure. Change nothing except the files item 7 names.
 
-  0. Root. ${typeof input.root === "string" ? `Use ${JSON.stringify(input.root)}: \`git -C <it> rev-parse --show-toplevel\` is ROOT.` : "`git rev-parse --show-toplevel` is ROOT."} cd there; everything below runs in ROOT.
+  0. Root. ${typeof input.root === "string" ? `Use ${shq(input.root)}: \`git -C <it> rev-parse --show-toplevel\` is ROOT.` : "`git rev-parse --show-toplevel` is ROOT."} cd there; everything below runs in ROOT.
   1. Date: \`date +%F\`.
   2. \`gh auth status\` must succeed.
   3. Tracked files must be clean: \`git status --porcelain --untracked-files=no\` prints nothing, else fail "commit or stash your changes first". Then list untracked files with \`git ls-files --others --exclude-standard\` -> untracked (array, may be empty).
   4. \`git --version\` must be 2.38 or newer (restack uses rebase --update-refs).
   5. \`git fetch -q origin ${BASE}\`, then \`git rev-parse origin/${BASE}\` -> base_sha.
-  6. ${input.ticket ? `Ticket: \`bun run scripts/tracker.ts view ${JSON.stringify(input.ticket)}\`; return its JSON as issue, unchanged.` : "No ticket: issue null."}
+  6. ${input.ticket ? `Ticket: \`bun run scripts/tracker.ts view ${shq(input.ticket)}\`; return its JSON as issue, unchanged.` : "No ticket: issue null."}
 ${recordLine}
   8. Does app/services/analytics.ts exist -> has_analytics.
   9. CodeGraph: \`./scripts/codegraph.sh ensure\` (it never fails), then \`./scripts/codegraph.sh status\` -> has_codegraph (true when it prints index stats, false on any error).
- 10. Baseline (Bash timeout 600000 ms): \`./scripts/verify.sh\` (run it even if slow). For each gate it reports, return { name, pass, tail } (last 15 lines of a failing gate, "" for a passing one).
+ 10. Baseline (Bash timeout 600000 ms) on the base commit, not on whatever is checked out. Note the current position (\`git symbolic-ref -q --short HEAD\`, else \`git rev-parse HEAD\`), \`git switch --detach <base_sha>\`, run \`./scripts/verify.sh\` (even if slow), then switch back to the noted position (\`git switch <branch>\`, or \`git switch --detach <sha>\`) even when the gates fail. For each gate it reports, return { name, pass, tail } (last 15 lines of a failing gate, "" for a passing one).
 Return ok=false with a one-line reason at the first failure in 0-6; items 7-10 never fail the run.`,
   {
     label: "preflight",
@@ -403,7 +405,7 @@ const laneFor = (file) => {
 };
 const stackPlanFile = `${outDir()}/stack.json`;
 const stackPlan = {
-  base: BASE,
+  base: pre.base_sha, // the commit the work starts from; the local BASE branch may lag origin
   rest: lastPr.n,
   exclude: [...pre.untracked, ".verify/", "tmp/"],
   prs: prs.map((p) => ({
@@ -428,8 +430,8 @@ if (!setup || !setup.ok) return { stopped: "Contract", reason: setup ? setup.rea
 const MAP_SCHEMA = obj({ files: arr(obj({ path: STR, role: STR })) });
 const map = await sh(
   pre.has_codegraph
-    ? `Run \`./scripts/codegraph.sh context ${JSON.stringify(`${plan.title}. ${plan.summary}`.slice(0, 300))}\`. From its output return up to 15 files a builder should copy or extend, each with a one-line role ("repository pattern to copy", "router to register the procedure in"). Paths repo-relative. Add nothing the output does not show.`
-    : `CodeGraph is off. Run \`rg -l -i ${JSON.stringify((plan.title.split(/\s+/).filter((w) => w.length > 3)[0] || slug).toLowerCase())} app workers | head -15\` and return those files with role "matches the feature name".`,
+    ? `Run \`./scripts/codegraph.sh context ${shq(`${plan.title}. ${plan.summary}`.slice(0, 300))}\`. From its output return up to 15 files a builder should copy or extend, each with a one-line role ("repository pattern to copy", "router to register the procedure in"). Paths repo-relative. Add nothing the output does not show.`
+    : `CodeGraph is off. Run \`rg -l -i ${shq((plan.title.split(/\s+/).filter((w) => w.length > 3)[0] || slug).toLowerCase())} app workers | head -15\` and return those files with role "matches the feature name".`,
   { label: "contract:map", phase: "Contract", schema: MAP_SCHEMA }
 );
 const mapText = map && map.files.length ? `\nNearest existing code (${pre.has_codegraph ? "CodeGraph" : "rg"}) — read these before writing, copy their patterns:\n${map.files.map((f) => `  · ${f.path} — ${f.role}`).join("\n")}` : "";
@@ -629,12 +631,14 @@ const checkNames = ["gates", "effect", "security", ...(needsScale ? ["scale"] : 
 function findingsOf(name, r) {
   if (!r) return [{ source: name, severity: "P1", file: "", detail: `${name} check returned nothing`, fix: "re-run it" }];
   if (name === "gates") {
-    return r.gates
+    const got = new Set(r.gates.map((g) => g.name));
+    const missing = pre.baseline.filter((b) => !got.has(b.name)).map((b) => ({ source: `gate:${b.name}`, severity: "P0", file: "", detail: `no result for gate ${b.name}: the run is blocked, not green`, fix: "re-run ./scripts/verify.sh and report every gate" }));
+    return [...missing, ...r.gates
       .filter((g) => !g.pass)
       .map((g) => {
         const wasGreen = pre.baseline.some((b) => b.name === g.name && b.pass);
         return { source: `gate:${g.name}`, severity: "P0", file: "", detail: `${wasGreen ? "REGRESSION — green on the base, red now" : "red"}: ${g.name}\n${g.tail}`, fix: "make the gate green without weakening it" };
-      });
+      })];
   }
   if (name === "browser") {
     return [...findingsOf("walk", r.walk), ...findingsOf("critique", r.critique)];
@@ -839,7 +843,7 @@ const opened = await sh(
   `Push and open the stacked PRs for "${slug}". In order, stop at the first failure:
   1. \`git push -u origin ${prs.map((p) => p.branch).join(" ")}\`.
   2. For each PR in order: \`gh pr create --base <base> --head <branch> --title <title> --body-file <body>\` with
-${prs.map((p) => `       n=${p.n} base=${p.base} branch=${p.branch} title=${JSON.stringify(p.title)} body=${outDir()}/pr-${p.n}.md`).join("\n")}
+${prs.map((p) => `       n=${p.n} base=${p.base} branch=${p.branch} title=${shq(p.title)} body=${outDir()}/pr-${p.n}.md`).join("\n")}
      Record each PR's number and url.
   3. ${prs.length > 1 ? `For each PR: append to its body file a section "## Stack" listing every PR in order as "${"`"}n. #<number> <title>${"`"}" with "← this PR" on its own line, then \`gh pr edit <number> --body-file <body>\`.` : "Single PR: nothing to do."}
 Return ok, failed_command, prs [{ n, number, url, branch }].`,
@@ -928,7 +932,8 @@ Commit trailer: ${COAUTHOR}`,
     const pushed = await sh(
       `In order, stop at the first failure:
   1. ${later.length ? `\`bun run scripts/stack.ts restack --from ${p.n} --plan "${stackPlanFile}"\`` : "No later PRs: skip."}
-  2. \`git push --force-with-lease origin ${[p.branch, ...later].join(" ")}\`
+  2. ${later.length ? `For each later branch (${later.join(", ")}), in stack order: \`git switch <branch>\`, then \`bun run typecheck\` and \`bun run test\` (a lower PR can break a caller that lives only in a later one with no git conflict). Stop at the first failure, with that command as failed_command.` : "No later PRs: skip."}
+  3. \`git switch ${p.branch}\`, then \`git push --force-with-lease origin ${[p.branch, ...later].join(" ")}\`
 Return ok and failed_command.`,
       { label: `greptile:push:${p.n}:${round}`, phase: "Greptile", schema: obj({ ok: BOOL, failed_command: STR }) }
     );
@@ -977,7 +982,7 @@ ${issue ? `\nCloses ${issue.url}` : ""}
   1. \`git branch -f review/${slug} ${top.branch}\` then \`git push -f -u origin review/${slug}\` (a disposable review branch).
   2. Write this text byte for byte to ${outDir()}/rollup.md with a quoted heredoc. In it, replace the line starting "Fixture logins:" with the fixture logins line you find under "How to test" in ${outDir()}/pr-1.md (keep the "Fixture logins:" prefix).
 ${fence("rollup.md", body)}
-  3. \`gh pr create --base ${BASE} --head review/${slug} --title ${JSON.stringify(`${plan.title} (roll-up)`)} --body-file ${outDir()}/rollup.md\` -> number and url.
+  3. \`gh pr create --base ${BASE} --head review/${slug} --title ${shq(`${plan.title} (roll-up)`)} --body-file ${outDir()}/rollup.md\` -> number and url.
   4. For each of ${openPrs.map((p) => `#${p.number}`).join(", ")}: \`gh pr comment <n> --body "Rolled up into #<roll-up number> for review; close this after it merges."\`
 Return ok, failed_command, number, url.`,
     { label: "rollup:pr", phase: "Rollup", schema: obj({ ok: BOOL, failed_command: STR, number: NUM, url: STR }) }

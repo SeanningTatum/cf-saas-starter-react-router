@@ -131,6 +131,7 @@ describe("stack split", () => {
     expect(o.code).toBe(0);
     expect(joined(calls).slice(2)).toEqual([
       "rev-list --count main..HEAD",
+      "diff --cached --name-only",
       "switch -c feat/x/1-data",
       "add -A -- app/db/schema.ts",
       "commit -m feat: data",
@@ -170,6 +171,14 @@ describe("stack split", () => {
     const o = run(["split", "--plan", "p.json"], deps);
     expect(o.code).toBe(3);
     expect(o.err?.code).toBe("HEAD_AHEAD");
+    expect(calls.some((c) => c[0] === "switch")).toBe(false);
+  });
+
+  it("refuses staged files: each `git commit` would take all of them into the first PR", () => {
+    const { deps, calls } = stub((a) => (a[0] === "diff" && a.includes("--cached") ? { stdout: "app/routes/x.tsx\n" } : changed(a)));
+    const o = run(["split", "--plan", "p.json"], deps);
+    expect(o.code).toBe(3);
+    expect(o.err?.code).toBe("STAGED_FILES");
     expect(calls.some((c) => c[0] === "switch")).toBe(false);
   });
 

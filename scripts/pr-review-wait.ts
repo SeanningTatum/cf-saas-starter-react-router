@@ -173,7 +173,7 @@ export async function run(argv: string[], deps: Deps = defaultDeps): Promise<Out
   const ir = deps.gh(["api", "--paginate", `repos/${repo}/issues/${pr}/comments`]);
   if (ir.code !== 0) return ghFailure(ir, "gh api issue comments");
   const summary = parseItems(ir.stdout)
-    .filter((c) => typeof c?.body === "string" && c.body.includes(MARKER))
+    .filter((c) => isBot(c?.user?.login) && typeof c?.body === "string" && c.body.includes(MARKER) && c.body.includes(sha))
     .pop()?.body ?? "";
 
   return ok({
