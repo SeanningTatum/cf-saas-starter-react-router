@@ -407,8 +407,8 @@ const stackPlanFile = `${outDir()}/stack.json`;
 const stackPlan = {
   base: pre.base_sha, // the commit the work starts from; the local BASE branch may lag origin
   rest: lastPr.n,
-  // Untracked files stay out unless a fence names them (plan-feature leaves its prototypes uncommitted for PR 1).
-  exclude: [...pre.untracked.filter((u) => !covers(allFence(), norm(u))), ".verify/", "tmp/"],
+  // Untracked files stay out unless a fence names that exact file (plan-feature leaves its prototypes uncommitted for PR 1); owning the directory is not enough.
+  exclude: [...pre.untracked.filter((u) => !allFence().includes(norm(u))), ".verify/", "tmp/"],
   prs: prs.map((p) => ({
     n: p.n,
     branch: p.branch,
