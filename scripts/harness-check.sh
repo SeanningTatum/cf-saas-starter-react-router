@@ -130,9 +130,15 @@ for f in .claude/workflows/*.js; do
     WF_BAD="$WF_BAD $base(syntax)"
   fi
   grep -Eq "^[[:space:]]*name:[[:space:]]*\"${base}\"" "$f" || WF_BAD="$WF_BAD $base(meta.name!=filename)"
+  # A bare agentType must be a built-in or a project agent; plugin agents carry a "plugin:" prefix.
+  while IFS= read -r at; do
+    [ -z "$at" ] && continue
+    case "$at" in *:*|Explore|Plan|general-purpose) continue ;; esac
+    [ -f ".claude/agents/${at}.md" ] || WF_BAD="$WF_BAD $base(agentType ${at} has no .claude/agents/${at}.md)"
+  done < <(grep -oE "agentType:[^,}]*" "$f" | grep -oE "[\"'][A-Za-z0-9:_-]+[\"']" | tr -d "\"'" | sort -u)
 done
 if [ -z "$WF_BAD" ]; then
-  ok "workflows intact ($WF_N scripts parse, meta.name matches, launched names resolve)"
+  ok "workflows intact ($WF_N scripts parse, meta.name matches, launched names and agentTypes resolve)"
 else
   fail "broken workflows:$WF_BAD"
 fi

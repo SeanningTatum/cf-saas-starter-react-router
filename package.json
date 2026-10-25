@@ -11,6 +11,8 @@
     "postinstall": "npm run cf-typegen && npm run hooks:install",
     "preview": "bun run build && vite preview",
     "typecheck": "npm run cf-typegen && react-router typegen && tsc -b",
+    "tracker": "bun run scripts/tracker.ts",
+    "feature-doc:check": "bun run scripts/check-feature-doc.ts",
     "typegen": "wrangler types && react-router typegen",
     "hooks:install": "git config core.hooksPath .githooks && echo '\u2713 git hooks \u2192 .githooks/'",
     "auth:generate": "bunx --bun @better-auth/cli generate --config auth.config.ts",

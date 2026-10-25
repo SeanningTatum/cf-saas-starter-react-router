@@ -72,3 +72,6 @@ tmp/
 
 # lavish review pages written outside .verify/
 /.lavish/
+
+# impeccable hook cache (config.json is committed)
+.impeccable/hook.cache.json
