@@ -52,4 +52,21 @@ describe("posthogAdapter", () => {
       expect(down).toBeInstanceOf(AnalyticsDeliveryError);
     })
   );
+
+  it.effect("fails with AnalyticsDeliveryError when fetch never responds", () =>
+    Effect.gen(function* () {
+      // Catches: a stalled PostHog connection holding runtime.dispose() open forever.
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(
+          (_url: string, init: RequestInit) =>
+            new Promise((_, reject) => {
+              init.signal?.addEventListener("abort", () => reject(init.signal?.reason));
+            })
+        )
+      );
+      const err = yield* Effect.flip(posthogAdapter({ apiKey: "k", timeoutMs: 20 }).send([sample]));
+      expect(err).toBeInstanceOf(AnalyticsDeliveryError);
+    })
+  );
 });

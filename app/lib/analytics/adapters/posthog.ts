@@ -5,6 +5,7 @@ import { AnalyticsDeliveryError } from "@/models/errors/analytics";
 export const posthogAdapter = (config: {
   readonly apiKey: string;
   readonly host?: string;
+  readonly timeoutMs?: number;
 }): AnalyticsAdapter => ({
   name: "posthog",
   send: (batch) =>
@@ -12,6 +13,7 @@ export const posthogAdapter = (config: {
       try: () =>
         fetch(`${config.host ?? "https://us.i.posthog.com"}/batch/`, {
           method: "POST",
+          signal: AbortSignal.timeout(config.timeoutMs ?? 5000),
           headers: { "content-type": "application/json" },
           body: JSON.stringify({
             api_key: config.apiKey,
