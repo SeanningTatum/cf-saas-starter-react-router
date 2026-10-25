@@ -24,6 +24,10 @@ The store lives in `~/.claude/projects/<repo>/memory/features/` on purpose. A fo
 - `context-scout` (plan-feature) and the nearest-feature lane of `build-feature` start with `explore`.
 - Never commit `.codegraph/`: it is a binary SQLite file that changes on every edit.
 
+## Analytics
+
+[`analytics.md`](analytics.md) — the provider-agnostic `Analytics` service: add an event, add a provider, env vars.
+
 ## Planning skills
 
 Planning uses Matt Pocock's [skills](https://github.com/mattpocock/skills), listed in [`skills-lock.json`](../../skills-lock.json). They run only when you type them.

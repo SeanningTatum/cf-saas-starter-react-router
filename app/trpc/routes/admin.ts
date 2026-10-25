@@ -2,6 +2,7 @@ import { Effect, Schema } from "effect";
 import { adminProcedure, createTRPCRouter } from "..";
 import { runProcedure } from "@/lib/effect-trpc";
 import { UserRepository } from "@/repositories/user";
+import { Analytics } from "@/services/analytics";
 import type { AppRuntime } from "@/runtime";
 import {
   GetUsersInput,
@@ -113,10 +114,19 @@ export const adminRouter = createTRPCRouter({
         ctx.runtime,
         Effect.gen(function* () {
           const repo = yield* UserRepository;
-          return yield* repo.banUser({
+          const analytics = yield* Analytics;
+          const result = yield* repo.banUser({
             ...input,
             currentUserId: ctx.auth.user.id,
           });
+          yield* analytics.capture({
+            _tag: "user_banned",
+            distinctId: ctx.auth.user.id,
+            targetUserId: input.userId,
+            hasReason: Boolean(input.reason),
+            hasExpiry: input.expiresAt != null,
+          });
+          return result;
         }),
         { span: "trpc.admin.banUser" }
       )

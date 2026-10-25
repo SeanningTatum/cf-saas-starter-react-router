@@ -25,6 +25,7 @@ const APP_ERROR_TAGS = new Set<AppError["_tag"]>([
   "BucketListError",
   "BucketValidationError",
   "WorkflowTriggerError",
+  "AnalyticsDeliveryError",
 ]);
 
 // Compile-time exhaustiveness guard for `appErrorToTRPC`'s switch. Reachable
@@ -145,6 +146,13 @@ const appErrorToTRPC = (e: AppError): TRPCError => {
       return new TRPCError({
         code: "INTERNAL_SERVER_ERROR",
         message: `Failed to trigger workflow: ${e.name}`,
+        cause: e.cause,
+      });
+    case "AnalyticsDeliveryError":
+      // Analytics swallows this error; the case exists for exhaustiveness.
+      return new TRPCError({
+        code: "INTERNAL_SERVER_ERROR",
+        message: "Internal Server Error",
         cause: e.cause,
       });
     default:
