@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Brand brief: product interview</title>
+<style>
+  :root {
+    --bg: #faf9f5; --surface: #ffffff; --fg: #141413; --fg-secondary: #3d3d3a;
+    --muted: #5f5e59; --border: #dedcd1; --highlight: #fff7ca; --accent: #a8492a;
+    --space-2: 8px; --space-3: 16px; --space-4: 24px; --space-6: 40px;
+  }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    font-size: 16px; background: var(--bg); color: var(--fg); line-height: 1.6;
+    max-width: 72ch; margin: 0 auto; padding: var(--space-6) var(--space-4);
+  }
+  h1, h2, h3 { font-family: Charter, "Iowan Old Style", "Palatino Linotype", Georgia, serif;
+    font-weight: 600; line-height: 1.25; color: var(--fg); }
+  h1 { font-size: 1.75em; }
+  h2 { font-size: 1.3em; font-weight: 500; margin-top: var(--space-6);
+    border-bottom: 1px solid var(--border); padding-bottom: var(--space-2); }
+  h3 { font-size: 1.05em; font-weight: 500; }
+  p, li { color: var(--fg-secondary); }
+  code { font-size: 0.9em; }
+  mark, .highlight { background: var(--highlight); color: var(--fg); padding: 0 2px; }
+  .chip { display: inline-block; padding: 2px 10px; border-radius: 999px;
+    font-size: 0.8em; font-weight: 600; border: 1px solid var(--border); }
+  .chip-status-in-review { background: var(--highlight); color: var(--fg); border-color: var(--highlight); }
+  .chip-high { color: var(--accent); border-color: var(--accent); }
+  .chip-low { color: var(--muted); }
+  .settled { font-size: 0.85em; color: var(--muted); margin: 0 0 var(--space-2); }
+  .decision-card { background: var(--surface); border: 1px solid var(--border);
+    border-radius: 10px; padding: var(--space-4); margin: var(--space-4) 0; }
+  .decision-card table { margin-bottom: var(--space-3); }
+  table { width: 100%; border-collapse: collapse; margin: var(--space-3) 0;
+    background: var(--surface); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+  th, td { text-align: left; padding: 10px 14px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  tr:last-child td { border-bottom: none; }
+  th { font-weight: 600; font-size: 0.9em; color: var(--fg); }
+  td { font-size: 0.95em; color: var(--fg-secondary); }
+  .tag-recommended { color: var(--accent); font-weight: 600; }
+  .btn-queue { border: none; border-radius: 10px; padding: 8px 16px; font-weight: 600;
+    cursor: pointer; font-size: 0.95em; background: var(--fg); color: #fff; }
+  .queue-ack { margin-left: var(--space-3); font-size: 0.9em; color: var(--muted); }
+  .checklist { list-style: none; padding: 0; }
+  .checklist li { margin: var(--space-2) 0; }
+  pre.mermaid { text-align: center; background: var(--surface); border: 1px solid var(--border);
+    border-radius: 10px; padding: var(--space-3); }
+  pre.mermaid svg { display: block; margin: 0 auto; }
+  details { margin-top: var(--space-2); }
+  summary { cursor: pointer; color: var(--fg); }
+  textarea { width: 100%; box-sizing: border-box; font: inherit; font-size: 0.95em; line-height: 1.5;
+    padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg);
+    color: var(--fg); margin-bottom: var(--space-3); min-height: 7em; resize: vertical; }
+  .prefill { font-size: 0.85em; color: var(--muted); margin: 0 0 var(--space-2); }
+</style>
+</head>
+<body>
+<header>
+  <h1>Product interview for /brand-init</h1>
+  <div><span>2026-10-23</span> · <span>feature: brand-init</span> · <span class="chip chip-status-in-review">in-review</span></div>
+</header>
+<section id="tldr">
+  <h2>What this is</h2>
+  <p>This is impeccable's <code>init</code> interview, held here instead of in chat. Each box holds my guess from the repo.
+  Edit it, then press <strong>Queue answer</strong>. Press it even if the guess is right, so I know you confirmed it.
+  Nothing here asks about colour, type or style; the next step handles those. No <code>PRODUCT.md</code> exists yet.</p>
+</section>
+<section id="questions">
+  <h2>Questions</h2>
+  <div class="decision-card" id="decision-platform" data-brain-action>
+    <p class="prefill">Evidence: React Router v7 SSR on Cloudflare Workers, no native code.</p>
+    <p><strong>What platform is the product?</strong></p>
+    <table><tbody>
+        <tr><td><input type="radio" name="decision-platform" id="platform-0" value="web" checked data-brain-action></td>
+          <td><label for="platform-0">Web (mobile web included) <span class="tag-recommended">(prefilled guess)</span></label></td></tr>
+        <tr><td><input type="radio" name="decision-platform" id="platform-1" value="adaptive" data-brain-action></td>
+          <td><label for="platform-1">Adaptive native (iOS and Android)</label></td></tr>
+        <tr><td><input type="radio" name="decision-platform" id="platform-2" value="ios" data-brain-action></td>
+          <td><label for="platform-2">iOS only</label></td></tr>
+        <tr><td><input type="radio" name="decision-platform" id="platform-3" value="android" data-brain-action></td>
+          <td><label for="platform-3">Android only</label></td></tr>
+    </tbody></table>
+    <button type="button" class="btn-queue" data-brain-action onclick="queueDecision('decision-platform','What platform is the product?')">Queue answer</button>
+    <span class="queue-ack" id="ack-decision-platform"></span>
+  </div>
+  <div class="decision-card" id="decision-product" data-brain-action>
+    <p class="prefill">Prefilled from README.md, app/routes/home.tsx and app/locales/en/home.json. No brief was given, so this is the starter itself. Replace it with the product you are forking this into.</p>
+    <p><strong>What does your product do, and for whom?</strong></p>
+    <textarea id="text-product" data-brain-action>The repo is a starter, not yet a product. As it stands: a SaaS starter for developers who fork it to ship a Cloudflare-hosted SaaS. It gives them email/password auth with roles and bans, an admin dashboard (user management, analytics), R2 file upload, i18n (en, zh) and dark mode.
+
+[Replace with your product: what it does, what it makes possible.]</textarea>
+    <button type="button" class="btn-queue" data-brain-action onclick="queueText('decision-product','What does your product do, and for whom?')">Queue answer</button>
+    <span class="queue-ack" id="ack-decision-product"></span>
+  </div>
+  <div class="decision-card" id="decision-users" data-brain-action>
+    <p class="prefill">Prefilled from README.md and app/locales/en/home.json.</p>
+    <p><strong>Who is the primary user, in what situation, and what job are they doing?</strong></p>
+    <textarea id="text-users" data-brain-action>Primary: a developer (solo or small team) on day one of a fork, who wants working auth, admin and storage so they can build product features instead of plumbing. Secondary: the AI coding agents that build in the repo.
+
+[Replace with the end users of your product: who signs in, and what they come to do. Name any admin or operator role.]</textarea>
+    <button type="button" class="btn-queue" data-brain-action onclick="queueText('decision-users','Who is the primary user, in what situation, and what job are they doing?')">Queue answer</button>
+    <span class="queue-ack" id="ack-decision-users"></span>
+  </div>
+  <div class="decision-card" id="decision-positioning" data-brain-action>
+    <p class="prefill">Prefilled from README.md pillars.</p>
+    <p><strong>What position or mechanism could a neighbouring product not truthfully copy?</strong></p>
+    <textarea id="text-positioning" data-brain-action>Harness-first: the same runtime locally and at the edge, a queryable brain, declared verification gates and five enforced non-negotiables (Effect TS, Effect Schema, tagged errors, tests, Workers not Node).
+
+[Replace with what is different about your product.]</textarea>
+    <button type="button" class="btn-queue" data-brain-action onclick="queueText('decision-positioning','What position or mechanism could a neighbouring product not truthfully copy?')">Queue answer</button>
+    <span class="queue-ack" id="ack-decision-positioning"></span>
+  </div>
+  <div class="decision-card" id="decision-constraints" data-brain-action>
+    <p class="prefill">Prefilled from AGENTS.md and package.json.</p>
+    <p><strong>What durable constraints, assets or facts must future design work preserve?</strong></p>
+    <textarea id="text-constraints" data-brain-action>Runs on Cloudflare Workers (no Node APIs). Stack: React Router v7, tRPC, D1/Drizzle, Better Auth, Effect TS, ShadCN/Tailwind v4. Roles: user, admin. i18n in English and Chinese, so layouts must survive longer strings. Dark mode is required. Terms: 'brain', 'gates'.
+
+No real customers, testimonials, benchmarks or pricing exist. Future work must not invent them.</textarea>
+    <button type="button" class="btn-queue" data-brain-action onclick="queueText('decision-constraints','What durable constraints, assets or facts must future design work preserve?')">Queue answer</button>
+    <span class="queue-ack" id="ack-decision-constraints"></span>
+  </div>
+  <div class="decision-card" id="decision-brand" data-brain-action>
+    <p class="prefill">Current name is the starter default in app/locales/en/home.json ("Cloudflare SaaS Starter"). Colour, type and style are not asked here.</p>
+    <p><strong>Is there a name, voice or identity that is already binding?</strong></p>
+    <textarea id="text-brand" data-brain-action>Name today: Cloudflare SaaS Starter (placeholder). Voice in current copy: plain, technical, direct. Nothing is binding yet.
+
+[Replace with the product name and any commitment you want kept.]</textarea>
+    <button type="button" class="btn-queue" data-brain-action onclick="queueText('decision-brand','Is there a name, voice or identity that is already binding?')">Queue answer</button>
+    <span class="queue-ack" id="ack-decision-brand"></span>
+  </div>
+  <div class="decision-card" id="decision-a11y" data-brain-action>
+    <p class="prefill">No evidence in the repo of a stated standard.</p>
+    <p><strong>Any accessibility or inclusion requirement?</strong></p>
+    <textarea id="text-a11y" data-brain-action>WCAG 2.1 AA as a floor: keyboard-operable, visible focus, 4.5:1 text contrast in both light and dark, respects reduced motion. Bilingual (en, zh) from the start.</textarea>
+    <button type="button" class="btn-queue" data-brain-action onclick="queueText('decision-a11y','Any accessibility or inclusion requirement?')">Queue answer</button>
+    <span class="queue-ack" id="ack-decision-a11y"></span>
+  </div>
+</section>
+<script>
+  function ack(cardId, text) {
+    var a = document.getElementById("ack-" + cardId);
+    if (a) a.textContent = "Queued: " + (text.length > 60 ? text.slice(0, 60) + "..." : text);
+  }
+  function send(cardId, question, choice) {
+    if (window.brain && typeof window.brain.queuePrompt === "function") {
+      window.brain.queuePrompt({
+        tag: "decision", queueKey: cardId, prompt: question + ": " + choice,
+        target: { type: "decision", question: question, choice: choice }
+      });
+    }
+    ack(cardId, choice);
+  }
+  function queueDecision(cardId, question) {
+    var c = document.getElementById(cardId).querySelector('input[type="radio"]:checked');
+    if (c) send(cardId, question, c.value);
+  }
+  function queueText(cardId, question) {
+    var t = document.getElementById(cardId).querySelector("textarea").value.trim();
+    if (t) send(cardId, question, t);
+  }
+</script>
+</body>
+</html>

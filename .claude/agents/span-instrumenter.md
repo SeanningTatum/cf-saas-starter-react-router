@@ -1,6 +1,6 @@
 ---
 name: span-instrumenter
-description: Adds and audits Effect tracing spans on tRPC procedures, repositories and services, per the repo's span-naming convention. Edits source; never touches the exporter. Use after adding a procedure, repo method or service call, and before `brain verify`. Examples - "instrument the new billing.getInvoice procedure", "audit app/trpc/routes/admin.ts for span coverage", "the upload flow has no spans".
+description: Adds and audits Effect tracing spans on tRPC procedures, repositories and services, per the repo's span-naming convention. Edits source; never touches the exporter. Use after adding a procedure, repo method or service call, and before `./scripts/verify.sh`. Examples - "instrument the new billing.getInvoice procedure", "audit app/trpc/routes/admin.ts for span coverage", "the upload flow has no spans".
 tools: Read, Edit, Grep, Glob, Bash
 model: sonnet
 ---

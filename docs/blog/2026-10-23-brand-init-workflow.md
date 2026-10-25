@@ -10,7 +10,7 @@ A fork of this starter looks like the starter. Neutral grey tokens, Inter, no `P
 2. The taste skill's `draw.mjs`, to deal directions.
 3. A comp for each direction, then the taste critique loop on each.
 4. `impeccable` critique, then `emil-design-eng` and `animate` for motion.
-5. A pick, through `brain review`.
+5. A pick, on a lavish review page.
 6. `impeccable` polish, then `document` to write `DESIGN.md`.
 
 Miss a step and nothing stops me or records it. Every surface was designed by hand, so the plan for this workflow says the number of times the human gets asked has no bound. I have no count of how many times I was asked, so I will not invent one.
@@ -23,7 +23,7 @@ So the old process had three faults. I sequenced from memory. Nothing recorded t
 
 ## After: a script holds the order, and I hold three decisions
 
-`.claude/workflows/brand-init.js` is one workflow with eleven phases: Preflight, Brief, Draw, Critique, Pick, Contract, Build, Check, Fix, Close, Ship. The agents do the skill-chaining. I answer through `brain review`, a page in my browser that the agent opens and then waits on.
+`.claude/workflows/brand-init.js` is one workflow with eleven phases: Preflight, Brief, Draw, Critique, Pick, Contract, Build, Check, Fix, Close, Ship. The agents do the skill-chaining. I answer on a review page in my browser. The run stops and returns what it needs; I answer, and it resumes where it stopped. (At the time of this run the page came from brain-axi, which the repo has since removed.)
 
 ```mermaid
 flowchart LR
@@ -49,7 +49,7 @@ The ordering rule that makes it safe: after one sequential step that writes the 
 
 I ran it twice.
 
-**Run 1 lasted about 39 seconds.** Preflight used one agent and refused to start, because the baseline was red: `harness-check.sh` exited 1, eight checks passed and one failed. Typecheck and tests were fine. The harness failed because a worktree has no `.brain/brain.db` of its own. Commit `3b81ca2` fixes that. A red baseline stopped the run before it spent anything on design.
+**Run 1 lasted about 39 seconds.** Preflight used one agent and refused to start, because the baseline was red: `harness-check.sh` exited 1, eight checks passed and one failed. Typecheck and tests were fine. The harness failed because a worktree has no `.brain/brain.db` of its own (brain-axi has since been removed). Commit `3b81ca2` fixes that. A red baseline stopped the run before it spent anything on design.
 
 **Run 2 was the full run.** 52 agents, 915 tool calls, 3,315,443 tokens, 3h37m on the clock.
 

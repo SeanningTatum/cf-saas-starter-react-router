@@ -1,0 +1,17 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "low-contrast",
+        "value": "*",
+        "files": [
+          "plans/plan-feature.html"
+        ],
+        "createdAt": "2026-10-24T19:54:29.935Z",
+        "reason": "plans/plan-feature.html was written in the fixed palette of the brain-axi plan style (brain-axi has since been removed); the terra-cotta accent marks (recommended) only"
+      }
+    ]
+  }
+}

@@ -59,10 +59,22 @@ worker-configuration.d.ts
 # feature-verifier throwaway Playwright scripts (see .claude/agents/feature-verifier.md)
 tmp/
 
-# brain-axi local state
+# CodeGraph index: one per checkout, rebuilt by scripts/codegraph.sh ensure (init.sh, SessionStart)
+/.codegraph/
+
+# legacy brain-axi local state: old checkouts still hold it, keep it out of git
 .brain/brain.db
 .brain/brain.db-wal
 .brain/brain.db-shm
 .brain/brain.db.bak-v*
 .brain/export.toon
 .brain/shots/
+
+# feature-verifier screenshots and verdicts
+/.verify/
+
+# lavish review pages written outside .verify/
+/.lavish/
+
+# impeccable hook cache (config.json is committed)
+.impeccable/hook.cache.json

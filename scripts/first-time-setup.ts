@@ -485,28 +485,6 @@ export async function setupGitHubCiCredentials(accountId?: string) {
 }
 
 // Main setup function
-/**
- * Create this checkout's brain (`.brain/brain.db`) and declare the repo's gates.
- *
- * brain-axi keeps the brain in one gitignored SQLite file, so a clone of this
- * template never inherits the template's features, checkpoints or run notes —
- * it starts empty. `scripts/brain-setup.sh` is idempotent: it creates the db if
- * missing and (re)declares the checks `brain verify` runs.
- *
- * Skipped, never failed: setup must not die because an optional CLI is absent.
- */
-function setupBrain(): void {
-  const res = spawnSync("./scripts/brain-setup.sh", [], { stdio: "inherit" });
-  if (res.status !== 0) {
-    console.log(
-      "\x1b[33m  Could not create the brain (brain-axi needs Node >= 24). Run this yourself:\x1b[0m"
-    );
-    console.log("\x1b[33m    ./scripts/brain-setup.sh\x1b[0m");
-    return;
-  }
-  console.log("\x1b[32m  Brain ready — .brain/brain.db is local to this checkout.\x1b[0m");
-}
-
 async function main() {
   intro("🚀 Cloudflare SaaS Stack - First-Time Setup");
 
@@ -526,8 +504,6 @@ async function main() {
     process.exit(1);
   }
   console.log("\x1b[32m✓ Authenticated with Cloudflare\x1b[0m");
-
-  setupBrain();
 
   // Check for multiple accounts and prompt for selection if needed
   const accounts = extractAccountDetails(whoamiOutput);

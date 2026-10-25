@@ -59,17 +59,17 @@
     "subtitle": "v2 把 LLM 周围的脚手架(指令、状态、验证、范围、生命周期)一起打包,让编程助手(Claude Code、Cursor、Codex)在长会话里保持一致,而不是上下文一满就开始走样。",
     "commands_label": "确定性检查门",
     "pillars": {
-      "brain": {
-        "title": "Brain",
-        "description": "每个检出一个 SQLite 文件。功能、任务、检查点、运行日志和验证结果在上下文窗口清空后依然在,助手通过 brain CLI 查询。"
+      "specs": {
+        "title": "规格与工单",
+        "description": "规格是一个 GitHub issue,再拆成互相标明先后依赖的小工单。状态都在 issue 和 PR 里,上下文窗口清空后依然在,每个检出看到的计划都一样。"
       },
       "skills": {
         "title": "Skills",
-        "description": "brain-axi 插件把方法串成一条链 —— 开始、计划、执行、验证、完成。每个技能交给下一个,助手不用提醒也会按步骤走。"
+        "description": "规划交给 Matt Pocock 的技能:/grill-me 追问到设计清楚,/to-spec 写出规格,/to-tickets 切成小工单。助手不用提醒也会按步骤走。"
       },
       "gates": {
         "title": "验证门",
-        "description": "已声明的检查 —— 类型检查、单测、非妥协项、harness 不变量、构建、e2e —— 由 brain verify 运行。所有门没绿,就不能宣告完成。"
+        "description": "已声明的检查 —— 类型检查、单测、非妥协项、harness 不变量、构建、e2e —— 由 ./scripts/verify.sh 运行。所有门没绿,就不能宣告完成。"
       }
     }
   },

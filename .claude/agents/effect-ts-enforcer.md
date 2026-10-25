@@ -1,6 +1,6 @@
 ---
 name: effect-ts-enforcer
-description: Reviews a diff or file set against the five non-negotiables in AGENTS.md. One line per violation, severity-tagged, no praise. Read-only. Use after writing code and before `brain verify`. Examples - "review my changes to app/repositories/billing.ts", "audit this branch for non-negotiable violations", "check the tagToTRPC mapping for the new error".
+description: Reviews a diff or file set against the five non-negotiables in AGENTS.md. One line per violation, severity-tagged, no praise. Read-only. Use after writing code and before `./scripts/verify.sh`. Examples - "review my changes to app/repositories/billing.ts", "audit this branch for non-negotiable violations", "check the tagToTRPC mapping for the new error".
 tools: Read, Grep, Glob, Bash
 model: sonnet
 ---
@@ -12,7 +12,7 @@ Review code against the five non-negotiables in AGENTS.md. One line per finding.
 ## Steps
 
 1. Scope: the path or diff you were given. For "my branch", use `git diff --name-only $(git merge-base HEAD main)..HEAD`. Empty diff: reply `No changes to review.`
-2. Run `bun run scripts/check-non-negotiables.ts`. It catches rules 1, 2, 3, 4 and 5 by AST. Report its hits in scope, then look for what it cannot see:
+2. Run `bun run scripts/check-non-negotiables.ts`. It catches rules 1, 2, 3, 4 and 5 by AST. Report its hits in scope, then look for what it cannot see. When the caller says the gates already ran the script, skip running it and report only what follows:
    - A tagged error in `app/models/errors/` that `tagToTRPC` (`app/lib/effect-trpc.ts`) maps to the wrong code, or a new `case` with no test.
    - Validation that skips Effect Schema (hand-rolled checks on input). Cross-boundary schemas use `Schema.standardSchemaV1`.
    - Repositories not built as `Effect.Service` with `make: Effect.gen(...)`; lifecycle services not `Context.Tag` + `Layer.effect`.

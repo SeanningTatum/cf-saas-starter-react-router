@@ -11,7 +11,7 @@ import {
   IconAtom,
   IconArrowRight,
   IconBook,
-  IconBrain,
+  IconTicket,
   IconChecklist,
   IconRoute,
 } from "@tabler/icons-react";
@@ -187,22 +187,22 @@ export default function Home() {
 
           <div className="grid gap-4 md:grid-cols-3">
             <HarnessPillar
-              icon={<IconBrain className="size-5" />}
-              title={t("harness.pillars.brain.title")}
-              description={t("harness.pillars.brain.description")}
-              path=".brain/brain.db"
+              icon={<IconTicket className="size-5" />}
+              title={t("harness.pillars.specs.title")}
+              description={t("harness.pillars.specs.description")}
+              path="GitHub issues"
             />
             <HarnessPillar
               icon={<IconRoute className="size-5" />}
               title={t("harness.pillars.skills.title")}
               description={t("harness.pillars.skills.description")}
-              path="brain-axi plugin"
+              path="skills-lock.json"
             />
             <HarnessPillar
               icon={<IconChecklist className="size-5" />}
               title={t("harness.pillars.gates.title")}
               description={t("harness.pillars.gates.description")}
-              path="brain verify"
+              path="scripts/verify.sh"
             />
           </div>
 
@@ -213,14 +213,17 @@ export default function Home() {
               </span>
             </div>
             <pre className="overflow-x-auto px-4 py-4 font-mono text-sm leading-relaxed text-foreground">
-              <code>{`# orient — features, in-progress, last checkpoint
-brain
+              <code>{`# interview you until the design is clear
+/grill-me
+
+# write the spec as a GitHub issue
+/to-spec
+
+# split the spec into vertical-slice issues
+/to-tickets
 
 # verify before declaring done — typecheck, test, non-negotiables, build, e2e
-brain verify
-
-# close out a feature — needs a PASS verification
-brain features ship billing --evidence "verifier PASS; tests green"`}</code>
+./scripts/verify.sh`}</code>
             </pre>
           </div>
         </section>

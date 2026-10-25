@@ -59,17 +59,17 @@
     "subtitle": "v2 ships with the scaffolding around the LLM — instructions, state, verification, scope, and lifecycle — so coding agents (Claude Code, Cursor, Codex) stay coherent across sessions instead of regressing every time the context window fills.",
     "commands_label": "deterministic gates",
     "pillars": {
-      "brain": {
-        "title": "Brain",
-        "description": "One SQLite file per checkout. Features, tasks, checkpoints, run notes and verifications outlive the context window; the agent queries them through the brain CLI."
+      "specs": {
+        "title": "Specs & tickets",
+        "description": "The spec is a GitHub issue, split into small tickets that name what blocks what. State lives in issues and PRs, so it outlasts the context window and every checkout sees the same plan."
       },
       "skills": {
         "title": "Skills",
-        "description": "The brain-axi plugin chains the method — start, plan, execute, verify, done. Each skill hands off to the next, so the agent follows the steps without a reminder."
+        "description": "Matt Pocock's skills run the planning: /grill-me asks until the design is clear, /to-spec writes the spec, /to-tickets cuts it into slices. The agent follows the steps without a reminder."
       },
       "gates": {
         "title": "Verification gates",
-        "description": "Declared checks — typecheck, tests, non-negotiables, harness invariants, build, e2e — run by brain verify. The agent can't claim done until every gate is green."
+        "description": "Declared checks — typecheck, tests, non-negotiables, harness invariants, build, e2e — run by ./scripts/verify.sh. The agent can't claim done until every gate is green."
       }
     }
   },

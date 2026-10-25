@@ -41,7 +41,34 @@
       "Bash(git reset --hard:*)",
       "Bash(git clean -fd:*)",
       "Bash(git clean -fdx:*)"
+    ],
+    "allow": [
+      "mcp__codegraph__*"
     ]
+  },
+  "skillOverrides": {
+    "embedded-captions": "off",
+    "faceless-explainer": "off",
+    "figma": "off",
+    "general-video": "off",
+    "hyperframes": "off",
+    "hyperframes-animation": "off",
+    "hyperframes-cli": "off",
+    "hyperframes-core": "off",
+    "hyperframes-creative": "off",
+    "hyperframes-keyframes": "off",
+    "hyperframes-registry": "off",
+    "media-use": "off",
+    "motion-graphics": "off",
+    "music-to-video": "off",
+    "pr-to-video": "off",
+    "product-launch-video": "off",
+    "recipe-box": "off",
+    "reel-to-recipe": "off",
+    "remotion-to-hyperframes": "off",
+    "slideshow": "off",
+    "talking-head-recut": "off",
+    "video-watcher": "off"
   },
   "hooks": {
     "SessionStart": [
@@ -51,6 +78,17 @@
             "type": "command",
             "timeout": 5,
             "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/session-start.sh\" 2>&1 || true"
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "timeout": 10,
+            "command": "command -v codegraph >/dev/null 2>&1 && codegraph prompt-hook || true"
           }
         ]
       }

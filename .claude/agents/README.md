@@ -1,6 +1,6 @@
 # Sub-agents
 
-Project sub-agents for repo-specific work. The method (start, plan, execute, verify, done) comes from the brain-axi skills; the order of the waves is in AGENTS.md ("Delegate in parallel") and [`/build-feature`](../commands/build-feature.md).
+Project sub-agents for repo-specific work. Planning uses Matt Pocock's skills (`/grill-me` or `/grill-with-docs`, `/to-spec`, `/to-tickets`); the order of the waves is in AGENTS.md ("Delegate in parallel") and [`/build-feature`](../commands/build-feature.md).
 
 ## Roster
 
@@ -9,8 +9,21 @@ Project sub-agents for repo-specific work. The method (start, plan, execute, ver
 | [`ui-builder`](ui-builder.md) | Any user-visible work, inside a file fence the caller sets (runs on `opus`) |
 | [`test-author`](test-author.md) | After a feature or fix: write or update the unit tests (runs on `opus`) |
 | [`span-instrumenter`](span-instrumenter.md) | After adding an endpoint, repo method or service call: add or audit tracing spans |
-| [`effect-ts-enforcer`](effect-ts-enforcer.md) | Before `brain verify`: read-only review against the five non-negotiables |
-| [`feature-verifier`](feature-verifier.md) | Any user-visible flow: browser walk, screenshots, verdict via `brain verifications add` |
+| [`effect-ts-enforcer`](effect-ts-enforcer.md) | Before `./scripts/verify.sh`: read-only review against the five non-negotiables |
+| [`context-memory`](context-memory.md) | Start of any task (recall, read-only) and its end (record, one writer): per-feature context, decisions, links, todos, where work stopped — stored outside the repo |
+| [`feature-verifier`](feature-verifier.md) | Any user-visible flow: browser walk, screenshots, verdict in `.verify/<slug>/verdict.md` |
+| [`runner`](runner.md) | A workflow step that needs a shell but no judgment: a git snapshot, a gate run, a commit (runs on `haiku`) |
+| [`context-scout`](context-scout.md) | Planning: recall the memory, issues, PRs and code that already cover a ticket's area, sourced (runs on `sonnet`) |
+| [`ticket-auditor`](ticket-auditor.md) | Planning: grade a ticket on the 13-item readiness checklist and draft the amended ticket |
+| [`product-strategist`](product-strategist.md) | Planning: user, job, fit, metric and non-goals for a feature |
+| [`ux-planner`](ux-planner.md) | Planning: flow and empty/loading/error/success states; `has_ui: false` for backend-only work |
+| [`architect`](architect.md) | Planning: tables, procedures, tagged errors, contract and disjoint lane fences |
+| [`stack-planner`](stack-planner.md) | Planning: cut the fences into an ordered PR stack with a flow diagram |
+| [`ui-prototyper`](ui-prototyper.md) | Planning: write one self-contained HTML prototype of a UI direction, or add its state switcher (runs on `opus`) |
+| [`proto-critic`](proto-critic.md) | Planning: critique one prototype from screenshots (light/dark, desktop/mobile) and the design audit; never edits it (runs on `opus`) |
+| [`plan-judge`](plan-judge.md) | Planning: grade one producer's output against its `## Checklist` (runs on `sonnet`, read-only) |
+
+The planning agents are driven by [`.claude/workflows/plan-feature.js`](../workflows/plan-feature.js); call them by hand only to debug a step. Each producer ends with a `## Checklist` of `- **id**: condition` lines that `plan-judge` reads, so keep that section last.
 
 Plugin agents (enabled in `.claude/settings.json`; names carry the plugin prefix):
 
@@ -31,6 +44,14 @@ Use a project agent for the non-negotiables, this repo's UI rules and its verifi
 - Grant the fewest tools. `effect-ts-enforcer` has no `Edit` or `Write`.
 - Default `model: sonnet`. `test-author` and `ui-builder` use `opus`: choosing which tests to write, and building UI to a brand, take judgment a cheaper model lacks.
 - Add an agent only for a recurring task with long instructions and structured output. Otherwise work in the main thread.
+
+## Token cost
+
+Measured on the brand-init trial run (2026-10-24, 87.5M tokens through models): the cost of an agent is its turns times its context, because every turn re-reads the whole context.
+
+- A workflow `agent()` call with no `agentType` starts at about 40k tokens (every tool, the full skill list, AGENTS.md). An agent with a short `tools:` list starts at 10–30k. Give every workflow step an `agentType`; use `runner` for shell-only steps.
+- Writer lanes run long. A 20-file lane went 72 turns and 10.5M tokens; most of that came after typecheck passed, on browser checks the check phase repeats. Keep a lane to about 10 files and keep the browser out of it.
+- Every loaded skill stays in context for every later turn. Load only the ones the task needs, once each.
 
 ## Kimi Code
 
