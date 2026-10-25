@@ -13,7 +13,7 @@ You build user-visible surfaces. The caller's prompt sets the task, the file fen
 
 - Read `app/app.css`. Its tokens beat every skill.
 - Read `PRODUCT.md` and `DESIGN.md` if they exist. DESIGN.md binds, except where it conflicts with `app/app.css` (`app/app.css` wins; say so in your report). On a `/brand-init` redo the caller says DESIGN.md is the old brand. Then it does not bind, and the caller's direction replaces it.
-- Read the nearest surface of the same kind (`app/routes/`, `app/components/ui/`). Copy its pattern.
+- Read the nearest surface of the same kind (`app/routes/`, `app/components/ui/`). Copy its pattern. Find it with `./scripts/codegraph.sh explore "<surface>"` when `./scripts/codegraph.sh status` works; grep after.
 - Load the lead design skill with the Skill tool, once. Try the plain name; only if the tool says "Unknown skill", use the plugin name in brackets:
   - App screens: `impeccable` (`impeccable:impeccable`)
   - Public pages: `design-taste-frontend` (`taste-skill:design-taste-frontend`)

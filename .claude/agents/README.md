@@ -1,6 +1,6 @@
 # Sub-agents
 
-Project sub-agents for repo-specific work. Planning uses Matt Pocock's skills (`/grill-me` or `/grill-with-docs`, `/to-spec`, `/to-tickets`); the order of the waves is in AGENTS.md ("Delegate in parallel") and [`/build-feature`](../commands/build-feature.md).
+Project sub-agents for repo-specific work. Planning uses Matt Pocock's skills (`/grill-me` or `/grill-with-docs`, `/to-spec`, `/to-tickets`); the order of the waves is in AGENTS.md ("Delegate in parallel") and the [`ship-feature`](../workflows/ship-feature.js) workflow.
 
 ## Roster
 
@@ -22,6 +22,14 @@ Project sub-agents for repo-specific work. Planning uses Matt Pocock's skills (`
 | [`ui-prototyper`](ui-prototyper.md) | Planning: write one self-contained HTML prototype of a UI direction, or add its state switcher (runs on `opus`) |
 | [`proto-critic`](proto-critic.md) | Planning: critique one prototype from screenshots (light/dark, desktop/mobile) and the design audit; never edits it (runs on `opus`) |
 | [`plan-judge`](plan-judge.md) | Planning: grade one producer's output against its `## Checklist` (runs on `sonnet`, read-only) |
+| [`backend-builder`](backend-builder.md) | Build lane: schema, migration, repository + test, tRPC procedure, tagged errors, seed fixtures, inside a fence; returns when typecheck passes (runs on `opus`) |
+| [`security-reviewer`](security-reviewer.md) | Review: auth level, IDOR, input validation, PII in telemetry, XSS, uploads, anonymous reach; read-only, every P0/P1 has file:line and an attack |
+| [`scale-reviewer`](scale-reviewer.md) | Review: N+1, missing indexes, unbounded lists, Workers and D1 limits, memory; read-only, each finding tied to a data size |
+| [`maintainability-reviewer`](maintainability-reviewer.md) | Review: duplication of existing helpers, code and files the acceptance does not need, over-long units, restating docs and tests; read-only, each finding names the reuse or deletion |
+| [`analytics-instrumenter`](analytics-instrumenter.md) | After the build: the fewest analytics events that compute the feature's metric, through the `Analytics` wrapper |
+| [`e2e-author`](e2e-author.md) | After the build: committed Playwright specs in `e2e/`, one golden and one error path per flow (runs on `opus`) |
+| [`docs-writer`](docs-writer.md) | After review: decision record, glossary, ADR if hard to reverse, changed docs, one PR body per PR in `.verify/<slug>/` |
+| [`review-responder`](review-responder.md) | After a PR opens: triage a review bot's comments, fix inside the PR's fence, reply on each thread, one commit; never pushes (runs on `opus`) |
 
 The planning agents are driven by [`.claude/workflows/plan-feature.js`](../workflows/plan-feature.js); call them by hand only to debug a step. Each producer ends with a `## Checklist` of `- **id**: condition` lines that `plan-judge` reads, so keep that section last.
 

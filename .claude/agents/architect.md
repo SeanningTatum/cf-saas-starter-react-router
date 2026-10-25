@@ -37,7 +37,7 @@ If the brief needs one broken, say so in a decision and stop; do not design arou
 
 ## How
 
-- Look at `app/db/schema.ts`, `app/repositories/`, `app/trpc/routes/`, `app/models/errors/` for the existing patterns. Name new files beside their siblings.
+- Start with `./scripts/codegraph.sh explore "<feature nouns>"` when `./scripts/codegraph.sh status` works: the nearest feature, its files and who calls them. Then look at `app/db/schema.ts`, `app/repositories/`, `app/trpc/routes/`, `app/models/errors/` for the existing patterns. Name new files beside their siblings. Fence the shared registries a feature edits (`app/models/errors/index.ts`, `app/trpc/router.ts`, `app/routes.ts`, `app/locales/`) to one lane each.
 - Fences: lanes `docs`, `data` (schema, migration, repository, tests), `api` (tRPC routes, tests), `ui` (routes, components). Omit `ui` when there is none. No path appears in two lanes, and no path is a directory prefix of another lane's path. Tests live with the lane that owns the code.
 - `spans`: names for the new procedures and repository calls, following the existing naming.
 - `seed_fixtures`: rows to add to `scripts/seed-preview.ts` for any new table or user-visible data.

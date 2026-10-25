@@ -41,7 +41,7 @@ Any change beyond one file runs as parallel sub-agents, not one long thread.
 4. **Checkers:** `effect-ts-enforcer` ‖ `feature-verifier` ‖ design critique ‖ `./scripts/verify.sh`. Read-only; each browser lane owns its port (`CI=1 bun run dev --port <free>`).
 5. **Converge:** the main thread reads every report, re-dispatches the owner of each P0/P1, then runs Done. Lanes never record.
 
-`/build-feature` runs the build as a workflow; `plan-feature` plans it first (ticket or idea to a decision record on the issue). Stay sequential for a one-file change, an unknown interface, a red baseline, or lanes sharing a file.
+`plan-feature` plans a feature (ticket or idea to a decision record on the issue); `ship-feature` builds, reviews and opens it as stacked PRs. Stay sequential for a one-file change, an unknown interface, a red baseline, or lanes sharing a file.
 
 ## Scope policy
 
