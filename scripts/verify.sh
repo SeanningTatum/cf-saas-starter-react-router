@@ -15,13 +15,15 @@ set -uo pipefail
 cd "$(dirname "$0")/.."
 
 # name|command|in baseline (y/n)|time limit (s)
+# e2e runs with CI=1: without it the dev server opens a remote-bindings session that needs a Cloudflare
+# login, so the gate is red on any machine that is not logged in (vite.config.ts, remoteBindings).
 GATES='typecheck|bun run typecheck|y|600
 test|bun run test|y|600
 non-negotiables-selftest|bun run scripts/check-non-negotiables.ts --selftest|y|300
 non-negotiables|bun run scripts/check-non-negotiables.ts|y|300
 harness|./scripts/harness-check.sh|y|300
 build|bun run build|n|900
-e2e|bun run test:e2e|n|900'
+e2e|CI=1 bun run test:e2e|n|900'
 
 MODE="all"
 ONLY=""
