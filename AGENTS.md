@@ -17,6 +17,7 @@ SaaS starter on **Cloudflare Workers + React Router v7 + tRPC + D1/Drizzle + Bet
 | Hard-to-reverse decisions | `docs/adr/NNNN-<slug>.md` ([`docs/agents/domain.md`](docs/agents/domain.md)) |
 | Proof a flow works | `.verify/<slug>/` (screenshots + `verdict.md`, gitignored), pasted in the PR |
 | Working memory per feature | [`context-memory`](.claude/agents/context-memory.md) store outside the repo (`./scripts/memory-dir.sh`) |
+| Symbol graph of the code | `./scripts/codegraph.sh explore "<q>"` before grep; optional, per checkout ([`docs/agents/harness.md`](docs/agents/harness.md#codegraph)) |
 
 `context-memory`: **recall** is read-only, run it at the start of any task. **record** merges decisions, todos and where work stopped; run it once at the end, from the main thread, never in lanes. Never run `lavish-axi share` (public host). Workflow agents cannot poll the user: the workflow returns a `review` page path; the main thread polls it.
 

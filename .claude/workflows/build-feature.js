@@ -75,7 +75,7 @@ Also recall what earlier sessions saved. Run \`./scripts/memory-dir.sh\` to get 
     ),
   () =>
     agent(
-      `Feature to build: ${feature}\n\nFind the closest EXISTING feature in this repo and trace it end to end — schema, repository, tRPC procedure, route, tests. Report the pattern a new feature should copy, with file:line anchors. Read only.`,
+      `Feature to build: ${feature}\n\nFind the closest EXISTING feature in this repo and trace it end to end — schema, repository, tRPC procedure, route, tests. Start with \`./scripts/codegraph.sh explore "<feature nouns>"\` (symbols, source and call paths in one call); fall back to grep if it warns or finds nothing. Report the pattern a new feature should copy, with file:line anchors. Read only.`,
       { label: "explore:nearest-feature", phase: "Orient", schema: CONTEXT_SCHEMA }
     ),
   ...(hasUi

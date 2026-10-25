@@ -25,7 +25,7 @@ Return exactly these fields. If `related_features` is empty, `summary` must name
 
 1. Pull 3 to 6 nouns from the ticket. Search with each.
 2. Memory (recall, read-only): run `./scripts/memory-dir.sh` for the store. Read `INDEX.md`, then `_general.md`, then `grep -ril` the store for each noun and read the feature files that match. Shipped features, open todos and recorded decisions matter most. Never write there.
-3. Code: `rg` over `app/` (routes, `app/trpc/routes/`, `app/repositories/`, `app/db/schema.ts`, `app/models/errors/`). Name the files that would change and the ones that already do the job.
+3. Code: start with `./scripts/codegraph.sh explore "<nouns>"`, which returns the matching symbols, their source and call paths in one call; `./scripts/codegraph.sh node <symbol>` shows one symbol's callers. Fall back to `rg` when it prints a warning or finds nothing. Either way, cover `app/` (routes, `app/trpc/routes/`, `app/repositories/`, `app/db/schema.ts`, `app/models/errors/`). Name the files that would change and the ones that already do the job.
 4. GitHub: `gh issue list --search "<q>" --state all`, `gh pr list --search "<q>" --state all`. Skip quietly if `gh` is not signed in and say so in `unknowns`.
 5. Every entry cites a source: a memory file (`memory/<slug>.md`), a path, or a URL you saw in a command's output. Never invent a ref. If you did not see it, it goes in `unknowns`.
 6. If the memory store is empty or missing, say so in `summary` and carry on with GitHub and the code.

@@ -26,6 +26,10 @@ if [ "$MODE" != "--baseline" ] && [ "$MODE" != "--quick" ]; then
   ./scripts/restore-skills.sh || echo "WARN: skill restore failed — frontend design skills unavailable until it succeeds"
   echo ""
 
+  echo "--- CodeGraph index (.codegraph/, optional) ---"
+  ./scripts/codegraph.sh ensure
+  echo ""
+
   echo "--- Apply local D1 migrations ---"
   bun run db:migrate:local || { echo "FAIL: db:migrate:local"; exit 1; }
   echo ""

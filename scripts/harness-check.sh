@@ -96,8 +96,8 @@ else
   fail "broken hook wiring:$HOOK_BAD"
 fi
 
-# H. Script behaviour tests (SessionStart skill restore, context-memory store resolver)
-for t in test-restore-skills test-memory-dir; do
+# H. Script behaviour tests (SessionStart skill restore, context-memory store resolver, CodeGraph wrapper)
+for t in test-restore-skills test-memory-dir test-codegraph; do
   if [ -x "scripts/${t}.sh" ]; then
     if T_OUT=$("./scripts/${t}.sh" 2>&1); then
       ok "${t#test-} tests pass ($(grep -c '✓' <<<"$T_OUT") checks)"

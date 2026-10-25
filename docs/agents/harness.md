@@ -13,6 +13,17 @@ It does not store facts about the code (read the code), what an issue already sa
 
 The store lives in `~/.claude/projects/<repo>/memory/features/` on purpose. A folder inside a checkout forks per worktree and dies with it, and a symlink back to the main checkout is refused by worktree isolation. The auto-memory folder is the one place every worktree shares.
 
+## CodeGraph
+
+[CodeGraph](https://github.com/colbymchenry/codegraph) keeps a symbol graph of the code (functions, types, imports, who calls what) in `.codegraph/`, one per checkout and gitignored. Agents ask it before they grep: one call returns the symbols, their source and their call paths.
+
+- [`scripts/codegraph.sh`](../../scripts/codegraph.sh) runs the installed `codegraph` if it is on PATH, else a pinned copy through `npx`, so a fork needs no install. `npm i -g @colbymchenry/codegraph` makes it faster.
+- `init.sh` and the SessionStart hook run `scripts/codegraph.sh ensure`: build the index when it is missing (a new worktree), sync it otherwise. It never fails its caller; with no `codegraph` and no `npx` it warns and agents fall back to `rg`. `CODEGRAPH=0` skips it.
+- [`.mcp.json`](../../.mcp.json) starts the MCP server through the same script (`codegraph_explore`, `codegraph_node` and friends); the server watches files and syncs itself. The `UserPromptSubmit` hook adds context only when `codegraph` is installed.
+- From a shell: `./scripts/codegraph.sh explore "<q>"`, `node <symbol>`, `status`.
+- `context-scout` (plan-feature) and the nearest-feature lane of `build-feature` start with `explore`.
+- Never commit `.codegraph/`: it is a binary SQLite file that changes on every edit.
+
 ## Planning skills
 
 Planning uses Matt Pocock's [skills](https://github.com/mattpocock/skills), listed in [`skills-lock.json`](../../skills-lock.json). They run only when you type them.

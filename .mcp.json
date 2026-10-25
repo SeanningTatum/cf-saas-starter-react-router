@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "codegraph": {
+      "type": "stdio",
+      "command": "sh",
+      "args": [
+        "-c",
+        "exec bash \"$(git rev-parse --show-toplevel)/scripts/codegraph.sh\" serve --mcp"
+      ],
+      "alwaysLoad": true
+    }
+  }
+}
