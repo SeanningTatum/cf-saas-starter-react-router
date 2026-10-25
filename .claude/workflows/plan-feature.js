@@ -18,6 +18,7 @@ export const meta = {
     { title: "Check", detail: "wait for the prototypes, assemble the decision record, run the format checker, judge the whole record" },
     { title: "Plan", detail: "the run stops on a lavish plan page with the three prototypes and a pick card, up to two rounds; states added to the chosen prototype" },
     { title: "Publish", detail: "issue comment and one context-memory record; never commits" },
+    { title: "Escalation", detail: "any phase: a gate failed twice, so the run records where it stopped and asks you to fix, accept or stop" },
   ],
 };
 
