@@ -54,6 +54,7 @@ export const meta = {
  *     needs-input, stage "brief"       The audit is done. Returns the verdict, original and amended ticket, the checklist and the
  *                                      questions. Re-run with args.brief = { decision: "approve" | "override" | "stop", answers:
  *                                      { <question id>: option }, hasUi, research, title?, body? }.
+ *     needs-input, stage "fit"         product-strategist ruled the feature does not fit. Re-run with args.fit = "override" | "stop".
  *     needs-input, stage "escalation"  A quality gate failed twice. Returns the label and the judge's open fixes. Re-run with
  *                                      args.escalations = { ...earlier, "<label>": "accept" | "stop" | "fix: <words>" }.
  *     needs-plan                       The record and the prototypes are ready. Returns review (the page path), the record, the
@@ -79,9 +80,9 @@ export const meta = {
  * args:
  *   a string: a ticket ref (12, #12, a github issue URL) or an idea
  *   { ticket?: string, idea?: string, slug?: string, root?: string, research?: boolean,
- *     product?: object, brief?: object, escalations?: object, plans?: object, accept?: object }
+ *     fit?: "override" | "stop", product?: object, brief?: object, escalations?: object, plans?: object, accept?: object }
  */
-const ARG_TYPES = [["ticket", "string"], ["idea", "string"], ["slug", "string"], ["root", "string"], ["research", "boolean"], ["product", "object"], ["brief", "object"], ["escalations", "object"], ["plans", "object"], ["accept", "object"]];
+const ARG_TYPES = [["ticket", "string"], ["idea", "string"], ["slug", "string"], ["root", "string"], ["research", "boolean"], ["fit", "string"], ["product", "object"], ["brief", "object"], ["escalations", "object"], ["plans", "object"], ["accept", "object"]];
 let input;
 if (typeof args === "string") {
   const s = args.trim();
@@ -816,6 +817,33 @@ if (!rec.fit) {
   rec.fit = g.out;
 }
 log(`Fit: ${rec.fit.fit.verdict} — ${rec.fit.fit.why}`);
+if (rec.fit.fit.verdict === "no") {
+  // The product case says this does not fit the product. The user decides: stop, or override and plan on.
+  if (input.fit === "stop") {
+    log("Stopped at Fit: the feature does not fit the product and the user chose to stop");
+    return { stopped: "Fit", reason: `does not fit the product: ${rec.fit.fit.why}` };
+  }
+  if (input.fit !== "override") {
+    await stop(
+      "needs-input:fit",
+      "Fit",
+      "Fit phase, status needs-input. product-strategist ruled the feature does not fit the product; the issue is already amended",
+      'the user\'s call: "override" (plan it anyway) or "stop"',
+      resumeHow('fit: "override" | "stop"'),
+      {
+        status: "needs-input",
+        stage: "fit",
+        slug,
+        why: rec.fit.fit.why,
+        user: rec.fit.user,
+        job: rec.fit.job,
+        question: `The product case says this does not fit the product: ${rec.fit.fit.why} Override and plan it anyway, or stop?`,
+        next: `Ask the user in chat; say what would make it fit if the case names it. Then ${resumeHow('fit: "override" | "stop"')}`,
+      }
+    );
+  }
+  log("Fit: the user overrode a no-fit verdict; planning continues");
+}
 
 // =============================================================================================
 phase("Design");
@@ -1088,8 +1116,9 @@ Return ok (the checker exit code was 0), the failures verbatim as "rule: detail"
     { label: "check:flush-accepted", phase: "Check", effort: "low", schema: obj({ ok: { type: "boolean" }, failures: STRS, file: STR }) }
   );
   if (!r) {
-    log("WARNING: could not write the accepted items into the draft — Publish will refuse to run until they are in");
-    return;
+    // Dropping an accepted finding from the record is not allowed: fail loudly instead of going on.
+    log(`Stopped: could not write ${pending.length} accepted item(s) into ${draft}`);
+    throw { halt: { stopped: "Check", reason: `could not write the accepted items into ${draft} (${pending.join("; ")}); fix the file by hand or re-run` } };
   }
   acceptedWritten = acceptedOpen.length;
   if (r.ok || formatAccepted) checked = r.ok ? r : checked;
@@ -1285,6 +1314,10 @@ if (hasUi && chosen) {
 } else if (hasUi) log("Plan: no surviving prototype, so no states pass");
 
 await flushAccepted();
+if (acceptedWritten !== acceptedOpen.length) {
+  log(`Stopped at Publish: ${acceptedOpen.length - acceptedWritten} accepted item(s) are not in the draft`);
+  return { stopped: "Publish", reason: `${acceptedOpen.length - acceptedWritten} accepted item(s) are missing from ${draft}; nothing published` };
+}
 // Publish never infers acceptance: the record passes the checker, or the human explicitly accepted it.
 if (!checked.ok && !formatAccepted) {
   log(`Stopped at Publish: the record fails check-feature-doc and the human never accepted that: ${checked.failures.join(" | ")}`);

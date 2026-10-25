@@ -249,14 +249,21 @@ async function edit(ref: Ref, p: Parsed, deps: Deps): Promise<Outcome> {
     } catch {
       return bad(2, "NOT_FOUND", "gh api graphql returned unreadable JSON", "the write landed; run: tracker view <ref> and check the body");
     }
+    // The bound is our own completed write, not the clock before we ran: an edit that lands while
+    // `gh issue edit` is in flight sits after writeAt but before our edit. With no own edit on
+    // record (an unchanged body creates none), fall back to the pre-write clock.
+    const ours = nodes
+      .filter((n) => n.editor?.login === me && n.editedAt > expect)
+      .sort((a, b) => (a.editedAt < b.editedAt ? 1 : -1))[0];
+    const bound = ours && ours.editedAt > writeAt ? ours.editedAt : writeAt;
     const other = nodes
-      .filter((n) => n.editor?.login !== me && n.editedAt > expect && n.editedAt < writeAt)
+      .filter((n) => n.editor?.login !== me && n.editedAt > expect && n.editedAt < bound)
       .sort((a, b) => (a.editedAt < b.editedAt ? 1 : -1))[0];
     if (other) {
       const err = bad(
         3,
         "STALE_AFTER_WRITE",
-        `${other.editor?.login ?? "someone"} edited the issue at ${other.editedAt}, after ${expect} and before our write; our write may have overwritten it`,
+        `${other.editor?.login ?? "someone"} edited the issue at ${other.editedAt}, after ${expect} and before our write finished; our write may have overwritten it`,
         "the write landed; restore or merge the text in `body` (that edit's diff), then edit again",
       );
       err.err!.body = other.diff ?? "";

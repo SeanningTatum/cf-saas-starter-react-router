@@ -34,7 +34,7 @@ Return exactly these fields:
 
 ## Checklist
 
-- **pr1_docs**: PR 1's fence includes docs/features/<slug>.md, both plan pages and, when the UX plan has directions, the three prototype files.
+- **pr1_docs**: PR 1's fence includes docs/features/<slug>.md and, when the UX plan has directions, the three prototype files (plans/<slug>-proto-<id>.html). No plan page is listed: those live in .verify/.
 - **branches**: every branch matches feat/<slug>/<n>-<lane> and n runs 1..N in order with no repeat.
 - **base_chain**: PR 1's base is the stated base branch and each later base equals the previous PR's branch.
 - **fences_once**: every path from the architect's fences appears in exactly one PR, the only paths added are the fixed PR-1 docs set, and none is a directory prefix of another.

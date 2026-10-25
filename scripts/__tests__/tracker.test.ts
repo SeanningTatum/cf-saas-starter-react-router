@@ -152,6 +152,18 @@ describe("tracker edit", () => {
     expect(o.err?.body).toBe("maria's text");
   });
 
+  it("an edit by someone else that lands while our gh command runs (after the pre-write clock, before our own edit) exits 3 STALE_AFTER_WRITE", async () => {
+    const { deps } = guarded({
+      edits: [
+        { editor: { login: "maria" }, editedAt: "2026-10-24T10:06:00Z", diff: "maria's in-flight text" },
+        { editor: { login: "sean" }, editedAt: "2026-10-24T10:07:00Z", diff: "mine" },
+      ],
+    });
+    const o = await run(guardedArgs, withNow(deps));
+    expect(o.err?.code).toBe("STALE_AFTER_WRITE");
+    expect(o.err?.body).toBe("maria's in-flight text");
+  });
+
   it("our own edits and edits outside the window do not trip STALE_AFTER_WRITE: a false alarm would block every run", async () => {
     const { deps } = guarded({
       edits: [
