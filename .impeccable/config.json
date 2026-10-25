@@ -1,0 +1,17 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "low-contrast",
+        "value": "*",
+        "files": [
+          "plans/plan-feature.html"
+        ],
+        "createdAt": "2026-10-24T19:54:29.935Z",
+        "reason": "brain-plan skill mandates this fixed palette (references/style.md); the terra-cotta accent marks (recommended) only"
+      }
+    ]
+  }
+}

@@ -66,3 +66,7 @@ tmp/
 .brain/brain.db.bak-v*
 .brain/export.toon
 .brain/shots/
+.brain/drafts/
+
+# impeccable hook cache (config.json is committed)
+.impeccable/hook.cache.json
