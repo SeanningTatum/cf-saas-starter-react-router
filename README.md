@@ -144,7 +144,6 @@ State lives in GitHub: the spec is an issue, each ticket is an issue, and a merg
 
 | Command | What it does |
 |---------|--------------|
-| [`/build-feature`](.claude/commands/build-feature.md) | Multi-layer feature build with the sub-agents fanned out in parallel on disjoint paths, then parallel verification. |
 | [`/harness-check`](.claude/commands/harness-check.md) | Repo invariants (CLAUDE↔AGENTS symlink, sub-agent frontmatter, hook wiring) via [`scripts/harness-check.sh`](scripts/harness-check.sh) — no LLM, exits non-zero on drift. |
 
 ### Project-local sub-agents ([`.claude/agents/`](.claude/agents/))

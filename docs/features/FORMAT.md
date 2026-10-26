@@ -1,7 +1,7 @@
 # Feature decision record
 
 `/plan-feature` writes one record per feature. During planning it lives at `.verify/<slug>/record.md` (git ignores it);
-`/build-feature` commits it as `docs/features/<slug>.md` in PR 1. `bun run feature-doc:check <file>` checks it.
+`ship-feature` commits it as `docs/features/<slug>.md` in PR 1. `bun run feature-doc:check <file>` checks it.
 
 The record is a plan's audit trail: what we found, what we chose, what we rejected and who chose it.
 

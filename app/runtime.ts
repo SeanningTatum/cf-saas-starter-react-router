@@ -5,6 +5,7 @@ import { BucketLive, type Bucket } from "@/services/bucket";
 import { AuthApiLive, type AuthApi as AuthApiTag } from "@/services/auth";
 import { WorkflowsLive, type Workflows } from "@/services/workflows";
 import { LoggerLive, MinLogLevelLive } from "@/services/logger";
+import { AnalyticsLive, type Analytics } from "@/services/analytics";
 import { TracingLayer } from "@/services/tracing";
 import { UserRepository } from "@/repositories/user";
 import { AnalyticsRepository } from "@/repositories/analytics";
@@ -15,6 +16,7 @@ export type AppServices =
   | Bucket
   | AuthApiTag
   | Workflows
+  | Analytics
   | UserRepository
   | AnalyticsRepository
   | BucketRepository;
@@ -28,7 +30,8 @@ export const makeAppRuntime = (env: Env, baseURL?: string) => {
     DatabaseLive,
     BucketLive,
     AuthApiLive(baseURL),
-    WorkflowsLive
+    WorkflowsLive,
+    AnalyticsLive
   );
   const reposLayer = Layer.mergeAll(
     UserRepository.Default,

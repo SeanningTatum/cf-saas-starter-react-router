@@ -38,9 +38,10 @@ jobs:
   deploy:
     name: Deploy to Cloudflare (production)
     runs-on: ubuntu-latest
-    # Only on a green CI run for main, and only when credentials are wired up.
+    # Only on a green CI run for a push to main (CI also runs on PRs), and only when credentials are wired up.
     if: >-
       ${{ github.event.workflow_run.conclusion == 'success'
+          && github.event.workflow_run.event == 'push'
           && vars.CLOUDFLARE_ACCOUNT_ID != '' }}
     timeout-minutes: 15
     environment: production

@@ -3,8 +3,8 @@ name: CI
 on:
   push:
     branches: [main]
+  # Every PR, not only those into main: a stacked PR targets the PR below it.
   pull_request:
-    branches: [main]
 
 permissions:
   contents: read
@@ -78,6 +78,10 @@ jobs:
 
       - name: Apply local D1 migrations
         run: bun run db:migrate:local
+
+      # Fixture logins (admin / user / banned) that signed-in specs use.
+      - name: Seed local D1
+        run: bun run db:seed
 
       - name: Install Playwright browsers
         run: bunx playwright install --with-deps chromium

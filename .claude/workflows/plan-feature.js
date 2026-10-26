@@ -3,7 +3,7 @@ export const meta = {
   description:
     "Turn a ticket or an idea into a reviewed decision record — audit the ticket, ask you, write back to the issue, plan fit, UX, architecture and the PR stack, then publish the record to the issue and the working memory",
   whenToUse:
-    "A feature you want planned before any code: a GitHub issue (args.ticket) or a raw idea (args.idea). Not for building it (/build-feature does that), not for a typo or a one-file change.",
+    "A feature you want planned before any code: a GitHub issue (args.ticket) or a raw idea (args.idea). Not for building it (ship-feature does that), not for a typo or a one-file change.",
   phases: [
     { title: "Preflight", detail: "root, date, gh auth, tracker backend, PRODUCT.md and DESIGN.md; reads the ticket (runner)" },
     { title: "Product", detail: "only when PRODUCT.md is missing: stops and asks you the product interview in chat" },
@@ -1368,7 +1368,7 @@ ${decisionLines.map((d) => `  · ${d.question} — chose "${d.chosen}" — ${d.w
 Links: issue ${writeback.issue_url}; decision record ${published.record_comment_url}.
 PR stack (${rec.stack.prs.length}): ${rec.stack.prs.map((p) => `#${p.n} ${p.branch} (${p.size})`).join("; ")}.
 Todo: review the PR stack, then build it (PR 1 first)${hasUi && chosen ? `; build prototype ${chosen}` : ""}.
-Next step: run /build-feature for PR 1 of ${slug}.`,
+Next step: run Workflow ship-feature with the ticket to build and open the PR stack.`,
   "memory:record:published",
   "Publish"
 );
@@ -1385,7 +1385,7 @@ return {
   critique,
   research,
   prs: rec.stack.prs.map((p) => ({ n: p.n, branch: p.branch, base: p.base, title: p.title, size: p.size })),
-  next: `Review the PR stack, then build it with /build-feature. The prototypes (${plans.join(", ") || "none"}) and ${draft} stay uncommitted.`,
+  next: `Review the PR stack, then build and open it with Workflow ship-feature (args.ticket). The prototypes (${plans.join(", ") || "none"}) and ${draft} stay uncommitted.`,
 };
 
 } catch (e) {

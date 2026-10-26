@@ -15,3 +15,8 @@ BETTER_AUTH_SECRET=change-me-openssl-rand-hex-16
 # OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318
 # OTEL_EXPORTER_OTLP_HEADERS=Authorization=Bearer%20<token>
 # OTEL_SERVICE_NAME=cf-saas-starter
+
+# Optional — server-side analytics. ANALYTICS_PROVIDER: none (default) | console | posthog.
+# ANALYTICS_PROVIDER=posthog
+# POSTHOG_API_KEY=phc_...
+# POSTHOG_HOST=https://us.i.posthog.com

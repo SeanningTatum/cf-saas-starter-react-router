@@ -2,7 +2,7 @@
  * Structural check for a feature decision record (docs/features/<slug>.md).
  *
  * The plan-feature workflow writes a record; this script says whether the record has the shape
- * /build-feature and the issue comment expect. It checks structure, not judgement: a record can pass and still
+ * ship-feature and the issue comment expect. It checks structure, not judgement: a record can pass and still
  * be a bad plan. The format is documented in docs/features/FORMAT.md.
  *
  *   bun run scripts/check-feature-doc.ts <file.md>
