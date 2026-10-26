@@ -14,8 +14,8 @@ export const meta = {
     { title: "Fix", detail: "each P0/P1 goes back to the lane that owns the file; failed checks re-run; two rounds" },
     { title: "Docs", detail: "docs-writer: the record, glossary, ADR, changed docs and one PR body per PR" },
     { title: "Ship", detail: "the run stops on a lavish page: the stack, the verdicts, the open findings; you approve or ask for changes" },
-    { title: "Open", detail: "split into stacked branches by fence, check each, push, open the PRs, wait for checks and the seeded preview, walk the preview" },
-    { title: "Greptile", detail: "per PR in order: wait for the review, review-responder fixes or declines each comment, restack, push; three rounds" },
+    { title: "Open", detail: "split into stacked branches by fence, check each, push, open the PRs, wait for every PR's checks and the seeded preview, walk the preview" },
+    { title: "Greptile", detail: "per PR in order: wait for the review, review-responder fixes or declines each comment, restack, push; three rounds; after fixes, checks and the preview walk again" },
     { title: "Rollup", detail: "more than one PR: a disposable review/<slug> branch and one roll-up PR for the human, a pointer comment on each stacked PR" },
     { title: "Close", detail: "one context-memory record; the PR links" },
   ],
@@ -399,6 +399,17 @@ for (const pr of prs) {
   if (ui.length) lanes.push({ name: `pr${pr.n}-ui`, pr: pr.n, agentType: "ui-builder", owns: ui });
 }
 if (!lanes.length) return { stopped: "Contract", reason: "no build lane: every fence path is docs or e2e" };
+// Builders run in parallel, so no two may own the same file: an equal path, or a folder holding another's path.
+const nested = (a, b) => covers([a], b) || covers([b], a);
+const clashes = (groups) =>
+  groups.flatMap((g, i) => groups.slice(i + 1).flatMap((h) => g.paths.flatMap((a) => h.paths.filter((b) => nested(a, b)).map((b) => `${g.name} ${a} / ${h.name} ${b}`))));
+const fenceClashes = [
+  ...clashes(prs.map((p) => ({ name: `PR ${p.n}`, paths: p.fence.map(norm) }))),
+  ...prs.flatMap((p) => clashes(lanes.filter((l) => l.pr === p.n).map((l) => ({ name: l.name, paths: l.owns })))),
+];
+if (fenceClashes.length) {
+  return { stopped: "Contract", reason: `fences overlap, so parallel builders could overwrite each other: ${fenceClashes.join("; ")}`, next: "Nothing was changed. Make the fences disjoint in the plan (plan-feature's PR stack), then run again." };
+}
 const laneFor = (file) => {
   const p = norm(file || "");
   return lanes.find((l) => covers(l.owns, p)) || null;
@@ -852,29 +863,35 @@ if (!opened || !opened.ok) return { stopped: "Open", reason: opened ? opened.fai
 const openPrs = opened.prs.sort((a, b) => a.n - b.n);
 log(`Opened: ${openPrs.map((p) => p.url).join(" ")}`);
 
-// The preview workflow deploys every PR with its own seeded D1 and posts the URL as a sticky comment.
+// CI and the preview workflow run on every PR in the stack; the preview deploys each PR with its own seeded
+// D1 and posts the URL as a sticky comment. The walk uses the top PR's preview, the whole feature.
 const top = openPrs[openPrs.length - 1];
-const checks = await sh(
-  `Wait for CI and the preview deploy on PR #${top.number}: \`gh pr checks ${top.number} --watch\` with a 600000 ms Bash timeout; if the tool times out first, run it again, up to three times. Then read the PR comments (\`gh pr view ${top.number} --json comments\`) for the one starting "### Preview deployment" and take the first https URL in bold as preview_url ("" when there is none: previews are off without Cloudflare credentials). Return each check { name, state } and preview_url.`,
-  { label: "open:checks", phase: "Open", schema: obj({ checks: arr(obj({ name: STR, state: STR })), preview_url: STR }) }
-);
-const previewUrl = (checks && checks.preview_url) || "";
-const redChecks = checks ? checks.checks.filter((c) => !/pass|success|skip|neutral/i.test(c.state)) : [];
-if (redChecks.length) log(`Red checks on #${top.number}: ${redChecks.map((c) => c.name).join(", ")}`);
-
+let checks = null;
+let previewUrl = "";
+let redChecks = [];
 let previewWalk = null;
-if (hasUi && previewUrl) {
+async function checkAndWalk(tag, phaseName) {
+  checks = await sh(
+    `Wait for CI and the preview deploy on each PR, in order: ${openPrs.map((p) => `#${p.number}`).join(", ")}. For each: \`gh pr checks <n> --watch\` with a 600000 ms Bash timeout; if the tool times out first, run it again, up to three times; if it reports no checks yet, wait 30 s and run it again, up to five times. Then read PR #${top.number}'s comments (\`gh pr view ${top.number} --json comments\`) for the one starting "### Preview deployment" and take the first https URL in bold as preview_url ("" when there is none: previews are off without Cloudflare credentials). Return prs [{ number, checks: [{ name, state }] }] and preview_url.`,
+    { label: `${tag}:checks`, phase: phaseName, schema: obj({ prs: arr(obj({ number: NUM, checks: arr(obj({ name: STR, state: STR })) })), preview_url: STR }) }
+  );
+  previewUrl = (checks && checks.preview_url) || "";
+  redChecks = checks ? checks.prs.flatMap((p) => p.checks.filter((c) => !/pass|success|skip|neutral/i.test(c.state)).map((c) => `#${p.number} ${c.name}`)) : [];
+  if (redChecks.length) log(`Red checks: ${redChecks.join(", ")}`);
+  previewWalk = null;
+  if (!hasUi || !previewUrl) return;
   previewWalk = await ask(
     `Walk the golden path of ${slug} on the DEPLOYED preview, not a dev server: base URL ${previewUrl}. Do not start a server. Golden path: ${plan.golden_path}. Log in with the seeded fixtures. Screenshots into ${outDir()}/preview/, verdict to ${outDir()}/preview-verdict.md (first line \`Verdict: PASS|FAIL|BLOCKED\`). Return the verdict.`,
-    { label: "open:preview-walk", phase: "Open", agentType: "feature-verifier", schema: VERDICT }
+    { label: `${tag}:preview-walk`, phase: phaseName, agentType: "feature-verifier", schema: VERDICT }
   );
   if (previewWalk) {
     await sh(`Post ${outDir()}/preview-verdict.md as a comment on PR #${top.number}, prefixed with the line "### Preview walk (${previewUrl})": write the combined text to ${outDir()}/preview-comment.md, then \`gh pr comment ${top.number} --body-file ${outDir()}/preview-comment.md\`.`, {
-      label: "open:preview-comment",
-      phase: "Open",
+      label: `${tag}:preview-comment`,
+      phase: phaseName,
     });
   }
 }
+await checkAndWalk("open", "Open");
 
 // =============================================================================================
 phase("Greptile");
@@ -886,6 +903,7 @@ const WAIT = obj({
   comments: arr(obj({ id: NUM, path: STR, line: { type: ["number", "null"] }, body: STR, url: STR }, ["id", "path", "body"])),
 }, ["status", "comments"]);
 const greptile = [];
+let fixesPushed = false;
 for (const p of openPrs) {
   const pr = prs.find((x) => x.n === p.n);
   const seen = new Set();
@@ -937,10 +955,13 @@ Return ok and failed_command.`,
       { label: `greptile:push:${p.n}:${round}`, phase: "Greptile", schema: obj({ ok: BOOL, failed_command: STR }) }
     );
     if (!pushed || !pushed.ok) return { stopped: "Greptile", reason: `restack or push failed after fixing #${p.number}: ${pushed ? pushed.failed_command : "no result"}`, prs: openPrs };
+    fixesPushed = true;
   }
   greptile.push({ pr: p.number, url: p.url, rounds });
 }
 await sh(`\`git switch ${top.branch}\`.`, { label: "greptile:home", phase: "Greptile" });
+// The checks and walk from Open describe the commits before the fixes; report on what is pushed now.
+if (fixesPushed) await checkAndWalk("greptile", "Greptile");
 
 // =============================================================================================
 phase("Rollup");
@@ -1003,7 +1024,7 @@ const memory = await ask(
 Where it stopped: ship-feature finished. PRs open: ${openPrs.map((p) => `#${p.number} ${p.url}`).join("; ")}. Merge them in order.${rollup ? ` Roll-up PR for the human: #${rollup.number} ${rollup.url} (merge it, then close the stacked PRs).` : ""}
 Links: ${issue ? `issue ${issue.url}; ` : ""}${previewUrl ? `preview ${previewUrl}; ` : ""}${pre.record_path ? `record docs/features/${slug}.md (PR 1).` : ""}
 Decisions (${DATE}): built from ${pre.record_path ? "the plan-feature decision record" : `the ticket directly (auditor: ${audit ? audit.verdict : "n/a"}${input.ready === "override" ? ", overridden by the human" : ""})`}.${architect ? ` Architecture: ${architect.decisions.map((d) => `${d.question} → ${d.chosen} (${d.why})`).join("; ")}.` : ""}
-Todo: ${open.length ? `${open.length} P0/P1 still open: ${open.map((f) => `${f.source} ${f.file}: ${f.detail.split("\n")[0]}`).join("; ")}; ` : ""}${redChecks.length ? `red checks on #${top.number}: ${redChecks.map((c) => c.name).join(", ")}; ` : ""}review and merge the PRs in order.
+Todo: ${open.length ? `${open.length} P0/P1 still open: ${open.map((f) => `${f.source} ${f.file}: ${f.detail.split("\n")[0]}`).join("; ")}; ` : ""}${redChecks.length ? `red checks: ${redChecks.join(", ")}; ` : ""}review and merge the PRs in order.
 Next step: human review of ${rollup ? rollup.url : openPrs[0].url}.`,
   { label: "memory:record", phase: "Close", agentType: "context-memory", effort: "low" }
 );
@@ -1015,7 +1036,7 @@ return {
   rollup: rollup ? rollup.url : null,
   preview: previewUrl || null,
   previewWalk: previewWalk ? previewWalk.verdict : null,
-  checks: checks ? checks.checks : [],
+  checks: checks ? checks.prs : [],
   greptile,
   verdicts: verdictLines(),
   open_findings: open,
