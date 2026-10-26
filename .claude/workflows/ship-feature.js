@@ -44,7 +44,7 @@ export const meta = {
  *     needs-input, stage "ready"   no decision record and the ticket-auditor did not rate the ticket ready.
  *                                  Re-run with args.ready = "override" (build anyway) or "stop"; or run plan-feature.
  *     needs-ship                   built, reviewed and documented; nothing has left the machine. The main thread
- *                                  writes the lavish page `review.page`, polls it, then re-runs with
+ *                                  writes the lavish page `review`, polls it, then re-runs with
  *                                  args.ships["<round>"] = { approved: true } or { approved: false, changes: ["..."] }.
  *   Nothing is pushed, no PR is opened and no comment is posted before a needs-ship approval.
  *
@@ -789,10 +789,8 @@ for (; shipRound <= 3; shipRound++) {
       e2e: e2eOut,
       docs,
       shots: hasUi ? `${shotsDir}/` : null,
-      review: {
-        page,
-        next: `Write ${page} (run \`npx -y lavish-axi playbook explanation\` and \`playbook input\` first; style it with the tokens in app/app.css; relative image paths, never a leading /). Top: the feature, the verdict lines and a one-line recommendation (ship, or what blocks). Then: the PR stack as cards (title, branch -> base, its paths, a link to its body file); OPEN P0/P1 findings as a table, most severe first${hasUi ? "; the browser-walk screenshots from shots/ at desktop and mobile" : ""}; the other findings collapsed; unfenced paths that fell to the last PR. One form: Approve (push and open the PRs) or Request changes (a textarea, one change per line), one submit that calls window.lavish.queuePrompt once. Open it with \`npx -y lavish-axi ${page}\`, run \`npx -y lavish-axi poll ${page}\` in the foreground (re-run on timeout), then ${resumeHow(`ships: { ...earlier rounds, "${shipRound}": <the answer> }`)} Never run \`lavish-axi share\`.`,
-      },
+      review: page,
+      next: `Write ${page} (run \`npx -y lavish-axi playbook explanation\` and \`playbook input\` first; style it with the tokens in app/app.css; relative image paths, never a leading /). Top: the feature, the verdict lines and a one-line recommendation (ship, or what blocks). Then: the PR stack as cards (title, branch -> base, its paths, a link to its body file); OPEN P0/P1 findings as a table, most severe first${hasUi ? "; the browser-walk screenshots from shots/ at desktop and mobile" : ""}; the other findings collapsed; unfenced paths that fell to the last PR. One form: Approve (push and open the PRs) or Request changes (a textarea, one change per line), one submit that calls window.lavish.queuePrompt once. Open it with \`npx -y lavish-axi ${page}\`, run \`npx -y lavish-axi poll ${page}\` in the foreground (re-run on timeout), then ${resumeHow(`ships: { ...earlier rounds, "${shipRound}": <the answer> }`)} Never run \`lavish-axi share\`.`,
     });
   }
   if (answer.approved) {
