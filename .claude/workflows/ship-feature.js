@@ -13,7 +13,7 @@ export const meta = {
     { title: "Review", detail: "all gates vs the baseline ‖ effect-ts-enforcer ‖ security-reviewer ‖ scale-reviewer ‖ maintainability-reviewer (lean) ‖ browser walk then design critique" },
     { title: "Fix", detail: "each P0/P1 goes back to the lane that owns the file; failed checks re-run; two rounds" },
     { title: "Docs", detail: "docs-writer: the record, glossary, ADR, changed docs and one PR body per PR" },
-    { title: "Ship", detail: "the run stops on a lavish page: the stack, the verdicts, the open findings; you approve or ask for changes" },
+    { title: "Ship", detail: "the @golden and @error specs re-run on video; the run stops on a lavish page: the stack, the verdicts, the open findings, the videos; you approve or ask for changes" },
     { title: "Open", detail: "split into stacked branches by fence, check each, push, open the PRs, wait for every PR's checks and the seeded preview, walk the preview" },
     { title: "Greptile", detail: "per PR in order: wait for the review, review-responder fixes or declines each comment, restack, push; three rounds; after fixes, checks and the preview walk again" },
     { title: "Rollup", detail: "more than one PR: a disposable review/<slug> branch and one roll-up PR for the human, a pointer comment on each stacked PR" },
@@ -562,7 +562,7 @@ const writers = await parallel([
     ? [
         () =>
           ask(
-            `${FEATURE}\n\nWrite committed Playwright specs for this feature under e2e/ (e2e/${slug}.spec.ts). Golden path: ${plan.golden_path || "derive it from the record"}. Error path: ${plan.error_path || "derive it"}. Acceptance:\n${ACCEPT}\nUse the seeded fixtures; run only your spec.${blast ? `\nIf a flow an existing route serves runs through the blast radius below and no e2e spec covers it, add one golden-path spec for it.${blast}` : ""}`,
+            `${FEATURE}\n\nWrite committed Playwright specs for this feature under e2e/ (e2e/${slug}.spec.ts). Golden path: ${plan.golden_path || "derive it from the record"}. Error path: ${plan.error_path || "derive it"}. Acceptance:\n${ACCEPT}\nUse the seeded fixtures; run only your spec. Tag the golden-path test \`{ tag: "@golden" }\` and the error-path test \`{ tag: "@error" }\`: they become the PR's smoke videos.${blast ? `\nIf a flow an existing route serves runs through the blast radius below and no e2e spec covers it, add one golden-path spec for it.${blast}` : ""}`,
             {
               label: "write:e2e",
               phase: "Write",
@@ -608,6 +608,7 @@ const touched = await sh(`Run \`git diff --name-only ${pre.base_sha}\` and \`git
 const changed = (touched && touched.files) || [];
 const needsScale = changed.some((p) => /^(app\/(db|repositories|trpc|services)\/|drizzle\/|workers\/)/.test(p));
 const shotsDir = `${outDir()}/shots`;
+const videoDir = `${outDir()}/video`;
 
 const DIFF = `the diff against ${pre.base_sha} (\`git diff ${pre.base_sha}\` plus untracked files)`;
 const reviewer = (key, agentType, note) => (round) => () =>
@@ -782,6 +783,12 @@ for (; shipRound <= 3; shipRound++) {
   assignment = await assignOut(`ship:assign:${shipRound}`);
   const answer = input.ships && input.ships[String(shipRound)];
   if (!answer) {
+    // The smoke videos: the committed @golden and @error specs, re-run on the final tree with video on.
+    const reel = hasUi ? await sh(
+      `Record the smoke videos of "${slug}". Run \`rm -f ${videoDir}/golden-*.webm ${videoDir}/error-*.webm\` (earlier rounds; keep demo-*), then, with a 600000 ms Bash timeout and E2E_PORT set to a free port, \`bun run scripts/e2e-videos.ts --out ${videoDir} ${((e2eOut && e2eOut.specs) || []).map((x) => x.path).join(" ") || `e2e/${slug}.spec.ts`}\`. Exit 0 or 1: return passed and videos ([{ kind, title, path, status }]) from its stdout. Exit 2: return passed false, videos [] and its stderr as error.`,
+      { label: `ship:videos:${shipRound}`, phase: "Ship", schema: obj({ passed: BOOL, videos: arr(obj({ kind: STR, title: STR, path: STR, status: STR })), error: STR }, ["passed", "videos"]) }
+    ) : null;
+    if (reel && !reel.passed) log(`Smoke videos: ${reel.error || "a tagged spec failed on video"}`);
     const open = blocking(allFindings());
     const page = `${outDir()}/ship-${shipRound}.html`;
     const restPaths = assignment ? (assignment.assignments.find((a) => a.n === lastPr.n) || { paths: [] }).paths.filter((p) => !covers(lastPr.fence.map(norm), p)) : [];
@@ -800,8 +807,9 @@ for (; shipRound <= 3; shipRound++) {
       e2e: e2eOut,
       docs,
       shots: hasUi ? `${shotsDir}/` : null,
+      videos: reel,
       review: page,
-      next: `Write ${page} (run \`npx -y lavish-axi playbook explanation\` and \`playbook input\` first; style it with the tokens in app/app.css; relative image paths, never a leading /). Top: the feature, the verdict lines and a one-line recommendation (ship, or what blocks). Then: the PR stack as cards (title, branch -> base, its paths, a link to its body file); OPEN P0/P1 findings as a table, most severe first${hasUi ? "; the browser-walk screenshots from shots/ at desktop and mobile" : ""}; the other findings collapsed; unfenced paths that fell to the last PR. One form: Approve (push and open the PRs) or Request changes (a textarea, one change per line), one submit that calls window.lavish.queuePrompt once. Open it with \`npx -y lavish-axi ${page}\`, run \`npx -y lavish-axi poll ${page}\` in the foreground (re-run on timeout), then ${resumeHow(`ships: { ...earlier rounds, "${shipRound}": <the answer> }`)} Never run \`lavish-axi share\`.`,
+      next: `Write ${page} (run \`npx -y lavish-axi playbook explanation\` and \`playbook input\` first; style it with the tokens in app/app.css; relative image paths, never a leading /). Top: the feature, the verdict lines and a one-line recommendation (ship, or what blocks). Then: the PR stack as cards (title, branch -> base, its paths, a link to its body file); OPEN P0/P1 findings as a table, most severe first${hasUi ? "; the browser-walk screenshots from shots/ at desktop and mobile; every video in video/ (golden-*, error-*, demo-*) as a <video controls> element captioned with its file name" : ""}; the other findings collapsed; unfenced paths that fell to the last PR. One form: Approve (push and open the PRs) or Request changes (a textarea, one change per line), one submit that calls window.lavish.queuePrompt once. Open it with \`npx -y lavish-axi ${page}\`, run \`npx -y lavish-axi poll ${page}\` in the foreground (re-run on timeout), then ${resumeHow(`ships: { ...earlier rounds, "${shipRound}": <the answer> }`)} Never run \`lavish-axi share\`.`,
     });
   }
   if (answer.approved) {
@@ -1035,6 +1043,7 @@ return {
   prs: openPrs,
   rollup: rollup ? rollup.url : null,
   preview: previewUrl || null,
+  videos: hasUi ? `${videoDir}/` : null,
   previewWalk: previewWalk ? previewWalk.verdict : null,
   checks: checks ? checks.prs : [],
   greptile,

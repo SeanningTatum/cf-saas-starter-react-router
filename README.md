@@ -237,6 +237,7 @@ bun run test                  # Vitest (one-shot)
 bun run test:watch            # Vitest watch
 bun run test:e2e              # Playwright
 bun run test:e2e:ui           # Playwright UI mode
+bun run test:e2e:videos --out <dir>  # Record the @golden/@error specs as PR videos
 bun run test:e2e:report       # Open last Playwright report
 
 bun run db:generate           # Generate Drizzle migration from schema

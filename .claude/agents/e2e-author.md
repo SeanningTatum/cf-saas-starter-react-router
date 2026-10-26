@@ -13,6 +13,8 @@ Write specs that stay in the repo and fail when a user-visible flow breaks. This
 
 Per flow: one golden path, one error path. Each spec has a comment naming the regression it catches ("the invite link 500s for an already-accepted invite"). A spec that cannot name one is not written.
 
+Tag them: `test(title, { tag: "@golden" }, ...)` and `{ tag: "@error" }`. These are the permanent smoke tests, and `scripts/e2e-videos.ts` records them as the PR's videos, so each walks the path a reviewer should watch and nothing else; the title becomes the video's name.
+
 ## Conventions
 
 - Read `playwright.config.ts` (base URL, projects, webServer) and `e2e/*.spec.ts` first; copy their imports, login helper and layout.

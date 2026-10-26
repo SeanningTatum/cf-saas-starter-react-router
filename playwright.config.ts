@@ -4,6 +4,9 @@ import { defineConfig, devices } from "@playwright/test";
 // project's dev server), which silently points e2e at the wrong app. Pin the
 // port explicitly and allow overriding via E2E_PORT when 5173 is occupied.
 const PORT = process.env.E2E_PORT ?? "5173";
+// E2E_VIDEO=1 records every test at a size a PR reviewer can read, slowed so a viewer can follow.
+// scripts/e2e-videos.ts sets it and collects the @golden and @error videos.
+const VIDEO = !!process.env.E2E_VIDEO;
 
 export default defineConfig({
   testDir: "./e2e",
@@ -16,6 +19,8 @@ export default defineConfig({
     baseURL: `http://localhost:${PORT}`,
     trace: "on-first-retry",
     screenshot: "only-on-failure",
+    video: VIDEO ? { mode: "on", size: { width: 1280, height: 720 } } : "off",
+    launchOptions: { slowMo: VIDEO ? 250 : 0 },
   },
   projects: [
     {
