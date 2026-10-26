@@ -999,7 +999,7 @@ ${issue ? `\nCloses ${issue.url}` : ""}
 `;
   rollup = await sh(
     `Open the roll-up PR for "${slug}". In order, stop at the first failure (ok=false, failed_command):
-  1. \`git branch -f review/${slug} ${top.branch}\` then \`git push -f -u origin review/${slug}\` (a disposable review branch).
+  1. \`git fetch -q origin\`, \`git branch -f review/${slug} ${top.branch}\`, then \`git push --force-with-lease -u origin review/${slug}\` (a disposable review branch; .claude/settings.json denies plain -f).
   2. Write this text byte for byte to ${outDir()}/rollup.md with a quoted heredoc. In it, replace the line starting "Fixture logins:" with the fixture logins line you find under "How to test" in ${outDir()}/pr-1.md (keep the "Fixture logins:" prefix).
 ${fence("rollup.md", body)}
   3. \`gh pr create --base ${BASE} --head review/${slug} --title ${shq(`${plan.title} (roll-up)`)} --body-file ${outDir()}/rollup.md\` -> number and url.
