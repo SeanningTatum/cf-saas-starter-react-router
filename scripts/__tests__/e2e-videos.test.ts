@@ -82,6 +82,24 @@ describe("run", () => {
     ]);
   });
 
+  it("numbers tests that share a name, so the second video never overwrites the first", () => {
+    const long = "a".repeat(60);
+    const twins: Report = {
+      suites: [
+        { specs: [spec("signup", ["golden"], [{ status: "passed", video: "/a.webm" }]), spec(`${long} one`, ["golden"], [{ status: "passed", video: "/c.webm" }])] },
+        { specs: [spec("signup", ["golden"], [{ status: "passed", video: "/b.webm" }]), spec(`${long} two`, ["golden"], [{ status: "passed", video: "/d.webm" }])] },
+      ],
+    };
+    const { deps, copies } = stub(0, JSON.stringify(twins));
+    run(["--out", "out"], deps);
+    expect(copies).toEqual([
+      ["/a.webm", "out/golden-signup.webm"],
+      ["/c.webm", `out/golden-${long}.webm`],
+      ["/b.webm", "out/golden-signup-2.webm"],
+      ["/d.webm", `out/golden-${long}-2.webm`],
+    ]);
+  });
+
   it("a failing run still saves its videos but exits 1: the video shows the failure, the code blocks the ship", () => {
     const failed: Report = { suites: [{ specs: [spec("x", ["golden"], [{ status: "failed", video: "/f.webm" }])] }] };
     const { deps, copies } = stub(1, JSON.stringify(failed));

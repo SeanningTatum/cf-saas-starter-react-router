@@ -13,7 +13,8 @@
  *   console.log(JSON.stringify(r));
  *
  * Saves <out>/<name>.webm at 1280x720, slowed so a viewer can follow, and holds the last frame for a
- * second. A step that throws still saves the video up to that point and returns ok: false.
+ * second. A step that throws still saves the video up to that point and returns ok: false; so does a
+ * failure to open the page or save the video. The browser always closes.
  * Name demos "demo-..." so the ship-feature review page shows them beside the smoke videos.
  */
 import { chromium, type Browser, type Page } from "@playwright/test";
@@ -43,19 +44,25 @@ export async function record(
   mkdir(out);
   const path = `${out}/${name}.webm`;
   const browser = await launch(slowMo);
-  const context = await browser.newContext({ recordVideo: { dir: out, size: SIZE }, viewport: SIZE });
-  const page = await context.newPage();
   let error: string | undefined;
+  // The outer try owns the browser: a failure to open the page or to save the video still closes it.
   try {
-    await steps(page);
-    await page.waitForTimeout(1000);
+    const context = await browser.newContext({ recordVideo: { dir: out, size: SIZE }, viewport: SIZE });
+    const page = await context.newPage();
+    try {
+      await steps(page);
+      await page.waitForTimeout(1000);
+    } catch (e) {
+      error = String(e);
+    } finally {
+      // Playwright writes the video when its context closes; saveAs then copies it to a stable name.
+      await context.close();
+      await page.video()?.saveAs(path);
+      await page.video()?.delete();
+    }
   } catch (e) {
-    error = String(e);
+    error = error ? `${error}; then ${String(e)}` : String(e);
   } finally {
-    // Playwright writes the video when its context closes; saveAs then copies it to a stable name.
-    await context.close();
-    await page.video()?.saveAs(path);
-    await page.video()?.delete();
     await browser.close();
   }
   return error ? { path, ok: false, error } : { path, ok: true };

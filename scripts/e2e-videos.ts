@@ -5,7 +5,8 @@
  *
  * Runs Playwright with E2E_VIDEO=1 (playwright.config.ts records and slows each test) and CI=1 (no
  * remote Cloudflare bindings, so no login), then copies each test's video to
- * <dir>/<golden|error>-<title>.webm. A failed test keeps its video: it shows the failure.
+ * <dir>/<golden|error>-<title>.webm (-2, -3, ... when two tests share a name). A failed test keeps
+ * its video: it shows the failure.
  * Success prints { passed, videos: [{ kind, title, file, status, path }] } to stdout.
  * Exit codes: 0 every test passed, 1 a test failed (videos still saved), 2 usage or no report.
  *
@@ -79,8 +80,15 @@ export function run(argv: string[], deps: Deps): { code: number; out?: unknown; 
   const found = collectVideos(report);
   if (!found.length) return { code: 2, err: "no @golden or @error test recorded a video; tag them: test(title, { tag: \"@golden\" }, ...)" };
   deps.mkdir(outDir);
+  // Two tests can share a title (across spec files, or after the slug is cut): number the later ones,
+  // or the second copy would overwrite the first.
+  const used = new Set<string>();
   const videos = found.map((v) => {
-    const path = join(outDir, videoName(v));
+    const base = videoName(v).replace(/\.webm$/, "");
+    let name = `${base}.webm`;
+    for (let i = 2; used.has(name); i++) name = `${base}-${i}.webm`;
+    used.add(name);
+    const path = join(outDir, name);
     deps.copy(v.source, path);
     return { kind: v.kind, title: v.title, file: v.file, status: v.status, path };
   });

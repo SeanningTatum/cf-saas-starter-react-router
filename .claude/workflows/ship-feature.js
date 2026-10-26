@@ -788,8 +788,13 @@ for (; shipRound <= 3; shipRound++) {
       `Record the smoke videos of "${slug}". Run \`rm -f ${videoDir}/golden-*.webm ${videoDir}/error-*.webm\` (earlier rounds; keep demo-*), then, with a 600000 ms Bash timeout and E2E_PORT set to a free port, \`bun run scripts/e2e-videos.ts --out ${videoDir} ${((e2eOut && e2eOut.specs) || []).map((x) => x.path).join(" ") || `e2e/${slug}.spec.ts`}\`. Exit 0 or 1: return passed and videos ([{ kind, title, path, status }]) from its stdout. Exit 2: return passed false, videos [] and its stderr as error.`,
       { label: `ship:videos:${shipRound}`, phase: "Ship", schema: obj({ passed: BOOL, videos: arr(obj({ kind: STR, title: STR, path: STR, status: STR })), error: STR }, ["passed", "videos"]) }
     ) : null;
-    if (reel && !reel.passed) log(`Smoke videos: ${reel.error || "a tagged spec failed on video"}`);
-    const open = blocking(allFindings());
+    // A red, empty or missing reel blocks like a check: the page's verdicts and recommendation must show it.
+    const reelOk = !hasUi || (reel && reel.passed && reel.videos.length > 0);
+    const reelWhy = !reel ? "the video run returned nothing" : reel.error || (reel.videos.length ? "a tagged spec failed on video" : "no video recorded");
+    const reelFindings = reelOk ? [] : [{ source: "smoke-videos", severity: "P1", file: "", detail: `smoke videos: ${reelWhy}`, fix: "make the @golden and @error specs pass on the final tree, then re-run the videos" }];
+    if (!reelOk) log(`Smoke videos: ${reelWhy}`);
+    const reelLine = hasUi ? `\nsmoke videos: ${reelOk ? `PASS (${reel.videos.length} videos)` : `FAIL: ${reelWhy}`}` : "";
+    const open = [...reelFindings, ...blocking(allFindings())];
     const page = `${outDir()}/ship-${shipRound}.html`;
     const restPaths = assignment ? (assignment.assignments.find((a) => a.n === lastPr.n) || { paths: [] }).paths.filter((p) => !covers(lastPr.fence.map(norm), p)) : [];
     await stop(`needs-ship:${shipRound}`, "Ship", `Ship round ${shipRound}: built, reviewed, documented; waiting for the human's go before any push`, resumeHow(`ships: { ...earlier rounds, "${shipRound}": { approved: true } | { approved: false, changes: ["..."] } }`), {
@@ -799,7 +804,7 @@ for (; shipRound <= 3; shipRound++) {
       prs: prs.map((p) => ({ n: p.n, branch: p.branch, base: p.base, title: p.title, body: `${outDir()}/pr-${p.n}.md`, paths: assignment ? (assignment.assignments.find((a) => a.n === p.n) || { paths: [] }).paths : [] })),
       unfenced_to_last_pr: restPaths,
       overlaps: assignment ? assignment.overlaps : [],
-      verdicts: verdictLines(),
+      verdicts: `${verdictLines()}${reelLine}`,
       open_findings: open,
       other_findings: allFindings().filter((f) => !open.includes(f)),
       blocked: blockedNotes,

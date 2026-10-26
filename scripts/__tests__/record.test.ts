@@ -3,16 +3,23 @@ import type { Browser, Page } from "@playwright/test";
 import { record } from "../lib/record";
 
 /** A fake browser that logs every call in order, so a test can check what was saved and closed. */
-function fakeBrowser() {
+function fakeBrowser(fail: { newContext?: boolean; saveAs?: boolean } = {}) {
   const calls: string[] = [];
   const video = {
-    saveAs: async (p: string) => void calls.push(`saveAs ${p}`),
+    saveAs: async (p: string) => {
+      if (fail.saveAs) throw new Error("disk full");
+      calls.push(`saveAs ${p}`);
+    },
     delete: async () => void calls.push("delete"),
   };
   const page = { video: () => video, waitForTimeout: async () => void calls.push("hold"), goto: async () => {} };
   const context = { newPage: async () => page, close: async () => void calls.push("context.close") };
   const browser = {
-    newContext: async (o: { recordVideo: { dir: string } }) => (calls.push(`newContext ${o.recordVideo.dir}`), context),
+    newContext: async (o: { recordVideo: { dir: string } }) => {
+      if (fail.newContext) throw new Error("no context");
+      calls.push(`newContext ${o.recordVideo.dir}`);
+      return context;
+    },
     close: async () => void calls.push("browser.close"),
   };
   let slowMo = -1;
@@ -34,6 +41,20 @@ describe("record", () => {
     const r = await record({ out: "o", name: "demo-x" }, async () => Promise.reject(new Error("no button")), f.launch, noMkdir);
     expect(r).toMatchObject({ ok: false, error: expect.stringContaining("no button") });
     expect(f.calls).toContain("saveAs o/demo-x.webm");
+    expect(f.calls.at(-1)).toBe("browser.close");
+  });
+
+  it("closes the browser when the context cannot open, and reports the failure instead of throwing", async () => {
+    const f = fakeBrowser({ newContext: true });
+    const r = await record({ out: "o", name: "demo-x" }, async () => {}, f.launch, noMkdir);
+    expect(r).toMatchObject({ ok: false, error: expect.stringContaining("no context") });
+    expect(f.calls).toEqual(["browser.close"]);
+  });
+
+  it("closes the browser when saving the video fails, and reports the failure instead of throwing", async () => {
+    const f = fakeBrowser({ saveAs: true });
+    const r = await record({ out: "o", name: "demo-x" }, async () => {}, f.launch, noMkdir);
+    expect(r).toMatchObject({ ok: false, error: expect.stringContaining("disk full") });
     expect(f.calls.at(-1)).toBe("browser.close");
   });
 
