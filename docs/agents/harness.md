@@ -24,6 +24,15 @@ The store lives in `~/.claude/projects/<repo>/memory/features/` on purpose. A fo
 - `context-scout` (plan-feature) and the architect `ship-feature` runs on a ticket with no record start with `explore`.
 - Never commit `.codegraph/`: it is a binary SQLite file that changes on every edit.
 
+## Walkthrough videos
+
+Videos a reviewer can watch instead of reading steps. They stay on this machine, in `.verify/<slug>/video/` (gitignored). Two kinds:
+
+- **Smoke videos** come from the committed e2e specs tagged `@golden` and `@error` (`e2e-author` writes one of each per flow). They are the permanent smoke tests: the `e2e` gate runs them on every PR. `bun run test:e2e:videos --out <dir> [spec ...]` ([`scripts/e2e-videos.ts`](../../scripts/e2e-videos.ts)) re-runs them with `E2E_VIDEO=1`, which `playwright.config.ts` reads to record and slow each test, and saves `golden-<title>.webm` and `error-<title>.webm`.
+- **Demo videos** show what is worth seeing but not worth a test: a tour, a design state, the mobile layout. A throwaway script under `tmp/` calls `record()` from [`scripts/lib/record.ts`](../../scripts/lib/record.ts) with the steps; it saves `demo-<name>.webm`.
+
+`ship-feature` records the smoke videos on the final tree before the ship stop and shows them, with any `demo-*`, on the review page.
+
 ## Analytics
 
 [`analytics.md`](analytics.md) — the provider-agnostic `Analytics` service: add an event, add a provider, env vars.
@@ -101,6 +110,7 @@ bun run typecheck         # Full typecheck (cf-typegen + react-router typegen + 
 bun run test              # Vitest unit tests (one-shot)
 bun run test:watch        # Vitest watch mode
 bun run test:e2e          # Playwright e2e tests
+bun run test:e2e:videos --out <dir>  # Record the @golden/@error specs as PR videos
 bun run db:generate       # Generate Drizzle migration
 bun run db:migrate:local  # Apply migrations to local D1
 bun run db:migrate:remote # Apply migrations to remote D1

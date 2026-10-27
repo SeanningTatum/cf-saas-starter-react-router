@@ -15,7 +15,7 @@ SaaS starter on **Cloudflare Workers + React Router v7 + tRPC + D1/Drizzle + Bet
 | Work, specs, tickets | GitHub issues ([`docs/agents/issue-tracker.md`](docs/agents/issue-tracker.md)); `--label ready-for-agent` |
 | Domain terms | `GLOSSARY.md`  |
 | Hard-to-reverse decisions | `docs/adr/NNNN-<slug>.md` ([`docs/agents/domain.md`](docs/agents/domain.md)) |
-| Proof a flow works | `.verify/<slug>/` (screenshots + `verdict.md`, gitignored), pasted in the PR |
+| Proof a flow works | `.verify/<slug>/` (screenshots, videos + `verdict.md`, gitignored), pasted in the PR; smoke videos from the `@golden`/`@error` specs, demos via `scripts/lib/record.ts` ([videos](docs/agents/harness.md#walkthrough-videos)) |
 | Working memory per feature | [`context-memory`](.claude/agents/context-memory.md) store outside the repo (`./scripts/memory-dir.sh`) |
 | Symbol graph of the code | `./scripts/codegraph.sh explore "<q>"` before grep; optional, per checkout ([`docs/agents/harness.md`](docs/agents/harness.md#codegraph)) |
 

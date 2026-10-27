@@ -27,6 +27,8 @@ Prove a user-visible feature works in a headless browser, and leave evidence. `e
 
 If the caller asks for the verdict only, skip the file in step 6 and return the verdict and screenshot paths.
 
+If the caller asks for a demo video (something to show, not to test), record it in a second throwaway script with `scripts/lib/record.ts` (its header has the template), named `demo-<what>`, into `.verify/<slug>/video/`. Smoke videos are not yours: they come from the `@golden` and `@error` specs.
+
 ## Script rules
 
 - Launch bundled chromium: `chromium.launch({ args: ["--disable-extensions"] })`. Never set `channel: "chrome"` or a persistent profile. Real-browser extensions inject DOM and cause hydration mismatches that are not app bugs.

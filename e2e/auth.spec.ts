@@ -20,7 +20,7 @@ test.describe("Authentication", () => {
   const password = "E2EPass123!";
   const name = "E2E User";
 
-  test("signup → dashboard, signout → login, signin → dashboard", async ({ page }) => {
+  test("signup → dashboard, signout → login, signin → dashboard", { tag: "@golden" }, async ({ page }) => {
     // 1. Sign up
     await page.goto("/sign-up");
     await page.fill('[data-testid="signup-name"]', name);
@@ -54,7 +54,7 @@ test.describe("Authentication", () => {
     await expect(page.getByTestId("dashboard-account")).toBeVisible();
   });
 
-  test("login form rejects bad credentials", async ({ page }) => {
+  test("login form rejects bad credentials", { tag: "@error" }, async ({ page }) => {
     await page.goto("/login");
     await page.fill('[data-testid="login-email"]', "nobody@test.local");
     await page.fill('[data-testid="login-password"]', "WrongPass123!");
