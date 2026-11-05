@@ -28,7 +28,7 @@ The store lives in `~/.claude/projects/<repo>/memory/features/` on purpose. A fo
 
 Videos a reviewer can watch instead of reading steps. They stay on this machine, in `.verify/<slug>/video/` (gitignored). Two kinds:
 
-- **Smoke videos** come from the committed e2e specs tagged `@golden` and `@error` (`e2e-author` writes one of each per flow). They are the permanent smoke tests: the `e2e` gate runs them on every PR. `bun run test:e2e:videos --out <dir> [spec ...]` ([`scripts/e2e-videos.ts`](../../scripts/e2e-videos.ts)) re-runs them with `E2E_VIDEO=1`, which `playwright.config.ts` reads to record and slow each test, and saves `golden-<title>.webm` and `error-<title>.webm`.
+- **Smoke videos** come from the committed e2e specs tagged `@golden` and `@error` (`e2e-author` writes one of each per flow). They are the permanent smoke tests: the `e2e` gate runs them on every PR. `bun run test:e2e:videos --out <dir> [spec ...]` ([`scripts/e2e-videos.ts`](../../scripts/e2e-videos.ts)) re-runs them with `E2E_VIDEO=1`, which `playwright.config.ts` reads to record and slow each test, and saves `golden-<title>.webm` and `error-<title>.webm`. A tagged test that leaves no video (skipped, `test.fixme`) fails the run, so a flow nobody filmed cannot drop off the ship page.
 - **Demo videos** show what is worth seeing but not worth a test: a tour, a design state, the mobile layout. A throwaway script under `tmp/` calls `record()` from [`scripts/lib/record.ts`](../../scripts/lib/record.ts) with the steps; it saves `demo-<name>.webm`.
 
 `ship-feature` records the smoke videos on the final tree before the ship stop and shows them, with any `demo-*`, on the review page.
