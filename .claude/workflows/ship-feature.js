@@ -943,7 +943,11 @@ ${declined.length ? `You declined these in earlier rounds; a comment that repeat
 Do not push. Return ok and failed_command.`,
         { label: `local:restack:${pr.n}:${round}`, phase: "Local Greptile", schema: obj({ ok: BOOL, failed_command: STR }) }
       );
-      if (!re || !re.ok) return { stopped: "Local Greptile", reason: `restack failed after fixing ${pr.branch}: ${re ? re.failed_command : "no result"}`, next: "Nothing was pushed. Fix the stacked branches by hand, then push and open the PRs." };
+      if (!re || !re.ok) {
+        // Local reviews leave no GitHub thread, so the stop carries every reply and blocked fix so far.
+        localReview.push({ branch: pr.branch, rounds });
+        return { stopped: "Local Greptile", reason: `restack failed after fixing ${pr.branch}: ${re ? re.failed_command : "no result"}`, localReview, next: "Nothing was pushed. Fix the stacked branches by hand, then push and open the PRs." };
+      }
     }
   }
   localDeclined.set(pr.n, declined);
