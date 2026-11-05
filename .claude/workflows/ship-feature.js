@@ -906,7 +906,7 @@ for (const [i, pr] of stackOrder.entries()) {
       log(`Local Greptile ${pr.branch}: ${w ? `${w.status}${w.summary ? ` — ${w.summary.split("\n")[0]}` : ""}` : "no result"} — moving on; the GitHub loop still runs`);
       break;
     }
-    const entry = { round, confidence: w.confidence, comments: w.comments.length, replies: [] };
+    const entry = { round, confidence: w.confidence, comments: w.comments.length, replies: [], blocked: [] };
     rounds.push(entry);
     if (!w.comments.length) {
       log(`Local Greptile ${pr.branch}: clean (confidence ${w.confidence ?? "n/a"})`);
@@ -921,6 +921,7 @@ ${declined.length ? `You declined these in earlier rounds; a comment that repeat
       { label: `local:respond:${pr.n}:${round}`, phase: "Local Greptile", agentType: "review-responder", schema: RESPONSE }
     );
     if (resp) {
+      entry.blocked = resp.blocked;
       // No GitHub threads hold these, so the result keeps them.
       for (const c of resp.comments) {
         const src = w.comments.find((x) => String(x.id) === String(c.id));
@@ -1125,12 +1126,13 @@ Return ok, failed_command, number, url.`,
 phase("Close");
 
 const open = blocking(allFindings());
+const localBlocked = localReview.flatMap((b) => b.rounds.flatMap((r) => (r.blocked || []).map((x) => `${b.branch}: ${x}`)));
 const memory = await ask(
   `Mode: record. Slug: ${slug}. Status: in review.
 Where it stopped: ship-feature finished. PRs open: ${openPrs.map((p) => `#${p.number} ${p.url}`).join("; ")}. Merge them in order.${rollup ? ` Roll-up PR for the human: #${rollup.number} ${rollup.url} (merge it, then close the stacked PRs).` : ""}
 Links: ${issue ? `issue ${issue.url}; ` : ""}${previewUrl ? `preview ${previewUrl}; ` : ""}${pre.record_path ? `record docs/features/${slug}.md (PR 1).` : ""}
 Decisions (${DATE}): built from ${pre.record_path ? "the plan-feature decision record" : `the ticket directly (auditor: ${audit ? audit.verdict : "n/a"}${input.ready === "override" ? ", overridden by the human" : ""})`}.${architect ? ` Architecture: ${architect.decisions.map((d) => `${d.question} → ${d.chosen} (${d.why})`).join("; ")}.` : ""}
-Todo: ${open.length ? `${open.length} P0/P1 still open: ${open.map((f) => `${f.source} ${f.file}: ${f.detail.split("\n")[0]}`).join("; ")}; ` : ""}${redChecks.length ? `red checks: ${redChecks.join(", ")}; ` : ""}review and merge the PRs in order.
+Todo: ${open.length ? `${open.length} P0/P1 still open: ${open.map((f) => `${f.source} ${f.file}: ${f.detail.split("\n")[0]}`).join("; ")}; ` : ""}${redChecks.length ? `red checks: ${redChecks.join(", ")}; ` : ""}${localBlocked.length ? `local review fixes not made: ${localBlocked.join("; ")}; ` : ""}review and merge the PRs in order.
 Next step: human review of ${rollup ? rollup.url : openPrs[0].url}.`,
   { label: "memory:record", phase: "Close", agentType: "context-memory", effort: "low" }
 );
@@ -1145,6 +1147,7 @@ return {
   previewWalk: previewWalk ? previewWalk.verdict : null,
   checks: checks ? checks.prs : [],
   localReview,
+  local_blocked: localBlocked,
   greptile,
   verdicts: verdictLines(),
   open_findings: open,
