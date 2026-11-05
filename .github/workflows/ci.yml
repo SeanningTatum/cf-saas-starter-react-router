@@ -62,7 +62,8 @@ jobs:
   # Feature-level proof is the feature-verifier sub-agent → .verify/<slug>/verdict.md in the PR (not run in CI).
   e2e:
     name: E2E smoke (Playwright)
-    runs-on: ubuntu-latest
+    # Pinned: Playwright ships no Chromium for ubuntu-latest (26.04) yet.
+    runs-on: ubuntu-24.04
     needs: baseline
     timeout-minutes: 20
     steps:
