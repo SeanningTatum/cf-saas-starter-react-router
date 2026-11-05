@@ -41,16 +41,27 @@ function stub(code = 0, stdout = JSON.stringify(report)) {
 
 describe("collectVideos", () => {
   it("keeps only @golden and @error tests: an untagged smoke test must not end up in the PR", () => {
-    expect(collectVideos(report).map((v) => v.kind)).toEqual(["golden", "error"]);
+    expect(collectVideos(report).videos.map((v) => v.kind)).toEqual(["golden", "error"]);
   });
 
   it("takes the last attempt's video: a retried test must show the run that counted, not the flake", () => {
-    expect(collectVideos(report)[0]).toMatchObject({ source: "/r/try2.webm", status: "passed" });
+    expect(collectVideos(report).videos[0]).toMatchObject({ source: "/r/try2.webm", status: "passed" });
   });
 
   it("accepts tags with or without '@', in case the reporter format changes", () => {
     const at: Report = { suites: [{ specs: [spec("x", ["@golden"], [{ status: "passed", video: "/v.webm" }])] }] };
-    expect(collectVideos(at)).toHaveLength(1);
+    expect(collectVideos(at).videos).toHaveLength(1);
+  });
+
+  it("lists a tagged test with no video as unrecorded, so a skipped flow cannot vanish from the reel", () => {
+    const skipped: Report = { suites: [{ specs: [spec("x", ["error"], [{ status: "skipped" }]), spec("y", ["golden"], [])] }] };
+    expect(collectVideos(skipped)).toEqual({
+      videos: [],
+      unrecorded: [
+        { kind: "error", title: "x", file: "auth.spec.ts", status: "skipped" },
+        { kind: "golden", title: "y", file: "auth.spec.ts", status: "not run" },
+      ],
+    });
   });
 });
 
@@ -107,6 +118,27 @@ describe("run", () => {
     expect(r.code).toBe(1);
     expect(copies).toHaveLength(1);
     expect(r.out).toMatchObject({ passed: false });
+  });
+
+  it("fails when a tagged test is skipped, even though Playwright exits 0: the ship page must not hide an unfilmed flow", () => {
+    const fixme: Report = {
+      suites: [
+        {
+          specs: [
+            spec("signup", ["golden"], [{ status: "passed", video: "/g.webm" }]),
+            spec("login rejects bad credentials", ["error"], [{ status: "skipped" }]),
+          ],
+        },
+      ],
+    };
+    const { deps, copies } = stub(0, JSON.stringify(fixme));
+    const r = run(["--out", "out"], deps);
+    expect(r.code).toBe(1);
+    expect(copies).toEqual([["/g.webm", "out/golden-signup.webm"]]);
+    expect(r.out).toMatchObject({
+      passed: false,
+      unrecorded: [{ kind: "error", title: "login rejects bad credentials", status: "skipped" }],
+    });
   });
 
   it("exits 2 when Playwright crashes before writing a report, quoting its stderr", () => {
