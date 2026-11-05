@@ -1,7 +1,7 @@
 export const meta = {
   name: "ship-feature",
   description:
-    "Ship a ready ticket, prompt or plan-feature record — specialist build lanes, unit and e2e tests, security, scale and regression review, docs, one stop before push, then stacked PRs with seeded previews and the Greptile loop",
+    "Ship a ready ticket, prompt or plan-feature record — specialist build lanes, unit and e2e tests, security, scale and regression review, docs, one stop before push, a local Greptile loop on the stacked branches, then stacked PRs with seeded previews and the Greptile loop on GitHub",
   whenToUse:
     "A feature that is already well defined: a plan-feature decision record on the issue, a GitHub issue the ticket-auditor rates ready, or a precise prompt. Not for planning (plan-feature does that), not for a one-file change.",
   phases: [
@@ -14,8 +14,10 @@ export const meta = {
     { title: "Fix", detail: "each P0/P1 goes back to the lane that owns the file; failed checks re-run; two rounds" },
     { title: "Docs", detail: "docs-writer: the record, glossary, ADR, changed docs and one PR body per PR" },
     { title: "Ship", detail: "the @golden and @error specs re-run on video; the run stops on a lavish page: the stack, the verdicts, the open findings, the videos; you approve or ask for changes" },
-    { title: "Open", detail: "split into stacked branches by fence, check each, push, open the PRs, wait for every PR's checks and the seeded preview, walk the preview" },
-    { title: "Greptile", detail: "per PR in order: wait for the review, review-responder fixes or declines each comment, restack, push; three rounds; after fixes, checks and the preview walk again" },
+    { title: "Split", detail: "split into stacked branches by fence, typecheck and test each on its own" },
+    { title: "Local Greptile", detail: "per stacked branch in order, before any push: greptile review against its base, review-responder fixes or declines each comment, restack, re-check; three rounds" },
+    { title: "Open", detail: "push, open the PRs, wait for every PR's checks and the seeded preview, walk the preview" },
+    { title: "Greptile", detail: "per PR in order: wait for the review on GitHub, review-responder fixes or declines each comment, restack, push; three rounds; after fixes, checks and the preview walk again" },
     { title: "Rollup", detail: "more than one PR: a disposable review/<slug> branch and one roll-up PR for the human, a pointer comment on each stacked PR" },
     { title: "Close", detail: "one context-memory record; the PR links" },
   ],
@@ -30,8 +32,16 @@ export const meta = {
  * SHAPE
  *   The feature is built ONCE, on one working tree, against the contract; lanes own disjoint paths and
  *   run in parallel. It is tested and reviewed as a whole, then split into the stacked branches by
- *   fence only at Open (scripts/stack.ts), and each branch is typechecked and tested on its own. Building
+ *   fence only at Split (scripts/stack.ts), and each branch is typechecked and tested on its own. Building
  *   each layer on its own branch would mean building and verifying the feature n times.
+ *
+ * GREPTILE, LOCAL FIRST
+ *   Before the first push, each stacked branch gets the same Greptile review from the CLI
+ *   (scripts/greptile-local.ts) and review-responder works through it there. A fix made locally costs no
+ *   push, no CI run and no preview deploy, and leaves no thread on the PR. The GitHub loop after Open
+ *   then reviews a diff that has already been through the reviewer, so it is mostly a confirmation.
+ *   The local loop runs after the needs-ship approval: it sends the diff to Greptile, and nothing
+ *   leaves the machine before that approval.
  *
  * REGRESSIONS
  *   Preflight runs every gate (unit, e2e, build, non-negotiables, harness) on the untouched base. At
@@ -55,9 +65,11 @@ export const meta = {
  * args:
  *   a string: a ticket ref (12, #12, an issue URL) or a prompt
  *   { ticket?, prompt?, record?: path to a decision record, slug?, base?: "main", root?,
- *     ready?: "override" | "stop", ships?: { "1": { approved, changes? } }, greptileRounds?: number (default 3, 0 skips) }
+ *     ready?: "override" | "stop", ships?: { "1": { approved, changes? } },
+ *     localRounds?: number (local Greptile CLI rounds per branch before push; default 3, 0 skips),
+ *     greptileRounds?: number (Greptile rounds per PR on GitHub; default 3, 0 skips) }
  */
-const ARG_TYPES = [["ticket", "string"], ["prompt", "string"], ["record", "string"], ["slug", "string"], ["base", "string"], ["root", "string"], ["ready", "string"], ["ships", "object"], ["greptileRounds", "number"]];
+const ARG_TYPES = [["ticket", "string"], ["prompt", "string"], ["record", "string"], ["slug", "string"], ["base", "string"], ["root", "string"], ["ready", "string"], ["ships", "object"], ["localRounds", "number"], ["greptileRounds", "number"]];
 let input;
 if (typeof args === "string") {
   const s = args.trim();
@@ -85,6 +97,7 @@ if (input.slug !== undefined && !SLUG.test(input.slug)) {
 const BASE = input.base || "main";
 // POSIX single-quote: nothing inside is expanded, so ticket or plan text can never run as a command.
 const shq = (v) => `'${String(v).replace(/'/g, `'\\''`)}'`;
+const LOCAL_ROUNDS = Math.max(0, Math.min(5, input.localRounds ?? 3));
 const GREPTILE_ROUNDS = Math.max(0, Math.min(5, input.greptileRounds ?? 3));
 const COAUTHOR = "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>";
 
@@ -216,7 +229,7 @@ if (baselineRed.length) {
 log(`Preflight green: ${ROOT}, ${DATE}, base ${BASE}@${pre.base_sha.slice(0, 8)}, ${pre.baseline.length} gates green${issue ? `, ticket ${issue.ref}` : ""}${pre.record_path ? `, record ${pre.record_path}` : ""}`);
 
 const PREAMBLE = `ROOT = ${ROOT}. Work only inside it; cd there first; every path is relative to it.
-Give every long command (verify.sh, test:e2e, gh pr checks --watch, pr-review-wait) the maximum Bash timeout, 600000 ms.
+Give every long command (verify.sh, test:e2e, gh pr checks --watch, pr-review-wait, greptile-local) the maximum Bash timeout, 600000 ms.
 Never run git commit, push, switch, checkout, stash, reset or rebase unless your task says so. Never post to GitHub unless your task says so.`;
 const ask = (prompt, opts) => agent(`${PREAMBLE}\n\n${prompt}`, opts);
 const sh = (prompt, opts) => ask(prompt, { effort: "low", ...opts, agentType: "runner" });
@@ -848,7 +861,7 @@ if (assignment && (assignment.unassigned.length || assignment.overlaps.length ||
 }
 
 // =============================================================================================
-phase("Open");
+phase("Split");
 
 const split = await sh(
   `The human approved shipping "${slug}". In order, stop at the first failure (ok=false, failed_command, its error):
@@ -857,15 +870,98 @@ const split = await sh(
   3. \`git branch -D ship/${slug}\` (it is left at the base; the work is on the stacked branches).
 Return ok, failed_command, branches, checks.`,
   {
-    label: "open:split",
-    phase: "Open",
+    label: "split",
+    phase: "Split",
     schema: obj({ ok: BOOL, failed_command: STR, branches: arr(obj({ n: NUM, branch: STR, sha: STR })), checks: arr(obj({ branch: STR, pass: BOOL, tail: STR })) }),
   }
 );
 if (!split || !split.ok) {
   // Nothing is pushed yet. A branch that fails alone means a path sits in the wrong PR's fence.
-  return { stopped: "Open", reason: split ? `${split.failed_command}` : "split returned nothing", checks: split ? split.checks : [], next: "Nothing was pushed. Move the path to the right PR in stack.json, or fix the branch, then push by hand." };
+  return { stopped: "Split", reason: split ? `${split.failed_command}` : "split returned nothing", checks: split ? split.checks : [], next: "Nothing was pushed. Move the path to the right PR in stack.json, or fix the branch, then push by hand." };
 }
+
+// =============================================================================================
+phase("Local Greptile");
+
+// The reviewer the PR bot runs, from the CLI, on each stacked branch against the branch below it. Fixes
+// restack the later branches here, so the stack is pushed once, already reviewed.
+const LOCAL = obj({
+  status: STR,
+  confidence: { type: ["number", "null"] },
+  summary: STR,
+  comments: arr(obj({ id: STR, path: STR, line: { type: ["number", "null"] }, severity: STR, body: STR }, ["id", "path", "body"])),
+}, ["status", "comments"]);
+const RESPONSE = obj({ comments: arr(obj({ id: { type: ["number", "string"] }, action: { type: "string", enum: ["fixed", "declined", "duplicate"] }, reply: STR })), commits: STRS, blocked: STRS });
+const localReview = [];
+// Comments declined locally, per PR n; the GitHub loop hands them to review-responder so it answers the same way.
+const localDeclined = new Map();
+const stackOrder = [...prs].sort((a, b) => a.n - b.n);
+for (const [i, pr] of stackOrder.entries()) {
+  // PR numbers may have gaps; the branch below is the previous one in stack order.
+  const base = i === 0 ? pre.base_sha : stackOrder[i - 1].branch;
+  const rounds = [];
+  const declined = [];
+  for (let round = 1; round <= LOCAL_ROUNDS; round++) {
+    const w = await sh(
+      `\`git switch ${pr.branch}\`, then run \`bun run scripts/greptile-local.ts --base ${base} --focus ${shq(pr.greptile_focus)} --timeout 540\` with a 600000 ms Bash timeout. Return its stdout JSON (exit 0: as printed; exit 5: status "timeout"; any other exit: status "error", the stderr JSON's error and help as summary, comments []).`,
+      { label: `local:review:${pr.n}:${round}`, phase: "Local Greptile", schema: LOCAL }
+    );
+    if (!w || w.status !== "reviewed") {
+      rounds.push({ round, status: w ? w.status : "no result" });
+      log(`Local Greptile ${pr.branch}: ${w ? `${w.status}${w.summary ? ` — ${w.summary.split("\n")[0]}` : ""}` : "no result"} — moving on; the GitHub loop still runs`);
+      break;
+    }
+    const entry = { round, confidence: w.confidence, comments: w.comments.length, replies: [], blocked: [] };
+    rounds.push(entry);
+    if (!w.comments.length) {
+      log(`Local Greptile ${pr.branch}: clean (confidence ${w.confidence ?? "n/a"})`);
+      break;
+    }
+    const resp = await ask(
+      `LOCAL review: Greptile's CLI review of branch ${pr.branch} against ${base}, which is checked out. No PR exists yet, so there are no threads: do not call gh, and put the reply you would have posted in each comment's reply field. The branch's fence: ${pr.fence.join(", ")}. Its review focus: ${pr.greptile_focus}.
+Confidence ${w.confidence ?? "n/a"}/5. Summary:
+${fence("greptile summary", w.summary)}
+${fence("greptile comments", w.comments.map((c) => `id ${c.id} — ${c.severity ? `${c.severity} — ` : ""}${c.path}${c.line ? `:${c.line}` : ""}\n${c.body}`).join("\n\n"))}
+${declined.length ? `You declined these in earlier rounds; a comment that repeats one is a duplicate, with the same reason:\n${fence("declined earlier", declined.map((d) => `${d.comment}\n→ ${d.reply}`).join("\n\n"))}\n` : ""}Commit trailer: ${COAUTHOR}`,
+      { label: `local:respond:${pr.n}:${round}`, phase: "Local Greptile", agentType: "review-responder", schema: RESPONSE }
+    );
+    if (resp) {
+      entry.blocked = resp.blocked;
+      // No GitHub threads hold these, so the result keeps them.
+      for (const c of resp.comments) {
+        const src = w.comments.find((x) => String(x.id) === String(c.id));
+        const comment = src ? `${src.path}${src.line ? `:${src.line}` : ""} — ${src.body.split("\n")[0]}` : `id ${c.id}`;
+        entry.replies.push({ comment, action: c.action, reply: c.reply });
+        if (c.action === "declined") declined.push({ comment, reply: c.reply });
+      }
+    }
+    if (!resp || !resp.commits.length) {
+      log(`Local Greptile ${pr.branch}: no fix commits (${resp ? resp.comments.map((c) => c.action).join(", ") : "no result"})`);
+      break;
+    }
+    const later = prs.filter((x) => x.n > pr.n).map((x) => x.branch);
+    if (later.length) {
+      const re = await sh(
+        `In order, stop at the first failure:
+  1. \`bun run scripts/stack.ts restack --from ${pr.n} --plan "${stackPlanFile}"\`.
+  2. For each later branch (${later.join(", ")}), in stack order: \`git switch <branch>\`, then \`bun run typecheck\` and \`bun run test\` (a lower branch can break a caller that lives only in a later one with no git conflict). Stop at the first failure, with that command as failed_command.
+Do not push. Return ok and failed_command.`,
+        { label: `local:restack:${pr.n}:${round}`, phase: "Local Greptile", schema: obj({ ok: BOOL, failed_command: STR }) }
+      );
+      if (!re || !re.ok) {
+        // Local reviews leave no GitHub thread, so the stop carries every reply and blocked fix so far.
+        localReview.push({ branch: pr.branch, rounds });
+        return { stopped: "Local Greptile", reason: `restack failed after fixing ${pr.branch}: ${re ? re.failed_command : "no result"}`, localReview, next: "Nothing was pushed. Fix the stacked branches by hand, then push and open the PRs." };
+      }
+    }
+  }
+  localDeclined.set(pr.n, declined);
+  localReview.push({ branch: pr.branch, rounds });
+}
+if (LOCAL_ROUNDS > 0) await sh(`\`git switch ${prs[prs.length - 1].branch}\`.`, { label: "local:home", phase: "Local Greptile" });
+
+// =============================================================================================
+phase("Open");
 
 const opened = await sh(
   `Push and open the stacked PRs for "${slug}". In order, stop at the first failure:
@@ -951,12 +1047,12 @@ for (const p of openPrs) {
 Confidence ${w.confidence ?? "n/a"}/5. Summary:
 ${fence("greptile summary", w.summary)}
 ${fence("greptile comments", fresh.map((c) => `id ${c.id} — ${c.path}${c.line ? `:${c.line}` : ""} — ${c.url}\n${c.body}`).join("\n\n"))}
-Commit trailer: ${COAUTHOR}`,
+${(localDeclined.get(p.n) || []).length ? `The local review before push raised these and you declined them; answer a repeat the same way:\n${fence("declined locally", localDeclined.get(p.n).map((d) => `${d.comment}\n→ ${d.reply}`).join("\n\n"))}\n` : ""}Commit trailer: ${COAUTHOR}`,
       {
         label: `greptile:respond:${p.n}:${round}`,
         phase: "Greptile",
         agentType: "review-responder",
-        schema: obj({ comments: arr(obj({ id: NUM, action: { type: "string", enum: ["fixed", "declined", "duplicate"] }, reply: STR })), commits: STRS, blocked: STRS }),
+        schema: RESPONSE,
       }
     );
     if (!resp || !resp.commits.length) {
@@ -992,15 +1088,17 @@ if (openPrs.length < 2) {
     const g = greptile.find((x) => x.pr === p.number);
     const rs = (g && g.rounds) || [];
     const last = [...rs].reverse().find((r) => r.confidence !== undefined && r.confidence !== null);
-    return `| #${p.number} | ${prs.find((x) => x.n === p.n).title} | ${rs.length} | ${last ? `${last.confidence}/5` : "n/a"} |`;
+    const pr = prs.find((x) => x.n === p.n);
+    const lr = localReview.find((x) => x.branch === pr.branch);
+    return `| #${p.number} | ${pr.title} | ${lr ? lr.rounds.length : 0} | ${rs.length} | ${last ? `${last.confidence}/5` : "n/a"} |`;
   });
   const body = `# ${plan.title} (roll-up)
 
 ## What this is
-One PR with the whole feature, for human review. The stacked PRs below were reviewed one by one by Greptile; merge this one, then close them.
+One PR with the whole feature, for human review. The stacked PRs below were reviewed one by one by Greptile, first from the CLI before push, then on GitHub; merge this one, then close them.
 
-| PR | Title | Greptile rounds | Last confidence |
-|----|-------|-----------------|-----------------|
+| PR | Title | Local rounds | GitHub rounds | Last confidence |
+|----|-------|--------------|---------------|-----------------|
 ${rows.join("\n")}
 
 ## Verdicts
@@ -1037,12 +1135,13 @@ Return ok, failed_command, number, url.`,
 phase("Close");
 
 const open = blocking(allFindings());
+const localBlocked = localReview.flatMap((b) => b.rounds.flatMap((r) => (r.blocked || []).map((x) => `${b.branch}: ${x}`)));
 const memory = await ask(
   `Mode: record. Slug: ${slug}. Status: in review.
 Where it stopped: ship-feature finished. PRs open: ${openPrs.map((p) => `#${p.number} ${p.url}`).join("; ")}. Merge them in order.${rollup ? ` Roll-up PR for the human: #${rollup.number} ${rollup.url} (merge it, then close the stacked PRs).` : ""}
 Links: ${issue ? `issue ${issue.url}; ` : ""}${previewUrl ? `preview ${previewUrl}; ` : ""}${pre.record_path ? `record docs/features/${slug}.md (PR 1).` : ""}
 Decisions (${DATE}): built from ${pre.record_path ? "the plan-feature decision record" : `the ticket directly (auditor: ${audit ? audit.verdict : "n/a"}${input.ready === "override" ? ", overridden by the human" : ""})`}.${architect ? ` Architecture: ${architect.decisions.map((d) => `${d.question} → ${d.chosen} (${d.why})`).join("; ")}.` : ""}
-Todo: ${open.length ? `${open.length} P0/P1 still open: ${open.map((f) => `${f.source} ${f.file}: ${f.detail.split("\n")[0]}`).join("; ")}; ` : ""}${shipReel && !shipReel.passed ? `smoke videos failed and were accepted at the ship review: ${shipReel.reason}; ` : ""}${redChecks.length ? `red checks: ${redChecks.join(", ")}; ` : ""}review and merge the PRs in order.
+Todo: ${open.length ? `${open.length} P0/P1 still open: ${open.map((f) => `${f.source} ${f.file}: ${f.detail.split("\n")[0]}`).join("; ")}; ` : ""}${shipReel && !shipReel.passed ? `smoke videos failed and were accepted at the ship review: ${shipReel.reason}; ` : ""}${redChecks.length ? `red checks: ${redChecks.join(", ")}; ` : ""}${localBlocked.length ? `local review fixes not made: ${localBlocked.join("; ")}; ` : ""}review and merge the PRs in order.
 Next step: human review of ${rollup ? rollup.url : openPrs[0].url}.`,
   { label: "memory:record", phase: "Close", agentType: "context-memory", effort: "low" }
 );
@@ -1057,6 +1156,8 @@ return {
   reel: shipReel,
   previewWalk: previewWalk ? previewWalk.verdict : null,
   checks: checks ? checks.prs : [],
+  localReview,
+  local_blocked: localBlocked,
   greptile,
   verdicts: verdictLines(),
   open_findings: open,
