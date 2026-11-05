@@ -5,7 +5,8 @@
  *
  * Calls `greptile review -b <base> --json [--instructions <focus>]`, the same reviewer the PR bot runs,
  * on the diff of HEAD against <base>. If that run dies or prints no review (a dropped connection, a
- * timeout) it runs `greptile review --resume --json` once to pick up the same review.
+ * timeout) it runs `greptile review --resume --json` once to pick up the same review. --timeout is the
+ * budget for both runs together, so a caller's own limit just above it is never hit first.
  *
  * Success prints one JSON object to stdout: { status: "reviewed", base, head, confidence, summary, comments }
  * with comments [{ id, path, line, severity, body }], the shape the ship-feature workflow hands to
@@ -13,7 +14,7 @@
  * Exit codes: 0 reviewed, 1 USAGE, 2 GREPTILE (CLI missing, signed out, or the review failed), 3 GIT,
  * 5 TIMEOUT (the status JSON still goes to stdout, the error to stderr).
  *
- * `greptile` and `git` are injected (`Deps`), so the tests run with no network and no repository.
+ * `greptile`, `git` and the clock are injected (`Deps`), so the tests run with no network and no repository.
  */
 import { spawnSync } from "node:child_process";
 
@@ -30,6 +31,8 @@ export type Runner = (args: string[], timeoutMs?: number) => ProcResult;
 export interface Deps {
   greptile: Runner;
   git: Runner;
+  /** Milliseconds; any monotonic origin. */
+  now: () => number;
 }
 
 export interface Outcome {
@@ -64,7 +67,7 @@ const spawner =
     return { code: r.status ?? 1, stdout: r.stdout ?? "", stderr: r.stderr ?? "" };
   };
 
-export const defaultDeps: Deps = { greptile: spawner("greptile"), git: spawner("git") };
+export const defaultDeps: Deps = { greptile: spawner("greptile"), git: spawner("git"), now: () => Date.now() };
 
 /** The review object from `greptile review --json`: the whole stdout, or else its last JSON line. */
 export function parseReview(text: string): any | null {
@@ -146,11 +149,13 @@ export function run(argv: string[], deps: Deps = defaultDeps): Outcome {
   if (b.code !== 0) return bad(3, "GIT", `base "${base}" is not a commit here`, "pass a local branch or a sha that exists in this checkout");
 
   const args = ["review", "-b", base, "--json", ...(focus ? ["--instructions", focus] : [])];
+  const deadline = deps.now() + timeout * 1000;
   let r = deps.greptile(args, timeout * 1000);
   let review = r.code === 0 ? parseReview(r.stdout) : null;
-  if (!review && !SIGNED_OUT.test(r.stderr + r.stdout) && r.code !== 127) {
-    // One retry that attaches to the same review instead of starting a second one.
-    r = deps.greptile(["review", "--resume", "--json"], timeout * 1000);
+  const left = deadline - deps.now();
+  if (!review && !SIGNED_OUT.test(r.stderr + r.stdout) && r.code !== 127 && left >= 1000) {
+    // One retry that attaches to the same review instead of starting a second one, inside what is left.
+    r = deps.greptile(["review", "--resume", "--json"], left);
     review = r.code === 0 ? parseReview(r.stdout) : null;
   }
   if (!review) {

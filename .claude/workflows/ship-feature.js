@@ -890,13 +890,15 @@ const RESPONSE = obj({ comments: arr(obj({ id: { type: ["number", "string"] }, a
 const localReview = [];
 // Comments declined locally, per PR n; the GitHub loop hands them to review-responder so it answers the same way.
 const localDeclined = new Map();
-for (const pr of [...prs].sort((a, b) => a.n - b.n)) {
-  const base = pr.n === 1 ? pre.base_sha : prs.find((x) => x.n === pr.n - 1).branch;
+const stackOrder = [...prs].sort((a, b) => a.n - b.n);
+for (const [i, pr] of stackOrder.entries()) {
+  // PR numbers may have gaps; the branch below is the previous one in stack order.
+  const base = i === 0 ? pre.base_sha : stackOrder[i - 1].branch;
   const rounds = [];
   const declined = [];
   for (let round = 1; round <= LOCAL_ROUNDS; round++) {
     const w = await sh(
-      `\`git switch ${pr.branch}\`, then run \`bun run scripts/greptile-local.ts --base ${base} --focus ${shq(pr.greptile_focus)}\` with a 600000 ms Bash timeout. Return its stdout JSON (exit 0: as printed; exit 5: status "timeout"; any other exit: status "error", the stderr JSON's error and help as summary, comments []).`,
+      `\`git switch ${pr.branch}\`, then run \`bun run scripts/greptile-local.ts --base ${base} --focus ${shq(pr.greptile_focus)} --timeout 540\` with a 600000 ms Bash timeout. Return its stdout JSON (exit 0: as printed; exit 5: status "timeout"; any other exit: status "error", the stderr JSON's error and help as summary, comments []).`,
       { label: `local:review:${pr.n}:${round}`, phase: "Local Greptile", schema: LOCAL }
     );
     if (!w || w.status !== "reviewed") {
@@ -904,7 +906,8 @@ for (const pr of [...prs].sort((a, b) => a.n - b.n)) {
       log(`Local Greptile ${pr.branch}: ${w ? `${w.status}${w.summary ? ` — ${w.summary.split("\n")[0]}` : ""}` : "no result"} — moving on; the GitHub loop still runs`);
       break;
     }
-    rounds.push({ round, confidence: w.confidence, comments: w.comments.length });
+    const entry = { round, confidence: w.confidence, comments: w.comments.length, replies: [] };
+    rounds.push(entry);
     if (!w.comments.length) {
       log(`Local Greptile ${pr.branch}: clean (confidence ${w.confidence ?? "n/a"})`);
       break;
@@ -918,9 +921,12 @@ ${declined.length ? `You declined these in earlier rounds; a comment that repeat
       { label: `local:respond:${pr.n}:${round}`, phase: "Local Greptile", agentType: "review-responder", schema: RESPONSE }
     );
     if (resp) {
-      for (const c of resp.comments.filter((x) => x.action === "declined")) {
+      // No GitHub threads hold these, so the result keeps them.
+      for (const c of resp.comments) {
         const src = w.comments.find((x) => String(x.id) === String(c.id));
-        if (src) declined.push({ comment: `${src.path}${src.line ? `:${src.line}` : ""} — ${src.body.split("\n")[0]}`, reply: c.reply });
+        const comment = src ? `${src.path}${src.line ? `:${src.line}` : ""} — ${src.body.split("\n")[0]}` : `id ${c.id}`;
+        entry.replies.push({ comment, action: c.action, reply: c.reply });
+        if (c.action === "declined") declined.push({ comment, reply: c.reply });
       }
     }
     if (!resp || !resp.commits.length) {

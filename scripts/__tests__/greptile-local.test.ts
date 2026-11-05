@@ -29,15 +29,18 @@ const review = (over: Record<string, unknown> = {}) => ({
 });
 const out = (v: unknown): ProcResult => ({ code: 0, stdout: typeof v === "string" ? v : JSON.stringify(v), stderr: "" });
 
-/** greptile replies in order (last one repeats); git answers rev-parse. */
-function harness(replies: ProcResult[], git: { headFails?: boolean; baseMissing?: boolean } = {}) {
+/** greptile replies in order (last one repeats), each taking `tookMs` on a fake clock; git answers rev-parse. */
+function harness(replies: ProcResult[], git: { headFails?: boolean; baseMissing?: boolean } = {}, tookMs = 0) {
   const calls: string[][] = [];
   const timeouts: (number | undefined)[] = [];
   let i = 0;
+  let t = 1_000_000;
   const deps: Deps = {
+    now: () => t,
     greptile: (args, timeoutMs) => {
       calls.push(args);
       timeouts.push(timeoutMs);
+      t += Math.min(tookMs, timeoutMs ?? tookMs);
       return replies[Math.min(i++, replies.length - 1)];
     },
     git: (args) => {
@@ -89,6 +92,21 @@ describe("greptile-local", () => {
     const o = run(["--base", "main"], deps);
     expect(o.code).toBe(0);
     expect(calls).toEqual([["review", "-b", "main", "--json"], ["review", "--resume", "--json"]]);
+  });
+
+  it("the resume gets only the time the first run left, so both fit inside --timeout", () => {
+    const { deps, timeouts } = harness([{ code: 1, stdout: "", stderr: "connection reset" }, out(review())], {}, 400_000);
+    const o = run(["--base", "main", "--timeout", "540"], deps);
+    expect(o.code).toBe(0);
+    expect(timeouts).toEqual([540_000, 140_000]);
+  });
+
+  it("no resume when the first run used the whole budget", () => {
+    const timedOut: ProcResult = { code: 124, stdout: "", stderr: "", timedOut: true };
+    const { deps, calls } = harness([timedOut], {}, 540_000);
+    const o = run(["--base", "main", "--timeout", "540"], deps);
+    expect(o.code).toBe(5);
+    expect(calls).toHaveLength(1);
   });
 
   it("fails GREPTILE when the resume fails too", () => {
