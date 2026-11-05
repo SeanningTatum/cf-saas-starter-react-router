@@ -6,9 +6,11 @@
  * Runs Playwright with E2E_VIDEO=1 (playwright.config.ts records and slows each test) and CI=1 (no
  * remote Cloudflare bindings, so no login), then copies each test's video to
  * <dir>/<golden|error>-<title>.webm (-2, -3, ... when two tests share a name). A failed test keeps
- * its video: it shows the failure.
- * Success prints { passed, videos: [{ kind, title, file, status, path }] } to stdout.
- * Exit codes: 0 every test passed, 1 a test failed (videos still saved), 2 usage or no report.
+ * its video: it shows the failure. A tagged test with no video (skipped, fixme, never ran) fails the
+ * run: the reviewer must not miss a flow that was never filmed.
+ * Prints { passed, videos: [{ kind, title, file, status, path }], unrecorded: [{ kind, title, file, status }] } to stdout.
+ * Exit codes: 0 every tagged test passed on video, 1 a test failed or has no video (videos still saved),
+ * 2 usage, no report or no tagged test.
  *
  * Playwright and the file system are injected (`Deps`), so the tests never start a browser.
  */
@@ -37,9 +39,15 @@ export interface Deps {
   copy: (from: string, to: string) => void;
 }
 
-/** The @golden and @error tests in a Playwright JSON report, with the video of each test's last attempt. */
-export function collectVideos(report: Report): Video[] {
-  const out: Video[] = [];
+export type Unrecorded = Omit<Video, "source">;
+
+/**
+ * The @golden and @error tests in a Playwright JSON report: the video of each test's last attempt,
+ * and the tagged tests whose last attempt left none.
+ */
+export function collectVideos(report: Report): { videos: Video[]; unrecorded: Unrecorded[] } {
+  const videos: Video[] = [];
+  const unrecorded: Unrecorded[] = [];
   const visit = (suite: Suite) => {
     for (const spec of suite.specs ?? []) {
       // The JSON reporter drops the "@" from tags.
@@ -48,13 +56,15 @@ export function collectVideos(report: Report): Video[] {
       for (const test of spec.tests) {
         const last = test.results[test.results.length - 1];
         const video = last?.attachments.find((a) => a.name === "video" && a.path);
-        if (video?.path) out.push({ kind, title: spec.title, file: spec.file, status: last.status, source: video.path });
+        const status = last?.status ?? "not run";
+        if (video?.path) videos.push({ kind, title: spec.title, file: spec.file, status, source: video.path });
+        else unrecorded.push({ kind, title: spec.title, file: spec.file, status });
       }
     }
     (suite.suites ?? []).forEach(visit);
   };
   (report.suites ?? []).forEach(visit);
-  return out;
+  return { videos, unrecorded };
 }
 
 /** "signup → dashboard, signout → login" -> "golden-signup-dashboard-signout-login.webm" */
@@ -77,8 +87,8 @@ export function run(argv: string[], deps: Deps): { code: number; out?: unknown; 
     return { code: 2, err: `playwright gave no JSON report (exit ${pw.code}): ${pw.stderr.trim().split("\n").slice(-15).join("\n")}` };
   }
 
-  const found = collectVideos(report);
-  if (!found.length) return { code: 2, err: "no @golden or @error test recorded a video; tag them: test(title, { tag: \"@golden\" }, ...)" };
+  const { videos: found, unrecorded } = collectVideos(report);
+  if (!found.length && !unrecorded.length) return { code: 2, err: "no @golden or @error test ran; tag them: test(title, { tag: \"@golden\" }, ...)" };
   deps.mkdir(outDir);
   // Two tests can share a title (across spec files, or after the slug is cut): number the later ones,
   // or the second copy would overwrite the first.
@@ -92,8 +102,8 @@ export function run(argv: string[], deps: Deps): { code: number; out?: unknown; 
     deps.copy(v.source, path);
     return { kind: v.kind, title: v.title, file: v.file, status: v.status, path };
   });
-  const passed = pw.code === 0 && videos.every((v) => v.status === "passed");
-  return { code: passed ? 0 : 1, out: { passed, videos } };
+  const passed = pw.code === 0 && unrecorded.length === 0 && videos.every((v) => v.status === "passed");
+  return { code: passed ? 0 : 1, out: { passed, videos, unrecorded } };
 }
 
 if (import.meta.main) {

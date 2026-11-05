@@ -779,18 +779,23 @@ const assignOut = async (label) =>
 let shipRound = 1;
 let approved = false;
 let assignment = null;
+// The last round's smoke-video outcome. A failed reel the human approved anyway must reach the return and the record.
+let shipReel = null;
 for (; shipRound <= 3; shipRound++) {
   assignment = await assignOut(`ship:assign:${shipRound}`);
   const answer = input.ships && input.ships[String(shipRound)];
+  // The smoke videos: the committed @golden and @error specs, re-run on the final tree with video on.
+  // Outside `if (!answer)` so the approved round keeps its reel; a resume returns the cached run.
+  const reel = hasUi ? await sh(
+    `Record the smoke videos of "${slug}". Run \`rm -f ${videoDir}/golden-*.webm ${videoDir}/error-*.webm\` (earlier rounds; keep demo-*), then, with a 600000 ms Bash timeout and E2E_PORT set to a free port, \`bun run scripts/e2e-videos.ts --out ${videoDir} ${((e2eOut && e2eOut.specs) || []).map((x) => x.path).join(" ") || `e2e/${slug}.spec.ts`}\`. Exit 0 or 1: return passed, videos ([{ kind, title, path, status }]) and unrecorded (the title of each entry in its unrecorded list) from its stdout. Exit 2: return passed false, videos [], unrecorded [] and its stderr as error.`,
+    { label: `ship:videos:${shipRound}`, phase: "Ship", schema: obj({ passed: BOOL, videos: arr(obj({ kind: STR, title: STR, path: STR, status: STR })), unrecorded: STRS, error: STR }, ["passed", "videos"]) }
+  ) : null;
+  // A red, empty or missing reel blocks like a check: the page's verdicts and recommendation must show it.
+  const reelOk = !hasUi || (reel && reel.passed && reel.videos.length > 0);
+  const unfilmed = (reel && reel.unrecorded) || [];
+  const reelWhy = !reel ? "the video run returned nothing" : reel.error || (unfilmed.length ? `no video for ${unfilmed.join(", ")}` : reel.videos.length ? "a tagged spec failed on video" : "no video recorded");
+  shipReel = hasUi ? { passed: !!reelOk, reason: reelOk ? "" : reelWhy, videos: reel ? reel.videos : [], unrecorded: unfilmed } : null;
   if (!answer) {
-    // The smoke videos: the committed @golden and @error specs, re-run on the final tree with video on.
-    const reel = hasUi ? await sh(
-      `Record the smoke videos of "${slug}". Run \`rm -f ${videoDir}/golden-*.webm ${videoDir}/error-*.webm\` (earlier rounds; keep demo-*), then, with a 600000 ms Bash timeout and E2E_PORT set to a free port, \`bun run scripts/e2e-videos.ts --out ${videoDir} ${((e2eOut && e2eOut.specs) || []).map((x) => x.path).join(" ") || `e2e/${slug}.spec.ts`}\`. Exit 0 or 1: return passed and videos ([{ kind, title, path, status }]) from its stdout. Exit 2: return passed false, videos [] and its stderr as error.`,
-      { label: `ship:videos:${shipRound}`, phase: "Ship", schema: obj({ passed: BOOL, videos: arr(obj({ kind: STR, title: STR, path: STR, status: STR })), error: STR }, ["passed", "videos"]) }
-    ) : null;
-    // A red, empty or missing reel blocks like a check: the page's verdicts and recommendation must show it.
-    const reelOk = !hasUi || (reel && reel.passed && reel.videos.length > 0);
-    const reelWhy = !reel ? "the video run returned nothing" : reel.error || (reel.videos.length ? "a tagged spec failed on video" : "no video recorded");
     const reelFindings = reelOk ? [] : [{ source: "smoke-videos", severity: "P1", file: "", detail: `smoke videos: ${reelWhy}`, fix: "make the @golden and @error specs pass on the final tree, then re-run the videos" }];
     if (!reelOk) log(`Smoke videos: ${reelWhy}`);
     const reelLine = hasUi ? `\nsmoke videos: ${reelOk ? `PASS (${reel.videos.length} videos)` : `FAIL: ${reelWhy}`}` : "";
@@ -1037,7 +1042,7 @@ const memory = await ask(
 Where it stopped: ship-feature finished. PRs open: ${openPrs.map((p) => `#${p.number} ${p.url}`).join("; ")}. Merge them in order.${rollup ? ` Roll-up PR for the human: #${rollup.number} ${rollup.url} (merge it, then close the stacked PRs).` : ""}
 Links: ${issue ? `issue ${issue.url}; ` : ""}${previewUrl ? `preview ${previewUrl}; ` : ""}${pre.record_path ? `record docs/features/${slug}.md (PR 1).` : ""}
 Decisions (${DATE}): built from ${pre.record_path ? "the plan-feature decision record" : `the ticket directly (auditor: ${audit ? audit.verdict : "n/a"}${input.ready === "override" ? ", overridden by the human" : ""})`}.${architect ? ` Architecture: ${architect.decisions.map((d) => `${d.question} → ${d.chosen} (${d.why})`).join("; ")}.` : ""}
-Todo: ${open.length ? `${open.length} P0/P1 still open: ${open.map((f) => `${f.source} ${f.file}: ${f.detail.split("\n")[0]}`).join("; ")}; ` : ""}${redChecks.length ? `red checks: ${redChecks.join(", ")}; ` : ""}review and merge the PRs in order.
+Todo: ${open.length ? `${open.length} P0/P1 still open: ${open.map((f) => `${f.source} ${f.file}: ${f.detail.split("\n")[0]}`).join("; ")}; ` : ""}${shipReel && !shipReel.passed ? `smoke videos failed and were accepted at the ship review: ${shipReel.reason}; ` : ""}${redChecks.length ? `red checks: ${redChecks.join(", ")}; ` : ""}review and merge the PRs in order.
 Next step: human review of ${rollup ? rollup.url : openPrs[0].url}.`,
   { label: "memory:record", phase: "Close", agentType: "context-memory", effort: "low" }
 );
@@ -1049,6 +1054,7 @@ return {
   rollup: rollup ? rollup.url : null,
   preview: previewUrl || null,
   videos: hasUi ? `${videoDir}/` : null,
+  reel: shipReel,
   previewWalk: previewWalk ? previewWalk.verdict : null,
   checks: checks ? checks.prs : [],
   greptile,
@@ -1056,7 +1062,7 @@ return {
   open_findings: open,
   analytics: instr.events || null,
   memory,
-  next: `${rollup ? `Review the roll-up ${rollup.url}, merge it, then close the stacked PRs.` : `Review ${openPrs[0].url} first; merge in order.`}${open.length ? ` ${open.length} P0/P1 were accepted open at the ship review.` : ""}`,
+  next: `${rollup ? `Review the roll-up ${rollup.url}, merge it, then close the stacked PRs.` : `Review ${openPrs[0].url} first; merge in order.`}${open.length ? ` ${open.length} P0/P1 were accepted open at the ship review.` : ""}${shipReel && !shipReel.passed ? ` The smoke videos failed (${shipReel.reason}) and were accepted at the ship review.` : ""}`,
 };
 
 } catch (e) {
