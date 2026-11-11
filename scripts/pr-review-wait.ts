@@ -13,8 +13,9 @@
  * reads the check run before the reviews: Greptile submits a review with comments before it completes
  * the check, so a completed check is never seen ahead of the review it belongs to.
  *
- * After --retrigger-after seconds with no review and no Greptile check run on the head, it posts
- * `@greptileai review` once. A queued or running check means a review is on its way.
+ * After --retrigger-after seconds with no review it posts `@greptileai review` once, unless a Greptile
+ * check is queued or running on the head: then a review is on its way. A failed or cancelled check that
+ * left no summary does not hold the retrigger back.
  *
  * Success prints one JSON object to stdout. Failure prints { error, code, help } to stderr.
  * Exit codes: 0 reviewed, 1 USAGE, 2 GH, 5 TIMEOUT (the status JSON still goes to stdout, the error to stderr).
@@ -161,6 +162,7 @@ export async function run(argv: string[], deps: Deps = defaultDeps): Promise<Out
     if (cr.code !== 0) return ghFailure(cr, "gh api check-runs");
     const runs: any[] = (parseItems(cr.stdout)[0]?.check_runs ?? []).filter((x: any) => isBot(x?.app?.slug));
     const checkDone = runs.some((x) => x?.status === "completed");
+    const checkPending = runs.some((x) => x?.status !== "completed");
     const r = deps.gh(["api", "--paginate", `repos/${repo}/pulls/${pr}/reviews`]);
     if (r.code !== 0) return ghFailure(r, "gh api reviews");
     const hits = parseItems(r.stdout).filter((x) => isBot(x?.user?.login) && x?.commit_id === sha);
@@ -178,7 +180,7 @@ export async function run(argv: string[], deps: Deps = defaultDeps): Promise<Out
     }
     const elapsed = (deps.now() - start) / 1000;
     if (elapsed >= timeout) break;
-    if (!retriggered && !runs.length && elapsed >= retriggerAfter) {
+    if (!retriggered && !checkPending && elapsed >= retriggerAfter) {
       const c = deps.gh(["pr", "comment", String(pr), "--body", "@greptileai review"]);
       if (c.code !== 0) return ghFailure(c, "gh pr comment");
       retriggered = true;

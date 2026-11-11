@@ -193,6 +193,14 @@ describe("pr-review-wait", () => {
       expect(retriggers(calls)).toHaveLength(0);
     });
 
+    it("a failed or cancelled check with no summary still retriggers once, then keeps waiting", async () => {
+      const failed = { ...check("completed"), conclusion: "failure" };
+      const { deps, calls } = harness({ reviews: [[]], checkRuns: [[failed]] });
+      const o = await run(["5", "--retrigger-after", "0", "--interval", "30", "--timeout", "120"], deps);
+      expect(o.code).toBe(5);
+      expect(retriggers(calls)).toHaveLength(1);
+    });
+
     it("ignores check runs from other apps", async () => {
       const other = { ...check("completed"), app: { slug: "github-actions" } };
       const { deps, calls } = harness({ reviews: [[]], checkRuns: [[other]], issueComments: [{ user: bot, body: summaryBody(5) }] });
