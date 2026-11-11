@@ -4,9 +4,17 @@
  *   bun run scripts/pr-review-wait.ts <pr> [--timeout 900] [--interval 30] [--retrigger-after 300]
  *
  * Polls the PR's reviews until one from a login starting with `greptile-apps` has commit_id equal to the
- * PR's current head. After --retrigger-after seconds with no review it posts
- * `@greptileai review` once. Then it reads that review's inline comments and the bot's summary
- * issue comment (marker `<!-- greptile_summary -->`, the last one wins) and parses `Confidence Score: N/5`.
+ * PR's current head. Then it reads that review's inline comments and the bot's summary issue comment
+ * (marker `<!-- greptile_summary -->`, the last one wins) and parses `Confidence Score: N/5`.
+ *
+ * A clean review has no inline comments, and then Greptile submits no PR review at all: it completes its
+ * "Greptile Review" check run on the head and updates its summary comment. So a completed check run
+ * plus a summary naming the head also counts as reviewed, with `review: null` and no comments. Each poll
+ * reads the check run before the reviews: Greptile submits a review with comments before it completes
+ * the check, so a completed check is never seen ahead of the review it belongs to.
+ *
+ * After --retrigger-after seconds with no review and no Greptile check run on the head, it posts
+ * `@greptileai review` once. A queued or running check means a review is on its way.
  *
  * Success prints one JSON object to stdout. Failure prints { error, code, help } to stderr.
  * Exit codes: 0 reviewed, 1 USAGE, 2 GH, 5 TIMEOUT (the status JSON still goes to stdout, the error to stderr).
@@ -136,20 +144,41 @@ export async function run(argv: string[], deps: Deps = defaultDeps): Promise<Out
   if (h.code !== 0 || !sha) return ghFailure(h.code !== 0 ? h : { ...h, stderr: "no head sha" }, `gh pr view ${pr}`);
 
   const isBot = (login: unknown) => typeof login === "string" && login.toLowerCase().startsWith(BOT);
+  const readSummary = (): string | Outcome => {
+    const ir = deps.gh(["api", "--paginate", `repos/${repo}/issues/${pr}/comments`]);
+    if (ir.code !== 0) return ghFailure(ir, "gh api issue comments");
+    return parseItems(ir.stdout)
+      .filter((c) => isBot(c?.user?.login) && typeof c?.body === "string" && c.body.includes(MARKER) && c.body.includes(sha))
+      .pop()?.body ?? "";
+  };
   const start = deps.now();
   let retriggered = false;
   let review: any = null;
+  let summary: string | null = null;
 
   for (;;) {
+    const cr = deps.gh(["api", `repos/${repo}/commits/${sha}/check-runs?per_page=100`]);
+    if (cr.code !== 0) return ghFailure(cr, "gh api check-runs");
+    const runs: any[] = (parseItems(cr.stdout)[0]?.check_runs ?? []).filter((x: any) => isBot(x?.app?.slug));
+    const checkDone = runs.some((x) => x?.status === "completed");
     const r = deps.gh(["api", "--paginate", `repos/${repo}/pulls/${pr}/reviews`]);
     if (r.code !== 0) return ghFailure(r, "gh api reviews");
     const hits = parseItems(r.stdout).filter((x) => isBot(x?.user?.login) && x?.commit_id === sha);
     // Latest submission wins; a re-review of the same commit supersedes the first.
     review = hits.sort((a, b) => String(a.submitted_at ?? "").localeCompare(String(b.submitted_at ?? ""))).pop() ?? null;
     if (review) break;
+    if (checkDone) {
+      // The summary lands a moment after the check completes; until it names the head, keep polling.
+      const s = readSummary();
+      if (isOutcome(s)) return s;
+      if (s) {
+        summary = s;
+        break;
+      }
+    }
     const elapsed = (deps.now() - start) / 1000;
     if (elapsed >= timeout) break;
-    if (!retriggered && elapsed >= retriggerAfter) {
+    if (!retriggered && !runs.length && elapsed >= retriggerAfter) {
       const c = deps.gh(["pr", "comment", String(pr), "--body", "@greptileai review"]);
       if (c.code !== 0) return ghFailure(c, "gh pr comment");
       retriggered = true;
@@ -157,30 +186,32 @@ export async function run(argv: string[], deps: Deps = defaultDeps): Promise<Out
     await deps.sleep(interval * 1000);
   }
 
-  if (!review) {
+  if (!review && summary === null) {
     return {
       ...ok({ status: "timeout", pr, sha, review: null, confidence: null, summary: "", comments: [], retriggered }, 5),
       err: { error: `no ${BOT} review of ${sha} within ${timeout}s`, code: "TIMEOUT", help: "check the PR on GitHub, or run again with a longer --timeout" },
     };
   }
 
-  const cr = deps.gh(["api", "--paginate", `repos/${repo}/pulls/${pr}/comments`]);
-  if (cr.code !== 0) return ghFailure(cr, "gh api pull comments");
-  const comments = parseItems(cr.stdout)
-    .filter((c) => c?.pull_request_review_id === review.id)
-    .map((c) => ({ id: c.id, path: c.path, line: c.line ?? c.original_line ?? null, body: c.body, url: c.html_url }));
-
-  const ir = deps.gh(["api", "--paginate", `repos/${repo}/issues/${pr}/comments`]);
-  if (ir.code !== 0) return ghFailure(ir, "gh api issue comments");
-  const summary = parseItems(ir.stdout)
-    .filter((c) => isBot(c?.user?.login) && typeof c?.body === "string" && c.body.includes(MARKER) && c.body.includes(sha))
-    .pop()?.body ?? "";
+  let comments: { id: unknown; path: unknown; line: unknown; body: unknown; url: unknown }[] = [];
+  if (review) {
+    const pc = deps.gh(["api", "--paginate", `repos/${repo}/pulls/${pr}/comments`]);
+    if (pc.code !== 0) return ghFailure(pc, "gh api pull comments");
+    comments = parseItems(pc.stdout)
+      .filter((c) => c?.pull_request_review_id === review.id)
+      .map((c) => ({ id: c.id, path: c.path, line: c.line ?? c.original_line ?? null, body: c.body, url: c.html_url }));
+  }
+  if (summary === null) {
+    const s = readSummary();
+    if (isOutcome(s)) return s;
+    summary = s;
+  }
 
   return ok({
     status: "reviewed",
     pr,
     sha,
-    review: { id: review.id, state: review.state, submitted_at: review.submitted_at, body: review.body ?? "" },
+    review: review ? { id: review.id, state: review.state, submitted_at: review.submitted_at, body: review.body ?? "" } : null,
     confidence: parseConfidence(summary),
     summary,
     comments,
