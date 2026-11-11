@@ -158,9 +158,10 @@ export async function run(argv: string[], deps: Deps = defaultDeps): Promise<Out
   let summary: string | null = null;
 
   for (;;) {
-    const cr = deps.gh(["api", `repos/${repo}/commits/${sha}/check-runs?per_page=100`]);
+    // Every page, one run per line: a commit with many checks can put Greptile's past the first page.
+    const cr = deps.gh(["api", "--paginate", "--jq", ".check_runs[]", `repos/${repo}/commits/${sha}/check-runs?per_page=100`]);
     if (cr.code !== 0) return ghFailure(cr, "gh api check-runs");
-    const runs: any[] = (parseItems(cr.stdout)[0]?.check_runs ?? []).filter((x: any) => isBot(x?.app?.slug));
+    const runs = parseItems(cr.stdout).filter((x) => isBot(x?.app?.slug));
     const checkDone = runs.some((x) => x?.status === "completed");
     const checkPending = runs.some((x) => x?.status !== "completed");
     const r = deps.gh(["api", "--paginate", `repos/${repo}/pulls/${pr}/reviews`]);

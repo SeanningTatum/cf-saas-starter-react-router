@@ -40,8 +40,9 @@ function harness(w: World, flags: { commentFails?: boolean } = {}) {
       if (j.startsWith("pr view")) return out(`${SHA}\n`);
       if (j.startsWith("pr comment")) return flags.commentFails ? { code: 1, stdout: "", stderr: "boom" } : out("");
       if (j.includes(`/commits/${SHA}/check-runs`)) {
+        // `--paginate --jq .check_runs[]` prints one run per line across every page.
         const runs = w.checkRuns ?? [[]];
-        return out({ total_count: 0, check_runs: runs[Math.min(checkPoll++, runs.length - 1)] });
+        return out(runs[Math.min(checkPoll++, runs.length - 1)].map((x) => JSON.stringify(x)).join("\n"));
       }
       if (j.endsWith("/reviews")) return out(w.reviews[Math.min(poll++, w.reviews.length - 1)]);
       if (j.endsWith("/pulls/5/comments")) return out(w.comments ?? []);
@@ -199,6 +200,15 @@ describe("pr-review-wait", () => {
       const o = await run(["5", "--retrigger-after", "0", "--interval", "30", "--timeout", "120"], deps);
       expect(o.code).toBe(5);
       expect(retriggers(calls)).toHaveLength(1);
+    });
+
+    it("reads the Greptile check from any page: other apps' runs come first", async () => {
+      const others = Array.from({ length: 150 }, (_, i) => ({ name: `ci-${i}`, status: "completed", app: { slug: "github-actions" } }));
+      const { deps, calls } = harness({ reviews: [[]], checkRuns: [[...others, check("completed")]], issueComments: [{ user: bot, body: summaryBody(5) }] });
+      const o = await run(["5"], deps);
+      expect(o.code).toBe(0);
+      expect((o.out as any).confidence).toBe(5);
+      expect(calls.find((c) => c.join(" ").includes("check-runs"))).toEqual(expect.arrayContaining(["--paginate", "--jq", ".check_runs[]"]));
     });
 
     it("ignores check runs from other apps", async () => {
