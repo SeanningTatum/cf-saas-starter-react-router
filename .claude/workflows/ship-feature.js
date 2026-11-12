@@ -1164,15 +1164,16 @@ if (openPrs.length < 2) {
     const rs = (lr && lr.rounds) || [];
     const fixed = rs.flatMap((r) => r.replies || []).filter((x) => x.action === "fixed").length;
     const declinedN = rs.flatMap((r) => r.replies || []).filter((x) => x.action === "declined").length;
-    return `| #${p.number} | ${pr.title} | ${rs.length} | ${fixed} | ${declinedN} |`;
+    const advisory = rs.flatMap((r) => r.advisory || []);
+    return `| #${p.number} | ${pr.title} | ${rs.length} | ${fixed} | ${declinedN} | ${advisory.length ? advisory.join("<br>").replace(/\|/g, "\\|") : "none"} |`;
   });
   const body = `# ${plan.title} (roll-up)
 
 ## What this is
 One PR with the whole feature, for human review. Each stacked PR below was reviewed on its own diff before the first push (the code-review skill, plus the security, scale, maintainability and Effect reviewers over the whole tree). Greptile reviews this roll-up only. Merge this one, then close them.
 
-| PR | Title | Local review rounds | Fixed | Declined |
-|----|-------|---------------------|-------|----------|
+| PR | Title | Local review rounds | Fixed | Declined | Advisory (P2/P3, not fixed) |
+|----|-------|---------------------|-------|----------|-----------------------------|
 ${rows.join("\n")}
 
 ## Verdicts
