@@ -1264,10 +1264,10 @@ ${fence("greptile comments", g.cs.map((c) => `id ${c.id} — ${c.path}${c.line ?
 ${allDeclined.length ? `The local review declined these; answer a repeat the same way:\n${fence("declined locally", allDeclined.map((d) => `${d.comment}\n→ ${d.reply}`).join("\n\n"))}\n` : ""}Commit trailer: ${COAUTHOR}`,
         { label: `rollup-greptile:respond:${g.pr.n}:${round}`, phase: "Roll-up Greptile", agentType: "review-responder", schema: RESPONSE }
       );
-      if (!resp) {
-        unanswered.push(...g.cs.map(describe));
-        continue;
-      }
+      // Every comment needs its own reply: a missing or partial result leaves the rest open.
+      const answered = new Set(resp ? resp.comments.map((c) => String(c.id)) : []);
+      unanswered.push(...g.cs.filter((c) => !answered.has(String(c.id))).map(describe));
+      if (!resp) continue;
       entry.blocked.push(...resp.blocked.map((b) => `${g.pr.branch}: ${b}`));
       for (const c of resp.comments) {
         const srcC = g.cs.find((x) => String(x.id) === String(c.id));
@@ -1325,7 +1325,11 @@ const open = blocking(allFindings());
 const localBlocked = localReview.flatMap((b) => b.rounds.flatMap((r) => (r.blocked || []).map((x) => `${b.branch}: ${x}`)));
 const rollupBlocked = rollupReview.rounds.flatMap((r) => r.blocked || []);
 // Merge bar item 2: a local P0/P1 that got no fix, decline or duplicate reply is still open.
-const localOpen = localReview.flatMap((b) => b.rounds.filter((r) => r.comments > (r.replies || []).length).map((r) => `${b.branch}: ${r.comments - (r.replies || []).length} ${r.source} finding(s) unanswered in round ${r.round}`));
+// A code-review round that never finished is open too; the opt-in Greptile CLI is extra and does not count.
+const localOpen = localReview.flatMap((b) => [
+  ...b.rounds.filter((r) => r.comments > (r.replies || []).length).map((r) => `${b.branch}: ${r.comments - (r.replies || []).length} ${r.source} finding(s) unanswered in round ${r.round}`),
+  ...b.rounds.filter((r) => r.source === "code-review" && r.status).map((r) => `${b.branch}: code-review round ${r.round} did not finish (${r.status})`),
+]);
 const mergeCmd = target && rollupPassed && rollupReview.sha ? `gh pr merge ${target.number} --squash --match-head-commit ${rollupReview.sha}` : "";
 const rollupLine = !target
   ? "no roll-up PR, so Greptile did not run"

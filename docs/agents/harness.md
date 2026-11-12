@@ -95,7 +95,8 @@ After the first push no branch is rewritten: `.claude/settings.json` denies `git
 
 - Migrations and ADRs: renumber yours to follow `main`'s latest. `scripts/seed-preview.ts` and `GLOSSARY.md`: keep both sides.
 - Re-run the gates on every branch (typecheck, unit), and e2e on the top branch after `bun run db:seed`: the e2e server migrates but does not seed.
-- Push (the rebase rewrites the branches, so this push is yours to make; the workflow never force-pushes), then post `@greptileai review` on the roll-up only.
+- Move the roll-up branch to the rebased top: `git branch -f review/<slug> <top branch>`. Without this Greptile reviews the old roll-up.
+- Push the stacked branches and `review/<slug>` (the rebase rewrites them, so this push is yours to make; the workflow never force-pushes), then post `@greptileai review` on the roll-up only.
 
 **Fresh worktrees.** A `node_modules/node_modules` symlink to the main checkout breaks tests ("Invalid hook call", Playwright "No tests found"). `ship-feature`'s preflight moves it aside in a linked worktree; elsewhere, `mv node_modules/node_modules node_modules/.nested-modules-aside`.
 
