@@ -923,7 +923,7 @@ const LOCAL_SOURCES = {
     rounds: REVIEW_ROUNDS,
     async review(pr, base, round) {
       const r = await ask(
-        `Review branch ${pr.branch}, which is checked out, against ${base}: only the commits on this branch, \`git diff ${base}...HEAD\`. Read-only: do not switch, edit, commit or post anything.
+        `\`git switch ${pr.branch}\`, then review it against ${base}: only the commits on this branch, \`git diff ${base}...HEAD\`. After the switch you are read-only: do not switch again, edit, commit or post anything.
 Load the \`code-review\` skill with the Skill tool, args \`high\`, and have it review that diff. Never pass --comment or --fix. If the skill cannot be loaded, or cannot be pointed at that diff, review \`git diff ${base}...HEAD\` yourself for correctness bugs at the same bar and set method "manual".
 Keep only findings inside that diff. Severity: P0 breaks data, security or the build; P1 a real bug a user or caller hits; P2 a smaller defect; P3 a cleanup. The branch's focus: ${pr.greptile_focus}.
 Return method ("code-review skill" or "manual") and findings [{ severity, file, line, detail, fix }].`,
@@ -954,7 +954,6 @@ for (const [i, pr] of stackOrder.entries()) {
   const declined = [];
   for (const [source, src] of Object.entries(LOCAL_SOURCES)) {
     for (let round = 1; round <= src.rounds; round++) {
-      await sh(`\`git switch ${pr.branch}\`. Return ok.`, { label: `local:switch:${source}:${pr.n}:${round}`, phase: "Local review", schema: obj({ ok: BOOL }) });
       const w = await src.review(pr, base, round);
       if (w.status !== "reviewed") {
         rounds.push({ source, round, status: w.status });
@@ -1067,11 +1066,16 @@ const WAIT = obj({
   summary: STR,
   comments: arr(obj({ id: NUM, path: STR, line: { type: ["number", "null"] }, body: STR, url: STR }, ["id", "path", "body"])),
 }, ["status", "comments"]);
-const waitFor = (number, label, phaseName) =>
-  sh(
-    `Run \`bun run scripts/pr-review-wait.ts ${number} --timeout 540 --retrigger-after 600\` with a 600000 ms Bash timeout (the workflow triggers Greptile itself, so the script must not). On exit 5 (timeout) run it once more. Return its stdout JSON (exit 0: as printed; a second exit 5: status "timeout"; any other exit: status "error").`,
+// Right after a push GitHub can still report the old head, and the script would return the old review.
+// With the pushed head known, a review of any other commit is stale: wait and read again.
+const waitFor = async (number, label, phaseName, head) => {
+  const w = await sh(
+    `Run \`bun run scripts/pr-review-wait.ts ${number} --timeout 540 --retrigger-after 600\` with a 600000 ms Bash timeout (the workflow triggers Greptile itself, so the script must not). ${head ? `If its JSON's sha is not ${head} (GitHub had not caught up with the push), wait 20 s and run it again, up to 3 times. ` : ""}On exit 5 (timeout) run it once more. Return its stdout JSON (exit 0: as printed; a second exit 5: status "timeout"; any other exit: status "error").`,
     { label, phase: phaseName, schema: WAIT }
   );
+  if (w && head && w.status === "reviewed" && w.sha !== head) return { ...w, status: `stale (reviewed ${String(w.sha).slice(0, 8)}, head ${head.slice(0, 8)})` };
+  return w;
+};
 
 // After the first push a branch is never rewritten: a fix on one stacked branch is MERGED into each branch
 // above it (and the roll-up branch fast-forwards to the top), so every later push is a fast-forward.
@@ -1095,9 +1099,10 @@ for (const p of GREPTILE_ROUNDS > 0 ? openPrs : []) {
   const pr = prs.find((x) => x.n === p.n);
   const seen = new Set();
   const rounds = [];
+  let head = "";
   for (let round = 1; round <= GREPTILE_ROUNDS; round++) {
     if (round === 1) await sh(`\`gh pr comment ${p.number} --body "@greptileai review"\`.`, { label: `greptile:trigger:${p.n}`, phase: "Greptile" });
-    const w = await waitFor(p.number, `greptile:wait:${p.n}:${round}`, "Greptile");
+    const w = await waitFor(p.number, `greptile:wait:${p.n}:${round}`, "Greptile", head);
     if (!w || w.status !== "reviewed") {
       rounds.push({ round, status: w ? w.status : "no result" });
       log(`Greptile #${p.number}: ${w ? w.status : "no result"} — a stop, not a pass; moving on`);
@@ -1133,9 +1138,10 @@ ${(localDeclined.get(p.n) || []).length ? `The local review before push raised t
     if (!mf || !mf.ok) return { stopped: "Greptile", reason: `merging the fix on ${p.branch} forward failed: ${mf ? mf.failed_command : "no result"}`, prs: openPrs };
     const later = openPrs.filter((x) => x.n > p.n).map((x) => x.branch);
     const pushed = await sh(
-      `\`git push origin ${[p.branch, ...later].join(" ")}\` (fast-forwards only; never --force), then \`gh pr comment ${p.number} --body "@greptileai review"\`. Return ok and failed_command.`,
-      { label: `greptile:push:${p.n}:${round}`, phase: "Greptile", schema: obj({ ok: BOOL, failed_command: STR }) }
+      `\`git push origin ${[p.branch, ...later].join(" ")}\` (fast-forwards only; never --force), then \`gh pr comment ${p.number} --body "@greptileai review"\`. Return ok, failed_command, and head = \`git rev-parse ${p.branch}\`.`,
+      { label: `greptile:push:${p.n}:${round}`, phase: "Greptile", schema: obj({ ok: BOOL, failed_command: STR, head: STR }, ["ok", "failed_command"]) }
     );
+    head = (pushed && pushed.head) || "";
     if (!pushed || !pushed.ok) return { stopped: "Greptile", reason: `push failed after fixing #${p.number}: ${pushed ? pushed.failed_command : "no result"}`, prs: openPrs };
     fixesPushed = true;
   }
@@ -1220,8 +1226,9 @@ else {
   const seen = new Set();
   const trig = await sh(`\`gh pr comment ${target.number} --body "@greptileai review"\`. Return ok and failed_command.`, { label: "rollup-greptile:trigger", phase: "Roll-up Greptile", schema: obj({ ok: BOOL, failed_command: STR }) });
   if (!trig || !trig.ok) rollupReview.status = "trigger failed";
+  let head = "";
   for (let round = 1; trig && trig.ok && round <= ROLLUP_ROUNDS; round++) {
-    const w = await waitFor(target.number, `rollup-greptile:wait:${round}`, "Roll-up Greptile");
+    const w = await waitFor(target.number, `rollup-greptile:wait:${round}`, "Roll-up Greptile", head);
     // pr-review-wait counts a review only when it names the PR's current head; a timeout is a stop, not a pass.
     if (!w || w.status !== "reviewed") {
       rollupReview.status = w ? w.status : "no result";
@@ -1235,13 +1242,16 @@ else {
     const entry = { round, sha: w.sha || "", confidence: w.confidence, comments: fresh.length, replies: [], blocked: [] };
     rollupReview.rounds.push(entry);
     if (!fresh.length) {
-      rollupReview.status = w.confidence === 5 ? "passed" : "declined";
-      log(`Roll-up Greptile #${target.number}: ${w.confidence ?? "n/a"}/5, no new comments${w.confidence === 5 ? "" : "; every earlier comment was fixed or declined with a reason"}`);
+      // Below 5 with nothing new passes only when what holds the score down was declined with a reason.
+      const declinedBefore = rollupReview.rounds.some((r) => (r.replies || []).some((x) => x.action === "declined"));
+      rollupReview.status = w.confidence === 5 ? "passed" : declinedBefore ? "declined" : "below 5";
+      log(`Roll-up Greptile #${target.number}: ${w.confidence ?? "n/a"}/5, no new comments${w.confidence === 5 ? "" : declinedBefore ? "; the remaining comments were declined with reasons" : "; no comment to act on, so not a pass: read the summary"}`);
       break;
     }
     // Group the comments by the stacked branch that owns each file; fix lower branches first.
     const groups = stackOrder.map((x) => ({ pr: x, cs: fresh.filter((c) => branchFor(c.path) === x.branch) })).filter((g) => g.cs.length);
     let lowest = null;
+    const unanswered = [];
     for (const g of groups) {
       const sw = await sh(`\`git switch ${g.pr.branch}\`. Return ok.`, { label: `rollup-greptile:switch:${g.pr.n}:${round}`, phase: "Roll-up Greptile", schema: obj({ ok: BOOL }) });
       if (!sw || !sw.ok) return { stopped: "Roll-up Greptile", reason: `could not switch to ${g.pr.branch}`, prs: openPrs, rollupReview };
@@ -1253,7 +1263,10 @@ ${fence("greptile comments", g.cs.map((c) => `id ${c.id} — ${c.path}${c.line ?
 ${allDeclined.length ? `The local review declined these; answer a repeat the same way:\n${fence("declined locally", allDeclined.map((d) => `${d.comment}\n→ ${d.reply}`).join("\n\n"))}\n` : ""}Commit trailer: ${COAUTHOR}`,
         { label: `rollup-greptile:respond:${g.pr.n}:${round}`, phase: "Roll-up Greptile", agentType: "review-responder", schema: RESPONSE }
       );
-      if (!resp) continue;
+      if (!resp) {
+        unanswered.push(...g.cs.map(describe));
+        continue;
+      }
       entry.blocked.push(...resp.blocked.map((b) => `${g.pr.branch}: ${b}`));
       for (const c of resp.comments) {
         const srcC = g.cs.find((x) => String(x.id) === String(c.id));
@@ -1271,15 +1284,23 @@ ${allDeclined.length ? `The local review declined these; answer a repeat the sam
     const pushList = lowest ? [lowest, ...above(stackOrder.find((x) => x.branch === lowest)), ...(target.rollup ? [`review/${slug}`] : [])] : [];
     const wrote = await sh(
       `Every GitHub write of roll-up round ${round}, in order; stop at the first failure (ok=false, failed_command):
-  1. Write this JSON byte for byte to ${replies} with a quoted heredoc:
+  1. Write this JSON byte for byte to ${replies} with a quoted heredoc whose delimiter is REPLIES_JSON_EOF, then check it parses (\`bun -e 'JSON.parse(await Bun.file(process.argv[1]).text())' ${replies}\`):
 ${fence("replies json", JSON.stringify(entry.replies.map((r) => ({ id: r.id, reply: r.reply }))))}
   2. ${pushList.length ? `\`git push origin ${pushList.join(" ")}\` (fast-forwards only; never --force).` : "Nothing to push."}
   3. For each entry: write its reply to a temp file, then \`gh api repos/{owner}/{repo}/pulls/${target.number}/comments/<id>/replies -F body=@<temp file>\`.
   4. ${lowest && !last ? `\`gh pr comment ${target.number} --body "@greptileai review"\`.` : "No re-trigger."}
-Return ok and failed_command.`,
-      { label: `rollup-greptile:write:${round}`, phase: "Roll-up Greptile", schema: obj({ ok: BOOL, failed_command: STR }) }
+Return ok, failed_command, and head = \`git rev-parse ${target.branch}\`.`,
+      { label: `rollup-greptile:write:${round}`, phase: "Roll-up Greptile", schema: obj({ ok: BOOL, failed_command: STR, head: STR }, ["ok", "failed_command"]) }
     );
     if (!wrote || !wrote.ok) return { stopped: "Roll-up Greptile", reason: `round ${round} writes failed: ${wrote ? wrote.failed_command : "no result"}`, prs: openPrs, rollupReview };
+    head = wrote.head || "";
+    if (unanswered.length) {
+      // A comment nobody answered is open, never declined.
+      rollupReview.status = "unanswered";
+      entry.blocked.push(...unanswered.map((c) => `no response: ${c}`));
+      log(`Roll-up Greptile #${target.number}: ${unanswered.length} comment(s) got no response — not a pass`);
+      break;
+    }
     if (!lowest) {
       rollupReview.status = "declined";
       log(`Roll-up Greptile #${target.number}: ${w.confidence ?? "n/a"}/5; every comment declined with a reason, nothing to fix`);
@@ -1302,6 +1323,8 @@ phase("Close");
 const open = blocking(allFindings());
 const localBlocked = localReview.flatMap((b) => b.rounds.flatMap((r) => (r.blocked || []).map((x) => `${b.branch}: ${x}`)));
 const rollupBlocked = rollupReview.rounds.flatMap((r) => r.blocked || []);
+// Merge bar item 2: a local P0/P1 that got no fix, decline or duplicate reply is still open.
+const localOpen = localReview.flatMap((b) => b.rounds.filter((r) => r.comments > (r.replies || []).length).map((r) => `${b.branch}: ${r.comments - (r.replies || []).length} ${r.source} finding(s) unanswered in round ${r.round}`));
 const mergeCmd = target && rollupPassed && rollupReview.sha ? `gh pr merge ${target.number} --squash --match-head-commit ${rollupReview.sha}` : "";
 const rollupLine = !target
   ? "no roll-up PR, so Greptile did not run"
@@ -1313,7 +1336,7 @@ const memory = await ask(
 Where it stopped: ship-feature finished. PRs open: ${openPrs.map((p) => `#${p.number} ${p.url}`).join("; ")}. Merge them in order.${rollup ? ` Roll-up PR for the human: #${rollup.number} ${rollup.url} (merge it, then close the stacked PRs).` : ""}
 Links: ${issue ? `issue ${issue.url}; ` : ""}${previewUrl ? `preview ${previewUrl}; ` : ""}${pre.record_path ? `record docs/features/${slug}.md (PR 1).` : ""}
 Decisions (${DATE}): built from ${pre.record_path ? "the plan-feature decision record" : `the ticket directly (auditor: ${audit ? audit.verdict : "n/a"}${input.ready === "override" ? ", overridden by the human" : ""})`}.${architect ? ` Architecture: ${architect.decisions.map((d) => `${d.question} → ${d.chosen} (${d.why})`).join("; ")}.` : ""}
-Todo: ${open.length ? `${open.length} P0/P1 still open: ${open.map((f) => `${f.source} ${f.file}: ${f.detail.split("\n")[0]}`).join("; ")}; ` : ""}${shipReel && !shipReel.passed ? `smoke videos failed and were accepted at the ship review: ${shipReel.reason}; ` : ""}${redChecks.length ? `red checks: ${redChecks.join(", ")}; ` : ""}${localBlocked.length ? `local review fixes not made: ${localBlocked.join("; ")}; ` : ""}${rollupBlocked.length ? `roll-up review fixes not made: ${rollupBlocked.join("; ")}; ` : ""}${rollupLine}; ${mergeCmd ? `merge with \`${mergeCmd}\`` : "merge after Greptile passes"}${rollup ? ", then close the stacked PRs" : ""}.
+Todo: ${open.length ? `${open.length} P0/P1 still open: ${open.map((f) => `${f.source} ${f.file}: ${f.detail.split("\n")[0]}`).join("; ")}; ` : ""}${shipReel && !shipReel.passed ? `smoke videos failed and were accepted at the ship review: ${shipReel.reason}; ` : ""}${redChecks.length ? `red checks: ${redChecks.join(", ")}; ` : ""}${localBlocked.length ? `local review fixes not made: ${localBlocked.join("; ")}; ` : ""}${rollupBlocked.length ? `roll-up review fixes not made: ${rollupBlocked.join("; ")}; ` : ""}${localOpen.length ? `local P0/P1 still open: ${localOpen.join("; ")}; ` : ""}${rollupLine}; ${mergeCmd ? `merge with \`${mergeCmd}\`` : "merge after Greptile passes"}${rollup ? ", then close the stacked PRs" : ""}.
 Next step: human review of ${rollup ? rollup.url : openPrs[0].url}.`,
   { label: "memory:record", phase: "Close", agentType: "context-memory", effort: "low" }
 );
@@ -1330,13 +1353,14 @@ return {
   checks: checks ? checks.prs : [],
   localReview,
   local_blocked: localBlocked,
+  local_open: localOpen,
   greptile,
   rollupReview,
   verdicts: verdictLines(),
   open_findings: open,
   analytics: instr.events || null,
   memory,
-  next: `${rollupLine}. ${mergeCmd ? `Review ${target.url}, then merge with \`${mergeCmd}\`${rollup ? " and close the stacked PRs" : ""}.` : rollup ? `Review the roll-up ${rollup.url}; merge it once Greptile passes, then close the stacked PRs.` : `Review ${openPrs[0].url}; merge it once Greptile passes.`}${open.length ? ` ${open.length} P0/P1 were accepted open at the ship review.` : ""}${shipReel && !shipReel.passed ? ` The smoke videos failed (${shipReel.reason}) and were accepted at the ship review.` : ""}`,
+  next: `${rollupLine}. ${mergeCmd ? `Review ${target.url}, then merge with \`${mergeCmd}\`${rollup ? " and close the stacked PRs" : ""}.` : rollup ? `Review the roll-up ${rollup.url}; merge it once Greptile passes, then close the stacked PRs.` : `Review ${openPrs[0].url}; merge it once Greptile passes.`}${open.length ? ` ${open.length} P0/P1 were accepted open at the ship review.` : ""}${localOpen.length ? ` Local review left P0/P1 unanswered (${localOpen.join("; ")}); the merge bar needs none open.` : ""}${shipReel && !shipReel.passed ? ` The smoke videos failed (${shipReel.reason}) and were accepted at the ship review.` : ""}`,
 };
 
 } catch (e) {
