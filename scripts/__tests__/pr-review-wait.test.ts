@@ -20,6 +20,8 @@ interface World {
   reviews: unknown[][];
   comments?: unknown[];
   issueComments?: unknown[];
+  /** check runs on the head returned on each poll, by poll index (last one repeats); default none */
+  checkRuns?: unknown[][];
 }
 
 /** A gh stub plus a fake clock: `sleep` advances time, so no test waits. */
@@ -27,6 +29,7 @@ function harness(w: World, flags: { commentFails?: boolean } = {}) {
   const calls: string[][] = [];
   let t = 1_000_000;
   let poll = 0;
+  let checkPoll = 0;
   const sleeps: number[] = [];
   const deps: Deps = {
     gh: (args): GhResult => {
@@ -36,6 +39,11 @@ function harness(w: World, flags: { commentFails?: boolean } = {}) {
       if (j.startsWith("repo view")) return out("acme/saas\n");
       if (j.startsWith("pr view")) return out(`${SHA}\n`);
       if (j.startsWith("pr comment")) return flags.commentFails ? { code: 1, stdout: "", stderr: "boom" } : out("");
+      if (j.includes(`/commits/${SHA}/check-runs`)) {
+        // `--paginate --jq .check_runs[]` prints one run per line across every page.
+        const runs = w.checkRuns ?? [[]];
+        return out(runs[Math.min(checkPoll++, runs.length - 1)].map((x) => JSON.stringify(x)).join("\n"));
+      }
       if (j.endsWith("/reviews")) return out(w.reviews[Math.min(poll++, w.reviews.length - 1)]);
       if (j.endsWith("/pulls/5/comments")) return out(w.comments ?? []);
       if (j.endsWith("/issues/5/comments")) return out(w.issueComments ?? []);
@@ -137,6 +145,79 @@ describe("pr-review-wait", () => {
     const o = await run(["5"], deps);
     expect((o.out as any).confidence).toBeNull();
     expect((o.out as any).summary).toBe("");
+  });
+
+  describe("a clean review: no inline comments, so Greptile submits no PR review", () => {
+    const check = (status: string) => ({ name: "Greptile Review", status, conclusion: status === "completed" ? "success" : null, app: { slug: "greptile-apps" } });
+
+    it("a completed Greptile check plus a summary naming the head is reviewed, with no review and no comments", async () => {
+      const { deps, calls } = harness({ reviews: [[]], checkRuns: [[check("in_progress")], [check("completed")]], issueComments: [{ user: bot, body: summaryBody(5) }] });
+      const o = await run(["5"], deps);
+      expect(o.code).toBe(0);
+      expect(o.out).toMatchObject({ status: "reviewed", review: null, confidence: 5, comments: [], retriggered: false });
+      expect(calls.some((c) => c.join(" ").endsWith("/pulls/5/comments"))).toBe(false);
+    });
+
+    it("keeps polling until the summary names the head: it lands a moment after the check completes", async () => {
+      let n = 0;
+      const h = harness({ reviews: [[]], checkRuns: [[check("completed")]] });
+      const gh = h.deps.gh;
+      h.deps.gh = (args) => {
+        if (args.join(" ").endsWith("/issues/5/comments")) {
+          n++;
+          return { code: 0, stdout: JSON.stringify(n < 3 ? [{ user: bot, body: summaryBody(3, "old999") }] : [{ user: bot, body: summaryBody(4) }]), stderr: "" };
+        }
+        return gh(args);
+      };
+      const o = await run(["5"], h.deps);
+      expect(o.code).toBe(0);
+      expect((o.out as any).confidence).toBe(4);
+      expect(n).toBe(3);
+    });
+
+    it("a review with comments still wins when the check is also complete: reviews are read after the check", async () => {
+      const { deps } = harness({
+        reviews: [[review({ id: 7 })]],
+        checkRuns: [[check("completed")]],
+        comments: [{ id: 1, pull_request_review_id: 7, path: "a.ts", line: 3, body: "bug", html_url: "u1" }],
+        issueComments: [{ user: bot, body: summaryBody(3) }],
+      });
+      const o = await run(["5"], deps);
+      expect((o.out as any).review.id).toBe(7);
+      expect((o.out as any).comments).toHaveLength(1);
+    });
+
+    it("no retrigger while a Greptile check is queued or running on the head", async () => {
+      const { deps, calls } = harness({ reviews: [[]], checkRuns: [[check("queued")], [check("in_progress")]] });
+      const o = await run(["5", "--retrigger-after", "0", "--interval", "30", "--timeout", "120"], deps);
+      expect(o.code).toBe(5);
+      expect(retriggers(calls)).toHaveLength(0);
+    });
+
+    it("a failed or cancelled check with no summary still retriggers once, then keeps waiting", async () => {
+      const failed = { ...check("completed"), conclusion: "failure" };
+      const { deps, calls } = harness({ reviews: [[]], checkRuns: [[failed]] });
+      const o = await run(["5", "--retrigger-after", "0", "--interval", "30", "--timeout", "120"], deps);
+      expect(o.code).toBe(5);
+      expect(retriggers(calls)).toHaveLength(1);
+    });
+
+    it("reads the Greptile check from any page: other apps' runs come first", async () => {
+      const others = Array.from({ length: 150 }, (_, i) => ({ name: `ci-${i}`, status: "completed", app: { slug: "github-actions" } }));
+      const { deps, calls } = harness({ reviews: [[]], checkRuns: [[...others, check("completed")]], issueComments: [{ user: bot, body: summaryBody(5) }] });
+      const o = await run(["5"], deps);
+      expect(o.code).toBe(0);
+      expect((o.out as any).confidence).toBe(5);
+      expect(calls.find((c) => c.join(" ").includes("check-runs"))).toEqual(expect.arrayContaining(["--paginate", "--jq", ".check_runs[]"]));
+    });
+
+    it("ignores check runs from other apps", async () => {
+      const other = { ...check("completed"), app: { slug: "github-actions" } };
+      const { deps, calls } = harness({ reviews: [[]], checkRuns: [[other]], issueComments: [{ user: bot, body: summaryBody(5) }] });
+      const o = await run(["5", "--retrigger-after", "0", "--timeout", "60"], deps);
+      expect(o.code).toBe(5);
+      expect(retriggers(calls)).toHaveLength(1);
+    });
   });
 
   it("a gh failure exits 2 GH instead of polling forever", async () => {
