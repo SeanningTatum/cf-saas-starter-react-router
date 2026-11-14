@@ -13,7 +13,7 @@
 2. **AI-first** — six project-local sub-agents, Matt Pocock's planning skills, seven gates, five AST-checked non-negotiables.
 3. **DX that just works** — `bun install` + `bun run dev` and you're live. `bun run scripts/first-time-setup.ts` gets you from zero to deployed Worker in ~3 minutes. Local dev runs the same Workers runtime that ships to production.
 
-📦 **Latest release:** [`v1.2.0` — The Boilerplate Audited Itself](https://github.com/SeanningTatum/cf-saas-starter-react-router/releases/tag/v1.2.0)
+📦 **Latest release:** [`v2.4.0` — One Review Where It Counts](https://github.com/SeanningTatum/cf-saas-starter-react-router/releases/tag/v2.4.0)
 
 If you're a human, scroll to [Quick Start](#quick-start). If you're an agent, scroll to [How To Work In This Repo](#how-to-work-in-this-repo) — it tells you how to read the project state before writing code.
 
