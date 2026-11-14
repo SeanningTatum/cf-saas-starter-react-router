@@ -1369,7 +1369,8 @@ return {
   open_findings: open,
   analytics: instr.events || null,
   memory,
-  next: `${rollupLine}. ${mergeCmd ? `Review ${target.url}, then merge with \`${mergeCmd}\`${rollup ? " and close the stacked PRs" : ""}.` : rollup ? `Review the roll-up ${rollup.url}; merge it once Greptile passes, then close the stacked PRs.` : `Review ${openPrs[0].url}; merge it once Greptile passes.`}${open.length ? ` ${open.length} P0/P1 were accepted open at the ship review.` : ""}${localOpen.length ? ` Local review left P0/P1 unanswered (${localOpen.join("; ")}); the merge bar needs none open.` : ""}${shipReel && !shipReel.passed ? ` The smoke videos failed (${shipReel.reason}) and were accepted at the ship review.` : ""}`,
+  // Merge bar item 1: Greptile passing does not excuse a red check; say so next to the merge command.
+  next: `${rollupLine}.${redChecks.length ? ` Red checks: ${redChecks.join(", ")}; the merge bar needs them green, so fix or re-run them before merging.` : ""} ${mergeCmd ? `Review ${target.url}, then merge with \`${mergeCmd}\`${rollup ? " and close the stacked PRs" : ""}.` : rollup ? `Review the roll-up ${rollup.url}; merge it once Greptile passes, then close the stacked PRs.` : `Review ${openPrs[0].url}; merge it once Greptile passes.`}${open.length ? ` ${open.length} P0/P1 were accepted open at the ship review.` : ""}${localOpen.length ? ` Local review left P0/P1 unanswered (${localOpen.join("; ")}); the merge bar needs none open.` : ""}${shipReel && !shipReel.passed ? ` The smoke videos failed (${shipReel.reason}) and were accepted at the ship review.` : ""}`,
 };
 
 } catch (e) {
