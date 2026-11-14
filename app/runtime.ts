@@ -10,6 +10,7 @@ import { TracingLayer } from "@/services/tracing";
 import { UserRepository } from "@/repositories/user";
 import { AnalyticsRepository } from "@/repositories/analytics";
 import { BucketRepository } from "@/repositories/bucket";
+import { HealthRepository } from "@/repositories/health";
 
 export type AppServices =
   | Database
@@ -19,7 +20,8 @@ export type AppServices =
   | Analytics
   | UserRepository
   | AnalyticsRepository
-  | BucketRepository;
+  | BucketRepository
+  | HealthRepository;
 
 // `baseURL` is the request's own origin — threaded through to Better Auth
 // via `AuthApiLive(baseURL)` so the single construction path (Effect.try →
@@ -36,7 +38,8 @@ export const makeAppRuntime = (env: Env, baseURL?: string) => {
   const reposLayer = Layer.mergeAll(
     UserRepository.Default,
     AnalyticsRepository.Default,
-    BucketRepository.Default
+    BucketRepository.Default,
+    HealthRepository.Default
   );
   const layer = reposLayer
     .pipe(Layer.provideMerge(baseLayer))
