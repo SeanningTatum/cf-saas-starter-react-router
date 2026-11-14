@@ -15,6 +15,7 @@ import {
   BulkDeleteUsersInput,
   BulkUpdateUserRolesInput,
 } from "@/lib/schemas/user";
+import { dbHealth } from "./health";
 
 /**
  * Shared shape for the three `bulk*` procedures below: filter out
@@ -194,4 +195,6 @@ export const adminRouter = createTRPCRouter({
         { role: input.role }
       )
     ),
+
+  dbHealth,
 });
