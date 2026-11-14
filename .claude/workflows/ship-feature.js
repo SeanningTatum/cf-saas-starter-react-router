@@ -114,6 +114,9 @@ const LOCAL_ROUNDS = Math.max(0, Math.min(5, input.localRounds ?? 0));
 const GREPTILE_ROUNDS = Math.max(0, Math.min(5, input.greptileRounds ?? 0));
 const ROLLUP_ROUNDS = Math.max(0, Math.min(5, input.rollupRounds ?? 3));
 const COAUTHOR = "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>";
+// The e2e dev server must not collide with another on 5173 (a second checkout, another project's dev server):
+// every gate or e2e run gets a free port. playwright.config.ts reads E2E_PORT.
+const E2E_ENV = `E2E_PORT=$(bun -e 'const s=Bun.listen({hostname:"localhost",port:0,socket:{data(){}}});console.log(s.port);s.stop(true)')`;
 
 let ROOT = "";
 let slug = input.slug || "";
@@ -204,7 +207,7 @@ const pre = await agent(
 ${recordLine}
   8. Does app/services/analytics.ts exist -> has_analytics.
   9. CodeGraph: \`./scripts/codegraph.sh ensure\` (it never fails), then \`./scripts/codegraph.sh status\` -> has_codegraph (true when it prints index stats, false on any error).
- 10. Baseline (Bash timeout 600000 ms) on the base commit, not on whatever is checked out. Note the current position (\`git symbolic-ref -q --short HEAD\`, else \`git rev-parse HEAD\`), \`git switch --detach <base_sha>\`, run \`CI=1 ./scripts/verify.sh\` (even if slow; CI=1 because the base commit's verify.sh may lack the e2e fix and the dev server would ask for Cloudflare credentials), then switch back to the noted position (\`git switch <branch>\`, or \`git switch --detach <sha>\`) even when the gates fail. For each gate it reports, return { name, pass, tail } (last 15 lines of a failing gate, "" for a passing one).
+ 10. Baseline (Bash timeout 600000 ms) on the base commit, not on whatever is checked out. Note the current position (\`git symbolic-ref -q --short HEAD\`, else \`git rev-parse HEAD\`), \`git switch --detach <base_sha>\`, run \`CI=1 ${E2E_ENV} ./scripts/verify.sh\` (even if slow; CI=1 because the base commit's verify.sh may lack the e2e fix and the dev server would ask for Cloudflare credentials; E2E_PORT so the e2e server never collides with another dev server on 5173), then switch back to the noted position (\`git switch <branch>\`, or \`git switch --detach <sha>\`) even when the gates fail. For each gate it reports, return { name, pass, tail } (last 15 lines of a failing gate, "" for a passing one).
 Return ok=false with a one-line reason at the first failure in 0-6; items 7-10 never fail the run.`,
   {
     label: "preflight",
@@ -246,6 +249,7 @@ log(`Preflight green: ${ROOT}, ${DATE}, base ${BASE}@${pre.base_sha.slice(0, 8)}
 
 const PREAMBLE = `ROOT = ${ROOT}. Work only inside it; cd there first; every path is relative to it.
 Give every long command (verify.sh, test:e2e, gh pr checks --watch, pr-review-wait, greptile-local) the maximum Bash timeout, 600000 ms.
+Prefix every run that starts the e2e server (verify.sh, test:e2e, playwright test) with \`${E2E_ENV}\`, so it never collides with another dev server on 5173.
 Never run git commit, push, switch, checkout, stash, reset or rebase unless your task says so. Never post to GitHub unless your task says so.`;
 const ask = (prompt, opts) => agent(`${PREAMBLE}\n\n${prompt}`, opts);
 const sh = (prompt, opts) => ask(prompt, { effort: "low", ...opts, agentType: "runner" });
@@ -645,7 +649,7 @@ const reviewer = (key, agentType, note) => (round) => () =>
 
 const CHECKS = {
   gates: (round) => () =>
-    sh(`Run \`CI=1 ./scripts/verify.sh\` (every gate: typecheck, unit tests, non-negotiables, harness, build, e2e). For each gate return { name, pass, tail } — tail is the last 25 lines of a failing gate verbatim, "" for a passing one. Fix nothing.`, {
+    sh(`Run \`CI=1 ${E2E_ENV} ./scripts/verify.sh\` (every gate: typecheck, unit tests, non-negotiables, harness, build, e2e). For each gate return { name, pass, tail } — tail is the last 25 lines of a failing gate verbatim, "" for a passing one. Fix nothing.`, {
       label: `review:gates:${round}`,
       phase: "Review",
       schema: GATES,
@@ -1032,6 +1036,7 @@ const top = openPrs[openPrs.length - 1];
 let checks = null;
 let previewUrl = "";
 let redChecks = [];
+const isRed = (c) => !/pass|success|skip|neutral/i.test(c.state);
 let previewWalk = null;
 async function checkAndWalk(tag, phaseName) {
   checks = await sh(
@@ -1039,7 +1044,7 @@ async function checkAndWalk(tag, phaseName) {
     { label: `${tag}:checks`, phase: phaseName, schema: obj({ prs: arr(obj({ number: NUM, checks: arr(obj({ name: STR, state: STR })) })), preview_url: STR }) }
   );
   previewUrl = (checks && checks.preview_url) || "";
-  redChecks = checks ? checks.prs.flatMap((p) => p.checks.filter((c) => !/pass|success|skip|neutral/i.test(c.state)).map((c) => `#${p.number} ${c.name}`)) : [];
+  redChecks = checks ? checks.prs.flatMap((p) => p.checks.filter(isRed).map((c) => `#${p.number} ${c.name}`)) : [];
   if (redChecks.length) log(`Red checks: ${redChecks.join(", ")}`);
   previewWalk = null;
   if (!hasUi || !previewUrl) return;
@@ -1321,6 +1326,17 @@ const rollupPassed = rollupReview.status === "passed" || rollupReview.status ===
 // =============================================================================================
 phase("Close");
 
+// The roll-up is the PR that merges, and it runs its own CI: the stacked PRs' checks do not stand in for it.
+if (rollup) {
+  const rc = await sh(
+    `Wait for CI on the roll-up PR #${rollup.number}: \`gh pr checks ${rollup.number} --watch\` with a 600000 ms Bash timeout; if the tool times out first, run it again, up to three times; if it reports no checks yet, wait 30 s and run it again, up to five times. Return checks [{ name, state }].`,
+    { label: "close:rollup-checks", phase: "Close", schema: obj({ checks: arr(obj({ name: STR, state: STR })) }) }
+  );
+  const red = rc ? rc.checks.filter(isRed).map((c) => `#${rollup.number} ${c.name}`) : [`#${rollup.number} checks (could not read them)`];
+  if (red.length) log(`Roll-up red checks: ${red.join(", ")}`);
+  redChecks = [...redChecks, ...red];
+}
+
 const open = blocking(allFindings());
 const localBlocked = localReview.flatMap((b) => b.rounds.flatMap((r) => (r.blocked || []).map((x) => `${b.branch}: ${x}`)));
 const rollupBlocked = rollupReview.rounds.flatMap((r) => r.blocked || []);
@@ -1365,7 +1381,8 @@ return {
   open_findings: open,
   analytics: instr.events || null,
   memory,
-  next: `${rollupLine}. ${mergeCmd ? `Review ${target.url}, then merge with \`${mergeCmd}\`${rollup ? " and close the stacked PRs" : ""}.` : rollup ? `Review the roll-up ${rollup.url}; merge it once Greptile passes, then close the stacked PRs.` : `Review ${openPrs[0].url}; merge it once Greptile passes.`}${open.length ? ` ${open.length} P0/P1 were accepted open at the ship review.` : ""}${localOpen.length ? ` Local review left P0/P1 unanswered (${localOpen.join("; ")}); the merge bar needs none open.` : ""}${shipReel && !shipReel.passed ? ` The smoke videos failed (${shipReel.reason}) and were accepted at the ship review.` : ""}`,
+  // Merge bar item 1: Greptile passing does not excuse a red check; say so next to the merge command.
+  next: `${rollupLine}.${redChecks.length ? ` Red checks: ${redChecks.join(", ")}; the merge bar needs them green, so fix or re-run them before merging.` : ""} ${mergeCmd ? `Review ${target.url}, then merge with \`${mergeCmd}\`${rollup ? " and close the stacked PRs" : ""}.` : rollup ? `Review the roll-up ${rollup.url}; merge it once Greptile passes, then close the stacked PRs.` : `Review ${openPrs[0].url}; merge it once Greptile passes.`}${open.length ? ` ${open.length} P0/P1 were accepted open at the ship review.` : ""}${localOpen.length ? ` Local review left P0/P1 unanswered (${localOpen.join("; ")}); the merge bar needs none open.` : ""}${shipReel && !shipReel.passed ? ` The smoke videos failed (${shipReel.reason}) and were accepted at the ship review.` : ""}`,
 };
 
 } catch (e) {
