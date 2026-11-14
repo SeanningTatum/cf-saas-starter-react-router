@@ -1036,6 +1036,7 @@ const top = openPrs[openPrs.length - 1];
 let checks = null;
 let previewUrl = "";
 let redChecks = [];
+const isRed = (c) => !/pass|success|skip|neutral/i.test(c.state);
 let previewWalk = null;
 async function checkAndWalk(tag, phaseName) {
   checks = await sh(
@@ -1043,7 +1044,7 @@ async function checkAndWalk(tag, phaseName) {
     { label: `${tag}:checks`, phase: phaseName, schema: obj({ prs: arr(obj({ number: NUM, checks: arr(obj({ name: STR, state: STR })) })), preview_url: STR }) }
   );
   previewUrl = (checks && checks.preview_url) || "";
-  redChecks = checks ? checks.prs.flatMap((p) => p.checks.filter((c) => !/pass|success|skip|neutral/i.test(c.state)).map((c) => `#${p.number} ${c.name}`)) : [];
+  redChecks = checks ? checks.prs.flatMap((p) => p.checks.filter(isRed).map((c) => `#${p.number} ${c.name}`)) : [];
   if (redChecks.length) log(`Red checks: ${redChecks.join(", ")}`);
   previewWalk = null;
   if (!hasUi || !previewUrl) return;
@@ -1324,6 +1325,17 @@ const rollupPassed = rollupReview.status === "passed" || rollupReview.status ===
 
 // =============================================================================================
 phase("Close");
+
+// The roll-up is the PR that merges, and it runs its own CI: the stacked PRs' checks do not stand in for it.
+if (rollup) {
+  const rc = await sh(
+    `Wait for CI on the roll-up PR #${rollup.number}: \`gh pr checks ${rollup.number} --watch\` with a 600000 ms Bash timeout; if the tool times out first, run it again, up to three times; if it reports no checks yet, wait 30 s and run it again, up to five times. Return checks [{ name, state }].`,
+    { label: "close:rollup-checks", phase: "Close", schema: obj({ checks: arr(obj({ name: STR, state: STR })) }) }
+  );
+  const red = rc ? rc.checks.filter(isRed).map((c) => `#${rollup.number} ${c.name}`) : [`#${rollup.number} checks (could not read them)`];
+  if (red.length) log(`Roll-up red checks: ${red.join(", ")}`);
+  redChecks = [...redChecks, ...red];
+}
 
 const open = blocking(allFindings());
 const localBlocked = localReview.flatMap((b) => b.rounds.flatMap((r) => (r.blocked || []).map((x) => `${b.branch}: ${x}`)));
