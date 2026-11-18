@@ -20,7 +20,7 @@ export const meta = {
     { title: "Greptile", detail: "off by default (greptileRounds 0): per stacked PR on GitHub, review-responder, merge forward, plain push" },
     { title: "Rollup", detail: "more than one PR: merge the stacked PRs bottom-up into review/<slug> (merge commits, each retargeted first), then one roll-up PR review/<slug> -> base for the human, all in one step" },
     { title: "Roll-up Greptile", detail: "Greptile on the roll-up (or the single PR) only: one trigger, fixes committed on review/<slug> inside the fence of the stacked PR that owns each file, fast-forward pushed, every GitHub write of a round in one step; three rounds, to 5/5 or every comment declined" },
-    { title: "Close", detail: "one context-memory record; the PR links" },
+    { title: "Close", detail: "the roll-up's CI and a walk of its own preview; one context-memory record; the PR links" },
   ],
 };
 
@@ -1222,12 +1222,16 @@ Return ok, failed_command, merged, number, url.`,
   if (!rollup || !rollup.ok) {
     const merged = (rollup && rollup.merged) || [];
     const rest = openPrs.filter((p) => !merged.includes(p.number));
+    // Step 5 may have opened the roll-up before a pointer comment failed: keep it, never open a second one.
+    const opened = rollup && rollup.number && rollup.url ? { number: rollup.number, url: rollup.url } : null;
+    const comment = `\`gh pr comment <n> --body "Merged into ${rollupBranch}; it lands on ${BASE} with the roll-up #${opened ? opened.number : "<roll-up number>"}."\``;
     return {
       stopped: "Rollup",
       reason: rollup ? rollup.failed_command : "rollup returned nothing",
       prs: openPrs,
       merged_into_rollup: merged,
-      next: `${merged.length ? `Merged into ${rollupBranch}: ${merged.map((n) => `#${n}`).join(", ")}. ` : ""}${rest.length ? `Merge the rest in order: for each of ${rest.map((p) => `#${p.number}`).join(", ")}, \`gh pr edit <n> --base ${rollupBranch}\` then \`gh pr merge <n> --merge\`. ` : ""}Then open the roll-up: \`gh pr create --base ${BASE} --head ${rollupBranch} --title ${shq(`${plan.title} (roll-up)`)} --body-file ${outDir()}/rollup.md\`, and post "@greptileai review" on it.`,
+      rollup: opened ? opened.url : null,
+      next: `${merged.length ? `Merged into ${rollupBranch}: ${merged.map((n) => `#${n}`).join(", ")}. ` : ""}${rest.length ? `Merge the rest in order: for each of ${rest.map((p) => `#${p.number}`).join(", ")}, \`gh pr edit <n> --base ${rollupBranch}\` then \`gh pr merge <n> --merge\`. ` : ""}${opened ? `The roll-up is open: ${opened.url}; do not create another.` : `Then open the roll-up: \`gh pr create --base ${BASE} --head ${rollupBranch} --title ${shq(`${plan.title} (roll-up)`)} --body-file ${outDir()}/rollup.md\`.`} On each stacked PR that lacks it, ${comment}. Then post "@greptileai review" on the roll-up.`,
     };
   }
   log(`Rollup: ${openPrs.length} stacked PRs merged into ${rollupBranch}; ${rollup.url}`);
@@ -1337,7 +1341,8 @@ Return ok, failed_command, and head = \`git rev-parse ${target.branch}\`.`,
     }
   }
   // The stacked PRs are merged, so the fixes are on the target alone: watch it, and walk its own preview.
-  if (fixesPushed) await checkAndWalk("rollup-greptile", "Roll-up Greptile", [target], target);
+  // Close does this for the roll-up, at its final head, fixes or not.
+  if (fixesPushed && !rollup) await checkAndWalk("rollup-greptile", "Roll-up Greptile", [target], target);
 }
 const rollupPassed = rollupReview.status === "passed" || rollupReview.status === "declined";
 
@@ -1345,16 +1350,11 @@ const rollupPassed = rollupReview.status === "passed" || rollupReview.status ===
 phase("Close");
 
 // The roll-up is the PR that merges, and it runs its own CI: the stacked PRs' checks do not stand in for it.
-// Its preview is the only one left: the stacked PRs' previews closed when they merged into review/<slug>.
+// Its preview is the only one left: the stacked PRs' previews closed when they merged into review/<slug>, so
+// walk it here, or the verdict would describe a preview that no longer exists.
 if (rollup) {
-  const rc = await sh(
-    `Wait for CI on the roll-up PR #${rollup.number}: \`gh pr checks ${rollup.number} --watch\` with a 600000 ms Bash timeout; if the tool times out first, run it again, up to three times; if it reports no checks yet, wait 30 s and run it again, up to five times. Then read its comments (\`gh pr view ${rollup.number} --json comments\`) for the one starting "### Preview deployment" and take the first https URL in bold as preview_url ("" when there is none). Return checks [{ name, state }] and preview_url.`,
-    { label: "close:rollup-checks", phase: "Close", schema: obj({ checks: arr(obj({ name: STR, state: STR })), preview_url: STR }) }
-  );
-  previewUrl = (rc && rc.preview_url) || "";
-  const red = rc ? rc.checks.filter(isRed).map((c) => `#${rollup.number} ${c.name}`) : [`#${rollup.number} checks (could not read them)`];
-  if (red.length) log(`Roll-up red checks: ${red.join(", ")}`);
-  redChecks = [...redChecks, ...red];
+  await checkAndWalk("close", "Close", [target], target);
+  if (!checks) redChecks = [`#${rollup.number} checks (could not read them)`];
 }
 
 const open = blocking(allFindings());
