@@ -16,11 +16,11 @@ export const meta = {
     { title: "Ship", detail: "the @golden and @error specs re-run on video; the run stops on a lavish page: the stack, the verdicts, the open findings, the videos; you approve or ask for changes" },
     { title: "Split", detail: "split into stacked branches by fence, typecheck and test each on its own" },
     { title: "Local review", detail: "per stacked branch in order, before any push: the code-review skill (high) on its diff against the branch below, review-responder fixes or declines each P0/P1, restack, re-check; two rounds (opt-in: the Greptile CLI too)" },
-    { title: "Open", detail: "push, open the PRs, wait for every PR's checks and the seeded preview, walk the preview" },
+    { title: "Open", detail: "more than one PR: push review/<slug> at the base first, PR 1 targets it; push, open the PRs, wait for every PR's checks and the seeded preview, walk the preview" },
     { title: "Greptile", detail: "off by default (greptileRounds 0): per stacked PR on GitHub, review-responder, merge forward, plain push" },
-    { title: "Rollup", detail: "more than one PR: a disposable review/<slug> branch and one roll-up PR for the human, a pointer comment on each stacked PR" },
-    { title: "Roll-up Greptile", detail: "Greptile on the roll-up (or the single PR) only: one trigger, fixes on the stacked branch that owns each file, merged forward and fast-forward pushed, every GitHub write of a round in one step; three rounds, to 5/5 or every comment declined" },
-    { title: "Close", detail: "one context-memory record; the PR links" },
+    { title: "Rollup", detail: "more than one PR: merge the stacked PRs bottom-up into review/<slug> (merge commits, each retargeted first), then one roll-up PR review/<slug> -> base for the human, all in one step" },
+    { title: "Roll-up Greptile", detail: "Greptile on the roll-up (or the single PR) only: one trigger, fixes committed on review/<slug> inside the fence of the stacked PR that owns each file, fast-forward pushed, every GitHub write of a round in one step; three rounds, to 5/5 or every comment declined" },
+    { title: "Close", detail: "the roll-up's CI and a walk of its own preview; one context-memory record; the PR links" },
   ],
 };
 
@@ -47,10 +47,10 @@ export const meta = {
  *   Merge bar: docs/agents/harness.md#review-loop-and-merge-bar.
  *
  * PUSHES
- *   .claude/settings.json denies `git push --force` (and so --force-with-lease). After the first push, a fix
- *   lands on the stacked branch that owns its file and is MERGED forward through the branches above it, so
- *   every push is a fast-forward. Each round's GitHub writes (pushes, thread replies, the Greptile trigger)
- *   run in one step, so the human approves them once a round, not once a PR.
+ *   .claude/settings.json denies `git push --force` (and so --force-with-lease). After the first push no branch
+ *   is rewritten: an opt-in per-PR Greptile fix is MERGED forward through the branches above it, and a roll-up
+ *   fix is a new commit on review/<slug>, so every push is a fast-forward. Each round's GitHub writes (pushes,
+ *   thread replies, the Greptile trigger) run in one step, so the human approves them once a round, not once a PR.
  *
  * REGRESSIONS
  *   Preflight runs every gate (unit, e2e, build, non-negotiables, harness) on the untouched base. At
@@ -65,12 +65,17 @@ export const meta = {
  *     needs-ship                   built, reviewed and documented; nothing has left the machine. The main thread
  *                                  writes the lavish page `review`, polls it, then re-runs with
  *                                  args.ships["<round>"] = { approved: true } or { approved: false, changes: ["..."] }.
- *   Nothing is pushed, no PR is opened and no comment is posted before a needs-ship approval.
+ *   Nothing is pushed, no PR is opened and no comment is posted before a needs-ship approval. The approval also
+ *   covers merging the stacked PRs into review/<slug> at Rollup; nothing merges into the base.
  *
  * ROLL-UP
  *   A stack of two or more PRs gets one roll-up PR (review/<slug> -> base) holding the whole feature, so the
- *   human tests and merges once (`gh pr merge --squash --match-head-commit <reviewed sha>`); each stacked PR
- *   gets a comment to close it afterwards.
+ *   human tests and merges once (`gh pr merge --squash --match-head-commit <reviewed sha>`). review/<slug> is
+ *   pushed at the base before any PR opens and PR 1 targets it. At Rollup the stacked PRs merge into it bottom-up
+ *   with merge commits (a squash would rewrite PR 1's commits and PR 2's diff would show them again), each one
+ *   retargeted to review/<slug> first; then the roll-up opens (GitHub refuses a PR with no diff, so not sooner).
+ *   At the end every stacked PR shows Merged into review/<slug> and the roll-up Merged into the base: nobody
+ *   closes a PR by hand.
  *
  * args:
  *   a string: a ticket ref (12, #12, an issue URL) or a prompt
@@ -379,6 +384,9 @@ slug = input.slug || plan.slug || slug;
 if (!SLUG.test(slug)) return { stopped: "Intake", reason: `no usable slug (${JSON.stringify(slug)})` };
 const prs = [...plan.prs].sort((a, b) => a.n - b.n);
 if (!prs.length) return { stopped: "Intake", reason: "the plan has no PRs" };
+// A stack merges into review/<slug> and reaches the base through the roll-up, so PR 1 targets review/<slug>.
+const rollupBranch = prs.length > 1 ? `review/${slug}` : "";
+const baseOf = (p) => (rollupBranch && p.n === prs[0].n ? rollupBranch : p.base);
 const hasUi = plan.ui;
 const ACCEPT = plan.acceptance.map((a) => `  · ${a}`).join("\n");
 const wantsAnalytics = pre.has_analytics && !!plan.metric.trim();
@@ -781,7 +789,7 @@ ${pre.record_path ? `Commit the decision record: copy ${pre.record_path} to docs
 Then GLOSSARY.md, an ADR only for a hard-to-reverse decision, and any doc the diff (\`git diff ${pre.base_sha}\` plus untracked) makes wrong.
 
 PR bodies, one per PR, at ${outDir()}/pr-<n>.md:
-${prs.map((p) => `  · PR ${p.n}: ${p.branch} -> ${p.base}, "${p.title}", fence ${p.fence.join(", ")}; Greptile focus: ${p.greptile_focus}`).join("\n")}
+${prs.map((p) => `  · PR ${p.n}: ${p.branch} -> ${baseOf(p)}, "${p.title}", fence ${p.fence.join(", ")}; Greptile focus: ${p.greptile_focus}`).join("\n")}
 ${issue ? `Issue: ${issue.url} — "Closes ${issue.url}" on PR ${lastPr.n} only, "Part of ${issue.url}" on the others.` : "No issue: leave out Closes/Part of."}
 Verdicts to quote:
 ${verdictLines()}
@@ -835,11 +843,11 @@ for (; shipRound <= 3; shipRound++) {
     const open = [...reelFindings, ...blocking(allFindings())];
     const page = `${outDir()}/ship-${shipRound}.html`;
     const restPaths = assignment ? (assignment.assignments.find((a) => a.n === lastPr.n) || { paths: [] }).paths.filter((p) => !covers(lastPr.fence.map(norm), p)) : [];
-    await stop(`needs-ship:${shipRound}`, "Ship", `Ship round ${shipRound}: built, reviewed, documented; waiting for the human's go before any push`, resumeHow(`ships: { ...earlier rounds, "${shipRound}": { approved: true } | { approved: false, changes: ["..."] } }`), {
+    await stop(`needs-ship:${shipRound}`, "Ship", `Ship round ${shipRound}: built, reviewed, documented; waiting for the human's go before any push${rollupBranch ? ` (it also lets Rollup merge the stacked PRs into ${rollupBranch}, never into ${BASE})` : ""}`, resumeHow(`ships: { ...earlier rounds, "${shipRound}": { approved: true } | { approved: false, changes: ["..."] } }`), {
       status: "needs-ship",
       round: shipRound,
       slug,
-      prs: prs.map((p) => ({ n: p.n, branch: p.branch, base: p.base, title: p.title, body: `${outDir()}/pr-${p.n}.md`, paths: assignment ? (assignment.assignments.find((a) => a.n === p.n) || { paths: [] }).paths : [] })),
+      prs: prs.map((p) => ({ n: p.n, branch: p.branch, base: baseOf(p), title: p.title, body: `${outDir()}/pr-${p.n}.md`, paths: assignment ? (assignment.assignments.find((a) => a.n === p.n) || { paths: [] }).paths : [] })),
       unfenced_to_last_pr: restPaths,
       overlaps: assignment ? assignment.overlaps : [],
       verdicts: `${verdictLines()}${reelLine}`,
@@ -1018,9 +1026,10 @@ phase("Open");
 
 const opened = await sh(
   `Push and open the stacked PRs for "${slug}". In order, stop at the first failure:
+  0. ${rollupBranch ? `\`git branch -f ${rollupBranch} ${pre.base_sha}\`, then \`git push -u origin ${rollupBranch}\` (the roll-up branch, at the base commit; PR 1 targets it). A plain push: if origin already has ${rollupBranch} from an earlier run and refuses it, fail with that push.` : "Single PR: it targets the base directly; skip."}
   1. \`git push -u origin ${prs.map((p) => p.branch).join(" ")}\`.
   2. For each PR in order: \`gh pr create --base <base> --head <branch> --title <title> --body-file <body>\` with
-${prs.map((p) => `       n=${p.n} base=${p.base} branch=${p.branch} title=${shq(p.title)} body=${outDir()}/pr-${p.n}.md`).join("\n")}
+${prs.map((p) => `       n=${p.n} base=${baseOf(p)} branch=${p.branch} title=${shq(p.title)} body=${outDir()}/pr-${p.n}.md`).join("\n")}
      Record each PR's number and url.
   3. ${prs.length > 1 ? `For each PR: append to its body file a section "## Stack" listing every PR in order as "${"`"}n. #<number> <title>${"`"}" with "← this PR" on its own line, then \`gh pr edit <number> --body-file <body>\`.` : "Single PR: nothing to do."}
 Return ok, failed_command, prs [{ n, number, url, branch }].`,
@@ -1030,17 +1039,18 @@ if (!opened || !opened.ok) return { stopped: "Open", reason: opened ? opened.fai
 const openPrs = opened.prs.sort((a, b) => a.n - b.n);
 log(`Opened: ${openPrs.map((p) => p.url).join(" ")}`);
 
-// CI and the preview workflow run on every PR in the stack; the preview deploys each PR with its own seeded
-// D1 and posts the URL as a sticky comment. The walk uses the top PR's preview, the whole feature.
+// CI and the preview workflow run on every PR in the stack, whatever its base; the preview deploys each PR with
+// its own seeded D1 and posts the URL as a sticky comment. The walk uses the top PR's preview, the whole feature.
+// Once the stack has merged into review/<slug> their previews close; later walks use the roll-up's own.
 const top = openPrs[openPrs.length - 1];
 let checks = null;
 let previewUrl = "";
 let redChecks = [];
 const isRed = (c) => !/pass|success|skip|neutral/i.test(c.state);
 let previewWalk = null;
-async function checkAndWalk(tag, phaseName) {
+async function checkAndWalk(tag, phaseName, watch = openPrs, home = top) {
   checks = await sh(
-    `Wait for CI and the preview deploy on each PR, in order: ${openPrs.map((p) => `#${p.number}`).join(", ")}. For each: \`gh pr checks <n> --watch\` with a 600000 ms Bash timeout; if the tool times out first, run it again, up to three times; if it reports no checks yet, wait 30 s and run it again, up to five times. Then read PR #${top.number}'s comments (\`gh pr view ${top.number} --json comments\`) for the one starting "### Preview deployment" and take the first https URL in bold as preview_url ("" when there is none: previews are off without Cloudflare credentials). Return prs [{ number, checks: [{ name, state }] }] and preview_url.`,
+    `Wait for CI and the preview deploy on each PR, in order: ${watch.map((p) => `#${p.number}`).join(", ")}. For each: \`gh pr checks <n> --watch\` with a 600000 ms Bash timeout; if the tool times out first, run it again, up to three times; if it reports no checks yet, wait 30 s and run it again, up to five times. Then read PR #${home.number}'s comments (\`gh pr view ${home.number} --json comments\`) for the one starting "### Preview deployment" and take the first https URL in bold as preview_url ("" when there is none: previews are off without Cloudflare credentials). Return prs [{ number, checks: [{ name, state }] }] and preview_url.`,
     { label: `${tag}:checks`, phase: phaseName, schema: obj({ prs: arr(obj({ number: NUM, checks: arr(obj({ name: STR, state: STR })) })), preview_url: STR }) }
   );
   previewUrl = (checks && checks.preview_url) || "";
@@ -1053,7 +1063,7 @@ async function checkAndWalk(tag, phaseName) {
     { label: `${tag}:preview-walk`, phase: phaseName, agentType: "feature-verifier", schema: VERDICT }
   );
   if (previewWalk) {
-    await sh(`Post ${outDir()}/preview-verdict.md as a comment on PR #${top.number}, prefixed with the line "### Preview walk (${previewUrl})": write the combined text to ${outDir()}/preview-comment.md, then \`gh pr comment ${top.number} --body-file ${outDir()}/preview-comment.md\`.`, {
+    await sh(`Post ${outDir()}/preview-verdict.md as a comment on PR #${home.number}, prefixed with the line "### Preview walk (${previewUrl})": write the combined text to ${outDir()}/preview-comment.md, then \`gh pr comment ${home.number} --body-file ${outDir()}/preview-comment.md\`.`, {
       label: `${tag}:preview-comment`,
       phase: phaseName,
     });
@@ -1083,15 +1093,14 @@ const waitFor = async (number, label, phaseName, head) => {
 };
 
 // After the first push a branch is never rewritten: a fix on one stacked branch is MERGED into each branch
-// above it (and the roll-up branch fast-forwards to the top), so every later push is a fast-forward.
-async function mergeForward(from, withRollup, label, phaseName) {
+// above it, so every later push is a fast-forward. The stack is not in review/<slug> yet: Rollup merges it later.
+async function mergeForward(from, label, phaseName) {
   const fromPr = stackOrder.find((x) => x.branch === from);
   const later = fromPr ? above(fromPr) : [];
   return sh(
     `Carry the fix on ${from} up the stack. In order, stop at the first failure (ok=false, failed_command):
   1. ${later.length ? `For each branch in order (${later.join(", ")}): \`git switch <branch>\`, then \`git merge --no-edit <the branch before it>\` (the first merges ${from}). On a conflict run \`git merge --abort\` and fail with that merge.` : "No branches above: skip."}
   2. ${later.length ? `For each of ${later.join(", ")}: \`git switch <branch>\`, \`bun run typecheck\`, \`bun run test\`.` : "Skip."}
-  3. ${withRollup ? `\`git switch review/${slug}\`, then \`git merge --ff-only ${stackOrder[stackOrder.length - 1].branch}\`.` : "Skip."}
 Never rebase, reset or push. Return ok and failed_command.`,
     { label, phase: phaseName, schema: obj({ ok: BOOL, failed_command: STR }) }
   );
@@ -1139,7 +1148,7 @@ ${(localDeclined.get(p.n) || []).length ? `The local review before push raised t
       log(`Greptile #${p.number}: no fix commits (${resp ? resp.comments.map((c) => c.action).join(", ") : "no result"})`);
       break;
     }
-    const mf = await mergeForward(p.branch, false, `greptile:forward:${p.n}:${round}`, "Greptile");
+    const mf = await mergeForward(p.branch, `greptile:forward:${p.n}:${round}`, "Greptile");
     if (!mf || !mf.ok) return { stopped: "Greptile", reason: `merging the fix on ${p.branch} forward failed: ${mf ? mf.failed_command : "no result"}`, prs: openPrs };
     const later = openPrs.filter((x) => x.n > p.n).map((x) => x.branch);
     const pushed = await sh(
@@ -1160,7 +1169,7 @@ if (fixesPushed) await checkAndWalk("greptile", "Greptile");
 phase("Rollup");
 
 let rollup = null;
-if (openPrs.length < 2) {
+if (!rollupBranch) {
   log("Rollup: skipped, a single PR is already the whole feature");
 } else {
   const rows = openPrs.map((p) => {
@@ -1175,7 +1184,7 @@ if (openPrs.length < 2) {
   const body = `# ${plan.title} (roll-up)
 
 ## What this is
-One PR with the whole feature, for human review. Each stacked PR below was reviewed on its own diff before the first push (the code-review skill, plus the security, scale, maintainability and Effect reviewers over the whole tree). Greptile reviews this roll-up only. Merge this one, then close them.
+One PR with the whole feature, for human review. Each stacked PR below was reviewed on its own diff before the first push (the code-review skill, plus the security, scale, maintainability and Effect reviewers over the whole tree), then merged into ${rollupBranch}. Greptile reviews this roll-up only. Merging this one lands the feature; nothing else to merge or close.
 
 | PR | Title | Local review rounds | Fixed | Declined | Advisory (P2/P3, not fixed) |
 |----|-------|---------------------|-------|----------|-----------------------------|
@@ -1185,46 +1194,64 @@ ${rows.join("\n")}
 ${verdictLines()}
 
 ## How to test
-${previewUrl ? `Preview of the top PR: ${previewUrl}` : "No preview deployed."}
+${previewUrl ? `This PR's own preview: the "Preview deployment" comment below (the stacked PRs' previews closed when they merged into ${rollupBranch}).` : "No preview deployed."}
 Fixture logins: copy the fixture logins line from ${outDir()}/pr-1.md (How to test).
 Locally: \`bun run db:seed && bun run dev\`
 
 ## Merge
-When Greptile scores this PR's current head 5/5 (or every remaining comment is declined with a reason): \`gh pr merge <this PR> --squash --match-head-commit <the sha Greptile reviewed>\`, then close the stacked PRs (${openPrs.map((p) => `#${p.number}`).join(", ")}).
+When Greptile scores this PR's current head 5/5 (or every remaining comment is declined with a reason): \`gh pr merge <this PR> --squash --match-head-commit <the sha Greptile reviewed>\`. The stacked PRs (${openPrs.map((p) => `#${p.number}`).join(", ")}) are already merged into ${rollupBranch}.
 ${issue ? `\nCloses ${issue.url}` : ""}
 `;
+  // One step for every GitHub write here, so the human approves them once. Merge commits, never squash:
+  // a squash would rewrite PR 1's commits and PR 2's diff would show them again.
   rollup = await sh(
-    `Open the roll-up PR for "${slug}". In order, stop at the first failure (ok=false, failed_command):
-  1. \`git fetch -q origin\`, \`git branch -f review/${slug} ${top.branch}\`, then \`git push -u origin review/${slug}\` (a plain push: .claude/settings.json denies --force, so if origin already has review/${slug} from an earlier run and this push is refused, fail with it).
-  2. Write this text byte for byte to ${outDir()}/rollup.md with a quoted heredoc. In it, replace the line starting "Fixture logins:" with the fixture logins line you find under "How to test" in ${outDir()}/pr-1.md (keep the "Fixture logins:" prefix).
+    `Merge the stacked PRs of "${slug}" into ${rollupBranch}, then open the roll-up PR. In order, stop at the first failure (ok=false, failed_command):
+  1. Write this text byte for byte to ${outDir()}/rollup.md with a quoted heredoc. In it, replace the line starting "Fixture logins:" with the fixture logins line you find under "How to test" in ${outDir()}/pr-1.md (keep the "Fixture logins:" prefix).
 ${fence("rollup.md", body)}
-  3. \`gh pr create --base ${BASE} --head review/${slug} --title ${shq(`${plan.title} (roll-up)`)} --body-file ${outDir()}/rollup.md\` -> number and url.
-  4. For each of ${openPrs.map((p) => `#${p.number}`).join(", ")}: \`gh pr comment <n> --body "Rolled up into #<roll-up number> for review; close this after it merges."\`
-Return ok, failed_command, number, url.`,
-    { label: "rollup:pr", phase: "Rollup", schema: obj({ ok: BOOL, failed_command: STR, number: NUM, url: STR }) }
+  2. For each PR in order (${openPrs.map((p) => `#${p.number} ${p.branch}`).join(", ")}):
+     a. \`gh pr edit <n> --base ${rollupBranch}\` (PR 1 targets it already, and GitHub may have retargeted the others; then it is a no-op).
+     b. \`gh pr merge <n> --merge --match-head-commit $(git rev-parse <branch>)\`. Never --squash, --rebase, --admin, --auto or --delete-branch. If GitHub says the PR is not mergeable yet or its base was just modified, wait 10 s and run it again, up to three times.
+     Record each merged PR's number in merged.
+  3. \`git fetch -q origin\`, then \`git diff --quiet origin/${rollupBranch} ${top.branch}\` must exit 0: ${rollupBranch} must hold exactly the top branch's tree.
+  4. \`git branch -f ${rollupBranch} origin/${rollupBranch}\`.
+  5. \`gh pr create --base ${BASE} --head ${rollupBranch} --title ${shq(`${plan.title} (roll-up)`)} --body-file ${outDir()}/rollup.md\` -> number and url.
+  6. For each of ${openPrs.map((p) => `#${p.number}`).join(", ")}: \`gh pr comment <n> --body "Merged into ${rollupBranch}; it lands on ${BASE} with the roll-up #<roll-up number>."\`
+Return ok, failed_command, merged, number, url.`,
+    { label: "rollup:pr", phase: "Rollup", schema: obj({ ok: BOOL, failed_command: STR, merged: arr(NUM), number: NUM, url: STR }, ["ok", "failed_command", "merged"]) }
   );
   if (!rollup || !rollup.ok) {
-    log(`Rollup failed: ${rollup ? rollup.failed_command : "no result"} — the stacked PRs stand`);
-    rollup = null;
-  } else {
-    log(`Rollup: ${rollup.url}`);
+    const merged = (rollup && rollup.merged) || [];
+    const rest = openPrs.filter((p) => !merged.includes(p.number));
+    // Step 5 may have opened the roll-up before a pointer comment failed: keep it, never open a second one.
+    const opened = rollup && rollup.number && rollup.url ? { number: rollup.number, url: rollup.url } : null;
+    const comment = `\`gh pr comment <n> --body "Merged into ${rollupBranch}; it lands on ${BASE} with the roll-up #${opened ? opened.number : "<roll-up number>"}."\``;
+    return {
+      stopped: "Rollup",
+      reason: rollup ? rollup.failed_command : "rollup returned nothing",
+      prs: openPrs,
+      merged_into_rollup: merged,
+      rollup: opened ? opened.url : null,
+      next: `${merged.length ? `Merged into ${rollupBranch}: ${merged.map((n) => `#${n}`).join(", ")}. ` : ""}${rest.length ? `Merge the rest in order: for each of ${rest.map((p) => `#${p.number}`).join(", ")}, \`gh pr edit <n> --base ${rollupBranch}\` then \`gh pr merge <n> --merge\`. ` : ""}${opened ? `The roll-up is open: ${opened.url}; do not create another.` : `Then open the roll-up: \`gh pr create --base ${BASE} --head ${rollupBranch} --title ${shq(`${plan.title} (roll-up)`)} --body-file ${outDir()}/rollup.md\`.`} On each stacked PR that lacks it, ${comment}. Then post "@greptileai review" on the roll-up.`,
+    };
   }
+  log(`Rollup: ${openPrs.length} stacked PRs merged into ${rollupBranch}; ${rollup.url}`);
 }
 
 // =============================================================================================
 phase("Roll-up Greptile");
 
-// Greptile reviews one PR per feature: the roll-up, or the single PR. A comment is fixed on the stacked branch
-// that owns its file, merged forward, and the roll-up branch fast-forwards; each round's GitHub writes
-// (pushes, replies, the next trigger) run in ONE step, so the human approves them once a round.
+// Greptile reviews one PR per feature: the roll-up, or the single PR. The stack is already merged into
+// review/<slug>, so a fix is a new commit on the target's branch, made inside the fence of the stacked PR that
+// owns the file; each round's GitHub writes (push, replies, the next trigger) run in ONE step, so the human
+// approves them once a round.
 const target = rollup
-  ? { number: rollup.number, url: rollup.url, branch: `review/${slug}`, rollup: true }
+  ? { number: rollup.number, url: rollup.url, branch: rollupBranch, rollup: true }
   : openPrs.length === 1
     ? { number: openPrs[0].number, url: openPrs[0].url, branch: openPrs[0].branch, rollup: false }
     : null;
 const rollupReview = { pr: target ? target.number : null, url: target ? target.url : null, status: "skipped", sha: "", confidence: null, rounds: [] };
-// Which stacked branch owns a path: its fence, else the last PR (it takes what no fence claims).
-const branchFor = (path) => (stackOrder.find((x) => covers(x.fence.map(norm), norm(path || ""))) || lastPr).branch;
+// Which stacked PR owns a path: its fence, else the last PR (it takes what no fence claims).
+const prFor = (path) => stackOrder.find((x) => covers(x.fence.map(norm), norm(path || ""))) || lastPr;
 if (!target) log("Roll-up Greptile: no roll-up PR to review (the roll-up failed to open); the stacked PRs were reviewed locally only");
 else if (ROLLUP_ROUNDS === 0) log("Roll-up Greptile: skipped (rollupRounds 0)");
 else {
@@ -1254,15 +1281,15 @@ else {
       log(`Roll-up Greptile #${target.number}: ${w.confidence ?? "n/a"}/5, no new comments${w.confidence === 5 ? "" : declinedBefore ? "; the remaining comments were declined with reasons" : "; no comment to act on, so not a pass: read the summary"}`);
       break;
     }
-    // Group the comments by the stacked branch that owns each file; fix lower branches first.
-    const groups = stackOrder.map((x) => ({ pr: x, cs: fresh.filter((c) => branchFor(c.path) === x.branch) })).filter((g) => g.cs.length);
-    let lowest = null;
+    // Group the comments by the stacked PR whose fence owns each file; each group's responder stays in that fence.
+    const groups = stackOrder.map((x) => ({ pr: x, cs: fresh.filter((c) => prFor(c.path).n === x.n) })).filter((g) => g.cs.length);
+    let fixed = false;
     const unanswered = [];
+    const sw = await sh(`\`git switch ${target.branch}\`. Return ok.`, { label: `rollup-greptile:switch:${round}`, phase: "Roll-up Greptile", schema: obj({ ok: BOOL }) });
+    if (!sw || !sw.ok) return { stopped: "Roll-up Greptile", reason: `could not switch to ${target.branch}`, prs: openPrs, rollupReview };
     for (const g of groups) {
-      const sw = await sh(`\`git switch ${g.pr.branch}\`. Return ok.`, { label: `rollup-greptile:switch:${g.pr.n}:${round}`, phase: "Roll-up Greptile", schema: obj({ ok: BOOL }) });
-      if (!sw || !sw.ok) return { stopped: "Roll-up Greptile", reason: `could not switch to ${g.pr.branch}`, prs: openPrs, rollupReview };
       const resp = await ask(
-        `LOCAL mode, replies deferred: Greptile's comments on PR #${target.number} (${target.url}) whose files belong to stacked branch ${g.pr.branch}, which is checked out. The workflow posts your replies on the PR's threads after it pushes, so do not call gh; put each reply in its comment's reply field. The branch's fence: ${g.pr.fence.join(", ")}. Its review focus: ${g.pr.greptile_focus}.
+        `LOCAL mode, replies deferred: Greptile's comments on PR #${target.number} (${target.url}) whose files fall in stacked PR ${g.pr.n}'s fence. Branch ${target.branch} is checked out; commit there. The workflow posts your replies on the PR's threads after it pushes, so do not call gh; put each reply in its comment's reply field. The fence: ${g.pr.fence.join(", ")}. Its review focus: ${g.pr.greptile_focus}.
 Confidence ${w.confidence ?? "n/a"}/5. Summary:
 ${fence("greptile summary", w.summary)}
 ${fence("greptile comments", g.cs.map((c) => `id ${c.id} — ${c.path}${c.line ? `:${c.line}` : ""} — ${c.url}\n${c.body}`).join("\n\n"))}
@@ -1278,23 +1305,18 @@ ${allDeclined.length ? `The local review declined these; answer a repeat the sam
         const srcC = g.cs.find((x) => String(x.id) === String(c.id));
         entry.replies.push({ id: c.id, comment: srcC ? describe(srcC) : `id ${c.id}`, action: c.action, reply: c.reply });
       }
-      if (resp.commits.length && !lowest) lowest = g.pr.branch;
+      if (resp.commits.length) fixed = true;
     }
     const last = round === ROLLUP_ROUNDS;
-    if (lowest) {
-      const mf = await mergeForward(lowest, target.rollup, `rollup-greptile:forward:${round}`, "Roll-up Greptile");
-      if (!mf || !mf.ok) return { stopped: "Roll-up Greptile", reason: `merging the fixes on ${lowest} forward failed: ${mf ? mf.failed_command : "no result"}`, prs: openPrs, rollupReview, next: "Nothing from this round was pushed. Merge the fix up the stack by hand, then push." };
-    }
     // One step for every GitHub write of the round: one approval, not one per PR.
     const replies = `${outDir()}/rollup-replies-${round}.json`;
-    const pushList = lowest ? [lowest, ...above(stackOrder.find((x) => x.branch === lowest)), ...(target.rollup ? [`review/${slug}`] : [])] : [];
     const wrote = await sh(
       `Every GitHub write of roll-up round ${round}, in order; stop at the first failure (ok=false, failed_command):
   1. Write this JSON byte for byte to ${replies} with a quoted heredoc whose delimiter is REPLIES_JSON_EOF, then check it parses (\`bun -e 'JSON.parse(await Bun.file(process.argv[1]).text())' ${replies}\`):
 ${fence("replies json", JSON.stringify(entry.replies.map((r) => ({ id: r.id, reply: r.reply }))))}
-  2. ${pushList.length ? `\`git push origin ${pushList.join(" ")}\` (fast-forwards only; never --force).` : "Nothing to push."}
+  2. ${fixed ? `\`git push origin ${target.branch}\` (a fast-forward; never --force).` : "Nothing to push."}
   3. For each entry: write its reply to a temp file, then \`gh api repos/{owner}/{repo}/pulls/${target.number}/comments/<id>/replies -F body=@<temp file>\`.
-  4. ${lowest && !last ? `\`gh pr comment ${target.number} --body "@greptileai review"\`.` : "No re-trigger."}
+  4. ${fixed && !last ? `\`gh pr comment ${target.number} --body "@greptileai review"\`.` : "No re-trigger."}
 Return ok, failed_command, and head = \`git rev-parse ${target.branch}\`.`,
       { label: `rollup-greptile:write:${round}`, phase: "Roll-up Greptile", schema: obj({ ok: BOOL, failed_command: STR, head: STR }, ["ok", "failed_command"]) }
     );
@@ -1307,7 +1329,7 @@ Return ok, failed_command, and head = \`git rev-parse ${target.branch}\`.`,
       log(`Roll-up Greptile #${target.number}: ${unanswered.length} comment(s) got no response — not a pass`);
       break;
     }
-    if (!lowest) {
+    if (!fixed) {
       rollupReview.status = "declined";
       log(`Roll-up Greptile #${target.number}: ${w.confidence ?? "n/a"}/5; every comment declined with a reason, nothing to fix`);
       break;
@@ -1318,8 +1340,9 @@ Return ok, failed_command, and head = \`git rev-parse ${target.branch}\`.`,
       log(`Roll-up Greptile #${target.number}: fixes from round ${round} are pushed but not reviewed; re-trigger by hand`);
     }
   }
-  await sh(`\`git switch ${top.branch}\`.`, { label: "rollup-greptile:home", phase: "Roll-up Greptile" });
-  if (fixesPushed) await checkAndWalk("rollup-greptile", "Roll-up Greptile");
+  // The stacked PRs are merged, so the fixes are on the target alone: watch it, and walk its own preview.
+  // Close does this for the roll-up, at its final head, fixes or not.
+  if (fixesPushed && !rollup) await checkAndWalk("rollup-greptile", "Roll-up Greptile", [target], target);
 }
 const rollupPassed = rollupReview.status === "passed" || rollupReview.status === "declined";
 
@@ -1327,14 +1350,11 @@ const rollupPassed = rollupReview.status === "passed" || rollupReview.status ===
 phase("Close");
 
 // The roll-up is the PR that merges, and it runs its own CI: the stacked PRs' checks do not stand in for it.
+// Its preview is the only one left: the stacked PRs' previews closed when they merged into review/<slug>, so
+// walk it here, or the verdict would describe a preview that no longer exists.
 if (rollup) {
-  const rc = await sh(
-    `Wait for CI on the roll-up PR #${rollup.number}: \`gh pr checks ${rollup.number} --watch\` with a 600000 ms Bash timeout; if the tool times out first, run it again, up to three times; if it reports no checks yet, wait 30 s and run it again, up to five times. Return checks [{ name, state }].`,
-    { label: "close:rollup-checks", phase: "Close", schema: obj({ checks: arr(obj({ name: STR, state: STR })) }) }
-  );
-  const red = rc ? rc.checks.filter(isRed).map((c) => `#${rollup.number} ${c.name}`) : [`#${rollup.number} checks (could not read them)`];
-  if (red.length) log(`Roll-up red checks: ${red.join(", ")}`);
-  redChecks = [...redChecks, ...red];
+  await checkAndWalk("close", "Close", [target], target);
+  if (!checks) redChecks = [`#${rollup.number} checks (could not read them)`];
 }
 
 const open = blocking(allFindings());
@@ -1354,10 +1374,10 @@ const rollupLine = !target
     : `Greptile on #${target.number} did not pass (${rollupReview.status}); re-trigger it with "@greptileai review" and loop to 5/5 before merging`;
 const memory = await ask(
   `Mode: record. Slug: ${slug}. Status: in review.
-Where it stopped: ship-feature finished. PRs open: ${openPrs.map((p) => `#${p.number} ${p.url}`).join("; ")}. Merge them in order.${rollup ? ` Roll-up PR for the human: #${rollup.number} ${rollup.url} (merge it, then close the stacked PRs).` : ""}
+Where it stopped: ship-feature finished. ${rollup ? `Stacked PRs merged into ${rollupBranch}: ${openPrs.map((p) => `#${p.number} ${p.url}`).join("; ")}. Roll-up PR for the human: #${rollup.number} ${rollup.url}; merging it lands the feature.` : `PR open: #${openPrs[0].number} ${openPrs[0].url}.`}
 Links: ${issue ? `issue ${issue.url}; ` : ""}${previewUrl ? `preview ${previewUrl}; ` : ""}${pre.record_path ? `record docs/features/${slug}.md (PR 1).` : ""}
 Decisions (${DATE}): built from ${pre.record_path ? "the plan-feature decision record" : `the ticket directly (auditor: ${audit ? audit.verdict : "n/a"}${input.ready === "override" ? ", overridden by the human" : ""})`}.${architect ? ` Architecture: ${architect.decisions.map((d) => `${d.question} → ${d.chosen} (${d.why})`).join("; ")}.` : ""}
-Todo: ${open.length ? `${open.length} P0/P1 still open: ${open.map((f) => `${f.source} ${f.file}: ${f.detail.split("\n")[0]}`).join("; ")}; ` : ""}${shipReel && !shipReel.passed ? `smoke videos failed and were accepted at the ship review: ${shipReel.reason}; ` : ""}${redChecks.length ? `red checks: ${redChecks.join(", ")}; ` : ""}${localBlocked.length ? `local review fixes not made: ${localBlocked.join("; ")}; ` : ""}${rollupBlocked.length ? `roll-up review fixes not made: ${rollupBlocked.join("; ")}; ` : ""}${localOpen.length ? `local P0/P1 still open: ${localOpen.join("; ")}; ` : ""}${rollupLine}; ${mergeCmd ? `merge with \`${mergeCmd}\`` : "merge after Greptile passes"}${rollup ? ", then close the stacked PRs" : ""}.
+Todo: ${open.length ? `${open.length} P0/P1 still open: ${open.map((f) => `${f.source} ${f.file}: ${f.detail.split("\n")[0]}`).join("; ")}; ` : ""}${shipReel && !shipReel.passed ? `smoke videos failed and were accepted at the ship review: ${shipReel.reason}; ` : ""}${redChecks.length ? `red checks: ${redChecks.join(", ")}; ` : ""}${localBlocked.length ? `local review fixes not made: ${localBlocked.join("; ")}; ` : ""}${rollupBlocked.length ? `roll-up review fixes not made: ${rollupBlocked.join("; ")}; ` : ""}${localOpen.length ? `local P0/P1 still open: ${localOpen.join("; ")}; ` : ""}${rollupLine}; ${mergeCmd ? `merge with \`${mergeCmd}\`` : "merge after Greptile passes"}.
 Next step: human review of ${rollup ? rollup.url : openPrs[0].url}.`,
   { label: "memory:record", phase: "Close", agentType: "context-memory", effort: "low" }
 );
@@ -1382,7 +1402,7 @@ return {
   analytics: instr.events || null,
   memory,
   // Merge bar item 1: Greptile passing does not excuse a red check; say so next to the merge command.
-  next: `${rollupLine}.${redChecks.length ? ` Red checks: ${redChecks.join(", ")}; the merge bar needs them green, so fix or re-run them before merging.` : ""} ${mergeCmd ? `Review ${target.url}, then merge with \`${mergeCmd}\`${rollup ? " and close the stacked PRs" : ""}.` : rollup ? `Review the roll-up ${rollup.url}; merge it once Greptile passes, then close the stacked PRs.` : `Review ${openPrs[0].url}; merge it once Greptile passes.`}${open.length ? ` ${open.length} P0/P1 were accepted open at the ship review.` : ""}${localOpen.length ? ` Local review left P0/P1 unanswered (${localOpen.join("; ")}); the merge bar needs none open.` : ""}${shipReel && !shipReel.passed ? ` The smoke videos failed (${shipReel.reason}) and were accepted at the ship review.` : ""}`,
+  next: `${rollupLine}.${redChecks.length ? ` Red checks: ${redChecks.join(", ")}; the merge bar needs them green, so fix or re-run them before merging.` : ""} ${mergeCmd ? `Review ${target.url}, then merge with \`${mergeCmd}\`.` : rollup ? `Review the roll-up ${rollup.url}; merge it once Greptile passes.` : `Review ${openPrs[0].url}; merge it once Greptile passes.`}${rollup ? ` The stacked PRs are already merged into ${rollupBranch}; nothing to close.` : ""}${open.length ? ` ${open.length} P0/P1 were accepted open at the ship review.` : ""}${localOpen.length ? ` Local review left P0/P1 unanswered (${localOpen.join("; ")}); the merge bar needs none open.` : ""}${shipReel && !shipReel.passed ? ` The smoke videos failed (${shipReel.reason}) and were accepted at the ship review.` : ""}`,
 };
 
 } catch (e) {
