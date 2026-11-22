@@ -92,14 +92,14 @@
     "next_page": "转到下一页",
     "last_page": "转到最后一页",
     "toasts": {
-      "impersonate_success": "正在模拟登录 {{name}}",
-      "impersonate_error": "模拟登录 {{name}} 失败",
-      "ban_success": "用户 {{name}} 已被封禁",
-      "ban_error": "封禁用户 {{name}} 失败",
-      "unban_success": "用户 {{name}} 已解除封禁",
-      "unban_error": "解除封禁用户 {{name}} 失败",
-      "role_update_success": "{{name}} 的角色已更新为 {{role}}",
-      "role_update_error": "更新 {{name}} 的角色失败"
+      "impersonate_success": "正在模拟登录 {{- name}}",
+      "impersonate_error": "模拟登录 {{- name}} 失败",
+      "ban_success": "用户 {{- name}} 已被封禁",
+      "ban_error": "封禁用户 {{- name}} 失败",
+      "unban_success": "用户 {{- name}} 已解除封禁",
+      "unban_error": "解除封禁用户 {{- name}} 失败",
+      "role_update_success": "{{- name}} 的角色已更新为 {{role}}",
+      "role_update_error": "更新 {{- name}} 的角色失败"
     }
   }
 }
