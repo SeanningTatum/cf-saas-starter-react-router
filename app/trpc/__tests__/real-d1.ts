@@ -2,6 +2,8 @@ import { readdirSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import type { AppLoadContext } from "react-router";
 import { getPlatformProxy } from "wrangler";
+import { Effect } from "effect";
+import { resolveAuthConfig } from "@/auth/config";
 import { createAuth } from "@/auth/server";
 import { makeAppRuntime } from "@/runtime";
 import { createCallerFactory, createTRPCContext } from "@/trpc";
@@ -52,14 +54,15 @@ export const startRealApp = async () => {
     for (const statement of statements) await db.prepare(statement).run();
   }
 
-  // The proxy has no secret, and Better Auth needs one.
   const env = {
     ...proxy.env,
     BETTER_AUTH_SECRET: "real-d1-test-secret-0123456789abcdef0123456789",
+    BETTER_AUTH_URL: BASE_URL,
   } as unknown as Env;
 
-  const auth = createAuth(env.DATABASE, env.BETTER_AUTH_SECRET, BASE_URL);
-  const runtime = makeAppRuntime(env, BASE_URL);
+  const authOptions = { dev: false };
+  const auth = createAuth(env.DATABASE, Effect.runSync(resolveAuthConfig(env, authOptions)));
+  const runtime = makeAppRuntime(env, authOptions);
   const loadContext = { auth } as unknown as AppLoadContext;
 
   const signUp = async (email: string): Promise<Account> => {

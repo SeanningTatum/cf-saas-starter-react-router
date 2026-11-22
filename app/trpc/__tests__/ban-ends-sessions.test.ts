@@ -261,3 +261,73 @@ describe("a ban ends the user's sessions at once", { timeout: 60_000 }, () => {
     expect(await bannedFlag(victim.userId)).toBe(1);
   });
 });
+
+const banExpiresOf = async (userId: string) =>
+  (
+    await app.db
+      .prepare("SELECT ban_expires AS banExpires FROM user WHERE id = ?")
+      .bind(userId)
+      .first<{ banExpires: number | null }>()
+  )?.banExpires;
+
+const moveBanExpiryIntoPast = (userId: string) =>
+  app.db
+    .prepare("UPDATE user SET ban_expires = ? WHERE id = ?")
+    .bind(Date.parse("2000-01-01T00:00:00Z"), userId)
+    .run();
+
+const timedBetterAuthBan = (userId: string) =>
+  app.auth.api.banUser({ body: { userId, banExpiresIn: 3600 }, headers: admin.headers });
+
+type ReBanRoad = {
+  name: string;
+  firstBan: (userId: string) => Promise<unknown>;
+  banAgain: (userId: string) => Promise<unknown>;
+};
+
+const RE_BAN_ROADS: ReBanRoad[] = [
+  {
+    name: "tRPC admin.updateUser",
+    firstBan: async (userId) =>
+      (await callerFor(admin.headers)).admin.updateUser({
+        userId,
+        data: { banned: true, banExpires: new Date("2999-01-01T00:00:00Z") },
+      }),
+    banAgain: async (userId) =>
+      (await callerFor(admin.headers)).admin.updateUser({ userId, data: { banned: true } }),
+  },
+  {
+    name: "Better Auth /admin/ban-user",
+    firstBan: timedBetterAuthBan,
+    banAgain: (userId) => app.auth.api.banUser({ body: { userId }, headers: admin.headers }),
+  },
+  {
+    name: "Better Auth /admin/update-user",
+    firstBan: timedBetterAuthBan,
+    banAgain: (userId) =>
+      app.auth.api.adminUpdateUser({
+        body: { userId, data: { banned: true } },
+        headers: admin.headers,
+      }),
+  },
+];
+
+describe("a new ban with no expiry replaces an old expiry", { timeout: 60_000 }, () => {
+  it.each(RE_BAN_ROADS.map((road, i) => ({ ...road, email: `re-ban${i + 1}@ban.test` })))(
+    "$name: a re-ban after a past expiry stores no expiry, so the next sign-in is refused",
+    async ({ firstBan, banAgain, email }) => {
+      const victim = await signUp(email);
+      await firstBan(victim.userId);
+      await moveBanExpiryIntoPast(victim.userId);
+
+      await banAgain(victim.userId);
+
+      expect(await banExpiresOf(victim.userId)).toBeNull();
+      expect(await signInRefusal(victim.email)).toMatchObject({
+        statusCode: 403,
+        body: { code: "BANNED_USER" },
+      });
+      expect(await sessionRows(victim.userId)).toBe(0);
+    }
+  );
+});
