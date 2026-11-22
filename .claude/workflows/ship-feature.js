@@ -111,6 +111,8 @@ const CHECKLIST_IDS = ["problem", "user", "fit", "duplicate", "acceptance", "non
 const isP0P1 = (f) => f.severity === "P0" || f.severity === "P1";
 
 // ---- Prompt pieces ------------------------------------------------------------------------------
+/** The trailer on every commit a workflow asks an agent to make. Written here and nowhere else. */
+const COAUTHOR = "Co-Authored-By: Claude Fable 5.2 <noreply@anthropic.com>";
 /** Makes a `fence(label, text)` that wraps untrusted text in DATA markers; `note` goes after the label on the opening marker. */
 const makeFence = (note = "") => (label, text) => `----- DATA: ${label}${note} -----\n${text}\n----- END DATA: ${label} -----`;
 /** The preflight step that names the checkout: the caller's `args.root`, else the launch directory's git root. */
@@ -266,7 +268,6 @@ const BASE = input.base || "main";
 const shq = (v) => `'${String(v).replace(/'/g, `'\\''`)}'`;
 const REVIEW_ROUNDS = Math.max(0, Math.min(3, input.reviewRounds ?? 2));
 const ROLLUP_ROUNDS = Math.max(0, Math.min(5, input.rollupRounds ?? 3));
-const COAUTHOR = "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>";
 // The e2e dev server must not collide with another on 5173 (a second checkout, another project's dev server):
 // every gate or e2e run gets a free port. playwright.config.ts reads E2E_PORT.
 const E2E_ENV = `E2E_PORT=$(bun -e 'const s=Bun.listen({hostname:"localhost",port:0,socket:{data(){}}});console.log(s.port);s.stop(true)')`;
@@ -983,7 +984,7 @@ for (; shipRound <= 3; shipRound++) {
       overlaps: assignment ? assignment.overlaps : [],
       verdicts: `${verdictLines()}${reelLine}`,
       open_findings: open,
-      other_findings: allFindings().filter((f) => !open.includes(f)),
+      other_findings: allFindings().filter((f) => !isP0P1(f)),
       blocked: blockedNotes,
       analytics: instrEvents,
       e2e: e2eOut,

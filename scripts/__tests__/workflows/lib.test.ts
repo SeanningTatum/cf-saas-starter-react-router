@@ -16,6 +16,7 @@ import {
   haltOrThrow,
   workflowLib,
   memoryRecordCommand,
+  COAUTHOR,
   // lib.js is plain JavaScript: a workflow script pastes it in, so it carries no types
 } from "../../../.claude/workflow-src/lib.js";
 import { stripLib } from "../../workflows";
@@ -317,5 +318,16 @@ describe("lib.js as text", () => {
       expect(r).toBeNull();
       expect(logs).toHaveLength(2);
     });
+  });
+});
+
+describe("COAUTHOR", () => {
+  const SRC_DIR = dirname(LIB_PATH);
+
+  it("no workflow source names a co-author of its own (catches a second copy that goes stale when the model changes)", () => {
+    const sources = ["plan-feature", "ship-feature", "brand-init", "eval-plan-feature"];
+    const namedCoauthor = /Co-Authored-By: [^<$`\n]+<[^>\s]+@/i;
+    const withLiteral = sources.filter((name) => namedCoauthor.test(readFileSync(join(SRC_DIR, `${name}.js`), "utf8")));
+    expect(withLiteral).toEqual([]);
   });
 });
