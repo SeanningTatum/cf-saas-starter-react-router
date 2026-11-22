@@ -407,7 +407,7 @@ The Action also comments the URL (and a per-commit version URL) on the PR.
 
 **Data isolation** — each PR gets its **own D1 database** (`<name>-db-pr-<N>`). On PR open (and every push), [`scripts/ci/setup-preview-db.ts`](scripts/ci/setup-preview-db.ts) creates the database if needed and patches the CI checkout's `wrangler.jsonc` to point the preview `DATABASE` binding at it (the patch is never committed); CI then applies migrations **and seeds fixtures** ([`scripts/seed-preview.ts`](scripts/seed-preview.ts) `--preview`) before uploading the version, so every preview URL has representative, logged-in-ready data from the first push. On PR close, [`.github/workflows/preview-cleanup.yml`](.github/workflows/preview-cleanup.yml) deletes that database. The preview **R2 bucket is shared** across all PR previews — not per-PR, because wrangler can't delete non-empty buckets, so per-PR buckets would accumulate as orphans. `bun run teardown` also sweeps up any leftover `-db-pr-*` databases.
 
-**Test accounts** — every preview and local D1 gets the same three fixtures (`bun run db:seed` / `bun run db:seed:preview`, password `Password123!` for all):
+**Test accounts** — every preview and local D1 gets the same three fixtures:
 
 | Email | Role | Notes |
 |-------|------|-------|
@@ -415,15 +415,13 @@ The Action also comments the URL (and a per-commit version URL) on the PR.
 | `user@preview.local` | user | regular account |
 | `banned@preview.local` | user | `banned = true`, for testing the ban UI |
 
+Local D1 (`bun run db:seed`) uses the password `Password123!`, for local use only. A preview never uses it: see [Preview passwords](docs/ci/pipelines.md#preview-passwords).
+
 Seeding is idempotent (`INSERT OR IGNORE` on fixed `seed-*` ids) — safe to rerun on every PR synchronize. New tables/features must extend these fixtures.
 
 > **Free plan note:** Cloudflare's D1 free plan caps you at 10 databases, so per-PR databases assume a paid plan. On the free plan, revert the "Provision per-PR D1" step in `preview.yml` back to migrating the shared `<name>-db-preview` database (a one-line change).
 
-**One-time enablement for your repo** — previews ship disabled. To turn them on:
-
-1. Set the repo **variable** `CLOUDFLARE_ACCOUNT_ID` (Settings → Secrets and variables → Actions → Variables tab).
-2. Set the repo **secret** `CLOUDFLARE_API_TOKEN` (same page → Secrets tab), created from the "Edit Cloudflare Workers" API token template plus `D1:Edit` added (migrations need it).
-3. `bun run setup` already provisions the `preview` Worker/R2 resources (plus the shared `-db-preview` D1 used for manual preview work) alongside production; per-PR D1 databases are created automatically by CI — there's nothing else to create.
+**Turning previews and deploys on** — both ship disabled and end as skipped (not failed) until you set up your Cloudflare account. Every variable and secret, the steps to set each one, and how to create the two API tokens are in [`docs/ci/pipelines.md`](docs/ci/pipelines.md). `bun run setup` already provisions the `preview` Worker/R2 resources (plus the shared `-db-preview` D1 used for manual preview work) alongside production; per-PR D1 databases are created automatically by CI.
 
 **Manual commands** — useful for a one-off preview without opening a PR:
 

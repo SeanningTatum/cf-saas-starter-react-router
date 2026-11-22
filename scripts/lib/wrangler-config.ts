@@ -96,6 +96,11 @@ export function buildWranglerConfig(input: WranglerConfigInput): object {
   };
 }
 
+/** wrangler.jsonc text without its whole-line `//` comments, ready for JSON.parse. */
+export function stripJsonc(text: string): string {
+  return text.replace(/^\s*\/\/.*$/gm, "");
+}
+
 /**
  * Writes the given config object to the repo-root wrangler.jsonc, prefixed
  * with a header comment explaining that the file is generated/restored by
