@@ -23,15 +23,9 @@
  * `gh`, `sleep` and the clock are injected (`Deps`), so the tests run with no network and no waiting.
  * Lists use `gh api --paginate`; the parser takes a JSON array, concatenated arrays or one object per line.
  */
-import { spawnSync } from "node:child_process";
+import { ghSpawn, type GhResult, type GhRunner } from "./lib/gh";
 
-export interface GhResult {
-  code: number;
-  stdout: string;
-  stderr: string;
-}
-/** Runs `gh <args>` and reports what happened. Never throws. */
-export type GhRunner = (args: string[]) => GhResult;
+export type { GhResult };
 
 export interface Deps {
   gh: GhRunner;
@@ -62,11 +56,7 @@ const ghFailure = (r: GhResult, what: string): Outcome =>
   );
 
 export const defaultDeps: Deps = {
-  gh: (args) => {
-    const r = spawnSync("gh", args, { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
-    if (r.error) return { code: 127, stdout: "", stderr: `cannot run gh: ${r.error.message}` };
-    return { code: r.status ?? 1, stdout: r.stdout ?? "", stderr: r.stderr ?? "" };
-  },
+  gh: ghSpawn,
   sleep: (ms) => new Promise((res) => setTimeout(res, ms)),
   now: () => Date.now(),
 };
