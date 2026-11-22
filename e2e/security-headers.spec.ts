@@ -2,13 +2,12 @@ import {
   test,
   expect,
   type APIResponse,
-  type BrowserContext,
   type Locator,
   type Page,
   type Response,
 } from "@playwright/test";
-import path from "node:path";
 import { securityHeaders } from "../workers/security-headers";
+import { useAdminSessionSignedInOncePerFile } from "./lib/admin-session";
 
 /**
  * Security headers and the nonce CSP (issue #72), on the pages a user sees.
@@ -29,7 +28,6 @@ import { securityHeaders } from "../workers/security-headers";
  */
 
 const DOC = "docs/security-headers.md";
-const AUTH = path.join("test-results", ".auth", "security-headers-admin.json");
 
 type Violation = { directive: string; blocked: string; sample: string };
 
@@ -193,27 +191,9 @@ test.describe("Security headers, signed out", () => {
   });
 });
 
-// Sign in through the Better Auth API, not the form: on a cold dev server the
-// form can be submitted before hydration and the login silently fails.
-const login = async (context: BrowserContext, baseURL: string) => {
-  const res = await context.request.post("/api/auth/sign-in/email", {
-    headers: { Origin: baseURL },
-    data: { email: "admin@preview.local", password: "Password123!" },
-  });
-  expect(res.ok(), `sign-in returned ${res.status()}`).toBe(true);
-};
-
 test.describe("Security headers, signed in as admin", () => {
-  // One login for the file, in one worker: a login per test trips Better
-  // Auth's sign-in rate limit. The admin can open /dashboard too.
-  test.describe.configure({ mode: "default" });
-  test.use({ storageState: AUTH });
-  test.beforeAll(async ({ browser, baseURL }) => {
-    const context = await browser.newContext({ storageState: undefined, baseURL });
-    await login(context, baseURL ?? "");
-    await context.storageState({ path: AUTH });
-    await context.close();
-  });
+  // The admin can open /dashboard too.
+  useAdminSessionSignedInOncePerFile("security-headers");
 
   const sidebarToggle = (p: Page) => p.getByRole("button", { name: "Toggle Sidebar" }).first();
 
