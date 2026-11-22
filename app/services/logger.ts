@@ -9,6 +9,7 @@ import {
   Tracer,
 } from "effect";
 import { emitLog, isDev, type LogLevel as AppLogLevel } from "@/lib/log-format";
+import { CurrentRequest, requestLogFields } from "@/lib/request-context";
 
 export const toAppLevel = (level: LogLevel.LogLevel): AppLogLevel => {
   switch (level._tag) {
@@ -52,8 +53,26 @@ export const currentSpanAnnotations = (
   return { traceId: span.value.traceId, spanId: span.value.spanId };
 };
 
+/**
+ * Reads the request (`CurrentRequest`, provided by the per-request runtime)
+ * out of the log event's fiber context, so every Effect log carries the
+ * request id, and the user id once the session has resolved. Read from the
+ * fiber, not from the async-local store: Effect's scheduler is shared across
+ * requests, so a fiber can resume inside another request's async context.
+ */
+export const currentRequestAnnotations = (
+  context: FiberRefs.FiberRefs
+): { requestId?: string; userId?: string } => {
+  const fiberContext = FiberRefs.getOrDefault(context, FiberRef.currentContext);
+  const request = Context.getOption(fiberContext, CurrentRequest);
+  return requestLogFields(Option.getOrUndefined(request));
+};
+
 const customLogger = Logger.make(({ logLevel, message, annotations, context }) => {
-  const ann: Record<string, unknown> = currentSpanAnnotations(context);
+  const ann: Record<string, unknown> = {
+    ...currentSpanAnnotations(context),
+    ...currentRequestAnnotations(context),
+  };
   HashMap.forEach(annotations, (value, key) => {
     ann[key] = value;
   });
