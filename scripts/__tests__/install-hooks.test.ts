@@ -19,6 +19,8 @@ const REPO_ROOT = path.resolve(__dirname, "..", "..");
 const FAKE_ROOT = "/fake/checkout";
 const HOOKS_PATH = ".husky/_";
 const REAL_GIT_TIMEOUT_MS = 60_000;
+
+vi.setConfig({ testTimeout: REAL_GIT_TIMEOUT_MS });
 const EXECUTABLE_BITS = 0o777;
 const BAD_MESSAGE = "this message has no type";
 const GOOD_MESSAGE = "feat(ui): add a thing";
