@@ -1,6 +1,6 @@
 import { Either, Schema } from "effect";
 import { describe, it, expect } from "vitest";
-import { Config, hasOldShape } from "../lib/repo-rules-schemas";
+import { Config, hasOldShape } from "../repo-rules-schemas";
 
 const ruleset = {
   name: "r",

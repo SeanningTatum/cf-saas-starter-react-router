@@ -3,8 +3,8 @@ import {
   differ,
   rulesetDiffs,
   stable,
-} from "../lib/repo-rules-diff";
-import type { LiveRulesetT, Ruleset } from "../lib/repo-rules-schemas";
+} from "../repo-rules-diff";
+import type { LiveRulesetT, Ruleset } from "../repo-rules-schemas";
 
 const declared: Ruleset = {
   name: "production",
