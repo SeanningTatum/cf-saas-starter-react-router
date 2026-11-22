@@ -1,159 +1,191 @@
-import { useState, useRef, useEffect, type DragEvent, type ChangeEvent } from "react";
-import { useFetcher } from "react-router";
+import { useEffect, useRef, type ChangeEvent, type DragEvent, type KeyboardEvent } from "react";
+import { useMachine } from "@xstate/react";
 import { useTranslation } from "react-i18next";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
-import type { action } from "@/routes/api/upload-file";
+import { fileUploadMachine, type UploadFailure } from "./file-upload.machine";
 
 interface FileUploadProps {
   onUploadSuccess?: (key: string) => void;
   onUploadError?: (error: string) => void;
   accept?: string;
-  maxSize?: number; // in bytes
+  /** In bytes. Read once, when the component mounts. */
+  maxSize?: number;
   className?: string;
 }
 
+const toMB = (bytes: number) => (bytes / 1024 / 1024).toFixed(0);
+
+// React escapes text already; i18next's own escaping turns "/" in a key or "&"
+// in a file name into &#x2F; and &amp; on screen.
+const raw = { interpolation: { escapeValue: false } } as const;
+
+// "image/png,image/jpeg" has no break points and overflows a phone-width zone.
+const formatList = (accept: string) =>
+  accept
+    .split(",")
+    .map((f) => f.trim())
+    .filter(Boolean)
+    .join(", ");
+
+/**
+ * Drop zone that uploads one file to /api/upload-file. Its behaviour lives in
+ * file-upload.machine.ts; this component only renders the machine's state and
+ * forwards DOM events to it. `data-state` on the root mirrors that state.
+ */
 export function FileUpload({
   onUploadSuccess,
   onUploadError,
   accept,
-  maxSize = 10 * 1024 * 1024, // 10MB default
+  maxSize = 10 * 1024 * 1024,
   className,
 }: FileUploadProps) {
   const { t } = useTranslation("upload");
-  const [isDragging, setIsDragging] = useState(false);
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [snapshot, send, actorRef] = useMachine(fileUploadMachine, { input: { maxSize } });
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const fetcher = useFetcher<typeof action>();
+  const { file, key, error } = snapshot.context;
+  const limit = toMB(snapshot.context.maxSize);
 
-  const validateFile = (file: File): string | null => {
-    if (maxSize && file.size > maxSize) {
-      return t("size_limit_exceeded", { size: (maxSize / 1024 / 1024).toFixed(0) });
+  const describe = (failure: UploadFailure): string => {
+    switch (failure.reason) {
+      case "too_big":
+        return t("size_limit_exceeded", { size: limit });
+      case "rejected":
+        return failure.message;
+      case "unreachable":
+        return t("unreachable");
     }
-    return null;
   };
 
-  // Handle fetcher results — the action returns { success: true, key } or
-  // { success: false, error } on every branch (401/400/500 included)
   useEffect(() => {
-    if (!fetcher.data) return;
-    if (fetcher.data.success) {
-      onUploadSuccess?.(fetcher.data.key);
-    } else {
-      const errorMessage = fetcher.data.error || t("failed");
-      setError(errorMessage);
-      onUploadError?.(errorMessage);
-    }
-  }, [fetcher.data, onUploadSuccess, onUploadError, t]);
+    const uploaded = actorRef.on("uploaded", (e) => onUploadSuccess?.(e.key));
+    const failed = actorRef.on("failed", (e) => onUploadError?.(describe(e.error)));
+    return () => {
+      uploaded.unsubscribe();
+      failed.unsubscribe();
+    };
+    // describe only reads t and the size limit, both listed here.
+  }, [actorRef, onUploadSuccess, onUploadError, t, limit]);
 
-  const handleFile = (file: File) => {
-    setError(null);
-
-    const validationError = validateFile(file);
-    if (validationError) {
-      setError(validationError);
-      onUploadError?.(validationError);
-      return;
-    }
-
-    setSelectedFile(file);
-
-    const formData = new FormData();
-    formData.append("file", file);
-
-    fetcher.submit(formData, {
-      method: "POST",
-      action: "/api/upload-file",
-      encType: "multipart/form-data",
-    });
-  };
+  const openPicker = () => fileInputRef.current?.click();
 
   const handleDragOver = (e: DragEvent<HTMLDivElement>) => {
     e.preventDefault();
-    setIsDragging(true);
+    send({ type: "DRAG_ENTER" });
   };
 
   const handleDragLeave = (e: DragEvent<HTMLDivElement>) => {
     e.preventDefault();
-    setIsDragging(false);
+    // dragleave also fires when the pointer moves onto a child of the zone.
+    if (e.relatedTarget instanceof Node && e.currentTarget.contains(e.relatedTarget)) return;
+    send({ type: "DRAG_LEAVE" });
   };
 
   const handleDrop = (e: DragEvent<HTMLDivElement>) => {
     e.preventDefault();
-    setIsDragging(false);
+    const dropped = e.dataTransfer.files[0];
+    if (dropped) send({ type: "PICK", file: dropped });
+    else send({ type: "DRAG_LEAVE" });
+  };
 
-    const files = e.dataTransfer.files;
-    if (files.length > 0) {
-      handleFile(files[0]);
+  const handleInputChange = (e: ChangeEvent<HTMLInputElement>) => {
+    const picked = e.target.files?.[0];
+    // Clear the input so picking the same file again still fires change.
+    e.target.value = "";
+    if (picked) send({ type: "PICK", file: picked });
+  };
+
+  const handleKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      openPicker();
     }
   };
 
-  const handleFileInputChange = (e: ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (files && files.length > 0) {
-      handleFile(files[0]);
-    }
-  };
+  const reset = () => send({ type: "RESET" });
 
-  const handleBrowseClick = () => {
-    fileInputRef.current?.click();
-  };
-
-  const handleReset = () => {
-    setSelectedFile(null);
-    setError(null);
-    if (fileInputRef.current) {
-      fileInputRef.current.value = "";
-    }
-  };
-
-  const isUploading = fetcher.state === "submitting" || fetcher.state === "loading";
-  const uploadedKey = fetcher.data?.success ? fetcher.data.key : undefined;
+  const uploading = snapshot.matches("uploading");
+  const dragging = snapshot.matches("dragging");
 
   return (
-    <div className={cn("w-full", className)}>
+    <div
+      className={cn("w-full", className)}
+      data-testid="file-upload"
+      data-state={String(snapshot.value)}
+    >
       <input
         ref={fileInputRef}
         type="file"
-        onChange={handleFileInputChange}
+        onChange={handleInputChange}
         accept={accept}
         className="hidden"
         aria-label={t("file_input_label")}
+        data-testid="file-upload-input"
       />
 
-      {!uploadedKey ? (
+      {snapshot.matches("success") ? (
         <div
+          role="status"
+          className="flex flex-col items-center justify-center w-full h-64 px-4 border-2 border-primary/60 bg-primary/5 rounded-lg"
+        >
+          <svg
+            className="w-16 h-16 mb-4 text-primary"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+            aria-hidden="true"
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
+          </svg>
+          <p className="text-sm font-semibold text-foreground mb-2">{t("success")}</p>
+          <p className="text-xs text-foreground mb-1 max-w-full truncate">{file?.name}</p>
+          <p
+            className="text-xs text-foreground/90 mb-4 font-mono max-w-full break-all text-center"
+            data-testid="file-upload-key"
+          >
+            {t("key_label", { key, ...raw })}
+          </p>
+          <Button onClick={reset} variant="outline" size="sm" data-testid="file-upload-reset">
+            {t("upload_another")}
+          </Button>
+        </div>
+      ) : (
+        <div
+          role="button"
+          tabIndex={uploading ? -1 : 0}
+          aria-disabled={uploading || undefined}
+          aria-busy={uploading || undefined}
           onDragOver={handleDragOver}
           onDragLeave={handleDragLeave}
           onDrop={handleDrop}
-          onClick={handleBrowseClick}
+          onClick={openPicker}
+          onKeyDown={handleKeyDown}
+          data-testid="file-upload-dropzone"
           className={cn(
-            "relative flex flex-col items-center justify-center w-full h-64 px-4 transition-all border-2 border-dashed rounded-lg cursor-pointer",
-            isDragging
-              ? "border-primary bg-primary/5 scale-[1.02]"
-              : "border-gray-300 hover:border-gray-400 dark:border-gray-600 dark:hover:border-gray-500",
+            "relative flex flex-col items-center justify-center w-full h-64 px-4 transition-all border-2 border-dashed rounded-lg cursor-pointer outline-none",
+            "focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px]",
+            dragging
+              ? "border-primary bg-primary/5 scale-[1.02] motion-reduce:scale-100"
+              : "border-input hover:border-muted-foreground/60",
             "bg-background hover:bg-accent/50 dark:bg-input/10",
-            isUploading && "pointer-events-none opacity-70"
+            uploading && "pointer-events-none opacity-70"
           )}
         >
-          {isUploading ? (
-            <div className="flex flex-col items-center gap-4">
+          {uploading ? (
+            <div role="status" className="flex flex-col items-center gap-4">
               <Spinner size="lg" />
               <div className="text-center">
-                <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                  {t("uploading", { name: selectedFile?.name })}
+                <p className="text-sm font-medium text-foreground max-w-full truncate">
+                  {t("uploading", { name: file?.name, ...raw })}
                 </p>
-                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                  {t("please_wait")}
-                </p>
+                <p className="text-xs text-muted-foreground mt-1">{t("please_wait")}</p>
               </div>
             </div>
           ) : (
             <>
               <svg
-                className="w-12 h-12 mb-4 text-gray-400 dark:text-gray-500"
+                className="w-12 h-12 mb-4 text-muted-foreground"
                 stroke="currentColor"
                 fill="none"
                 viewBox="0 0 48 48"
@@ -167,61 +199,36 @@ export function FileUpload({
                 />
               </svg>
               <div className="text-center">
-                <p className="mb-2 text-sm font-semibold text-gray-700 dark:text-gray-300">
+                <p className="mb-2 text-sm font-semibold text-foreground">
                   <span className="text-primary">{t("dropzone.click_to_upload")}</span>{" "}
                   {t("dropzone.drag_and_drop")}
                 </p>
-                <p className="text-xs text-gray-500 dark:text-gray-400">
+                <p className="text-xs text-muted-foreground text-balance break-words">
                   {accept
-                    ? t("dropzone.accepted_formats", { formats: accept })
+                    ? t("dropzone.accepted_formats", { formats: formatList(accept), ...raw })
                     : t("dropzone.any_file_type")}
                 </p>
-                {maxSize && (
-                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                    {t("dropzone.max_size", { size: (maxSize / 1024 / 1024).toFixed(0) })}
-                  </p>
-                )}
+                <p className="text-xs text-muted-foreground mt-1">
+                  {t("dropzone.max_size", { size: limit })}
+                </p>
               </div>
             </>
           )}
         </div>
-      ) : (
-        <div className="flex flex-col items-center justify-center w-full h-64 px-4 border-2 border-green-500 dark:border-green-600 bg-green-50 dark:bg-green-950/20 rounded-lg">
-          <svg
-            className="w-16 h-16 mb-4 text-green-500 dark:text-green-400"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth="2"
-              d="M5 13l4 4L19 7"
-            />
-          </svg>
-          <p className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
-            {t("success")}
-          </p>
-          <p className="text-xs text-gray-600 dark:text-gray-400 mb-1">
-            {selectedFile?.name}
-          </p>
-          <p className="text-xs text-gray-500 dark:text-gray-500 mb-4 font-mono">
-            {t("key_label", { key: uploadedKey })}
-          </p>
-          <Button onClick={handleReset} variant="outline" size="sm">
-            {t("upload_another")}
-          </Button>
-        </div>
       )}
 
       {error && (
-        <div className="mt-4 p-4 bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-800 rounded-lg">
+        <div
+          role="alert"
+          data-testid="file-upload-error"
+          className="mt-4 p-4 bg-destructive/10 border border-destructive/30 rounded-lg"
+        >
           <div className="flex items-start gap-3">
             <svg
-              className="w-5 h-5 text-red-500 dark:text-red-400 shrink-0 mt-0.5"
+              className="w-5 h-5 text-destructive shrink-0 mt-0.5"
               fill="currentColor"
               viewBox="0 0 20 20"
+              aria-hidden="true"
             >
               <path
                 fillRule="evenodd"
@@ -229,20 +236,17 @@ export function FileUpload({
                 clipRule="evenodd"
               />
             </svg>
-            <div>
-              <p className="text-sm font-semibold text-red-800 dark:text-red-300">
-                {t("failed")}
-              </p>
-              <p className="text-sm text-red-700 dark:text-red-400 mt-1">
-                {error}
-              </p>
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-foreground">{t("failed")}</p>
+              <p className="text-sm text-foreground mt-1 break-words">{describe(error)}</p>
             </div>
           </div>
           <Button
-            onClick={handleReset}
+            onClick={reset}
             variant="outline"
             size="sm"
             className="mt-3"
+            data-testid="file-upload-reset"
           >
             {t("try_again")}
           </Button>
@@ -251,4 +255,3 @@ export function FileUpload({
     </div>
   );
 }
-
