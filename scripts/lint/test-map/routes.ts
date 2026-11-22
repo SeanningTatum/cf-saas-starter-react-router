@@ -1,8 +1,9 @@
 import ts from "typescript";
 import { APP_DIR } from "../constants";
+import { unwrapExpression } from "../source";
 import type { Source } from "../types";
 
-const ROOT_PATH = "/";
+export const ROOT_PATH = "/";
 
 const joinPath = (base: string, segment: string): string => {
   const joined = `${base}/${segment}`.replace(/\/+/g, "/");
@@ -14,11 +15,6 @@ const literal = (node: ts.Node | undefined): string | undefined =>
 
 const children = (call: ts.CallExpression): readonly ts.Expression[] =>
   call.arguments.flatMap((argument) => (ts.isArrayLiteralExpression(argument) ? argument.elements : []));
-
-function unwrap(node: ts.Expression): ts.Expression {
-  if (ts.isSatisfiesExpression(node) || ts.isAsExpression(node) || ts.isParenthesizedExpression(node)) return unwrap(node.expression);
-  return node;
-}
 
 export function routePaths(source: Source): Map<string, string[]> {
   const paths = new Map<string, string[]>();
@@ -48,7 +44,7 @@ export function routePaths(source: Source): Map<string, string[]> {
   };
   for (const statement of source.ast.statements) {
     if (!ts.isExportAssignment(statement)) continue;
-    const table = unwrap(statement.expression);
+    const table = unwrapExpression(statement.expression);
     if (ts.isArrayLiteralExpression(table)) visit(table.elements, "");
   }
   return paths;

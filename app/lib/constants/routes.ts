@@ -14,6 +14,3 @@ export const API_ROUTES = {
   uploadFile: "/api/upload-file",
   setLocale: "/api/set-locale",
 } as const;
-
-export type RoutePath = (typeof ROUTES)[keyof typeof ROUTES];
-export type ApiRoutePath = (typeof API_ROUTES)[keyof typeof API_ROUTES];

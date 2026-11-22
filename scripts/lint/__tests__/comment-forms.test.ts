@@ -18,6 +18,8 @@ describe("COMMENT_FORMS", () => {
       ["triple-slash reference", false],
       ["effect-promise-ok", false],
       ["secret-scan", false],
+      ["workflow library marker", false],
+      ["harness fence marker", false],
       ["eslint-disable", false],
       ["@ts-ignore", true],
     ]);
@@ -86,7 +88,27 @@ describe("commentVerdict", () => {
     '// <reference types="vite/client" />',
     "// secret-scan: allow",
     "// secret-scan: allow   ",
+    "// secret-scan: allow generic-secret because of a long story",
+    "// note, secret-scan: allow generic-secret",
+    "// biome-ignore this is really just a note",
+    "// @library code lives below",
+    "// harness: remember to update the fences",
   ])("a comment that only looks like a directive is claimed by no form: %j", (text) => {
     expect(commentVerdict(commentOf(text))).toBeUndefined();
+  });
+
+  it.each(["// @lib", "// harness:primitive-fences:start", "// harness:primitive-fences:end"])(
+    "a marker the build or the harness gate reads out of a comment is legal, since deleting it breaks them: %j",
+    (text) => {
+      expect(commentVerdict(commentOf(text))?.verdict).toBe("legal");
+    }
+  );
+
+  it("claims no directive that runs over several lines, so prose cannot ride in behind one", () => {
+    expect(commentVerdict(commentOf("/* @ts-expect-error: the SDK types omit this field,\n   and here is the history */"))).toBeUndefined();
+  });
+
+  it("claims no directive longer than the cap, so a reason stays a reason and not an essay", () => {
+    expect(commentVerdict(commentOf(`// @ts-expect-error: ${"why ".repeat(60)}`))).toBeUndefined();
   });
 });

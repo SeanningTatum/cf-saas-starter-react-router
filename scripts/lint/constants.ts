@@ -7,7 +7,7 @@ export const TEST_PATH = /(^|\/)__tests__\/|\.test\.tsx?$|\.test-layer\.ts$/;
 
 export const VENDORED_UI = "app/components/ui/";
 export const CONSTANTS_DIR = "app/lib/constants/";
-export const ROUTE_CONSTANTS_FILE = "app/lib/constants/routes.ts";
+export const ROUTE_CONSTANTS_FILE = `${CONSTANTS_DIR}routes.ts`;
 export const MAX_FILE_LINES = 400;
 export const SIZED_ROOTS = [...SHIPPED_ROOTS, "e2e", "scripts"] as const;
 export const WORKFLOW_SOURCE_FILE = /\.js$/;
@@ -39,6 +39,8 @@ export const RULES_END = "<!-- lint-rules:end -->";
 export const WRITE_DOCS_COMMAND = "bun run lint:house --write-docs";
 
 export const FIX_LEAD = "Do this instead:";
+export const EFFECT_PROMISE_MARKER = "effect-promise-ok:";
+export const MAX_DIRECTIVE_CHARS = 160;
 export const RULE_ID = /^[a-z][a-z0-9]*(-[a-z0-9]+)*$/;
 export const FINDING_LINE = /^\S+:\d+ [a-z][a-z0-9-]*: .+\. Do this instead: .+\.( See \S+\.)?$/;
 

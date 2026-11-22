@@ -1,4 +1,5 @@
-import { MAX_FILE_LINES, SIZED_ROOTS, SOURCE_FILE, VENDORED_UI } from "../constants";
+import { MAX_FILE_LINES, SIZED_ROOTS } from "../constants";
+import { isSizedSource } from "../source";
 import type { FileRule } from "../types";
 
 const lineCount = (text: string): number => text.split("\n").length - (text.endsWith("\n") ? 1 : 0);
@@ -11,7 +12,7 @@ export const rule: FileRule = {
   matches: `A file longer than ${MAX_FILE_LINES} lines.`,
   covers: `\`.ts\` and \`.tsx\` under ${SIZED_ROOTS.map((root) => `\`${root}/\``).join(", ")}, tests included. Not the ShadCN primitives in \`app/components/ui/\`.`,
   fix: "split it by responsibility: move a component, a group of helpers, a table's columns or a set of test cases to its own file beside this one",
-  applies: (path) => SOURCE_FILE.test(path) && !path.startsWith(VENDORED_UI) && SIZED_ROOTS.some((root) => path.startsWith(`${root}/`)),
+  applies: isSizedSource,
   check({ text }) {
     const count = lineCount(text);
     return count > MAX_FILE_LINES ? [{ line: MAX_FILE_LINES + 1, message: `the file has ${count} lines; the cap is ${MAX_FILE_LINES}` }] : [];

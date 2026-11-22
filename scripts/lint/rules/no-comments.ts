@@ -1,22 +1,21 @@
 import { inApp } from "../cases";
 import { COMMENT_FORMS, commentVerdict } from "../comment-forms";
 import { commentsIn, type Comment } from "../comments";
-import { SIZED_ROOTS, SOURCE_FILE, VENDORED_UI, WORKFLOW_SOURCE_DIR, WORKFLOW_SOURCE_FILE } from "../constants";
+import { WORKFLOW_SOURCE_DIR, WORKFLOW_SOURCE_FILE } from "../constants";
+import { isSizedSource } from "../source";
 import type { FileHit, FileRule } from "../types";
 
 const FIX =
   "say it in code. A limit or constraint becomes a named constant or a type; what a test catches goes in the test's title; " +
-  "a design or security reason goes in the feature's doc under `docs/` or an ADR; a comment that restates the code is deleted";
+  "a design or security reason goes in the feature's doc (`docs/features/<feature>.md`) or an ADR (`docs/adr/NNNN-<slug>.md`); a comment that restates the code is deleted";
 
 const LEGAL_NAMES = COMMENT_FORMS.filter((form) => !form.banned)
   .map((form) => `\`${form.name}\``)
   .join(", ");
 
-const applies = (path: string): boolean => {
-  if (path.startsWith(VENDORED_UI)) return false;
-  if (path.startsWith(`${WORKFLOW_SOURCE_DIR}/`)) return WORKFLOW_SOURCE_FILE.test(path);
-  return SOURCE_FILE.test(path) && SIZED_ROOTS.some((root) => path.startsWith(`${root}/`));
-};
+const isWorkflowSource = (path: string): boolean => path.startsWith(`${WORKFLOW_SOURCE_DIR}/`) && WORKFLOW_SOURCE_FILE.test(path);
+
+const applies = (path: string): boolean => isSizedSource(path) || isWorkflowSource(path);
 
 function hitFor(comment: Comment): FileHit | undefined {
   const known = commentVerdict(comment);
@@ -70,6 +69,10 @@ export const rule: FileRule = {
     { name: "a script is inside the rule", files: { "scripts/job.ts": "#!/usr/bin/env bun\n// does the job\nexport const a = 1;\n" }, expect: "finding" },
     { name: "a shebang line is not a comment", files: { "scripts/job.ts": "#!/usr/bin/env bun\nexport const a = 1;\n" }, expect: "clean" },
     { name: "a workflow source file is inside the rule", files: { ".claude/workflow-src/flow.js": "// step one\nconst a = 1;\n" }, expect: "finding" },
+    { name: "the workflow library marker the build needs is legal", files: { ".claude/workflow-src/flow.js": "const a = 1;\n// @lib\nconst b = 2;\n" }, expect: "clean" },
+    { name: "a directive followed by lines of prose is a comment, not a directive", files: inApp("/* @ts-expect-error: the SDK types omit this field,\n   and here is the history of why */\nexport const a: number = b;\n"), expect: "finding" },
+    { name: "secret-scan with prose after its rule is a comment", files: inApp('export const a = "x"; // secret-scan: allow generic-secret because of a long story\n'), expect: "finding" },
+    { name: "biome-ignore with prose in place of a rule is a comment", files: inApp("// biome-ignore this is really just a note\nexport const a = 1;\n"), expect: "finding" },
     { name: "a ShadCN primitive is outside the rule", files: { "app/components/ui/button.tsx": "// upstream note\nexport const a = 1;\n" }, expect: "clean" },
     { name: "@ts-expect-error with a reason is legal", files: inApp("// @ts-expect-error: the SDK types omit this field\nexport const a: number = b;\n"), expect: "clean" },
     { name: "@ts-expect-error with no reason is caught", files: inApp("// @ts-expect-error\nexport const a: number = b;\n"), expect: "finding" },
