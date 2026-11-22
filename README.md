@@ -10,7 +10,7 @@
 
 **Three pillars:**
 1. **Harness-first** — agents stay coherent across sessions via the [5-subsystem framework](#harness--the-system-around-the-agent): instructions, state, verification, scope, lifecycle.
-2. **AI-first** — six project-local sub-agents, Matt Pocock's planning skills, seven gates, five AST-checked non-negotiables.
+2. **AI-first** — six project-local sub-agents, Matt Pocock's planning skills, nine gates, five AST-checked non-negotiables.
 3. **DX that just works** — `bun install` + `bun run dev` and you're live. `bun run scripts/first-time-setup.ts` gets you from zero to deployed Worker in ~3 minutes. Local dev runs the same Workers runtime that ships to production.
 
 📦 **Latest release:** [`v2.4.0` — One Review Where It Counts](https://github.com/SeanningTatum/cf-saas-starter-react-router/releases/tag/v2.4.0)
@@ -135,6 +135,8 @@ State lives in GitHub: the spec is an issue, each ticket is an issue, and a merg
 | non-negotiables-selftest | `bun run scripts/check-non-negotiables.ts --selftest` | baseline, full |
 | non-negotiables | `bun run scripts/check-non-negotiables.ts` | baseline, full |
 | harness | `./scripts/harness-check.sh` | baseline, full |
+| secrets | `bun run scripts/secret-scan.ts` | baseline, full |
+| audit | `bun run scripts/package-audit.ts` | baseline, full |
 | build | `bun run build` | full |
 | e2e | `bun run test:e2e` | full |
 
@@ -450,5 +452,9 @@ CLOUDFLARE_ENV=preview bun run build \
 3. Pre-commit gate runs typecheck + tests automatically
 4. Run `./scripts/verify.sh` — every gate green
 5. Open the PR
+
+### Security
+
+Report a vulnerability in private: see [`SECURITY.md`](SECURITY.md). How dependency updates, the secret scan, the package audit and CodeQL work: [`docs/ci/supply-chain.md`](docs/ci/supply-chain.md).
 
 When in doubt: read first, code second.
