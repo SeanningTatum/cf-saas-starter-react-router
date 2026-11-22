@@ -19,7 +19,9 @@ const LEDGER = [
   call({ label: "build:1", phase: "Build", agent: "backend-builder", attempt: 2 }),
 ];
 
-const recorded = (slug: string): RunFile => mergeLedger(emptyRunFile(slug), "ship-feature", LEDGER);
+const phased = (phase: string): RunFile => mergeLedger(emptyRunFile("demo"), "w", [call({ phase })]);
+
+const recorded =(slug: string): RunFile => mergeLedger(emptyRunFile(slug), "ship-feature", LEDGER);
 
 const ingested = (slug: string): RunFile => {
   const file = recorded(slug);
@@ -62,5 +64,12 @@ describe("statsLines", () => {
 
   it("says n/a for the slowest phase when no call has a time yet", () => {
     expect(statsLines([recorded("demo")], false).join("\n")).toMatch(/Slowest phase\s*\n.*n\/a/);
+  });
+});
+
+describe("markdown escaping", () => {
+  it("escapes a backslash before a pipe: a phase of a\\|b must not turn the pipe back into a cell break", () => {
+    const row = summaryLines(phased("a\\|b"), true).find((l) => l.includes("a\\\\")) ?? "";
+    expect(row.startsWith("| a\\\\\\|b | 1 |")).toBe(true);
   });
 });

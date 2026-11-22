@@ -87,12 +87,12 @@ describe("record", () => {
     expect(writes).toEqual([]);
   });
 
-  it("keeps tokens for a call that keeps its position and label: a resumed run resends the whole ledger", () => {
-    const before = runFile({ "ship-feature": [stored(0, { tokens: tokens(5, 6), seconds: 2.5, ran_model: "claude-x" })] });
-    const { deps, store } = memory({ [RUN_PATH]: before }, ledgerText([call({ verdict: "later" }), call({ label: "new" })]));
+  it("keeps tokens when the new ledger strictly extends the stored one: a resumed run resends the whole ledger", () => {
+    const before = runFile({ "ship-feature": [stored(0, { verdict: "ready", tokens: tokens(5, 6), seconds: 2.5, ran_model: "claude-x" })] });
+    const { deps, store } = memory({ [RUN_PATH]: before }, ledgerText([call(), call({ label: "new" })]));
     run(["record", "demo", "ship-feature"], deps);
     const calls = JSON.parse(store.get(RUN_PATH) ?? "").workflows["ship-feature"].calls;
-    expect(calls[0]).toMatchObject({ tokens: tokens(5, 6), seconds: 2.5, ran_model: "claude-x", verdict: "later" });
+    expect(calls[0]).toMatchObject({ tokens: tokens(5, 6), seconds: 2.5, ran_model: "claude-x" });
     expect(calls[1]).toMatchObject({ label: "new", tokens: null, seconds: null, ran_model: null });
   });
 
@@ -105,7 +105,7 @@ describe("record", () => {
   });
 
   it("leaves other workflows in the file alone: plan-feature and ship-feature share a slug", () => {
-    const before = runFile({ "plan-feature": [stored(0, { tokens: tokens(1, 2) })] });
+    const before = runFile({ "plan-feature": [stored(0, { verdict: "ready", tokens: tokens(1, 2) })] });
     const { deps, store } = memory({ [RUN_PATH]: before }, ledgerText([call()]));
     run(["record", "demo", "ship-feature"], deps);
     const workflows = JSON.parse(store.get(RUN_PATH) ?? "").workflows;

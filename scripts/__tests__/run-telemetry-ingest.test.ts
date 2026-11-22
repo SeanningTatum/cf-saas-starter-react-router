@@ -19,7 +19,7 @@ describe("ingest", () => {
     };
     const { deps, store } = memory(files);
     const o = run(["ingest", "demo", "plan-feature", DIR], deps);
-    expect(text(o)).toBe("run-telemetry: 1 of 1 calls now have tokens; 0 journal entries had no ledger call");
+    expect(text(o)).toBe("run-telemetry: 1 of 1 calls now have tokens; 0 journal entries had no ledger call and were added");
     const c = JSON.parse(store.get(RUN_PATH) ?? "").workflows["plan-feature"].calls[0];
     expect(c.tokens).toEqual({ in: 11, out: 12, cache_read: 150, cache_write: 2 });
     expect(c.seconds).toBe(12.3);
@@ -62,7 +62,7 @@ describe("ingest", () => {
     };
     const { deps } = memory(files);
     expect(text(run(["ingest", "demo", "w", DIR], deps))).toBe(
-      "run-telemetry: 0 of 1 calls now have tokens; 2 journal entries had no ledger call",
+      "run-telemetry: 0 of 3 calls now have tokens; 2 journal entries had no ledger call and were added",
     );
   });
 
@@ -109,7 +109,7 @@ describe("ingest", () => {
     };
     const { deps, store } = memory(files);
     const o = run(["ingest", "demo", "ship-feature", DIR], deps);
-    expect(text(o)).toBe("run-telemetry: 1 of 2 calls now have tokens; 0 journal entries had no ledger call");
+    expect(text(o)).toBe("run-telemetry: 1 of 2 calls now have tokens; 0 journal entries had no ledger call and were added");
     const calls = JSON.parse(store.get(RUN_PATH) ?? "").workflows["ship-feature"].calls;
     expect(calls[0]).toMatchObject({ label: "audit", phase: "Audit", agent: "ticket-auditor", model: "sonnet", outcome: "ok", verdict: "fail", attempt: 1 });
     expect(calls[1]).toMatchObject({ label: "build", phase: "Build", agent: "", outcome: "empty", verdict: "" });
@@ -117,14 +117,26 @@ describe("ingest", () => {
 
   it("keeps tokens a call already has: a second ingest must not hand them to another call", () => {
     const files = {
-      [RUN_PATH]: runFile({ w: [stored(0, { tokens: tokens(9, 9) })] }),
+      [RUN_PATH]: runFile({ w: [stored(0, { tokens: tokens(9, 9), agent_id: "a1" })] }),
       [`${DIR}/journal.jsonl`]: journal([started("k1", "a1", "audit")]),
       [`${DIR}/agent-a1.jsonl`]: journal([assistant("m", { input_tokens: 1, output_tokens: 1 }, "2026-01-01T00:00:00Z")]),
     };
     const { deps, store } = memory(files);
     const o = run(["ingest", "demo", "w", DIR], deps);
-    expect(text(o)).toContain("1 of 1 calls now have tokens; 1 journal entries had no ledger call");
+    expect(text(o)).toContain("1 of 1 calls now have tokens; 0 journal entries had no ledger call and were added");
     expect(JSON.parse(store.get(RUN_PATH) ?? "").workflows.w.calls[0].tokens).toEqual(tokens(9, 9));
+  });
+
+  it("adds the runner and memory calls the ledger could not hold, and summary counts them: the last calls must reach the report", () => {
+    const labels = ["a", "b", "c", "run:record", "memory:record"];
+    const files = {
+      [RUN_PATH]: runFile({ w: ["a", "b", "c"].map((label, n) => stored(n, { label })) }),
+      [`${DIR}/journal.jsonl`]: journal(labels.flatMap((label, n) => [started(`k${n}`, `a${n}`, label), result(`k${n}`, `a${n}`, { pass: true })])),
+    };
+    const { deps } = memory(files);
+    expect(text(run(["ingest", "demo", "w", DIR], deps))).toBe("run-telemetry: 0 of 5 calls now have tokens; 2 journal entries had no ledger call and were added");
+    const total = run(["summary", "demo"], deps).stdout.find((l) => l.startsWith("total")) ?? "";
+    expect(total.split(/\s+/)[1]).toBe("5");
   });
 
   it("never builds a file name from an agentId with path characters: a journal must not read outside its directory", () => {

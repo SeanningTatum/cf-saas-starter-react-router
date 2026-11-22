@@ -140,6 +140,18 @@ describe("stats", () => {
     expect(text(o)).toContain("alpha");
   });
 
+  it("warns about an entry whose read throws and prints the others: a stray file must not end the command", () => {
+    const { deps } = memory(files());
+    const readFile = (path: string) => {
+      if (path.includes(".DS_Store")) throw new Error("ENOTDIR: not a directory");
+      return deps.readFile(path);
+    };
+    const o = run(["stats"], { ...deps, readFile, listDir: (p) => [...deps.listDir(p), ".DS_Store"] });
+    expect(o.code).toBe(0);
+    expect(o.stderr).toEqual(["run-telemetry: skipped .DS_Store: ENOTDIR: not a directory"]);
+    expect(text(o)).toContain("alpha");
+  });
+
   it("says so when there is nothing to read: an empty table would look like a result", () => {
     const o = run(["stats"], memory().deps);
     expect(o.code).toBe(0);

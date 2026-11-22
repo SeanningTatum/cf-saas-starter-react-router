@@ -60,6 +60,8 @@ export const stored = (n: number, over: Record<string, unknown> = {}) => ({
   verdict: "",
   tokens: null,
   seconds: null,
+  agent_id: null,
+  from_journal: false,
   ran_model: null,
   ...over,
 });
