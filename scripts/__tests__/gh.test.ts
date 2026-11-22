@@ -3,7 +3,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 const spawnSync = vi.hoisted(() => vi.fn());
 vi.mock("node:child_process", () => ({ spawnSync }));
 
-import { ghSpawn } from "../lib/gh";
+import { ghSpawn, GH_MAX_BUFFER_BYTES } from "../lib/gh";
 
 describe("ghSpawn", () => {
   beforeEach(() => spawnSync.mockReset());
@@ -21,7 +21,15 @@ describe("ghSpawn", () => {
     expect(spawnSync).toHaveBeenCalledWith("gh", ["api", "-X", "POST", "p", "--input", "-"], {
       input: '{"a":1}',
       encoding: "utf8",
+      maxBuffer: GH_MAX_BUFFER_BYTES,
     });
+  });
+
+  it("the output cap is above Node's 1 MiB default: a long paginated gh api list must not be cut off", () => {
+    spawnSync.mockReturnValue({ status: 0, stdout: "[]", stderr: "" });
+    ghSpawn(["api", "--paginate", "x"]);
+    const options = spawnSync.mock.calls[0]?.[2] as { maxBuffer: number };
+    expect(options.maxBuffer).toBeGreaterThan(1024 * 1024);
   });
 
   it("a null status (killed by signal) maps to 1, never to success", () => {

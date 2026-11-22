@@ -3,7 +3,7 @@ import { execSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { intro, outro, confirm, spinner, cancel } from "@clack/prompts";
-import { DUMMY_INPUT, buildWranglerConfig, writeWranglerJsonc } from "./lib/wrangler-config";
+import { DUMMY_INPUT, buildWranglerConfig, parseJsonc, writeWranglerJsonc } from "./lib/wrangler-config";
 
 function executeCommand(
   command: string,
@@ -83,16 +83,9 @@ function readWranglerConfig(): WranglerConfig | null {
     return null;
   }
 
-  const content = fs.readFileSync(wranglerPath, "utf-8");
-  // Strip single-line comments for JSONC parsing
-  const jsonContent = content.replace(/^\s*\/\/.*$/gm, "");
-
-  try {
-    return JSON.parse(jsonContent);
-  } catch {
-    console.error("\x1b[31m✗ Failed to parse wrangler.jsonc\x1b[0m");
-    return null;
-  }
+  const config = parseJsonc<WranglerConfig>(fs.readFileSync(wranglerPath, "utf-8"));
+  if (!config) console.error("\x1b[31m✗ Failed to parse wrangler.jsonc\x1b[0m");
+  return config;
 }
 
 /**
