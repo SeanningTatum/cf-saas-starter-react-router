@@ -9,6 +9,7 @@ interface SpecFacts {
   path: string;
   smoke: boolean;
   visits: string[];
+  paths: string[];
 }
 
 const PARAMETER = /^:/;
@@ -26,13 +27,16 @@ function readSpecs(repo: Repo): SpecFacts[] {
       if (!spec) return [];
       const strings = new Set<string>();
       const visits: string[] = [];
+      const heads: string[] = [];
       walkNodes(spec.ast, (node) => {
         if (ts.isStringLiteralLike(node)) strings.add(node.text);
+        if (ts.isTemplateExpression(node)) heads.push(node.head.text);
         if (!ts.isCallExpression(node) || !ts.isPropertyAccessExpression(node.expression)) return;
         const [target] = node.arguments;
         if (node.expression.name.text === "goto" && target && ts.isStringLiteralLike(target)) visits.push(target.text);
       });
-      return [{ path, smoke: asserts(spec) && SMOKE_TAGS.every((tag) => strings.has(tag)), visits }];
+      const paths = [...strings, ...heads].filter((text) => text.startsWith("/"));
+      return [{ path, smoke: asserts(spec) && SMOKE_TAGS.every((tag) => strings.has(tag)), visits, paths }];
     });
 }
 
@@ -57,7 +61,7 @@ export function specsVisiting(repo: Repo, path: string): string[] {
   const table = repo.source(ROUTES_FILE);
   const paths = (table ? routePaths(table) : new Map<string, string[]>()).get(path) ?? [];
   return specFacts(repo)
-    .filter((spec) => spec.visits.some((visited) => paths.some((own) => visitsPath(visited, own))))
+    .filter((spec) => [...spec.visits, ...spec.paths].some((visited) => paths.some((own) => visitsPath(visited, own))))
     .map((spec) => spec.path);
 }
 

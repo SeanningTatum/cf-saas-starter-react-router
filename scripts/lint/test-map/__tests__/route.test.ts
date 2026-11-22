@@ -74,6 +74,16 @@ describe("specsVisiting", () => {
     expect(specsVisiting(repo, "app/routes/users.tsx")).toEqual(["e2e/users.spec.ts", "e2e/visit.spec.ts"]);
   });
 
+  it("names a spec that opens the page through a helper, by the path it passes as a string", () => {
+    const repo = repoWith({
+      "e2e/helper.spec.ts": spec('test("opens", async ({ page }) => { await openHydrated(page, "/users"); });'),
+      "e2e/query.spec.ts": spec('test("finds", async ({ page }) => { await openHydrated(page, `/users?${query}`); });'),
+      "e2e/other.spec.ts": spec('test("opens", async ({ page }) => { await openHydrated(page, "/elsewhere"); });'),
+    });
+
+    expect(specsVisiting(repo, "app/routes/users.tsx")).toEqual(["e2e/helper.spec.ts", "e2e/query.spec.ts"]);
+  });
+
   it("names none for a file the route table does not list", () => {
     expect(specsVisiting(repoWith({ "e2e/users.spec.ts": tagged("/users") }), "app/routes/missing.tsx")).toEqual([]);
   });
