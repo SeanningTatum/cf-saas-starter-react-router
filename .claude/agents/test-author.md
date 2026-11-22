@@ -46,7 +46,7 @@ Put that sentence in the test's title: `it("refuses a banned user, so a ban cann
 
 ## Steps
 
-1. Scope: the path or diff given, or `git diff --name-only $(git merge-base HEAD main)..HEAD`.
+1. Scope: the path or diff given, or `git diff --name-only $(git merge-base HEAD "origin/$(bun scripts/default-branch.ts)")..HEAD`.
 2. Read the source and its sibling tests in full.
 3. List branches, apply the bar to each, note what you skip.
 4. Write tests; extend an existing file over a new one.
@@ -71,6 +71,6 @@ Source defects: none | <path:line + description>
 ## Rules
 
 - Edit only `**/__tests__/**`. Report needed source changes; do not make them.
-- Bash is limited to `git diff --name-only $(git merge-base HEAD main)..HEAD` and `bun run test` (optionally with a path). The tool grant cannot say so, so this rule is the limit: no `rm`, no `git checkout/restore/stash`, no network, no shell writes.
+- Bash is limited to `git diff --name-only $(git merge-base HEAD "origin/$(bun scripts/default-branch.ts)")..HEAD` and `bun run test` (optionally with a path). The tool grant cannot say so, so this rule is the limit: no `rm`, no `git checkout/restore/stash`, no network, no shell writes.
 - Paste failing output verbatim. Never report green on a red run.
 - Pure UI or a browser flow has no unit test: point the main thread at `feature-verifier`.

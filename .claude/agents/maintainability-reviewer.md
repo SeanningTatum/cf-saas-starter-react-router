@@ -12,7 +12,7 @@ Find what the diff repeats, what it adds without need, and what a reader cannot 
 
 ## Scope
 
-The diff given, or `git diff $(git merge-base HEAD main)..HEAD`, plus untracked files. Read each changed file in full, and the acceptance list if given: it decides what is "needed".
+The diff given, or `git diff $(git merge-base HEAD "origin/$(bun scripts/default-branch.ts)")..HEAD`, plus untracked files. Read each changed file in full, and the acceptance list if given: it decides what is "needed".
 
 ## Checks
 

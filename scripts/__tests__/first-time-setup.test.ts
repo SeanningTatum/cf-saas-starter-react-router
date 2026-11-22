@@ -193,6 +193,13 @@ describe("setupGitHubCiCredentials secrets (pipelines)", () => {
     expect(secretCalls.map((c) => c.cmd)).not.toContain("gh secret set CLOUDFLARE_API_TOKEN");
   });
 
+  it("the success line says a merge into production deploys, not a push to main: the flow deploys from production", async () => {
+    const { logged } = await wizard([PROD, ""]);
+    const said = logged.join("\n");
+    expect(said).toContain("A merge into production will now auto-deploy it.");
+    expect(said).not.toMatch(/push(es)? to main/i);
+  });
+
   const ENDPOINT = "repos/{owner}/{repo}/environments/production";
 
   it("an existing production environment gets no PUT: an empty PUT can wipe its reviewers and branch policy", async () => {

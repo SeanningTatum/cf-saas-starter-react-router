@@ -403,6 +403,7 @@ const pre = await agent(
      Otherwise return backend "gh".
   4. PRODUCT.md. Does ROOT/PRODUCT.md exist? -> has_product.
   5. DESIGN.md. Does ROOT/DESIGN.md exist? -> has_design. Does ROOT/.claude/skills/to-spec/SKILL.md exist? -> has_to_spec.
+  5b. Base branch. Run \`bun scripts/default-branch.ts\` -> base_branch, a bare branch name. If it fails, fail with its message.
 ${trackerLine}
 Return ok=false with a one-line reason for the first failure, else ok=true. Always return root when you found it.`,
   {
@@ -411,8 +412,8 @@ Return ok=false with a one-line reason for the first failure, else ok=true. Alwa
     agentType: "runner",
     effort: "low",
     schema: obj(
-      { ok: BOOL, reason: STR, root: STR, date: STR, backend: STR, has_product: BOOL, has_design: BOOL, has_to_spec: BOOL, issue: { type: ["object", "null"], additionalProperties: true } },
-      ["ok", "reason", "root", "date", "backend", "has_product", "has_design", "has_to_spec"]
+      { ok: BOOL, reason: STR, root: STR, date: STR, backend: STR, base_branch: STR, has_product: BOOL, has_design: BOOL, has_to_spec: BOOL, issue: { type: ["object", "null"], additionalProperties: true } },
+      ["ok", "reason", "root", "date", "backend", "base_branch", "has_product", "has_design", "has_to_spec"]
     ),
   }
 );
@@ -422,6 +423,11 @@ if (!/^\d{4}-\d{2}-\d{2}$/.test(pre.date)) {
   log(`Pre-flight returned a bad date (${JSON.stringify(pre.date)}). Nothing ran.`);
   return { stopped: "Preflight", reason: "preflight did not return an ISO date" };
 }
+if (!pre.base_branch) {
+  log("Pre-flight did not return the default branch. Nothing ran.");
+  return { stopped: "Preflight", reason: "preflight did not return the default branch" };
+}
+const BASE = pre.base_branch;
 if (input.ticket && !pre.issue) {
   log("Pre-flight did not return the ticket. Nothing ran.");
   return { stopped: "Preflight", reason: "ticket could not be read" };
@@ -590,7 +596,7 @@ ${fence("fit", JSON.stringify(rec.fit, null, 1))}
 ${fence("context", JSON.stringify(rec.context, null, 1))}
 Return the object your schema asks for.`;
     case "stack":
-      return `Plan the PR stack for feature "${slug}". PR 1 targets main; each later PR's base is the previous PR's branch. Fences must not overlap.
+      return `Plan the PR stack for feature "${slug}". PR 1 targets ${BASE}; each later PR's base is the previous PR's branch. Fences must not overlap.
 ${DATA_FENCE}
 
 ${fence("architect", JSON.stringify(rec.architect, null, 1))}
@@ -1106,13 +1112,13 @@ const protoBlock = () =>
 
 const draft = `${outDir()}/record.md`;
 const FORMAT = `FORMAT (see ${ROOT}/docs/features/FORMAT.md if it exists; the checker is the authority):
-  --- frontmatter: slug, title, ticket (the issue URL or none), date, ui (true|false), base (main) ---
+  --- frontmatter: slug, title, ticket (the issue URL or none), date, ui (true|false), base (${BASE}) ---
   # <title>, then H2 sections IN THIS ORDER: Summary, Context, User and job, Fit, Success metric, Non-goals,
   ${hasUi ? "UX (a ```mermaid block, then a table with columns Screen | Empty | Loading | Error | Success), " : "(no UX section: the feature has no UI, set ui: false), "}Architecture, Decisions, Flow (a \`\`\`mermaid block), PR stack, Contract (a \`\`\`ts block), Open questions.
   Context: one bullet per finding, each ending " — source: <ref>".
   Non-goals: "- <item> — <why>".
   Decisions: "### D1 — <question>" then bullets **Area:** product|ux|backend, **Chosen:**, **Rejected:** <option> — <why> (at least one), **Why:**, **Decided by:** user|agent. Collect the decisions from fit, ux and architect, renumber D1.. in order, and add one decision per brief answer the human gave (Decided by: user).
-  PR stack: table | # | Branch | Base | Fence | Size | Greptile focus |, fence paths in backticks; PR 1 base is main; later bases are the previous branch.
+  PR stack: table | # | Branch | Base | Fence | Size | Greptile focus |, fence paths in backticks; PR 1 base is ${BASE}; later bases are the previous branch.
   Open questions: every unknown from the context, and${writebackNote ? ` THIS TRACKER CONFLICT (first item; say whether the write was skipped or landed, and label any text as a diff): ${writebackNote}` : " anything the agents flagged"}.`;
 
 const assemble = async (extra) => {
@@ -1123,7 +1129,7 @@ const assemble = async (extra) => {
 const assembleOnce = (extra) =>
   ask(
     `Assemble the decision record for feature "${slug}" at ${draft} (mkdir -p its directory), then run \`bun run scripts/check-feature-doc.ts "${draft}"\` and report the result.
-Use only the agent outputs below; invent nothing. Frontmatter: slug ${slug}; title ${JSON.stringify(finalTicket.title)}; ticket ${source.kind === "ticket" || writeback.issue_url ? writeback.issue_url : "none"}; date ${DATE}; ui ${hasUi}; base main.
+Use only the agent outputs below; invent nothing. Frontmatter: slug ${slug}; title ${JSON.stringify(finalTicket.title)}; ticket ${source.kind === "ticket" || writeback.issue_url ? writeback.issue_url : "none"}; date ${DATE}; ui ${hasUi}; base ${BASE}.
 ${FORMAT}
 ${DATA_FENCE}
 

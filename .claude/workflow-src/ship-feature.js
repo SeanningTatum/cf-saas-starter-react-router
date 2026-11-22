@@ -74,7 +74,7 @@ export const meta = {
  *
  * args:
  *   a string: a ticket ref (12, #12, an issue URL) or a prompt
- *   { ticket?, prompt?, record?: path to a decision record, slug?, base?: "main", root?,
+ *   { ticket?, prompt?, record?: path to a decision record, slug?, base?: a branch name (default: the repo's default branch, read at Preflight), root?,
  *     ready?: "override" | "stop", ships?: { "1": { approved, changes? } },
  *     reviewRounds?: number (code-review rounds per stacked branch before push; default 2, 0 skips),
  *     rollupRounds?: number (Greptile rounds on the roll-up, or the single PR; default 3, 0 skips) }
@@ -97,7 +97,8 @@ if (!input.ticket && !input.prompt && !input.record) {
 if (input.slug !== undefined && !SLUG.test(input.slug)) {
   return { error: "args.slug must be kebab-case" };
 }
-const BASE = input.base || "main";
+// Preflight fills BASE from `bun scripts/default-branch.ts` when the caller gave no base.
+let BASE = input.base || "";
 // POSIX single-quote: nothing inside is expanded, so ticket or plan text can never run as a command.
 const shq = (v) => `'${String(v).replace(/'/g, `'\\''`)}'`;
 const REVIEW_ROUNDS = Math.max(0, Math.min(3, input.reviewRounds ?? 2));
@@ -172,7 +173,7 @@ const pre = await agent(
   3. Tracked files must be clean: \`git status --porcelain --untracked-files=no\` prints nothing, else fail "commit or stash your changes first". Then list untracked files with \`git ls-files --others --exclude-standard\` -> untracked (array, may be empty).
   4. \`git --version\` must be 2.38 or newer (restack uses rebase --update-refs).
   4b. Worktree guard. Only in a linked worktree (\`git rev-parse --git-dir\` differs from \`git rev-parse --git-common-dir\`): if \`node_modules/node_modules\` is a symlink (it points at the main checkout's modules and breaks tests with "Invalid hook call" and Playwright "No tests found"), move it aside with \`mv node_modules/node_modules node_modules/.nested-modules-aside\` and return moved_nested_modules true. Never touch the main checkout. Else moved_nested_modules false.
-  5. \`git fetch -q origin ${BASE}\`, then \`git rev-parse origin/${BASE}\` -> base_sha.
+  5. Base branch: ${input.base ? shq(input.base) : "run `bun scripts/default-branch.ts` (it prints the repo's default branch; if it fails, fail with its message)"} -> base_branch, a bare branch name. \`git fetch -q origin <base_branch>\`, then \`git rev-parse origin/<base_branch>\` -> base_sha.
   6. ${input.ticket ? `Ticket: \`bun run scripts/tracker.ts view ${shq(input.ticket)}\`; return its JSON as issue, unchanged.` : "No ticket: issue null."}
 ${recordLine}
   8. Does app/services/analytics.ts exist -> has_analytics.
@@ -191,6 +192,7 @@ Return ok=false with a one-line reason at the first failure in 0-6; items 7-10 n
         root: STR,
         date: STR,
         untracked: STRS,
+        base_branch: STR,
         base_sha: STR,
         issue: { type: ["object", "null"], additionalProperties: true },
         record_path: STR,
@@ -199,14 +201,16 @@ Return ok=false with a one-line reason at the first failure in 0-6; items 7-10 n
         moved_nested_modules: BOOL,
         baseline: arr(obj({ name: STR, pass: BOOL, tail: STR })),
       },
-      ["ok", "reason", "root", "date", "untracked", "base_sha", "record_path", "has_analytics", "baseline"]
+      ["ok", "reason", "root", "date", "untracked", "base_branch", "base_sha", "record_path", "has_analytics", "baseline"]
     ),
   }
 );
 if (!pre || !pre.ok) return { stopped: "Preflight", reason: pre ? pre.reason : "preflight returned nothing" };
 if (!pre.root || !pre.root.startsWith("/")) return { stopped: "Preflight", reason: "no absolute repo root" };
+if (!input.base && !pre.base_branch) return { stopped: "Preflight", reason: "no default branch reported" };
 if (input.ticket && !pre.issue) return { stopped: "Preflight", reason: "ticket could not be read" };
 ROOT = pre.root.replace(/\/+$/, "");
+BASE = input.base || pre.base_branch;
 const DATE = pre.date;
 const issue = pre.issue || null;
 const baselineRed = pre.baseline.filter((g) => !g.pass).map((g) => g.name);
@@ -1086,8 +1090,8 @@ ${fence("rollup.md", body)}
      Record each merged PR's number in merged.
   3. \`git fetch -q origin\`, then \`git diff --quiet origin/${rollupBranch} ${top.branch}\` must exit 0: ${rollupBranch} must hold exactly the top branch's tree.
   4. \`git branch -f ${rollupBranch} origin/${rollupBranch}\`.
-  5. \`gh pr create --base ${BASE} --head ${rollupBranch} --title ${shq(`${plan.title} (roll-up)`)} --body-file ${outDir()}/rollup.md\` -> number and url.
-  6. For each of ${openPrs.map((p) => `#${p.number}`).join(", ")}: \`gh pr comment <n> --body "Merged into ${rollupBranch}; it lands on ${BASE} with the roll-up #<roll-up number>."\`
+  5. \`gh pr create --base ${shq(BASE)} --head ${rollupBranch} --title ${shq(`${plan.title} (roll-up)`)} --body-file ${outDir()}/rollup.md\` -> number and url.
+  6. For each of ${openPrs.map((p) => `#${p.number}`).join(", ")}: \`gh pr comment <n> --body ${shq(`Merged into ${rollupBranch}; it lands on ${BASE} with the roll-up #<roll-up number>.`)}\`
 Return ok, failed_command, merged, number, url.`,
     { label: "rollup:pr", phase: "Rollup", schema: obj({ ok: BOOL, failed_command: STR, merged: arr(NUM), number: NUM, url: STR }, ["ok", "failed_command", "merged"]) }
   );
@@ -1096,14 +1100,14 @@ Return ok, failed_command, merged, number, url.`,
     const rest = openPrs.filter((p) => !merged.includes(p.number));
     // Step 5 may have opened the roll-up before a pointer comment failed: keep it, never open a second one.
     const opened = rollup && rollup.number && rollup.url ? { number: rollup.number, url: rollup.url } : null;
-    const comment = `\`gh pr comment <n> --body "Merged into ${rollupBranch}; it lands on ${BASE} with the roll-up #${opened ? opened.number : "<roll-up number>"}."\``;
+    const comment = `\`gh pr comment <n> --body ${shq(`Merged into ${rollupBranch}; it lands on ${BASE} with the roll-up #${opened ? opened.number : "<roll-up number>"}.`)}\``;
     return {
       stopped: "Rollup",
       reason: rollup ? rollup.failed_command : "rollup returned nothing",
       prs: openPrs,
       merged_into_rollup: merged,
       rollup: opened ? opened.url : null,
-      next: `${merged.length ? `Merged into ${rollupBranch}: ${merged.map((n) => `#${n}`).join(", ")}. ` : ""}${rest.length ? `Merge the rest in order: for each of ${rest.map((p) => `#${p.number}`).join(", ")}, \`gh pr edit <n> --base ${rollupBranch}\` then \`gh pr merge <n> --merge\`. ` : ""}${opened ? `The roll-up is open: ${opened.url}; do not create another.` : `Then open the roll-up: \`gh pr create --base ${BASE} --head ${rollupBranch} --title ${shq(`${plan.title} (roll-up)`)} --body-file ${outDir()}/rollup.md\`.`} On each stacked PR that lacks it, ${comment}. Then post "@greptileai review" on the roll-up.`,
+      next: `${merged.length ? `Merged into ${rollupBranch}: ${merged.map((n) => `#${n}`).join(", ")}. ` : ""}${rest.length ? `Merge the rest in order: for each of ${rest.map((p) => `#${p.number}`).join(", ")}, \`gh pr edit <n> --base ${rollupBranch}\` then \`gh pr merge <n> --merge\`. ` : ""}${opened ? `The roll-up is open: ${opened.url}; do not create another.` : `Then open the roll-up: \`gh pr create --base ${shq(BASE)} --head ${rollupBranch} --title ${shq(`${plan.title} (roll-up)`)} --body-file ${outDir()}/rollup.md\`.`} On each stacked PR that lacks it, ${comment}. Then post "@greptileai review" on the roll-up.`,
     };
   }
   log(`Rollup: ${openPrs.length} stacked PRs merged into ${rollupBranch}; ${rollup.url}`);

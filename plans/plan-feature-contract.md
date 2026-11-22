@@ -33,7 +33,7 @@ title: Team invites
 ticket: https://github.com/OWNER/REPO/issues/12     # or "none"
 date: 2026-10-24
 ui: true                                           # false skips the UX section
-base: main                                         # the branch PR 1 targets
+base: staging                                      # the repo's default branch (`bun scripts/default-branch.ts`); PR 1 targets it
 ---
 
 # Team invites
@@ -79,7 +79,7 @@ flowchart TD
 ## PR stack
 | # | Branch | Base | Fence | Size | Greptile focus |
 |---|--------|------|-------|------|----------------|
-| 1 | feat/team-invites/1-data | main | `app/db/schema.ts`, `app/repositories/invites.ts` | M | ... |
+| 1 | feat/team-invites/1-data | staging | `app/db/schema.ts`, `app/repositories/invites.ts` | M | ... |
 | 2 | feat/team-invites/2-api | feat/team-invites/1-data | `app/trpc/routes/invites.ts` | S | ... |
 
 ## Contract
@@ -104,7 +104,7 @@ Each failure is `{ rule, detail }`. Rule ids are stable; tests and the workflow 
 | `decisions` | no `### D<n> — ` heading; or a decision lacks Area (one of product/ux/backend), Chosen, Why, Decided by (user/agent), or at least one Rejected line with a reason after ` — ` |
 | `mermaid` | Flow (and UX when required) has no ```` ```mermaid ```` block, the block is empty, its first line is not a known diagram type (`flowchart`, `graph`, `sequenceDiagram`, `stateDiagram`, `stateDiagram-v2`, `journey`, `erDiagram`, `gitGraph`), or `[ ] ( ) { }` are unbalanced. This is a syntax smell test, not a full mermaid parse; FORMAT.md says so. |
 | `ux-states` | UX required and its table header lacks any of Empty, Loading, Error, Success (case-insensitive) |
-| `stack` | no rows; `#` not 1..n in order; branch repeated; PR 1 base ≠ frontmatter `base` (default `main`); PR n base ≠ PR n-1 branch; a fence cell with no backticked path; Size not S, M or L |
+| `stack` | no rows; `#` not 1..n in order; branch repeated; PR 1 base ≠ frontmatter `base` (default: the repo's default branch, `bun scripts/default-branch.ts`); PR n base ≠ PR n-1 branch; a fence cell with no backticked path; Size not S, M or L |
 | `fence-overlap` | the same path in two PRs' fences, or one fence path a directory prefix of another's (`app/routes/` vs `app/routes/x.tsx`) |
 
 CLI: `bun run scripts/check-feature-doc.ts <file.md>` prints one JSON object
