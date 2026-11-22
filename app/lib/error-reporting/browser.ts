@@ -149,6 +149,9 @@ const reporter = makeBrowserReporter({
   page: readPage,
 });
 
+export const reportRecoverableError = (error: unknown): void =>
+  reporter.report(error, "recoverable");
+
 const installedTargets = new WeakSet<object>();
 
 export const installBrowserErrorReporting = (

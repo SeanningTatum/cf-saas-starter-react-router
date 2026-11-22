@@ -144,6 +144,7 @@ const reportKindOf = (contentType: string | null): ReportKind | undefined => {
 const browserCapture = (report: BrowserErrorPayload): ErrorCapture => ({
   error: { name: report.name, message: report.message, stack: report.stack },
   source: report.source,
+  ...(report.source === "recoverable" ? { level: "warning" as const } : {}),
   url: report.url,
   requestId: report.requestId,
 });

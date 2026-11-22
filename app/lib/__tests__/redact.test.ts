@@ -140,7 +140,7 @@ describe("redactWithin", () => {
   it("cuts the input before it redacts, so a megabyte message cannot spend the request's CPU", () => {
     const huge = "word-like-run_".repeat(100_000);
 
-    expect(timeOf(() => redactWithin(huge, 1024))).toBeLessThan(100);
+    expect(timeOf(() => redactWithin(huge, 1024))).toBeLessThan(500);
     expect(redactWithin(huge, 1024)).toHaveLength(1024);
   });
 

@@ -229,3 +229,24 @@ describe("readBrowserReports", () => {
     }
   });
 });
+
+describe("readBrowserReports, errors React recovered from", () => {
+  it("files a recoverable report as a warning, so a hydration mismatch is logged but never sent on as a crash", async () => {
+    const intake = await intakeOf(
+      post(JSON.stringify({ ...goodReport(), source: "recoverable" }), "application/json")
+    );
+
+    expect(intake).toMatchObject({
+      status: 204,
+      captures: [{ source: "recoverable", level: "warning" }],
+    });
+  });
+
+  it("leaves an uncaught error at its own level, so a real crash is still sent on", async () => {
+    const intake = await intakeOf(
+      post(JSON.stringify({ ...goodReport(), source: "window" }), "application/json")
+    );
+
+    expect("captures" in intake && intake.captures[0]).not.toHaveProperty("level");
+  });
+});

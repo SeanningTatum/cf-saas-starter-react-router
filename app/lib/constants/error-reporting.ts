@@ -8,10 +8,16 @@ export const ERROR_SOURCES = [
   "boundary",
   "window",
   "rejection",
+  "recoverable",
   "csp",
 ] as const;
 
-export const BROWSER_ERROR_SOURCES = ["boundary", "window", "rejection"] as const;
+export const BROWSER_ERROR_SOURCES = [
+  "boundary",
+  "window",
+  "rejection",
+  "recoverable",
+] as const;
 
 export const ERROR_KINDS = ["expected", "defect"] as const;
 

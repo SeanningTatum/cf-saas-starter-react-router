@@ -10,6 +10,7 @@ import {
   MAGIC_BYTES_SNIFF_LENGTH,
   matchesMagicBytes,
 } from "@/lib/constants/upload";
+import { ErrorReporter } from "@/services/error-reporter";
 import type { Route } from "./+types/upload-file";
 
 const UploadedFileMeta = Schema.Struct({
@@ -89,8 +90,11 @@ export async function action({ request, context }: Route.ActionArgs) {
         ),
       // Transient upstream failure (Better Auth session lookup, file read) —
       // 503 so clients can distinguish "retry later" from a real 500.
-      ExternalServiceError: () =>
-        Effect.succeed(
+      ExternalServiceError: (error) =>
+        Effect.as(
+          Effect.flatMap(ErrorReporter, (reporter) =>
+            reporter.capture({ error, source: "upload" })
+          ),
           data(
             { success: false as const, error: "Service temporarily unavailable" },
             { status: 503 }

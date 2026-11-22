@@ -326,3 +326,17 @@ describe("toBrowserPayload, route error responses", () => {
     expect(payload.message).toBe("500 Internal Server Error");
   });
 });
+
+describe("reportRecoverableError", () => {
+  it("posts an error React recovered from with source recoverable, so a hydration mismatch is filed apart from a crash", async () => {
+    const fetchMock = stubBrowser();
+    const { reportRecoverableError } = await import("@/lib/error-reporting/browser");
+
+    reportRecoverableError(new Error("Hydration failed"));
+
+    expect(firstBody(fetchMock)).toMatchObject({
+      source: "recoverable",
+      message: "Hydration failed",
+    });
+  });
+});

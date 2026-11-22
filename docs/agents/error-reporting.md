@@ -12,12 +12,13 @@ There is one capture path. Plain code in a request calls `context.reportError({ 
 | `loader` / `action` | `handleError` in `app/entry.server.tsx`, which React Router calls for a failed loader or action. `GET` and `HEAD` give `loader`; other methods give `action`. An aborted request is skipped. |
 | `render` | The server render's `onError` in `app/entry.server.tsx`, only after the shell has rendered. |
 | `trpc` | `onError` of the HTTP handler in `app/routes/api/trpc.$.ts`, and of the server-side caller in `workers/app.ts`. |
-| `upload` | The failure branch of `app/routes/api/upload-file.ts`. |
+| `upload` | `app/routes/api/upload-file.ts`: a defect (answers 500), and a failed session lookup or file read (answers 503). A bad file (400) is not reported. |
 | `boundary` | The root error boundary in `app/root.tsx`, in the browser. It skips an error the server already rendered and a route response below 500. |
 | `window` / `rejection` | The browser `error` and `unhandledrejection` events, installed by `app/entry.client.tsx`. |
+| `recoverable` | An error React recovered from, most often a hydration mismatch (`onRecoverableError` on `hydrateRoot` in `app/entry.client.tsx`). Filed at level `warning`. |
 | `csp` | A CSP violation the browser posts to the endpoint below. |
 
-The three browser sources reach the server through `POST /api/browser-report`. A page sends at most 10 reports and skips repeats (same name, message and first stack line).
+The browser sources reach the server through `POST /api/browser-report`. A page sends at most 10 reports and skips repeats (same name, message and first stack line).
 
 ## What a report carries
 
@@ -57,7 +58,7 @@ tRPC never sends a 5xx `cause` to the client, and `app/trpc/index.ts` shows `sch
 
 | Content type | Body |
 |--------------|------|
-| `application/json` | One browser error: `source` (`boundary`, `window` or `rejection`), `name`, `message`, optional `stack`, `url`, optional `requestId`. |
+| `application/json` | One browser error: `source` (`boundary`, `window`, `rejection` or `recoverable`), `name`, `message`, optional `stack`, `url`, optional `requestId`. |
 | `application/csp-report` | The legacy CSP report, `{ "csp-report": { ... } }`. |
 | `application/reports+json` | The Reporting API list. Only `csp-violation` entries are kept. |
 
@@ -77,7 +78,7 @@ The limit today is a per-isolate budget of 120 accepted reports per 60 seconds (
 
 A refused post is logged at `debug` with its status and a fixed reason, never with any part of the body. Production logs start at `info`, so refusals add no log volume there.
 
-The server does not trust the body for the user id, release, environment, method, path, `kind` or `level`: it sets them. The schema accepts three values for `source`; CSP reports get `csp`. The `requestId` is checked for shape only (`[A-Za-z0-9-]`, 64 characters at most), so treat it as a label a client can set. The text is untrusted too; it is redacted as below before it is logged or sent.
+The server does not trust the body for the user id, release, environment, method, path, `kind` or `level`: it sets them. The schema accepts four values for `source`; CSP reports get `csp`. The `requestId` is checked for shape only (`[A-Za-z0-9-]`, 64 characters at most), so treat it as a label a client can set. The text is untrusted too; it is redacted as below before it is logged or sent.
 
 ## Redaction
 
