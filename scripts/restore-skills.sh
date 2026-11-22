@@ -84,8 +84,22 @@ fi
 
 older_than_2m() { [ -n "$(find "$1" -maxdepth 0 -mmin +2 2>/dev/null)" ]; }
 
-# A process's start time, whitespace-normalised; empty when the PID is not running.
-started() { ps -o lstart= -p "$1" 2>/dev/null | awk '{$1=$1; print}'; }
+# A process's start time; empty when the PID is not running. Two reads of one live process
+# must give the same text, or a waiter takes a live owner for a dead one and steals its lock.
+# On Linux that rules out `ps -o lstart=`, which ps works out from the clock on each call and
+# which can come out a second apart; the kernel's own start tick in /proc does not move.
+started() {
+  local stat
+  if [ -r "/proc/$1/stat" ]; then
+    stat=$(cat "/proc/$1/stat" 2>/dev/null) || return 0
+    stat=${stat##*) } # the command name may hold spaces; the fields resume after the last ")"
+    # shellcheck disable=SC2086
+    set -- $stat
+    echo "tick ${20}" # field 22 of the full line: start time in clock ticks since boot
+  else
+    ps -o lstart= -p "$1" 2>/dev/null | awk '{$1=$1; print}'
+  fi
+}
 
 # Stale = the owner died before cleanup (SIGKILL, crash, reboot), or died between mkdir and
 # writing its owner line. The owner line is "<pid> <start time>": a PID alone is not
@@ -118,7 +132,11 @@ take_lock() {
     return 0
   fi
   if mkdir "$LOCKDIR.reclaim" 2>/dev/null; then
-    lock_is_stale && rm -r "$LOCKDIR" 2>/dev/null
+    if lock_is_stale; then
+      # Say whose lock went, so a wrong reclaim can be traced from the log.
+      echo "restore-skills: reclaiming a stale lock (owner: $(cat "$LOCKDIR/owner" 2>/dev/null || echo unknown))" >&2
+      rm -r "$LOCKDIR" 2>/dev/null
+    fi
     rmdir "$LOCKDIR.reclaim"
   elif older_than_2m "$LOCKDIR.reclaim"; then
     rmdir "$LOCKDIR.reclaim" 2>/dev/null # held for milliseconds; this old, its holder died

@@ -15,7 +15,8 @@ FAILED=0
 ok()  { echo "  ✓ $1"; PASS=$((PASS+1)); }
 bad() { echo "  ✗ $1"; FAILED=$((FAILED+1)); }
 
-started() { ps -o lstart= -p "$1" 2>/dev/null | awk '{$1=$1; print}'; }
+# The script's own started(), so a planted "live owner" line reads as the script would write it.
+eval "$(sed -n '/^started() {$/,/^}$/p' "$SCRIPT")"
 
 # sandbox -> path of a fresh repo-shaped dir with two locked skills, neither installed
 sandbox() {
@@ -115,12 +116,22 @@ rm -r "$SB"
 SB=$(sandbox)
 sleep 30 & DEAD=$!; kill "$DEAD"; wait "$DEAD" 2>/dev/null
 plant "$SB" "$DEAD Thu Jan 1 00:00:00 1970"
-for _ in 1 2 3 4; do restore "$SB" >/dev/null 2>&1 & done
+for i in 1 2 3 4; do restore "$SB" >/dev/null 2>"$SB/err.$i" & done
 wait
+# On failure, print each restore's stderr: it names every lock that was reclaimed.
 [ "$(calls "$SB")" = 1 ] && lockgone "$SB" \
   && ok "4 concurrent restores over a stale lock run exactly one installer" \
-  || bad "concurrent restores: calls=$(calls "$SB")"
+  || { bad "concurrent restores: calls=$(calls "$SB")"; cat "$SB"/err.* 2>/dev/null | sed 's/^/      /'; }
 rm -r "$SB"
+
+# The lock's identity check rests on this: two reads of one live process give the same text.
+sleep 5 & LIVE=$!
+first=$(started "$LIVE"); same=yes
+for _ in $(seq 1 40); do [ "$(started "$LIVE")" = "$first" ] || same=no; done
+[ -n "$first" ] && [ "$same" = yes ] \
+  && ok "a live process's start time reads the same 40 times over" \
+  || bad "started() is not stable: first='$first'"
+kill "$LIVE" 2>/dev/null; wait "$LIVE" 2>/dev/null
 
 # No clock: whole-second timestamps flake across a second boundary. The stub installer
 # sleeps 1s before writing SKILL.md, so "returned before the install finished" is the
