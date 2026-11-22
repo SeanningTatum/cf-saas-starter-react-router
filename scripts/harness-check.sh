@@ -18,6 +18,16 @@ set -uo pipefail
 
 cd "$(dirname "$0")/.."
 
+# The gate reads the checkout it sits in, never a repo its caller's environment names. Inside
+# a git hook, GIT_DIR and GIT_INDEX_FILE point at the repo being committed to, and the script
+# tests under H run `git init`, `git commit` and `git worktree add` in throwaway repos: with
+# those variables set, git would do all three to the real repo (an inherited GIT_DIR once set
+# core.bare in the shared config and broke every worktree). So drop git's repo variables.
+unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_COMMON_DIR GIT_OBJECT_DIRECTORY \
+  GIT_ALTERNATE_OBJECT_DIRECTORIES GIT_NAMESPACE GIT_PREFIX GIT_CEILING_DIRECTORIES \
+  GIT_CONFIG GIT_CONFIG_PARAMETERS GIT_CONFIG_COUNT GIT_GRAFT_FILE GIT_SHALLOW_FILE \
+  GIT_IMPLICIT_WORK_TREE GIT_REPLACE_REF_BASE GIT_NO_REPLACE_OBJECTS
+
 FAIL=0
 PASS_COUNT=0
 FAIL_COUNT=0
