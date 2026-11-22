@@ -1,4 +1,8 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { describe, it, expect } from "vitest";
+import { resolveLogin } from "../lib/audit-login";
+import { HARNESS_ROOT } from "../lib/harness-config";
 import {
   parseColour,
   composite,
@@ -108,5 +112,49 @@ describe("contrastRatio", () => {
   it("luminance of white is 1 and of black is 0", () => {
     expect(luminance(WHITE)).toBeCloseTo(1, 5);
     expect(luminance(BLACK)).toBe(0);
+  });
+});
+
+describe("resolveLogin", () => {
+  const seeded = { admin: { email: "a@x.test", password: "pw:1" }, user: { email: "u@x.test", password: "pw2" } };
+
+  it("a name with no colon picks the seeded login: the credentials must come from the config, not the script", () => {
+    expect(resolveLogin("admin", seeded)).toEqual(seeded.admin);
+  });
+
+  it("email:password still works, and a colon inside the password stays in it", () => {
+    expect(resolveLogin("me@x.test:pa:ss", seeded)).toEqual({ email: "me@x.test", password: "pa:ss" });
+  });
+
+  it("an unknown name fails with a line that lists the names, so the author can pick one", () => {
+    expect(resolveLogin("root", seeded)).toEqual({ error: 'unknown login "root"; seeded logins: admin, user' });
+  });
+
+  it("an unknown name with no seeded logins says none are set, rather than printing an empty list", () => {
+    expect(resolveLogin("admin", {})).toEqual({ error: 'unknown login "admin"; seeded logins: none are set in harness.config.json' });
+  });
+
+  it("a name like 'constructor' is not a login: the lookup must not walk the prototype chain", () => {
+    expect("error" in resolveLogin("constructor", seeded)).toBe(true);
+  });
+
+  it("a leading colon is refused", () => {
+    expect("error" in resolveLogin(":pw", seeded)).toBe(true);
+  });
+});
+
+describe("design-audit reads the login form from the config", () => {
+  const source = readFileSync(join(HARNESS_ROOT, "scripts/design-audit.ts"), "utf8");
+
+  it("holds no login route or test id literal: a literal would ignore a project's own login form", () => {
+    for (const literal of ["login-email", "login-password", "login-submit", '"/login"']) expect(source).not.toContain(literal);
+  });
+
+  it("takes the route and each test id from loginForm", () => {
+    for (const key of ["path", "emailTestId", "passwordTestId", "submitTestId"]) expect(source).toContain(`loginForm.${key}`);
+  });
+
+  it("resolves --login through the seeded logins", () => {
+    expect(source).toContain("resolveLogin(rawLogin, harnessConfig.seedLogins)");
   });
 });

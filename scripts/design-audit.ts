@@ -13,11 +13,12 @@
  *   bun run design:audit -- --url http://localhost:5231/<route> --scope '[data-surface="<name>"]'
  *   bun run design:audit -- --url … --accent '#RRGGBB'      # accent economy check
  *
- * Auth-gated routes (/admin, /dashboard): pass --login <email:password> (or set AUDIT_LOGIN) and the
- * audit signs in through the app's /login form first. Seeded users come from scripts/seed-preview.ts
- * (admin@preview.local, user@preview.local; password Password123!; run `bun run db:seed` first).
+ * Auth-gated routes (/admin, /dashboard): pass --login <name | email:password> (or set AUDIT_LOGIN) and
+ * the audit signs in through the login form first. A name picks one of the seedLogins in
+ * harness.config.json; the login route and the form's test ids come from loginForm there too. Seeded
+ * users come from scripts/seed-preview.ts (run `bun run db:seed` first).
  *
- *   bun run design:audit -- --url http://localhost:5231/admin --login 'admin@preview.local:Password123!'
+ *   bun run design:audit -- --url http://localhost:5231/admin --login admin
  *
  * Exit code is 0 unless a HARD check fails (horizontal overflow, contrast below AA, motion that
  * ignores prefers-reduced-motion). Everything else reports and lets the human decide — a low
@@ -35,6 +36,10 @@ import {
   luminance,
   contrastRatio,
 } from "./lib/colour";
+import { loadHarnessConfigFromDisk } from "./lib/harness-config";
+import { resolveLogin } from "./lib/audit-login";
+
+const harnessConfig = loadHarnessConfigFromDisk();
 
 interface Args {
   url: string;
@@ -53,19 +58,19 @@ function parseArgs(): Args {
   const url = get("--url");
   if (!url) {
     console.error(
-      "usage: bun run design:audit -- --url <url> [--scope <selector>] [--accent <#hex>] [--login <email:password>] [--json]"
+      "usage: bun run design:audit -- --url <url> [--scope <selector>] [--accent <#hex>] [--login <name | email:password>] [--json]"
     );
     process.exit(2);
   }
   const rawLogin = get("--login") ?? process.env.AUDIT_LOGIN;
   let login: Args["login"];
   if (rawLogin) {
-    const at = rawLogin.indexOf(":");
-    if (at < 1) {
-      console.error("--login expects <email:password>");
+    const resolved = resolveLogin(rawLogin, harnessConfig.seedLogins);
+    if ("error" in resolved) {
+      console.error(resolved.error);
       process.exit(2);
     }
-    login = { email: rawLogin.slice(0, at), password: rawLogin.slice(at + 1) };
+    login = resolved;
   }
   return {
     login,
@@ -205,16 +210,17 @@ page.on("console", (m) => {
 });
 
 if (args.login) {
-  const loginUrl = new URL("/login", args.url).toString();
+  const { loginForm } = harnessConfig;
+  const loginUrl = new URL(loginForm.path, args.url).toString();
   await page.goto(loginUrl, { waitUntil: "networkidle" });
-  await page.getByTestId("login-email").fill(args.login.email);
-  await page.getByTestId("login-password").fill(args.login.password);
-  await page.getByTestId("login-submit").click();
+  await page.getByTestId(loginForm.emailTestId).fill(args.login.email);
+  await page.getByTestId(loginForm.passwordTestId).fill(args.login.password);
+  await page.getByTestId(loginForm.submitTestId).click();
   const left = await page
-    .waitForURL((u) => !u.pathname.endsWith("/login"), { timeout: 10_000 })
+    .waitForURL((u) => !u.pathname.endsWith(loginForm.path), { timeout: 10_000 })
     .then(() => true, () => false);
   if (!left) {
-    console.error(`login as ${args.login.email} did not leave /login: wrong credentials or unseeded DB?`);
+    console.error(`login as ${args.login.email} did not leave ${loginForm.path}: wrong credentials or unseeded DB?`);
     await browser.close();
     process.exit(2);
   }
