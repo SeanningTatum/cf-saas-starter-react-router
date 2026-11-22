@@ -12,16 +12,15 @@ import {
   MAX_BUFFERED_SPANS,
   OtlpSpan,
   TracingLayer,
-  buildOtlpPayload,
   flushSpans,
   makeOtlpTracer,
   makeSpanBuffer,
   parseOtlpHeaders,
   readTracingConfig,
-  toOtlpValue,
   type FetchLike,
   type TracingConfig,
 } from "../tracing";
+import { buildOtlpPayload, toOtlpValue } from "../tracing-otlp";
 import type { RequestContext } from "@/lib/request-context";
 
 // --- helpers ------------------------------------------------------------------

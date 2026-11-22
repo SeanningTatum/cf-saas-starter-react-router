@@ -4,9 +4,13 @@
     "no-throw": {
       "app/lib/effect-trpc.ts": "The one place an Effect failure becomes a TRPCError; tRPC reads a thrown error.",
       "app/trpc/index.ts": "tRPC middleware and the error formatter throw TRPCError by contract."
+    },
+    "external-call-span": {
+      "app/services/tracing.ts": "The span exporter cannot trace its own export."
     }
   },
   "debt": {
+    "external-call-span": {},
     "no-effect-promise": {},
     "no-process-env": {},
     "no-throw": {},
@@ -17,6 +21,7 @@
       "workers/app.ts": 1
     },
     "no-zod": {},
+    "procedure-span": {},
     "tagged-error-mapped": {},
     "test-map": {
       "app/auth/client.ts": 1,

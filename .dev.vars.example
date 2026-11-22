@@ -57,3 +57,9 @@ BETTER_AUTH_SECRET=paste-openssl-rand-hex-32
 # SENTRY_DSN=https://abc123@o0.ingest.example.com/1
 # RELEASE_VERSION=unversioned
 # ENVIRONMENT=development
+
+# Optional — sampling. The preset for ENVIRONMENT sets the rates
+# (docs/agents/logging.md); these override it. A number from 0 to 1.
+# Warnings, errors and the spans of a failed request are always kept.
+# LOG_SAMPLE_RATE=1
+# TRACE_SAMPLE_RATE=0.1

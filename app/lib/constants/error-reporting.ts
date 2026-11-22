@@ -9,6 +9,7 @@ export const ERROR_SOURCES = [
   "window",
   "rejection",
   "recoverable",
+  "handled",
   "csp",
 ] as const;
 
@@ -17,6 +18,7 @@ export const BROWSER_ERROR_SOURCES = [
   "window",
   "rejection",
   "recoverable",
+  "handled",
 ] as const;
 
 export const ERROR_KINDS = ["expected", "defect"] as const;
@@ -98,3 +100,4 @@ export const REMOTE_REPORT_WINDOW_MS = 60_000;
 export const REMOTE_REPORT_WINDOW_LIMIT = 300;
 export const ROUTE_ERROR_RESPONSE_NAME = "RouteErrorResponse";
 export const LOCAL_HOSTNAMES: ReadonlyArray<string> = ["localhost", "127.0.0.1"];
+export const READ_METHODS: ReadonlyArray<string> = ["GET", "HEAD"];

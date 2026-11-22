@@ -231,6 +231,19 @@ describe("installBrowserErrorReporting", () => {
     });
   });
 
+  it("posts a caught error with source handled so that a failure the UI recovers from is still seen", async () => {
+    const fetchMock = stubBrowser();
+    const { reportHandledError } = await import("@/lib/error-reporting/browser");
+
+    reportHandledError(new Error("ban failed"));
+
+    expect(firstBody(fetchMock)).toMatchObject({
+      source: "handled",
+      message: "ban failed",
+      requestId: "req-42",
+    });
+  });
+
   it("adds no listeners on a second install so that one error is not reported twice", async () => {
     stubBrowser();
     const { installBrowserErrorReporting } = await import(

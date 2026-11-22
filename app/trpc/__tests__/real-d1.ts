@@ -63,7 +63,7 @@ export const startRealApp = async () => {
   const authOptions = { dev: false };
   const auth = createAuth(env.DATABASE, Effect.runSync(resolveAuthConfig(env, authOptions)));
   const runtime = makeAppRuntime(env, authOptions);
-  const loadContext = { auth } as unknown as AppLoadContext;
+  const loadContext = { auth, runtime } as unknown as AppLoadContext;
 
   const signUp = async (email: string): Promise<Account> => {
     const res = await auth.api.signUpEmail({
