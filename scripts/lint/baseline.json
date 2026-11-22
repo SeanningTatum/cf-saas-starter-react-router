@@ -284,8 +284,6 @@
       "app/routes/admin/users.tsx": 1,
       "app/routes/api/auth.$.ts": 1,
       "app/routes/api/set-locale.ts": 1,
-      "app/routes/api/trpc.$.ts": 1,
-      "app/routes/api/upload-file.ts": 1,
       "app/routes/authentication/components/auth-shell.tsx": 1,
       "app/routes/authentication/components/login-form.tsx": 1,
       "app/routes/authentication/components/signup-form.tsx": 1,
@@ -303,8 +301,7 @@
       "scripts/lib/workflow-dry-run.ts": 1,
       "scripts/lib/wrangler-config.ts": 1,
       "scripts/teardown.ts": 1,
-      "scripts/workflows.ts": 1,
-      "workers/app.ts": 1
+      "scripts/workflows.ts": 1
     }
   }
 }

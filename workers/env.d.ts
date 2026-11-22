@@ -9,4 +9,8 @@ interface Env {
   ANALYTICS_PROVIDER?: "none" | "console" | "posthog";
   POSTHOG_API_KEY?: string;
   POSTHOG_HOST?: string;
+  ERROR_REPORTER?: "none" | "console" | "sentry";
+  SENTRY_DSN?: string;
+  RELEASE_VERSION?: string;
+  ENVIRONMENT?: string;
 }
