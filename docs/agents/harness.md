@@ -136,6 +136,8 @@ Listed in [`scripts/verify.sh`](../../scripts/verify.sh), the one runner for CI,
 
 `./scripts/verify.sh` runs the full set, `--baseline` the quick set, `--only <gate>` one gate, `--list` prints them. To add a gate, add a line to `GATES` in `scripts/verify.sh` — CI picks it up.
 
+The `e2e` gate needs the network: the sign-in and sign-up pages load Turnstile from `challenges.cloudflare.com`. Each spec file sends its own client IP (`e2e/lib/client-ip.ts`), so the auth rate limits count per file ([`docs/auth.md`](../auth.md#rate-limits)).
+
 The two `non-negotiables` gates run the house linter (`bun run lint:house`): one file per rule in `scripts/lint/rules/`, findings that say the fix, and a baseline that only shrinks. The rules, the baseline and how to add a rule: [`lint-rules.md`](lint-rules.md).
 
 ## Commands (README.md has the same list)

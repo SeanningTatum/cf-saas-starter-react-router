@@ -4,13 +4,17 @@ How auth is set up and which rules it enforces. Better Auth runs the sign-in. Th
 
 ## Config per environment
 
-Three variables. `app/auth/config.ts` reads and checks them on each request.
+Five variables. `app/auth/config.ts` reads and checks them on each request.
 
 | Variable | What it does | Dev build, unset | Any other build, unset or invalid |
 |----------|--------------|------------------|-----------------------------------|
 | `BETTER_AUTH_SECRET` | Signs sessions and tokens. At least 32 characters. | Falls back to a dev-only secret. | Auth refuses to start. |
 | `BETTER_AUTH_URL` | The origin the app is served from. Sets auth links, the origin check and Secure cookies. | Follows each request's own origin. | Auth refuses to start. |
 | `AUTH_TRUSTED_ORIGINS` | Extra origins that may send cookie-carrying requests to the auth API. Comma-separated. The base URL's own origin is always trusted. | No extra origins. | No extra origins. |
+| `TURNSTILE_SITE_KEY` | Public key of the Turnstile widget. Ships to the browser. | Cloudflare's always-pass test key. | Turnstile is off if both keys are unset. A half pair or a published test key refuses to start. |
+| `TURNSTILE_SECRET_KEY` | Private key the server uses to check a Turnstile token. | Cloudflare's always-pass test secret. | Same as the site key. |
+
+The Turnstile rules have [their own section](#turnstile).
 
 A dev build is `bun run dev`. Every other build is not dev: `bun run preview`, the `preview` environment, staging and production.
 
@@ -41,6 +45,8 @@ A dev build is `bun run dev`. Every other build is not dev: `bun run preview`, t
 | `BETTER_AUTH_SECRET` | `wrangler secret put BETTER_AUTH_SECRET` | `wrangler secret put BETTER_AUTH_SECRET --env preview` |
 | `BETTER_AUTH_URL` | `vars` in `wrangler.jsonc` | `vars` under `env.preview` in `wrangler.jsonc` |
 | `AUTH_TRUSTED_ORIGINS` | `vars` in `wrangler.jsonc` | `vars` under `env.preview` in `wrangler.jsonc` |
+| `TURNSTILE_SITE_KEY` | `vars` in `wrangler.jsonc`, or a secret | `vars` under `env.preview`, or `wrangler secret put TURNSTILE_SITE_KEY --env preview` |
+| `TURNSTILE_SECRET_KEY` | `wrangler secret put TURNSTILE_SECRET_KEY` | `wrangler secret put TURNSTILE_SECRET_KEY --env preview` |
 
 ```jsonc
 {
@@ -55,7 +61,7 @@ A dev build is `bun run dev`. Every other build is not dev: `bun run preview`, t
 
 Wrangler does not inherit `vars` into an environment, so set them in both blocks. Local dev reads `.dev.vars` (copy `.dev.vars.example`).
 
-`wrangler.jsonc` is generated. `scripts/first-time-setup.ts` builds it with `buildWranglerConfig` in `scripts/lib/wrangler-config.ts` and overwrites the whole file, so a hand-added `vars` block does not survive a re-run of setup. Teardown also rewrites it from the placeholder values. The builder emits no `vars`. After a re-run, add the `vars` back. To keep them, add them in `buildWranglerConfig` instead.
+`wrangler.jsonc` is generated. `scripts/first-time-setup.ts` builds it with `buildWranglerConfig` in `scripts/lib/wrangler-config.ts` and overwrites the whole file, so a hand-added `vars` block does not survive a re-run of setup. Teardown also rewrites it from the placeholder values. The builder emits no `vars`. After a re-run, add the `vars` back. To keep them, add them in `buildWranglerConfig` instead. The rate-limit bindings are different: the builder emits them ([Rate limits](#rate-limits)).
 
 ## Sessions, cookies, passwords
 
@@ -99,8 +105,106 @@ A drift test (`app/lib/constants/__tests__/admin.test.ts`) lists the admin endpo
 
 When an admin changes a user's email, `emailVerified` resets to `false`. The guard does it for Better Auth's `update-user`, and `emailVerifiedAfterUpdate` does it for the tRPC update. A change that keeps the same email leaves the flag as sent.
 
+## Rate limits
+
+Four rules, each a Workers Rate Limiting binding. The store and the reasons: [ADR 0002](adr/0002-rate-limit-store.md).
+
+| Rule | Binding | Limit per 60 s | Key | Covers |
+|------|---------|----------------|-----|--------|
+| `signIn` | `AUTH_SIGN_IN_LIMITER` | 10 | Client IP | Each `POST` under `/api/auth/sign-in/` |
+| `signUp` | `AUTH_SIGN_UP_LIMITER` | 5 | Client IP | Each `POST` under `/api/auth/sign-up/` |
+| `authApi` | `AUTH_API_LIMITER` | 60 | Client IP | Each other `POST` under `/api/auth/` |
+| `upload` | `UPLOAD_LIMITER` | 20 | User id | `POST /api/upload-file`, after the session check |
+
+`GET`, `HEAD` and `OPTIONS` are never limited. A request matches one rule: a sign-in call counts against `signIn` and not also against `authApi`. The client IP is the `cf-connecting-ip` header (`CLIENT_IP_HEADER`). Rule names, paths and messages live in `app/lib/constants/rate-limit.ts`; the limits live in `wrangler.jsonc`.
+
+**Where the check runs.** The `action` of `app/routes/api/auth.$.ts` calls `guardAuthRequest` (`app/auth/request-gate.ts`) and only then hands the request to Better Auth. The upload route calls `RateLimiter.check` itself. The `RateLimiter` service (`app/services/rate-limit.ts`) wraps the binding. Better Auth's own limiter is off (`rateLimit: { enabled: false }` in `app/auth/server.ts`): it counts in memory in each isolate, so two requests that land on two isolates get two separate counts. The gate runs before the Turnstile check, so a limited request costs no call to Cloudflare. Every attempt counts, pass or fail.
+
+**What a limited caller gets.**
+
+| Caller | Response |
+|--------|----------|
+| Auth API | `429`, header `Retry-After: 60`, body `{"code":"TOO_MANY_REQUESTS","message":"Too many attempts. Wait a minute, then try again."}` |
+| Sign-in and sign-up form | `refusal.rate_limited` in `app/locales/*/auth.json`: "Too many attempts. Wait a minute, then try again." |
+| Upload route | `429`, header `Retry-After: 60`, body `{"success":false,"error":"Too many uploads. Wait a minute, then try again."}` |
+| A tRPC procedure that fails with `RateLimitError` | `TOO_MANY_REQUESTS` (`appErrorToTRPC`, `app/lib/effect-trpc.ts`). No procedure checks a limit today. |
+
+`Retry-After` is always the period (60), not the time left in the window, so it can overstate the wait.
+
+**Change a limit.** Two files hold each limit, and they must agree: `wrangler.jsonc` is what Cloudflare reads, and `RATE_LIMITS` in `scripts/lib/wrangler-config.ts` is what setup and teardown write into `wrangler.jsonc`. Edit both. `scripts/__tests__/wrangler-config.test.ts` fails when the builder's output differs from the committed `wrangler.jsonc`, so they cannot drift apart unnoticed. The same test checks that both config blocks bind every rule, that the preview namespace ids differ from the top-level ones, and that every period equals `RATE_LIMIT_PERIOD_SECONDS`. Cloudflare takes a period of 10 or 60 seconds. The code sends `RATE_LIMIT_PERIOD_SECONDS` (60) as `Retry-After`, so a move to 10 is a code change too.
+
+**Add a rule.**
+
+1. Add it to `RATE_LIMIT_BINDINGS` in `app/lib/constants/rate-limit.ts`. For an auth path, add a prefix to `AUTH_RULE_PATH_PREFIXES`.
+2. Add the entry to `RATE_LIMITS` in `scripts/lib/wrangler-config.ts` and to both blocks of `wrangler.jsonc` (top level and `env.preview`), each with its own new `namespace_id`. Run `bun run cf-typegen` so `Env` gains the binding.
+3. Call it: an auth path needs no call beyond the prefix (`authRuleFor`, `app/auth/request-gate.ts`); any other route calls `RateLimiter.check(rule, key)`.
+4. Test it: the rule in `app/auth/__tests__/request-gate.test.ts` or the route's test, and `app/services/__tests__/rate-limit.test.ts`. The config test already loops over every rule.
+
+**Namespace ids are yours to pick.** A `namespace_id` is a number you choose. The repo ships `1001` to `1004` and, for preview, `2001` to `2004`. Nothing is created in Cloudflare and setup has no step for it. Pick ids no other limiter on your account uses. Preview has its own ids so its traffic never counts against production.
+
+**Locally.** `react-router dev` and the unit harness (`getPlatformProxy` in `app/trpc/__tests__/real-d1.ts`) run Miniflare's simulation of the binding, with the limits from `wrangler.jsonc`. A request with no `cf-connecting-ip` uses the key `no-client-ip`, so every local caller shares one count. Send the header to get a count of your own. The e2e specs do: each spec file sends its own address (`e2e/lib/client-ip.ts`), so one file's attempts never limit another's.
+
+**What this store cannot do.**
+
+- Counts are kept per Cloudflare location and are approximate. A caller who reaches two locations can pass more than the limit in all.
+- The period is 10 or 60 seconds. There is no hourly or daily limit and no lockout.
+- The key is the IP. Many users behind one address share one count; one user who changes address starts a new one.
+- If the binding is missing or throws, the check logs `Rate limiter fault; the request goes on unlimited` and lets the request through (it fails open). If the auth gate itself fails, the route logs `Auth rate-limit gate failed; the request goes on unlimited` and does the same. Watch the logs for both lines.
+
+## Turnstile
+
+Cloudflare Turnstile guards `POST /api/auth/sign-in/email` and `POST /api/auth/sign-up/email` (`TURNSTILE_PROTECTED_ENDPOINTS`). The control is on the server. Better Auth's `captcha` plugin (`app/auth/server.ts`) reads the token from the `x-captcha-response` header and checks it with Cloudflare's `siteverify` endpoint, passing the caller's IP. The widget on the forms only fetches the token. A request sent without the browser gets the same check.
+
+### Key rules
+
+`resolveAuthConfig` (`app/auth/config.ts`) decides. A blank value counts as unset.
+
+| Keys | Dev build | Any other build |
+|------|-----------|-----------------|
+| Both unset | Cloudflare's always-pass test pair. Turnstile is on. | **Turnstile is off.** No widget, no token check. |
+| Both set | Used as given, test keys included. | Used, unless either one is a published Cloudflare test key (`TURNSTILE_PUBLISHED_TEST_KEYS`). Then auth refuses to start. |
+| One set | Auth refuses to start. | Auth refuses to start. |
+
+To refuse to start is to answer every request with a 500. The log line `Failed to construct AuthApi` carries a `ConfigurationError` that names `TURNSTILE_SITE_KEY` or `TURNSTILE_SECRET_KEY`.
+
+**A deploy with no keys runs with Turnstile off.** It does not fail. Set the keys before you rely on the check.
+
+### Owner steps
+
+1. In the Cloudflare dashboard, open Turnstile and add a widget. List the hostnames that serve the forms: the production host, and each preview host (`<worker>-preview.<subdomain>.workers.dev`, and the per-PR alias hosts if you use them). `localhost` is not needed: a dev build uses test keys.
+2. Set the keys for production and for `--env preview` ([Where to set each](#where-to-set-each)). The site key is public and reaches the browser through the login and sign-up loaders. The secret key stays a secret:
+
+```bash
+wrangler secret put TURNSTILE_SECRET_KEY
+wrangler secret put TURNSTILE_SECRET_KEY --env preview
+```
+
+### What a refusal looks like
+
+| Case | Status and code | Form message (`refusal.*` in `app/locales/*/auth.json`) |
+|------|-----------------|--------------------------------------------------------|
+| No token sent | `400` `MISSING_RESPONSE` | `captcha_failed`: "The security check didn't go through. Let it run again, then submit." |
+| Cloudflare rejects the token | `403` `VERIFICATION_FAILED` | `captcha_failed` |
+| `siteverify` unreachable or errors | `500` `UNKNOWN_ERROR` | `captcha_unavailable`: "The security check isn't responding right now. Try again shortly." |
+| Over a rate limit | `429` `TOO_MANY_REQUESTS` | `rate_limited` |
+
+The forms map these with `authRefusalFor` (`app/lib/auth-errors.ts`) and reset the widget after each attempt. A `500 UNKNOWN_ERROR` reads as "unavailable" only when Turnstile is on. The check fails closed: if Cloudflare cannot be reached, nobody signs in or signs up. The widget shows its own `turnstile.*` messages when its script fails to load, the challenge fails or the token expires.
+
+### See the failure path locally
+
+With the keys unset, a dev build passes every check. To see a refusal, put Cloudflare's always-fail pair in `.dev.vars` (it is in `.dev.vars.example`), restart `bun run dev` and submit the form. Remove the pair afterwards.
+
+Cloudflare's always-pass secret accepts any non-empty token. So in a dev build with the default keys, the "token rejected" path (`403`) cannot be reached. Only the always-fail pair reaches it. The "no token" path (`400`) needs only a request without the header.
+
+### Needs the network
+
+The widget loads its script from `https://challenges.cloudflare.com`, and the server calls `siteverify` there. Dev, the e2e gate and the browser all need to reach it, test keys or not. Offline, the form shows the `script_failed` message and cannot submit. The CSP sources it needs (`script-src`, `frame-src`) are in [`security-headers.md`](security-headers.md#hosts-outside-the-apps-own-origin).
+
 ## Known limits
 
 - **`/get-session`**: Better Auth's own `/get-session` endpoint still returns a session for a user banned by hand in the database. Only the app's reads (above) refuse it. A ban written through the app or Better Auth deletes the sessions, so this affects only a hand-written ban.
 - **`BETTER_AUTH_TRUSTED_ORIGINS` and `BETTER_AUTH_SECRETS`**: Better Auth reads both from `process.env`. The Workers runtime fills `process.env` from bindings with compatibility date 2025-04-01 or later and `nodejs_compat`. Better Auth then applies them without this repo's checks. Do not set either. This repo's `wrangler.jsonc` pins 2025-03-25, so it does not fill `process.env` today, but a later date bump would.
 - **Dashboard admin UI**: `app/routes/dashboard/_index.tsx` shows the admin section when `role === "admin"` exactly. A user with a list such as `user,admin` is an admin to the server but sees no admin section there. It is display only; the server checks use `hasAdminRole`.
+- **Turnstile covers two endpoints.** Only `sign-in/email` and `sign-up/email` check a token. Every other auth route has none: a password reset or a password change, if you turn those on. Those sit under the `authApi` limit (60 per minute), and any other path under `/sign-in/` or `/sign-up/` sits under that path's own limit. Email and password is the only sign-in method enabled today. If you add another sign-in method, add its path to `TURNSTILE_PROTECTED_ENDPOINTS`.
+- **Rate limits skip reads.** `GET`, `HEAD` and `OPTIONS` are never counted, `/get-session` included.
+- **The IP is the whole key for the auth rules.** Behind a proxy that does not set `cf-connecting-ip`, every caller shares the key `no-client-ip`, and one caller can use up the limit for all. The `authApi` limit counts per address, not per account, so it does not slow one account tried from many addresses.
