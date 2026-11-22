@@ -31,9 +31,11 @@ vi.mock("@clack/prompts", () => ({
 }));
 
 import { execSync, spawnSync } from "node:child_process";
+import { confirm } from "@clack/prompts";
 import {
   buildAccountIdVariableArgs,
   executeArgv,
+  offerRepoRules,
   setupGitHubCiCredentials,
   upsertEnvLine,
 } from "../first-time-setup";
@@ -313,4 +315,35 @@ describe("setupGitHubCiCredentials (call-site shell-injection regression)", () =
       }
     }
   );
+});
+
+describe("offerRepoRules", () => {
+  const applied = { code: 0, stdout: ["did: POST repos/acme/saas/rulesets"], stderr: [] };
+  const answer = (yes: boolean) =>
+    (confirm as unknown as ReturnType<typeof vi.fn>).mockResolvedValueOnce(yes);
+
+  it("writes nothing to GitHub when the user declines: the rules stop direct pushes, so they are opt-in", async () => {
+    answer(false);
+    const apply = vi.fn(() => applied);
+    await offerRepoRules(apply);
+    expect(apply).not.toHaveBeenCalled();
+  });
+
+  it("runs the one documented command (--apply, no dry run) when the user accepts", async () => {
+    answer(true);
+    const apply = vi.fn(() => applied);
+    await offerRepoRules(apply);
+    expect(apply).toHaveBeenCalledTimes(1);
+    expect(apply).toHaveBeenCalledWith(["--apply"]);
+  });
+
+  it("does not claim success when the apply fails (no admin rights)", async () => {
+    answer(true);
+    const log = vi.spyOn(console, "log").mockImplementation(() => {});
+    await offerRepoRules(() => ({ code: 1, stdout: ["error: POST failed"], stderr: [] }));
+    const printed = log.mock.calls.map((c) => String(c[0])).join("\n");
+    log.mockRestore();
+    expect(printed).toContain("error: POST failed");
+    expect(printed).not.toContain("✓ Repo rules applied");
+  });
 });
