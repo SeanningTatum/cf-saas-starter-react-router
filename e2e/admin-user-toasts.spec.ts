@@ -4,6 +4,7 @@ import { Schema } from "effect";
 import adminText from "@/locales/en/admin.json" with { type: "json" };
 import commonText from "@/locales/en/common.json" with { type: "json" };
 import { useAdminSessionSignedInOncePerFile } from "./lib/admin-session";
+import { loadHydratedReloadingWhileViteReoptimizesDeps } from "./lib/hydration";
 
 type Member = { id: string; name: string; email: string };
 
@@ -49,14 +50,21 @@ const expectAnnounced = async (page: Page, message: string) => {
 
 const memberRow = (page: Page, member: Member) => page.getByRole("row").filter({ hasText: member.email });
 
+const rowMenuTrigger = (page: Page, member: Member) =>
+  memberRow(page, member).getByRole("button", { name: text.open_menu });
+
 const openUsersTable = async (page: Page, member: Member) => {
-  await page.goto(`/admin/users?${new URLSearchParams({ search: member.email })}`);
+  await loadHydratedReloadingWhileViteReoptimizesDeps(
+    page,
+    `/admin/users?${new URLSearchParams({ search: member.email })}`,
+    (p) => rowMenuTrigger(p, member),
+  );
   await expect(memberRow(page, member)).toBeVisible();
 };
 
 const chooseRowActionDespiteCellRemount = async (page: Page, member: Member, action: string) => {
   const oneClickTimeout = 5_000;
-  const trigger = memberRow(page, member).getByRole("button", { name: text.open_menu });
+  const trigger = rowMenuTrigger(page, member);
   const menu = page.getByRole("menu");
   await expect(async () => {
     await page.keyboard.press("Escape");
