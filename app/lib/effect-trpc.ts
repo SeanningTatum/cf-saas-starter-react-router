@@ -5,30 +5,7 @@ import type { AppError } from "@/models/errors";
 import { loggers } from "@/lib/logger";
 import { RATE_LIMITED_MESSAGE } from "@/lib/constants/rate-limit";
 import { TRPC_SERVER_FAILURE_CODES } from "@/lib/constants/error-reporting";
-
-// The literal set of tags every AppError union member can carry. Anything
-// with a `_tag` outside this set is NOT a known AppError — even though it
-// duck-types like one — and must fall through to the generic-500 branch
-// below rather than being routed into `appErrorToTRPC`'s switch.
-const APP_ERROR_TAGS = new Set<AppError["_tag"]>([
-  "NotFoundError",
-  "CreationError",
-  "UpdateError",
-  "DeletionError",
-  "QueryError",
-  "ValidationError",
-  "ConfigurationError",
-  "ExternalServiceError",
-  "BucketBindingError",
-  "BucketUploadError",
-  "BucketGetError",
-  "BucketNotFoundError",
-  "BucketDeleteError",
-  "BucketListError",
-  "BucketValidationError",
-  "AnalyticsDeliveryError",
-  "RateLimitError",
-]);
+import { APP_ERROR_TAGS } from "@/lib/constants/errors";
 
 // Compile-time exhaustiveness guard for `appErrorToTRPC`'s switch. Reachable
 // only if a future AppError variant's tag is added to APP_ERROR_TAGS without

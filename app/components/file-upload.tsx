@@ -2,6 +2,7 @@ import { useEffect, useRef, type ChangeEvent, type DragEvent, type KeyboardEvent
 import { useMachine } from "@xstate/react";
 import { useTranslation } from "react-i18next";
 import { cn } from "@/lib/utils";
+import { MAX_UPLOAD_SIZE_BYTES } from "@/lib/constants/upload";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { fileUploadMachine, type UploadFailure } from "./file-upload.machine";
@@ -38,7 +39,7 @@ export function FileUpload({
   onUploadSuccess,
   onUploadError,
   accept,
-  maxSize = 10 * 1024 * 1024,
+  maxSize = MAX_UPLOAD_SIZE_BYTES,
   className,
 }: FileUploadProps) {
   const { t } = useTranslation("upload");

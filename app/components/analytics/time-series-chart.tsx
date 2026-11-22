@@ -5,6 +5,7 @@ import { Area, AreaChart, CartesianGrid, XAxis, YAxis, Bar, BarChart, Line, Line
 import { useTranslation } from "react-i18next";
 
 import { formatDate as formatDateI18n } from "@/lib/date-utils";
+import { DEFAULT_TIME_RANGES } from "@/lib/constants/charts";
 import {
   Card,
   CardAction,
@@ -61,12 +62,6 @@ export interface TimeSeriesChartProps {
   valueFormatter?: (value: number) => string;
 }
 
-const defaultTimeRanges = [
-  { value: "90d", label: "Last 3 months", days: 90 },
-  { value: "30d", label: "Last 30 days", days: 30 },
-  { value: "7d", label: "Last 7 days", days: 7 },
-];
-
 export function TimeSeriesChart({
   title,
   description,
@@ -76,7 +71,7 @@ export function TimeSeriesChart({
   type = "area",
   color = "var(--primary)",
   showTimeRangeSelector = false,
-  timeRanges = defaultTimeRanges,
+  timeRanges = DEFAULT_TIME_RANGES,
   height = 300,
   showYAxis = false,
   valueFormatter,

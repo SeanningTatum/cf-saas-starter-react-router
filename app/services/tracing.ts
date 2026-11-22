@@ -8,6 +8,7 @@ import {
   type ReportBudget,
 } from "@/lib/error-reporting/report-budget";
 import { randomHex, type RequestContext } from "@/lib/request-context";
+import { MAX_BUFFERED_SPANS } from "@/lib/constants/tracing";
 import { buildOtlpPayload, isErrorSpan } from "./tracing-otlp";
 
 /**
@@ -89,8 +90,7 @@ interface SpanEvent {
   readonly attributes: Record<string, unknown>;
 }
 
-/** Buffer memory bound — beyond this, spans are counted as dropped, not kept. */
-export const MAX_BUFFERED_SPANS = 1000;
+export { MAX_BUFFERED_SPANS };
 
 export interface SpanBuffer {
   readonly spans: OtlpSpan[];

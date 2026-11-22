@@ -30,17 +30,9 @@ import { LanguageSwitcher } from "@/components/language-switcher";
 import { FeatureCard } from "@/components/feature-card";
 import { redirectIfAuthenticated } from "@/lib/session";
 import { ROUTES } from "@/lib/constants/routes";
+import { HOME_STACK } from "@/lib/constants/marketing";
 
 export const handle = { i18n: ["home"] };
-
-const STACK = [
-  "Workers",
-  "React Router",
-  "tRPC",
-  "Better Auth",
-  "Drizzle",
-  "Effect TS",
-] as const;
 
 export function meta(_: Route.MetaArgs) {
   return [
@@ -96,7 +88,7 @@ export default function Home() {
           </div>
 
           <div className="mt-2 flex flex-wrap items-center gap-2 md:justify-center">
-            {STACK.map((label) => (
+            {HOME_STACK.map((label) => (
               <StackBadge key={label}>{label}</StackBadge>
             ))}
           </div>
@@ -370,7 +362,7 @@ function Footer() {
       <div className="mx-auto flex max-w-6xl flex-col gap-2 px-6 py-8 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
         <p>{t("footer.tagline")}</p>
         <p className="font-mono text-xs uppercase tracking-wider">
-          {STACK.join(" · ")}
+          {HOME_STACK.join(" · ")}
         </p>
       </div>
     </footer>

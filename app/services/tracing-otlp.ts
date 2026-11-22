@@ -1,4 +1,4 @@
-import { Effect, Exit, Option, type Tracer } from "effect";
+import { Effect, Exit, Option } from "effect";
 import {
   FIRST_SERVER_ERROR_STATUS,
   HTTP_STATUS_ATTRIBUTE,
@@ -11,6 +11,7 @@ import {
   UNPRINTABLE_ATTRIBUTE,
 } from "@/lib/constants/redaction";
 import { redactDeep, redactWithin } from "@/lib/redact";
+import { OTLP_SPAN_KIND } from "@/lib/constants/tracing";
 import type { OtlpSpan } from "./tracing";
 
 type OtlpValue =
@@ -53,14 +54,6 @@ const toOtlpAttributes = (
       : toOtlpValue(value),
   }));
 
-const SPAN_KIND: Record<Tracer.SpanKind, number> = {
-  internal: 1,
-  server: 2,
-  client: 3,
-  producer: 4,
-  consumer: 5,
-};
-
 const spanToOtlp = (span: OtlpSpan) => {
   const status = span.status;
   const ended = status._tag === "Ended";
@@ -72,7 +65,7 @@ const spanToOtlp = (span: OtlpSpan) => {
       ? { parentSpanId: span.parent.value.spanId }
       : {}),
     name: span.name,
-    kind: SPAN_KIND[span.kind],
+    kind: OTLP_SPAN_KIND[span.kind],
     startTimeUnixNano: status.startTime.toString(),
     endTimeUnixNano: ended ? status.endTime.toString() : "0",
     attributes: toOtlpAttributes(span.attributes),

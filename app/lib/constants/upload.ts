@@ -89,7 +89,10 @@ export const matchesMagicBytes = (
   }
 };
 
-export const declaresOversizedUpload = (headers: Headers): boolean => {
+export const UPLOAD_FAILURE_TOO_BIG = { reason: "too_big" } as const;
+export const UPLOAD_FAILURE_UNREACHABLE = { reason: "unreachable" } as const;
+
+export const declaresOversizedUpload =(headers: Headers): boolean => {
   const declared = headers.get(CONTENT_LENGTH_HEADER)?.trim();
   return declared !== undefined && DECIMAL_DIGITS.test(declared) && Number(declared) > MAX_UPLOAD_REQUEST_BYTES;
 };

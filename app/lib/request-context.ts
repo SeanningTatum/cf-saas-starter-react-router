@@ -2,6 +2,11 @@ import { AsyncLocalStorage } from "node:async_hooks";
 import { Context, Effect, Option } from "effect";
 import { setLogContext, setLogSampler } from "./log-format";
 import type { SamplingDecision } from "./sampling";
+import {
+  ALL_ZEROS_PATTERN,
+  CF_RAY_SAFE_TO_ECHO_PATTERN,
+  TRACEPARENT_PATTERN,
+} from "./constants/tracing";
 
 /**
  * One id and the signed-in user for every log line and span of a request.
@@ -45,12 +50,9 @@ export class CurrentRequest extends Context.Tag("app/CurrentRequest")<
   RequestContext
 >() {}
 
-const TRACEPARENT = /^([0-9a-f]{2})-([0-9a-f]{32})-([0-9a-f]{16})-([0-9a-f]{2})$/;
-const ALL_ZERO = /^0+$/;
 // `cf-ray` is set by Cloudflare's edge, but a request that reaches the worker
 // some other way (local dev, a test) can carry any value. Only this shape may
 // reach a log line or a response header.
-const CF_RAY = /^[A-Za-z0-9-]{1,64}$/;
 
 /**
  * W3C trace context: `00-<32 hex>-<16 hex>-<2 hex>`, lower-case hex, neither
@@ -60,10 +62,10 @@ export const parseTraceparent = (
   header: string | null | undefined
 ): TraceParent | undefined => {
   if (!header) return undefined;
-  const match = TRACEPARENT.exec(header);
+  const match = TRACEPARENT_PATTERN.exec(header);
   if (!match) return undefined;
   const [, version, traceId, spanId, flags] = match;
-  if (version === "ff" || ALL_ZERO.test(traceId) || ALL_ZERO.test(spanId)) {
+  if (version === "ff" || ALL_ZEROS_PATTERN.test(traceId) || ALL_ZEROS_PATTERN.test(spanId)) {
     return undefined;
   }
   return { traceId, spanId, sampled: (parseInt(flags, 16) & 1) === 1 };
@@ -88,7 +90,7 @@ export const makeRequestContext = (
   const cfRay = request.headers.get("cf-ray");
   const requestId =
     parent?.traceId ??
-    (cfRay !== null && CF_RAY.test(cfRay) ? cfRay : randomHex(16));
+    (cfRay !== null && CF_RAY_SAFE_TO_ECHO_PATTERN.test(cfRay) ? cfRay : randomHex(16));
   return {
     requestId,
     method: request.method,

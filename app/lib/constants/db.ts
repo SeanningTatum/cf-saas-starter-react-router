@@ -1,0 +1,2 @@
+export const D1_MAX_BOUND_VARIABLES = 100;
+export const MAX_BULK_USER_IDS = D1_MAX_BOUND_VARIABLES / 2;

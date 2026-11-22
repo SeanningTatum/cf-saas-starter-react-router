@@ -1,5 +1,6 @@
 import { Schema } from "effect";
 import { Email } from "./auth";
+import { MAX_BULK_USER_IDS } from "@/lib/constants/db";
 
 export const Role = Schema.Literal("user", "admin");
 export type Role = typeof Role.Type;
@@ -9,8 +10,7 @@ export type Status = typeof Status.Type;
 
 const UserId = Schema.String.pipe(Schema.maxLength(128));
 
-// D1 binds at most 100 variables per statement, and a bulk UPDATE also binds its SET columns.
-export const MAX_BULK_USER_IDS = 50;
+export { MAX_BULK_USER_IDS };
 
 const BulkUserIds = Schema.Array(UserId).pipe(
   Schema.minItems(1),

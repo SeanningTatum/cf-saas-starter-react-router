@@ -19,6 +19,7 @@ import {
   ChartLegendContent,
   type ChartConfig,
 } from "@/components/ui/chart";
+import { DEFAULT_DISTRIBUTION_COLORS } from "@/lib/constants/charts";
 
 export interface DistributionDataPoint {
   name: string;
@@ -43,14 +44,6 @@ export interface DistributionChartProps {
   colors?: string[];
 }
 
-const defaultColors = [
-  "var(--primary)",
-  "var(--chart-2)",
-  "var(--chart-3)",
-  "var(--chart-4)",
-  "var(--chart-5)",
-];
-
 export function DistributionChart({
   title,
   description,
@@ -58,7 +51,7 @@ export function DistributionChart({
   type = "donut",
   showLegend = true,
   height = 300,
-  colors = defaultColors,
+  colors = DEFAULT_DISTRIBUTION_COLORS,
 }: DistributionChartProps) {
   const { t } = useTranslation("common");
   const chartConfig = React.useMemo(() => {

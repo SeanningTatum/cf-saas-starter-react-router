@@ -4,6 +4,8 @@ const SESSION_LIFETIME_DAYS = 7;
 export const PASSWORD_MIN_LENGTH = 8;
 export const PASSWORD_MAX_LENGTH = 128;
 
+export const EMAIL_PATTERN = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
+
 export const SESSION_EXPIRES_IN_SECONDS = SECONDS_PER_DAY * SESSION_LIFETIME_DAYS;
 export const SESSION_UPDATE_AGE_SECONDS = SECONDS_PER_DAY;
 export const SESSION_COOKIE_SAME_SITE = "lax";

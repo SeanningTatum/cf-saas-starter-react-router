@@ -10,11 +10,7 @@ import { useFetcher } from "react-router";
 import { supportedLngs } from "@/i18n";
 import { cn } from "@/lib/utils";
 import { API_ROUTES } from "@/lib/constants/routes";
-
-const languageLabels: Record<string, string> = {
-  en: "English",
-  zh: "中文",
-};
+import { LANGUAGE_LABELS } from "@/lib/constants/i18n";
 
 interface LanguageSwitcherProps {
   className?: string;
@@ -66,7 +62,7 @@ export function LanguageSwitcher({
       <SelectContent>
         {supportedLngs.map((lng) => (
           <SelectItem key={lng} value={lng}>
-            {languageLabels[lng] ?? lng}
+            {LANGUAGE_LABELS[lng] ?? lng}
           </SelectItem>
         ))}
       </SelectContent>
