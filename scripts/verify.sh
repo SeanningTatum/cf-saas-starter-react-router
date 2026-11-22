@@ -12,8 +12,9 @@
 #   ./scripts/verify.sh --only build     # one gate by name
 #   ./scripts/verify.sh --list           # print the gates and stop
 #
-# --changed runs typecheck, the house linter on the changed files, the unit tests related to
-# them and the e2e specs the test map ties to them. The base defaults to the pull request's
+# --changed runs typecheck, the house linter on the changed files (not the whole-tree baseline
+# ratchet or the rules' self-test), the unit tests related to them and the e2e specs the test
+# map ties to them. The base defaults to the pull request's
 # target, else the default branch (scripts/lint/base-ref.ts). A change to a gate script,
 # scripts/lint, a config file, a workflow, the harness or the lockfile runs every gate instead.
 # scripts/verify-changed.ts prints the plan; scripts/lib/verify-plan.ts holds its rules.

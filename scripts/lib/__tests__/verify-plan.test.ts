@@ -1,4 +1,6 @@
 import { Either } from "effect";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { memoryRepo } from "../../lint/repo";
 import { parseTestMap } from "../../lint/test-map/map";
@@ -69,6 +71,15 @@ describe("fullRunReasons", () => {
       expect(fullRunReasons([path])).toEqual([]);
     },
   );
+
+  it("every script verify.sh and the harness gate run forces the full run (catches the trigger list drifting from the gates)", () => {
+    const read = (file: string) => readFileSync(join(__dirname, "..", "..", "..", file), "utf-8");
+    const named = (text: string) => text.match(/scripts\/[\w./-]+\.(?:ts|sh)/g) ?? [];
+    const looped = [...read("scripts/harness-check.sh").matchAll(/for t in ([\w -]+); do/g)].flatMap((m) => (m[1] ?? "").split(" ").map((t) => `scripts/${t}.sh`));
+    const gateScripts = [...new Set([...named(read("scripts/verify.sh")), ...named(read("scripts/harness-check.sh")), ...looped])];
+    expect(gateScripts.length).toBeGreaterThan(5);
+    expect(gateScripts.filter((path) => fullRunReasons([path]).length === 0)).toEqual([]);
+  });
 
   it("a path with a | or a line break forces the full run: the plan's line format would split it", () => {
     expect(fullRunReasons(["app/a|b.ts", "app/c\nd.ts"])).toEqual([UNSAFE_PATH_REASON, UNSAFE_PATH_REASON]);

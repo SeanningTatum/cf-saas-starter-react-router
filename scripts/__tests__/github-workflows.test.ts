@@ -356,10 +356,12 @@ describe("which jobs run for which base: the full suite into the default branch 
     for (const [f, jobs] of Object.entries(expected)) expect(ran(f, context), f).toEqual(jobs);
   });
 
-  it.each(["staging", "production"])("a push to %s runs the full suite and not the lean job", (branch) => {
-    const push = event("push", "");
-    expect(ran("ci.yml", push)).toEqual(full["ci.yml"]);
-    expect(ran("codeql.yml", push), branch).toEqual(["analyze"]);
+  it("a push runs the full suite and not the lean job (the push trigger already limits it to staging and production)", () => {
+    expect(ran("ci.yml", event("push", ""))).toEqual(full["ci.yml"]);
+    expect(ran("codeql.yml", event("push", ""))).toEqual(["analyze"]);
+  });
+
+  it("the weekly scan still runs: a schedule has no base branch", () => {
     expect(ran("codeql.yml", event("schedule", ""))).toEqual(["analyze"]);
   });
 
@@ -368,7 +370,8 @@ describe("which jobs run for which base: the full suite into the default branch 
     for (const check of required.filter((name) => !/^(PR title|Source branch)/.test(name))) expect(names).toContain(check);
     const leanJob = jobsOf(read("ci.yml")).find((job) => job.id === "lean");
     expect(leanJob?.name).toMatch(/^Lean /);
-    for (const check of required) expect(leanJob?.name.startsWith(check.split(" ")[0] ?? "")).toBe(false);
+    expect(required).not.toContain(leanJob?.name);
+    for (const check of required) expect(leanJob?.name.split(" ")[0]).not.toBe(check.split(" ")[0]);
   });
 
   it.each(["lean", "baseline"])("ci.yml %s checks out full history: the lint baseline compares with the base branch", (id) => {
