@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { COMMENT_FORMS, commentVerdict } from "../comment-forms";
 import { commentBody, type Comment } from "../comments";
 
-const commentOf = (text: string): Comment => ({ pos: 0, line: 1, text, body: commentBody(text) });
+const commentOf = (text: string): Comment => ({ pos: 0, line: 1, endLine: text.split("\n").length, text, body: commentBody(text) });
 
 const verdictOf = (text: string) => {
   const known = commentVerdict(commentOf(text));

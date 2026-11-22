@@ -9,13 +9,13 @@ const lines = (count: number): string => Array.from({ length: count }, (_, index
 export const rule: FileRule = {
   id: "file-size",
   scope: "file",
-  matches: `A file longer than ${MAX_FILE_LINES} lines.`,
+  matches: `A file longer than ${MAX_FILE_LINES} lines. The finding weighs as many as the file has lines, so a file in the baseline may shrink and may not grow.`,
   covers: `\`.ts\` and \`.tsx\` under ${SIZED_ROOTS.map((root) => `\`${root}/\``).join(", ")}, tests included. Not the ShadCN primitives in \`app/components/ui/\`.`,
   fix: "split it by responsibility: move a component, a group of helpers, a table's columns or a set of test cases to its own file beside this one",
   applies: isSizedSource,
   check({ text }) {
     const count = lineCount(text);
-    return count > MAX_FILE_LINES ? [{ line: MAX_FILE_LINES + 1, message: `the file has ${count} lines; the cap is ${MAX_FILE_LINES}` }] : [];
+    return count > MAX_FILE_LINES ? [{ line: MAX_FILE_LINES + 1, weight: count, message: `the file has ${count} lines; the cap is ${MAX_FILE_LINES}` }] : [];
   },
   cases: [
     { name: "a file one line over the cap is caught", files: { "app/lib/big.ts": `${lines(MAX_FILE_LINES + 1)}\n` }, expect: "finding" },

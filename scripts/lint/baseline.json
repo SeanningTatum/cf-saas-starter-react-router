@@ -27,18 +27,18 @@
       "workers/security-headers.ts": 1
     },
     "file-size": {
-      "app/repositories/__tests__/user.test.ts": 1,
-      "app/routes/admin/components/data-table.tsx": 1,
-      "app/routes/admin/components/user-data-table.tsx": 1,
-      "app/routes/admin/kitchen-sink.tsx": 1,
-      "app/services/__tests__/tracing.test.ts": 1,
-      "scripts/__tests__/repo-rules.test.ts": 1,
-      "scripts/__tests__/workflows/brand-init.test.ts": 1,
-      "scripts/__tests__/workflows/plan-feature.test.ts": 1,
-      "scripts/__tests__/workflows/ship-feature.test.ts": 1,
-      "scripts/first-time-setup.ts": 1,
-      "scripts/memory.ts": 1,
-      "scripts/repo-rules.ts": 1
+      "app/repositories/__tests__/user.test.ts": 531,
+      "app/routes/admin/components/data-table.tsx": 804,
+      "app/routes/admin/components/user-data-table.tsx": 630,
+      "app/routes/admin/kitchen-sink.tsx": 1000,
+      "app/services/__tests__/tracing.test.ts": 506,
+      "scripts/__tests__/repo-rules.test.ts": 651,
+      "scripts/__tests__/workflows/brand-init.test.ts": 514,
+      "scripts/__tests__/workflows/plan-feature.test.ts": 477,
+      "scripts/__tests__/workflows/ship-feature.test.ts": 476,
+      "scripts/first-time-setup.ts": 929,
+      "scripts/memory.ts": 618,
+      "scripts/repo-rules.ts": 618
     },
     "no-comments": {
       ".claude/workflow-src/brand-init.js": 124,

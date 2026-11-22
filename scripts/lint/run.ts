@@ -53,6 +53,7 @@ const toFinding = (rule: Rule, hit: Hit): Finding => ({
   message: hit.message,
   fix: hit.fix ?? rule.fix,
   example: hit.example ?? rule.example,
+  weight: hit.weight,
 });
 
 const byText = (a: string, b: string): number => Number(a > b) - Number(a < b);

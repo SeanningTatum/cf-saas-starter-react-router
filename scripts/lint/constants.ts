@@ -37,6 +37,8 @@ export const RULES_PAGE = "docs/agents/lint-rules.md";
 export const RULES_START = "<!-- lint-rules:start -->";
 export const RULES_END = "<!-- lint-rules:end -->";
 export const WRITE_DOCS_COMMAND = "bun run lint:house --write-docs";
+export const LOWER_BASELINE_COMMAND = "bun run lint:house --lower-baseline";
+export const JSON_INDENT = 2;
 
 export const FIX_LEAD = "Do this instead:";
 export const EFFECT_PROMISE_MARKER = "effect-promise-ok:";
@@ -53,4 +55,5 @@ export const USAGE = [
   "       bun run lint:house --selftest    run every rule's cases",
   "       bun run lint:house --write-docs  rewrite the rule table in docs/agents/lint-rules.md",
   "       bun run lint:house --check-docs  fail when that table is stale",
+  "       bun run lint:house --lower-baseline  lower or remove baseline entries to match the code; it never raises or adds one",
 ];

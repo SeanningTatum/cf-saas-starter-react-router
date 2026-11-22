@@ -5,7 +5,7 @@ import { diskRepo } from "../../repo";
 import { TEST_MAP_PATH } from "../../constants";
 import { parseTestMap } from "../map";
 
-const mapText = (entries: Record<string, string>[]): string => JSON.stringify({ entries });
+const mapText = (entries: Record<string, string | undefined>[]): string => JSON.stringify({ entries });
 
 const problemsOf = (text: string): string[] => {
   const parsed = parseTestMap(text);

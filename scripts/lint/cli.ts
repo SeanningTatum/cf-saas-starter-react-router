@@ -4,8 +4,17 @@ import { dirname, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { Either } from "effect";
 import { resolveBase, type BaseDeps } from "./base-ref";
-import { applyBaseline, BASELINE_CHECKS, baselineFinding, baselineSize, compareWithBase, parseBaseline, type Baseline } from "./baseline";
-import { BASELINE_PATH, GH_TIMEOUT_MS, LINTER_ENTRY, LINT_ROOTS, RULES_PAGE, SHORT_SHA_LENGTH, USAGE } from "./constants";
+import {
+  applyBaseline,
+  BASELINE_CHECKS,
+  baselineFinding,
+  baselineSize,
+  compareWithBase,
+  lowerBaseline,
+  parseBaseline,
+  type Baseline,
+} from "./baseline";
+import { BASELINE_PATH, GH_TIMEOUT_MS, JSON_INDENT, LINTER_ENTRY, LINT_ROOTS, RULES_PAGE, SHORT_SHA_LENGTH, USAGE } from "./constants";
 import { runCommand } from "./command";
 import { formatFinding } from "./format";
 import { loadRules, type Registry } from "./registry";
@@ -23,7 +32,7 @@ export interface CliDeps extends BaseDeps {
   writeFile(path: string, text: string): void;
 }
 
-const MODES = ["--rules", "--selftest", "--write-docs", "--check-docs"];
+const MODES = ["--rules", "--selftest", "--write-docs", "--check-docs", "--lower-baseline"];
 const HELP_FLAGS = ["--help", "-h"];
 
 const ok = (...stdout: string[]): Outcome => ({ code: 0, stdout, stderr: [] });
@@ -86,7 +95,23 @@ function check(deps: CliDeps, files: string[]): Outcome {
   const scope = `${run.filesChecked} file(s), ${rules.length} rule(s)`;
   if (only) return ok(`house lint: clean. ${scope}.`);
   return ok(
-    `house lint: clean. ${scope}. Baseline: ${size.debt} finding(s) in debt, ${size.boundaries} boundary file(s), ${baseline.suppressions} suppression(s); ${compared.note}.`
+    `house lint: clean. ${scope}. Baseline: ${size.entries} file entr(ies) in debt, ${size.boundaries} boundary file(s), ${baseline.suppressions} suppression(s); ${compared.note}.`
+  );
+}
+
+function lower(deps: CliDeps): Outcome {
+  const text = deps.repo.read(BASELINE_PATH);
+  const parsed = text === undefined ? undefined : parseBaseline(text);
+  if (!parsed || Either.isLeft(parsed)) return failed([`${BASELINE_PATH} is missing or does not parse; run \`bun run lint:house\` to see why`]);
+  const before = parsed.right;
+  const after = lowerBaseline(before, runRules(deps.registry.rules, deps.repo, LINT_ROOTS));
+  const was = baselineSize(before);
+  const now = baselineSize(after);
+  const unchanged = JSON.stringify(before) === JSON.stringify(after);
+  if (unchanged) return ok(`${BASELINE_PATH} already matches the code; nothing to lower`);
+  deps.writeFile(BASELINE_PATH, `${JSON.stringify(after, null, JSON_INDENT)}\n`);
+  return ok(
+    `lowered ${BASELINE_PATH}: debt entries ${was.entries} to ${now.entries} (their total ${was.debt} to ${now.debt}), boundary files ${was.boundaries} to ${now.boundaries}, suppressions ${before.suppressions} to ${after.suppressions}. Nothing was raised or added.`
   );
 }
 
@@ -120,6 +145,7 @@ export function lint(argv: string[], deps: CliDeps): Outcome {
   if (problems.length > 0) return failed(problems);
   if (mode === "--rules") return ok(renderRules(rules));
   if (mode === "--write-docs" || mode === "--check-docs") return docs(deps, mode === "--write-docs");
+  if (mode === "--lower-baseline") return lower(deps);
   return check(deps, files);
 }
 

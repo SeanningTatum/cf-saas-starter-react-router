@@ -30,7 +30,7 @@ describe("applyBaseline: debt", () => {
       ["no-bad", 1],
       ["no-bad", 9],
     ]);
-    for (const entry of found) expect(entry.message).toContain("(2 in this file, the baseline allows 1)");
+    for (const entry of found) expect(entry.message).toContain("(this file counts 2, the baseline allows 1)");
   });
 
   it("does not let debt in one file excuse the same rule in another file, or another rule in the same file", () => {
@@ -51,14 +51,14 @@ describe("applyBaseline: debt", () => {
 
     expect(rulesOf(found)).toEqual(["baseline-stale"]);
     expect(found[0]?.message).toContain("is 3, and the linter finds 1");
-    expect(found[0]?.fix).toBe('set `debt["no-bad"]["app/a.ts"]` to 1');
+    expect(found[0]?.fix).toBe('run `bun run lint:house --lower-baseline`, or by hand set `debt["no-bad"]["app/a.ts"]` to 1');
   });
 
   it("tells you to delete the debt entry, not set it to 0, when the file is now clean", () => {
     const found = applyBaseline(baseline({ debt: twoRuleDebt({ "app/a.ts": 2 }) }), ran([]), ruleIds());
 
     expect(rulesOf(found)).toEqual(["baseline-stale"]);
-    expect(found[0]?.fix).toBe('delete "app/a.ts" from `debt["no-bad"]`');
+    expect(found[0]?.fix).toBe('run `bun run lint:house --lower-baseline`, or by hand delete "app/a.ts" from `debt["no-bad"]`');
   });
 });
 
@@ -90,7 +90,7 @@ describe("applyBaseline: boundaries", () => {
     );
 
     expect(found.filter((entry) => entry.rule === "baseline-stale").map((entry) => entry.fix)).toEqual([
-      'delete "app/a.ts" from `boundaries["no-bad"]`',
+      'run `bun run lint:house --lower-baseline`, or by hand delete "app/a.ts" from `boundaries["no-bad"]`',
     ]);
   });
 });
@@ -160,5 +160,28 @@ describe("applyBaseline in file mode", () => {
     );
 
     expect(found).toEqual([finding("no-bad", "app/a.ts")]);
+  });
+});
+
+describe("applyBaseline: a finding that weighs more than one", () => {
+  const longFile = (lines: number) => ran([{ ...finding("no-bad", "app/long.ts"), weight: lines }]);
+  const allows = (lines: number) => baseline({ debt: twoRuleDebt({ "app/long.ts": lines }) });
+
+  it("fails a baselined file that grew, so a file excused at 1,000 lines cannot drift to 1,010", () => {
+    const found = applyBaseline(allows(1000), longFile(1010), ruleIds());
+
+    expect(rulesOf(found)).toEqual(["no-bad"]);
+    expect(found[0]?.message).toContain("this file counts 1010, the baseline allows 1000");
+  });
+
+  it("excuses the file at exactly its recorded weight", () => {
+    expect(applyBaseline(allows(1000), longFile(1000), ruleIds())).toEqual([]);
+  });
+
+  it("asks for the lower number when the file shrank but is still over the cap", () => {
+    const found = applyBaseline(allows(1000), longFile(990), ruleIds());
+
+    expect(rulesOf(found)).toEqual(["baseline-stale"]);
+    expect(found[0]?.message).toContain("is 1000, and the linter finds 990");
   });
 });

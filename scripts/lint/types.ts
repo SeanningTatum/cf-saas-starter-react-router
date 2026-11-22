@@ -19,6 +19,7 @@ export interface Hit {
   fix?: string;
   example?: string;
   related?: string[];
+  weight?: number;
 }
 
 export type FileHit = Omit<Hit, "file">;
@@ -60,6 +61,7 @@ export interface Finding {
   message: string;
   fix: string;
   example?: string;
+  weight?: number;
 }
 
 export interface RunResult {
