@@ -188,7 +188,6 @@ import {
   CommandList,
 } from "@/components/ui/command";
 import { ScrollArea } from "@/components/ui/scroll-area";
-// Note: Resizable component (react-resizable-panels) is not SSR-compatible with Cloudflare Workers
 import { api } from "@/trpc/client";
 import { SiteHeader } from "./layout/site-header";
 import { FileUpload } from "@/components/file-upload";

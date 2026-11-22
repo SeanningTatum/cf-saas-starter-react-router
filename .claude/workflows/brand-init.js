@@ -3,7 +3,7 @@ export const meta = {
   description:
     "Give a fork its own brand in one run — preflight, brief, three comps drawn and critiqued in parallel, your pick on a lavish review page, tokens and every primitive rebuilt on disjoint fences, checks, fix rounds, DESIGN.md, one commit and one PR",
   whenToUse:
-    "A fresh fork that still wears the starter's look. Not for one colour or one component, not on a repo with live users whose brand is not changing (it rewrites 55 primitives), not as a throwaway exploration on a branch you care about.",
+    "A fresh fork that still wears the starter's look. Not for one colour or one component, not on a repo with live users whose brand is not changing (it rewrites 48 primitives), not as a throwaway exploration on a branch you care about.",
   phases: [
     { title: "Preflight", detail: "clean tree, green baseline, no brand yet, branch off main" },
     { title: "Brief", detail: "the impeccable init interview; asks you in chat, then writes PRODUCT.md" },
@@ -25,7 +25,7 @@ export const meta = {
  *   A brand is chosen by looking at it, then applied everywhere at once. This is ONE self-contained
  *   workflow: there is no slash command in front of it. It draws three rival comps in parallel, lets
  *   critics judge them on pixels, asks the user to pick, then turns the winner into the real design
- *   system. The token layer is the one sequential step; after it, 55 primitives and a few shared
+ *   system. The token layer is the one sequential step; after it, 48 primitives and a few shared
  *   components share no file, so they build in parallel. It ends by writing a verdict file
  *   and opening a PR with the verdict in its body, so everything lives in one place.
  *
@@ -327,6 +327,10 @@ Draft an answer to each one from:
 ${
   "PRODUCT.md exists at " + ROOT + "/PRODUCT.md? Check. If it does and redo is " + redo + ": when redo is false, use its content as the drafts and mark them confident; when redo is true, prefill from it."
 }
+One exception: a PRODUCT.md that says it describes the starter itself is the starter's file, not this
+product's. A fork that still has it has not said what it is building. Do not draft from it or from the
+repo's own description of the starter; draft from args.brief, and mark every answer that args.brief does
+not state confident=false.
 
 Return every question with a short stable id, the question text, your draft answer, and confident:
 true only when the repo or args.brief states the answer outright. Mark a guess confident=false: the user
@@ -709,7 +713,7 @@ const rejected = rejectedAll;
 
 const ui = (names) => names.map((n) => `app/components/ui/${n}.tsx`);
 
-// Hardcoded fences. The nine primitive lanes cover all 55 files in app/components/ui once.
+// Hardcoded fences. The nine primitive lanes cover all 48 files in app/components/ui once.
 const CONTRACT_FENCE = ["app/app.css", "app/root.tsx"];
 const BUILD_LANES = [
   // harness:primitive-fences:start
@@ -718,17 +722,17 @@ const BUILD_LANES = [
   {
     name: "primitives:buttons-toggles",
     motion: true,
-    owns: ui(["button", "button-group", "toggle", "toggle-group", "switch", "kbd"]),
+    owns: ui(["button", "button-group", "toggle", "toggle-group", "switch"]),
   },
   {
     name: "primitives:text-fields",
     motion: false,
-    owns: ui(["input", "input-group", "input-otp", "textarea", "label", "field", "form"]),
+    owns: ui(["input", "input-group", "input-otp", "textarea", "label", "form"]),
   },
   {
     name: "primitives:choice-pickers",
     motion: true,
-    owns: ui(["checkbox", "radio-group", "slider", "select", "native-select", "combobox", "calendar"]),
+    owns: ui(["checkbox", "radio-group", "slider", "select", "native-select", "calendar"]),
   },
   {
     name: "primitives:dialogs-sheets",
@@ -743,22 +747,22 @@ const BUILD_LANES = [
   {
     name: "primitives:feedback",
     motion: true,
-    owns: ui(["alert", "sonner", "progress", "skeleton", "spinner", "empty"]),
+    owns: ui(["alert", "progress", "skeleton", "spinner", "empty"]),
   },
   {
     name: "primitives:disclosure-nav",
     motion: true,
-    owns: ui(["accordion", "collapsible", "tabs", "navigation-menu", "breadcrumb", "pagination"]),
+    owns: ui(["accordion", "collapsible", "tabs", "breadcrumb", "pagination"]),
   },
   {
     name: "primitives:layout",
     motion: true, // the sidebar collapses
-    owns: ui(["sidebar", "separator", "scroll-area", "resizable", "aspect-ratio", "card"]),
+    owns: ui(["sidebar", "separator", "scroll-area", "aspect-ratio", "card"]),
   },
   {
     name: "primitives:data-display",
     motion: false,
-    owns: ui(["table", "chart", "avatar", "badge", "item", "carousel"]),
+    owns: ui(["table", "chart", "avatar", "badge", "carousel"]),
   },
   // harness:primitive-fences:end
   {
@@ -1149,7 +1153,7 @@ ${CHECK_INPUTS}
 
 ${browserRules("motion", 5283)}
 ${SKILL_RULE}
-Load the \`emil-design-eng\` skill (not \`review-animations\`, which the Skill tool refuses) and judge by its rules the primitives that move (dialog, sheet, dropdown-menu, tabs, accordion, sonner, button
+Load the \`emil-design-eng\` skill (not \`review-animations\`, which the Skill tool refuses) and judge by its rules the primitives that move (dialog, sheet, dropdown-menu, tabs, accordion, button
 press states). Check that the durations and easings come from the --duration-* / --ease-* tokens and
 that prefers-reduced-motion collapses them. ${FIND_NOTE}`,
         { label: "check:review-animations", phase: "Check", schema: VERDICT_SCHEMA }
