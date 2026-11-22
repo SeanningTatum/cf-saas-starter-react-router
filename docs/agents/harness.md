@@ -124,6 +124,7 @@ Listed in [`scripts/verify.sh`](../../scripts/verify.sh), the one runner for CI,
 | Gate | Command | Runs in |
 |------|---------|---------|
 | typecheck | `bun run typecheck` | baseline, full |
+| lint | `bun run lint` (Biome, the house linter, dead code; [`docs/agents/lint.md`](lint.md)) | baseline, full |
 | test | `bun run test` | baseline, full |
 | non-negotiables-selftest | `bun run scripts/check-non-negotiables.ts --selftest` | baseline, full |
 | non-negotiables | `bun run scripts/check-non-negotiables.ts` | baseline, full |
@@ -147,7 +148,12 @@ bun run dev               # Dev server (auto-runs local DB migrations) → http:
 bun run build             # Production build
 bun run deploy            # Build + deploy to Cloudflare Workers
 bun run deploy:preview    # Build with CLOUDFLARE_ENV=preview + deploy the -preview worker
-bun run typecheck         # Full typecheck (cf-typegen + react-router typegen + tsc)
+bun run typecheck         # Full typecheck (cf-typegen + react-router typegen + tsc): app, workers, scripts, e2e, configs
+bun run lint              # Biome + house linter + dead code, one finding per line (lint.md)
+bun run lint <files>      # The same for some files (no dead-code or import-cycle pass); --fix applies safe fixes
+bun run lint:staged       # The same for staged files
+bun run lint:effect       # Effect language service diagnostics (about 30 s; on demand, not a gate)
+bun run format            # Format every file Biome covers
 bun run test              # Vitest unit tests (one-shot)
 bun run test:watch        # Vitest watch mode
 bun run test:e2e          # Playwright e2e tests

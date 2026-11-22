@@ -23,7 +23,7 @@ Tag them: `test(title, { tag: "@golden" }, ...)` and `{ tag: "@error" }`. These 
 - Read `playwright.config.ts` (base URL, projects, webServer) and `e2e/*.spec.ts` first; copy their imports, login helper and layout.
 - Fixtures: run `bun scripts/seed-preview.ts --describe` to list seeded logins (admin, user, banned). Log in as those. Never create accounts in a spec unless the flow is sign-up.
 - Locators: `getByRole`, `getByLabel`, `getByText`, `getByTestId` only when no accessible name exists. No CSS or XPath chains.
-- Waits: web-first assertions (`expect(locator).toBeVisible()`, `toHaveURL`). No `waitForTimeout`, no sleeps.
+- Waits: web-first assertions (`expect(locator).toBeVisible()`, `toHaveURL`). No sleeps.
 - Independence: each spec sets up what it needs and does not depend on another spec's data or order. Data a spec mutates is restored or unique per run (`crypto.randomUUID()` in names).
 - One file per feature: `e2e/<slug>.spec.ts`.
 
@@ -49,5 +49,5 @@ skipped: [string]                   flows not covered, and why (also app bugs fo
 
 - Write only under `e2e/`. If the app is wrong, add it to `skipped` as an app bug and leave the spec failing honestly or mark the single test `test.fixme` with the reason - never edit source.
 - Run only your own specs, never the whole suite, never `bun run dev` by hand.
-- Never weaken an assertion to pass. Never add `test.skip` without a reason string.
+- Never weaken an assertion to pass.
 - Paste failing output verbatim. Never report green on a red run.

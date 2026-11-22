@@ -131,6 +131,7 @@ State lives in GitHub: the spec is an issue, each ticket is an issue, and a merg
 | Gate | Command | Runs in |
 |------|---------|--------|
 | typecheck | `bun run typecheck` | baseline, full |
+| lint | `bun run lint` (Biome, the house linter, dead code; [`docs/agents/lint.md`](docs/agents/lint.md)) | baseline, full |
 | test | `bun run test` | baseline, full |
 | non-negotiables-selftest | `bun run scripts/check-non-negotiables.ts --selftest` | baseline, full |
 | non-negotiables | `bun run scripts/check-non-negotiables.ts` | baseline, full |
@@ -172,7 +173,9 @@ These run automatically — you do not need to remember them.
 Triggered on `git commit`. Skips entirely if no `.ts/.tsx/.js/.jsx` files are staged. Otherwise:
 
 ```bash
-bun run typecheck     # cf-typegen + react-router typegen + tsc -b
+bun run typecheck     # cf-typegen + react-router typegen + tsc -b (app, workers, scripts, e2e, configs)
+bun run lint          # Biome + house linter + dead code, one finding per line
+bun run format        # format every file Biome covers
 bun run test          # vitest run (123+ unit tests)
 ```
 
@@ -243,7 +246,9 @@ bun run build                 # Production build
 bun run deploy                # Build + deploy to Cloudflare Workers
 bun run preview               # Build + serve locally via the Cloudflare Vite plugin (vite preview)
 
-bun run typecheck             # cf-typegen + react-router typegen + tsc -b
+bun run typecheck             # cf-typegen + react-router typegen + tsc -b (app, workers, scripts, e2e, configs)
+bun run lint                  # Biome + house linter + dead code, one finding per line
+bun run format                # Format every file Biome covers
 bun run test                  # Vitest (one-shot)
 bun run test:watch            # Vitest watch
 bun run test:e2e              # Playwright

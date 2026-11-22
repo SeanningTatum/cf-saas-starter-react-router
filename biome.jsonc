@@ -1,0 +1,222 @@
+{
+  "$schema": "./node_modules/@biomejs/biome/configuration_schema.json",
+  "vcs": { "enabled": true, "clientKind": "git", "useIgnoreFile": true, "defaultBranch": "staging" },
+  "files": {
+    "ignoreUnknown": true,
+    "includes": [
+      "**",
+      // Written by a tool, so a rule here would only be undone by the next run of that tool.
+      "!worker-configuration.d.ts",
+      "!drizzle",
+      "!skills-lock.json",
+      "!.claude/workflows",
+      // Workflow sources are script bodies (top-level return and await), not modules: Biome cannot parse them.
+      "!.claude/workflow-src",
+      "!plans",
+      "!scripts/__tests__/fixtures",
+      // Prose and pipelines: reflowing an agent brief changes a prompt, and tests read the workflow files as text.
+      "!**/*.md",
+      "!**/*.yml",
+      "!**/*.yaml"
+    ]
+  },
+  "assist": { "enabled": false },
+  "formatter": {
+    "enabled": true,
+    "indentStyle": "space",
+    "indentWidth": 2,
+    "lineWidth": 100
+  },
+  "javascript": {
+    "formatter": { "quoteStyle": "double", "semicolons": "always", "trailingCommas": "all" }
+  },
+  "css": { "parser": { "tailwindDirectives": true } },
+  "linter": {
+    "enabled": true,
+    // Each domain is switched on below for the folders it belongs to: outside them its rules misfire
+    // (a script function named `useD1` is not a hook, a helper named `describe` is not a test suite).
+    "domains": { "project": "none", "react": "none", "test": "none", "playwright": "none" },
+    "rules": {
+      "preset": "recommended",
+      "correctness": {
+        "noUnusedImports": "error",
+        "noUnusedVariables": "error"
+      },
+      "performance": { "noBarrelFile": "error", "noReExportAll": "error" },
+      "security": { "noDangerouslySetInnerHtml": "error" },
+      "style": {
+        "noDefaultExport": "error",
+        "noNonNullAssertion": "error",
+        "useFilenamingConvention": {
+          "level": "error",
+          "options": { "filenameCases": ["kebab-case"], "requireAscii": true }
+        },
+        "noRestrictedImports": {
+          "level": "error",
+          "options": {
+            "paths": {
+              "zod": "Use Effect Schema: import { Schema } from \"effect\".",
+              "@tabler/icons-react": "One icon set: import the icon from lucide-react.",
+              "posthog-js": "A provider SDK stays inside its adapter: app/lib/analytics/adapters/.",
+              "posthog-node": "A provider SDK stays inside its adapter: app/lib/analytics/adapters/."
+            }
+          }
+        }
+      },
+      "suspicious": {
+        "noExplicitAny": "error"
+        // noImportCycles is not listed on purpose. It needs the whole module graph, which costs
+        // seconds on every call, even for one file. `bun run lint` runs it by name on the whole repo
+        // (scripts/lint-all.ts), so the gate has it and the edit hook stays fast.
+      }
+    }
+  },
+  "overrides": [
+    {
+      "includes": ["app/**", "workers/**", "workflows/**"],
+      "linter": {
+        "domains": { "react": "recommended" },
+        "rules": {
+          "correctness": { "useExhaustiveDependencies": "error", "useHookAtTopLevel": "error" },
+          "style": { "noProcessEnv": "error" },
+          "suspicious": { "noConsole": "error" }
+        }
+      }
+    },
+    {
+      // Effect.catchTags takes an object of capitalised handlers; the rule reads each one as a component.
+      "includes": ["**/*.ts"],
+      "linter": { "rules": { "correctness": { "noComponentHookFactories": "off" } } }
+    },
+    {
+      "includes": ["**/__tests__/**", "**/*.test.ts", "**/*.test.tsx", "e2e/**"],
+      "linter": {
+        "domains": { "test": "recommended" },
+        "rules": { "suspicious": { "noFocusedTests": "error", "noSkippedTests": "error" } }
+      }
+    },
+    {
+      "includes": ["e2e/**"],
+      "linter": { "domains": { "playwright": "all" } }
+    },
+    {
+      // The framework loads these by their default export.
+      "includes": [
+        "*.config.ts",
+        "app/root.tsx",
+        "app/routes.ts",
+        "app/entry.server.tsx",
+        "app/routes/**",
+        "workers/app.ts"
+      ],
+      "linter": { "rules": { "style": { "noDefaultExport": "off" } } }
+    },
+    {
+      // React Router names a splat route file with `$`.
+      "includes": ["app/routes/api/*.$.ts"],
+      "linter": { "rules": { "style": { "useFilenamingConvention": "off" } } }
+    },
+    {
+      // The one place the app writes to the console: the logger's sink.
+      "includes": ["app/lib/log-format.ts"],
+      "linter": { "rules": { "suspicious": { "noConsole": "off" } } }
+    },
+    {
+      "includes": ["app/lib/analytics/adapters/**"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "paths": {
+                  "zod": "Use Effect Schema: import { Schema } from \"effect\".",
+                  "@tabler/icons-react": "One icon set: import the icon from lucide-react."
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      // The nine files that still use the second icon set. This list only shrinks: move a file to
+      // lucide-react, then delete its line. When it is empty, drop @tabler/icons-react from package.json.
+      "includes": [
+        "app/components/analytics/stat-card.tsx",
+        "app/components/feature-card.tsx",
+        "app/routes/admin/components/user-data-table.tsx",
+        "app/routes/admin/layout/app-sidebar.tsx",
+        "app/routes/admin/layout/nav-main.tsx",
+        "app/routes/admin/layout/nav-user.tsx",
+        "app/routes/authentication/components/auth-shell.tsx",
+        "app/routes/dashboard/_index.tsx",
+        "app/routes/home.tsx"
+      ],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "paths": {
+                  "zod": "Use Effect Schema: import { Schema } from \"effect\".",
+                  "posthog-js": "A provider SDK stays inside its adapter: app/lib/analytics/adapters/.",
+                  "posthog-node": "A provider SDK stays inside its adapter: app/lib/analytics/adapters/."
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      // ShadCN primitives are vendored: `shadcn add` writes them, so only the boundary is checked.
+      "includes": ["app/components/ui/**"],
+      "linter": {
+        "domains": { "react": "none" },
+        "rules": {
+          "preset": "none",
+          "correctness": {
+            "noUnusedImports": "off",
+            "noUnusedVariables": "off",
+            "useExhaustiveDependencies": "off",
+            "useHookAtTopLevel": "off"
+          },
+          "performance": { "noBarrelFile": "off", "noReExportAll": "off" },
+          "security": { "noDangerouslySetInnerHtml": "off" },
+          "suspicious": { "noExplicitAny": "off", "noConsole": "off" },
+          "style": {
+            "noDefaultExport": "off",
+            "noNonNullAssertion": "off",
+            "noProcessEnv": "off",
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "paths": {
+                  "zod": "Use Effect Schema: import { Schema } from \"effect\".",
+                  "@tabler/icons-react": "One icon set: import the icon from lucide-react.",
+                  "drizzle-orm": "A primitive takes data as props; it never reads the data layer."
+                },
+                "patterns": [
+                  {
+                    "group": [
+                      "@/db",
+                      "@/db/**",
+                      "@/repositories/**",
+                      "@/services/**",
+                      "@/trpc/**",
+                      "@/auth/**",
+                      "drizzle-orm/**"
+                    ],
+                    "message": "A primitive takes data as props; it never reads the data layer."
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
+}

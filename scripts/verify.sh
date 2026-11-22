@@ -18,6 +18,7 @@ cd "$(dirname "$0")/.."
 # e2e runs with CI=1: without it the dev server opens a remote-bindings session that needs a Cloudflare
 # login, so the gate is red on any machine that is not logged in (vite.config.ts, remoteBindings).
 GATES='typecheck|bun run typecheck|y|600
+lint|bun run lint|y|300
 test|bun run test|y|600
 non-negotiables-selftest|bun run scripts/check-non-negotiables.ts --selftest|y|300
 non-negotiables|bun run scripts/check-non-negotiables.ts|y|300
