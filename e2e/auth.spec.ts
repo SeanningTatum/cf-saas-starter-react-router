@@ -1,4 +1,35 @@
-import { test, expect } from "@playwright/test";
+import { test, expect, type Page } from "@playwright/test";
+
+/**
+ * Hold every script request until `release()` is called, so the server-
+ * rendered page sits on screen unhydrated: the window where a submit used to
+ * become a native GET with the password in the query string (issue #49).
+ */
+async function holdScripts(page: Page) {
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => (release = resolve));
+  await page.route("**/*", async (route) => {
+    if (route.request().resourceType() === "script") await gate;
+    await route.continue();
+  });
+  return release;
+}
+
+/**
+ * The auth forms keep submit disabled until React hydrates, and hydration
+ * resets anything typed before it, so wait for the button before filling.
+ * On a cold dev server the first page load can die on Vite's "504 Outdated
+ * Optimize Dep" and never hydrate (issue #50); one reload recovers it.
+ */
+async function waitForHydration(page: Page, submitTestId: string) {
+  const submit = page.getByTestId(submitTestId);
+  const hydrated = await expect(submit)
+    .toBeEnabled({ timeout: 15_000 })
+    .then(() => true, () => false);
+  if (hydrated) return;
+  await page.reload();
+  await expect(submit).toBeEnabled({ timeout: 30_000 });
+}
 
 /**
  * Authentication golden path.
@@ -23,6 +54,7 @@ test.describe("Authentication", () => {
   test("signup → dashboard, signout → login, signin → dashboard", { tag: "@golden" }, async ({ page }) => {
     // 1. Sign up
     await page.goto("/sign-up");
+    await waitForHydration(page, "signup-submit");
     await page.fill('[data-testid="signup-name"]', name);
     await page.fill('[data-testid="signup-email"]', email);
     await page.fill('[data-testid="signup-password"]', password);
@@ -45,6 +77,7 @@ test.describe("Authentication", () => {
 
     await page.goto("/dashboard");
     await page.waitForURL("/login");
+    await waitForHydration(page, "login-submit");
 
     // 3. Sign back in with the same credentials.
     await page.fill('[data-testid="login-email"]', email);
@@ -56,10 +89,46 @@ test.describe("Authentication", () => {
 
   test("login form rejects bad credentials", { tag: "@error" }, async ({ page }) => {
     await page.goto("/login");
+    await waitForHydration(page, "login-submit");
     await page.fill('[data-testid="login-email"]', "nobody@test.local");
     await page.fill('[data-testid="login-password"]', "WrongPass123!");
     await page.click('[data-testid="login-submit"]');
     await expect(page.getByTestId("login-error")).toBeVisible();
     await expect(page).toHaveURL(/\/login$/);
   });
+});
+
+// Catches issue #49: a submit before hydration must never put a field in the URL.
+test.describe("Auth forms before hydration", () => {
+  const forms = [
+    { path: "/sign-up", prefix: "signup", passwordFields: ["signup-password", "signup-confirm-password"] },
+    { path: "/login", prefix: "login", passwordFields: ["login-password"] },
+  ];
+
+  for (const { path, prefix, passwordFields } of forms) {
+    test(`${path} ignores an early submit and keeps the password out of the URL`, async ({ page }) => {
+      const release = await holdScripts(page);
+      await page.goto(path, { waitUntil: "commit" });
+
+      const form = page.getByTestId(`${prefix}-form`);
+      const submit = page.getByTestId(`${prefix}-submit`);
+      await expect(form).toBeVisible();
+      // Backstop if JS never loads: a native submit posts the body, never a query string.
+      await expect(form).toHaveAttribute("method", "post");
+      await expect(submit).toBeDisabled();
+
+      await page.getByTestId(`${prefix}-email`).fill("early@test.local");
+      for (const field of passwordFields) await page.getByTestId(field).fill("EarlyPass123!");
+      await submit.click({ force: true });
+      await page.getByTestId(passwordFields[0]).press("Enter");
+
+      expect(new URL(page.url()).search).toBe("");
+      expect(page.url()).not.toContain("EarlyPass123");
+
+      // Once hydrated, the same form works.
+      release();
+      await waitForHydration(page, `${prefix}-submit`);
+      expect(new URL(page.url()).pathname).toBe(path);
+    });
+  }
 });

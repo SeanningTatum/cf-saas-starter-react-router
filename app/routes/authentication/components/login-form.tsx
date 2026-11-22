@@ -23,6 +23,7 @@ import { useForm } from "react-hook-form"
 import { LoginSchema, type LoginInput } from "@/lib/schemas/auth"
 import { useState } from "react"
 import { useTranslation } from "react-i18next"
+import { useHydrated } from "@/hooks/use-hydrated"
 
 interface LoginFormProps extends React.ComponentProps<"div"> { }
 
@@ -30,6 +31,7 @@ export function LoginForm({ className, ...props }: LoginFormProps) {
   const navigate = useNavigate()
   const [authError, setAuthError] = useState<string>()
   const { t } = useTranslation("auth")
+  const hydrated = useHydrated()
 
   const form = useForm<LoginInput>({
     resolver: effectResolver(LoginSchema),
@@ -68,7 +70,7 @@ export function LoginForm({ className, ...props }: LoginFormProps) {
         </CardHeader>
         <CardContent>
           <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6" data-testid="login-form">
+            <form method="post" onSubmit={form.handleSubmit(onSubmit)} className="space-y-6" data-testid="login-form">
               <FormField
                 control={form.control}
                 name="email"
@@ -130,7 +132,7 @@ export function LoginForm({ className, ...props }: LoginFormProps) {
                   type="submit"
                   className="w-full"
                   data-testid="login-submit"
-                  disabled={form.formState.isSubmitting}
+                  disabled={!hydrated || form.formState.isSubmitting}
                 >
                   {form.formState.isSubmitting ? t("login.submitting") : t("login.submit")}
                 </Button>
