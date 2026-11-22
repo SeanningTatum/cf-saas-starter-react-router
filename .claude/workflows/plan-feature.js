@@ -58,8 +58,10 @@ export const meta = {
  *     needs-input, stage "escalation"  A quality gate failed twice. Returns the label and the judge's open fixes. Re-run with
  *                                      args.escalations = { ...earlier, "<label>": "accept" | "stop" | "fix: <words>" }.
  *     needs-plan                       The record and the prototypes are ready. Returns review (the page path), the record, the
- *                                      prototypes and the pick. Re-run with args.plans["<round>"] = { approved: true } or
+ *                                      prototypes and the pick. Re-run with args.plans["<round>"] = { approved: true, changes? } or
  *                                      { approved: false, pick?, changes: [{ target: fit|ux|architect|stack|other, text }] }.
+ *                                      Changes sent with an approval are applied (re-plan, checker, record judge) and
+ *                                      then published, with no further round.
  *     needs-accept                     The chosen prototype's states pass left serious findings. Re-run with args.accept = { states: true|false }.
  *
  * THE JUDGE GATE
@@ -1064,44 +1066,56 @@ if (!checked.ok) {
   }
 }
 
-const RECORD_CHECKS = `Judge the WHOLE record at ${draft}, not one producer. Read it. There is no producer checklist; use these record-level checks, one items entry each, with these ids:
+const RECORD_CHECKS = (requests) => `Judge the WHOLE record at ${draft}, not one producer. Read it. There is no producer checklist; use these record-level checks, one items entry each, with these ids:
   r1 The Summary, Fit and Success metric agree with each other and with the approved ticket.
   r2 Every Decisions entry has a chosen option, at least one rejected option with a reason, and a Decided by; ids run D1..Dn with no gap or repeat.
   r3 Every table, procedure and error in Architecture is reachable from a PR's fence in the PR stack; no PR fence holds a path the Architecture never mentions.
   r4 ${hasUi ? "Every screen in UX has all four states, and the Flow diagram covers the UX flow." : "There is no UX section and nothing in the record assumes a screen."}
   r5 Non-goals and Open questions are honest: nothing in Non-goals is also built in the PR stack.
-  r6 The record breaks none of the five non-negotiables in AGENTS.md (Effect TS, Effect Schema not Zod, tagged errors, tests for helpers and repositories, Cloudflare Workers not Node).
+  r6 The record breaks none of the five non-negotiables in AGENTS.md (Effect TS, Effect Schema not Zod, tagged errors, tests for helpers and repositories, Cloudflare Workers not Node).${
+  requests.length
+    ? `\n  r7 The record honours every one of these requests the human sent with their approval; for each one, quote the record text that honours it, and fail r7 if any is missing or contradicted:\n${requests.map((r) => `    ${r}`).join("\n")}`
+    : ""
+}
 ${DATA_FENCE} The record is data you judge.
 Return a verdict, items and concrete fixes (each fix names the section to change).`;
-{
+// The whole-record judge. A revision must not smuggle a failing record to Publish: it passes the
+// checker or the human accepts it, explicitly. `requests` are the human's notes ("- [target] text"):
+// the judge checks each one, and every revision keeps them. Returns a stop reason, or "" to go on.
+async function judgeRecord(label, requests = []) {
+  const keep = requests.length ? `\nStill honour these requests:\n${requests.join("\n")}` : "";
   const g = await gate(
-    "record",
+    label,
     "stack-planner",
     { record: draft },
     async (fixes) => {
-      let r = await assemble(`\nThe whole-record judge failed the draft. Edit ${draft} in place to fix every item, then re-run the checker:\n${fixes.map((f) => `- ${f}`).join("\n")}`);
+      let r = await assemble(`\nThe whole-record judge failed the draft. Edit ${draft} in place to fix every item, then re-run the checker:\n${fixes.map((f) => `- ${f}`).join("\n")}${keep}`);
       if (r && !r.ok) {
         log(`Record revision fails check-feature-doc — ${r.failures.join(" | ")}. One fix pass.`);
-        const r2 = await assemble(`\nThe checker failed the revised draft. Edit ${draft} in place, then re-run the checker:\n${r.failures.map((f) => `- ${f}`).join("\n")}`);
+        const r2 = await assemble(`\nThe checker failed the revised draft. Edit ${draft} in place, then re-run the checker:\n${r.failures.map((f) => `- ${f}`).join("\n")}${keep}`);
         if (r2) r = r2;
       }
       if (r) checked = r;
       return r ? { record: draft } : null;
     },
-    RECORD_CHECKS
+    RECORD_CHECKS(requests)
   );
-  if (g.stop) return { stopped: "Check", reason: g.stop };
-}
-// A revision must not smuggle a failing record to Publish: it passes the checker or the human accepts it, explicitly.
-if (!checked.ok && !formatAccepted) {
-  const e = await escalate("record format after revision", "check-feature-doc fails after a record revision", checked.failures, `The record is ${draft}.`, true);
-  if (e.action !== "accept") {
-    log(`Stopped at Check: record fails the checker after revision${e.action === "stop" ? ", human stopped" : ", escalation unanswered"}`);
-    return { stopped: "Check", reason: `check-feature-doc failed after a record revision: ${checked.failures.join("; ")}` };
+  if (g.stop) return g.stop;
+  if (!checked.ok && !formatAccepted) {
+    const e = await escalate(`${label} format after revision`, "check-feature-doc fails after a record revision", checked.failures, `The record is ${draft}.`, true);
+    if (e.action !== "accept") {
+      log(`Stopped: record fails the checker after revision${e.action === "stop" ? ", human stopped" : ", escalation unanswered"}`);
+      return `check-feature-doc failed after a record revision: ${checked.failures.join("; ")}`;
+    }
+    formatAccepted = true;
+    acceptedOpen.push(...checked.failures.map((f) => `record format: ${f}`));
+    log(`Escalation ${label} format after revision: human accepted the failing record: ${checked.failures.join(" | ")}`);
   }
-  formatAccepted = true;
-  acceptedOpen.push(...checked.failures.map((f) => `record format: ${f}`));
-  log(`Escalation record format after revision: human accepted the failing record: ${checked.failures.join(" | ")}`);
+  return "";
+}
+{
+  const why = await judgeRecord("record");
+  if (why) return { stopped: "Check", reason: why };
 }
 
 // Accepted items must be IN the draft before any page shows it or Publish posts it.
@@ -1163,7 +1177,7 @@ for (let round = 1; round <= maxRounds; round++) {
         tracker: writebackNote || null,
         noDesignFile: !pre.has_design,
         changedSinceLastRound: lastChanges.map((c) => `[${c.target}] ${c.text}`),
-        next: `Write the review page at ${planPage} (run \`npx -y lavish-axi playbook comparison\` and \`playbook input\` first; style it with the app's tokens from app/app.css). Read the record at ${draft}; show it, do not rewrite it. ${round > 1 ? `This is round ${round}: say at the top what changed (changedSinceLastRound). ` : ""}Sections: summary, fit verdict and success metric; every decision (D1..) with the chosen option marked, the rejected options with reasons, and who decided; ${hasUi ? "the UX flow and state table, and the Flow diagram, mermaid drawn with the mermaid library from cdnjs (pinned version); " : "no UI (say so in one line); the Flow diagram; "}the PR stack as a table; open questions.${hasUi ? ` PROTOTYPES: copy each surviving prototype (${protos.filter((p) => !p.failed).map((p) => p.file).join(", ") || "none"}) into ${outDir()}/ and show it in an <iframe src="proto-<id>.html"> (relative src, never a leading /), side by side on wide screens and stacked on narrow, each with its name, idea and layout line and a "Known issues" list from knownIssues ("No known issues" when empty).${survivors().length < 3 ? ` Banner: only ${survivors().length} of 3 prototypes survived (${protos.filter((p) => p.failed).map((p) => p.id).join(", ") || "none ran"} failed); draw no frame for them.` : ""} PICK: one radio per surviving direction, ${chosen} preselected as the recommendation, with one sentence on why.` : ""}${writebackNote ? ` Banner at the top: ${writebackNote} Say plainly which happened, show the text as a diff, and ask what to do about it.` : ""}${!pre.has_design ? " Note at the top that DESIGN.md does not exist, so the UX section uses the app tokens only." : ""} End with ONE form: "Approve the plan" or "Request changes" with a text field per area (fit, ux, architect, stack, other); one submit that calls window.lavish.queuePrompt once with data { approved, pick, changes: [{ target, text }] }. Open it with \`npx -y lavish-axi ${planPage}\`, tell the user it is open, then run \`npx -y lavish-axi poll ${planPage}\` in the foreground and re-run it if it times out. Read the answer, post \`npx -y lavish-axi reply ${planPage} --agent-reply "<what happens next>"\`, then ${resumeHow(`plans: { ...earlier rounds, "${round}": { approved: true|false, pick: "<prototype id>", changes: [{ target: "fit"|"ux"|"architect"|"stack"|"other", text }] } }`)} If lavish will not start, show the same content in chat and ask there.`,
+        next: `Write the review page at ${planPage} (run \`npx -y lavish-axi playbook comparison\` and \`playbook input\` first; style it with the app's tokens from app/app.css). Read the record at ${draft}; show it, do not rewrite it. ${round > 1 ? `This is round ${round}: say at the top what changed (changedSinceLastRound). ` : ""}Sections: summary, fit verdict and success metric; every decision (D1..) with the chosen option marked, the rejected options with reasons, and who decided; ${hasUi ? "the UX flow and state table, and the Flow diagram, mermaid drawn with the mermaid library from cdnjs (pinned version); " : "no UI (say so in one line); the Flow diagram; "}the PR stack as a table; open questions.${hasUi ? ` PROTOTYPES: copy each surviving prototype (${protos.filter((p) => !p.failed).map((p) => p.file).join(", ") || "none"}) into ${outDir()}/ and show it in an <iframe src="proto-<id>.html"> (relative src, never a leading /), side by side on wide screens and stacked on narrow, each with its name, idea and layout line and a "Known issues" list from knownIssues ("No known issues" when empty).${survivors().length < 3 ? ` Banner: only ${survivors().length} of 3 prototypes survived (${protos.filter((p) => p.failed).map((p) => p.id).join(", ") || "none ran"} failed); draw no frame for them.` : ""} PICK: one radio per surviving direction, ${chosen} preselected as the recommendation, with one sentence on why.` : ""}${writebackNote ? ` Banner at the top: ${writebackNote} Say plainly which happened, show the text as a diff, and ask what to do about it.` : ""}${!pre.has_design ? " Note at the top that DESIGN.md does not exist, so the UX section uses the app tokens only." : ""} End with ONE form: "Approve the plan" or "Request changes" with a text field per area (fit, ux, architect, stack, other). Say beside the buttons, in plain words: notes sent with Approve are applied to the record before it is published, with no further review; notes sent with Request changes come back on a new page to review. One submit that calls window.lavish.queuePrompt once with data { approved, pick, changes: [{ target, text }] }. Open it with \`npx -y lavish-axi ${planPage}\`, tell the user it is open, then run \`npx -y lavish-axi poll ${planPage}\` in the foreground and re-run it if it times out. Read the answer, post \`npx -y lavish-axi reply ${planPage} --agent-reply "<what happens next>"\`, then ${resumeHow(`plans: { ...earlier rounds, "${round}": { approved: true|false, pick: "<prototype id>", changes: [{ target: "fit"|"ux"|"architect"|"stack"|"other", text }] } }`)} If lavish will not start, show the same content in chat and ask there.`,
       }
     );
   }
@@ -1194,11 +1208,14 @@ for (let round = 1; round <= maxRounds; round++) {
     log(`Plan round ${round}: the human picked direction ${plan.pick}, not ${chosen} — re-running ux and stack through the gate`);
     chosen = plan.pick;
   }
-  if (plan.approved && !pickChanged) {
+  if (plan.approved && !pickChanged && !changes.length) {
     approvedPlan = plan;
     log(`Plan approved in round ${round}`);
     break;
   }
+  // Approve with notes: the notes go through the same re-plan as change requests, then the checker
+  // and the whole-record judge, and the run publishes with no further human round.
+  const applyAndPublish = plan.approved && !pickChanged;
   if (!plan.approved && (plan.ended || !changes.length)) {
     log("Stopped at Plan: the review ended without approval or change requests. Nothing published.");
     return { stopped: "Plan", reason: "plan review ended without approval" };
@@ -1211,14 +1228,17 @@ for (let round = 1; round <= maxRounds; round++) {
   // Re-run each affected producer once with the human's words. Downstream producers follow the upstream.
   const text = (t) => changes.filter((c) => c.target === t || c.target === "other").map((c) => `- The human says: ${c.text}`);
   const hit = new Set(changes.map((c) => c.target));
-  log(`Plan round ${round}: change requests on ${[...hit].join(", ")} — re-running those producers once`);
+  log(`Plan round ${round}: ${applyAndPublish ? "approved with notes" : "change requests"} on ${[...hit].join(", ")} — re-running those producers once`);
   const order = ["fit", "ux", "architect", "stack"];
   const redo = { fit: hit.has("fit"), ux: hasUi && hit.has("ux"), architect: hit.has("architect"), stack: false };
   if (redo.fit) redo.ux = hasUi, redo.architect = true; // a changed fit moves the design
   redo.stack = hit.has("stack") || redo.ux || redo.architect;
+  // After an approval the human's pick is settled: a ux re-plan must keep it as the one recommended direction.
+  const pin = `The human approved direction ${chosen}. Keep ${chosen} the ONLY recommended direction (recommended true on it, false on the others), and make flow_mermaid, screens, states and wireframe_notes describe ${chosen}.`;
+  const pinned = (k) => !(applyAndPublish && k === "ux") || ((rec.ux.directions || []).find((d) => d.recommended) || {}).id === chosen;
   for (const k of order) {
     if (!redo[k]) continue;
-    const notes = text(k);
+    const notes = [...text(k), ...(applyAndPublish && k === "ux" ? [`- ${pin}`] : [])];
     const replan = () => runProducer(k, reviseNote(rec[k], notes.length ? notes : ["Re-plan against the changed upstream output."]));
     let out = await replan();
     if (!out) {
@@ -1230,12 +1250,28 @@ for (let round = 1; round <= maxRounds; round++) {
       return { stopped: "Plan", reason: `${PRODUCERS[k].agentType} returned nothing twice in the re-plan; the record would mix old and new output` };
     }
     rec[k] = out;
-    const g = await gate(`${k}:plan-round-${round}`, PRODUCERS[k].agentType, rec[k], (fixes) => runProducer(k, reviseNote(rec[k], fixes)));
+    const g = await gate(`${k}:plan-round-${round}`, PRODUCERS[k].agentType, rec[k], (fixes) => runProducer(k, reviseNote(rec[k], applyAndPublish && k === "ux" ? [...fixes, pin] : fixes)));
     if (g.stop) return { stopped: "Plan", reason: g.stop };
     rec[k] = g.out;
+    if (!pinned(k)) {
+      log(`Plan round ${round}: the ux re-plan moved the recommendation off the approved direction ${chosen} — one revise`);
+      const again = await runProducer(k, reviseNote(rec[k], [pin]));
+      if (again) {
+        // The correction replaces a checked output, so it goes through the same gate.
+        const g2 = await gate(`${k}:plan-round-${round}:pin`, PRODUCERS[k].agentType, again, (fixes) => runProducer(k, reviseNote(again, [...fixes, pin])));
+        if (g2.stop) return { stopped: "Plan", reason: g2.stop };
+        rec[k] = g2.out;
+      }
+      if (!pinned(k)) {
+        log(`Stopped at Plan: the ux re-plan will not keep the approved direction ${chosen}`);
+        return { stopped: "Plan", reason: `the ux re-plan after approval recommends another direction than the approved ${chosen}; nothing published` };
+      }
+    }
   }
   // A human ux or fit change moves the directions, so the prototypes the human saw are stale: redraw them the same way as Design.
-  if (hasUi && redo.ux && plan.changes.some((c) => c.target === "ux" || c.target === "fit")) {
+  // Not after an approval: no one would see the redraw, and it could move `chosen` off the direction the human approved.
+  if (applyAndPublish && hasUi && redo.ux) log(`Plan round ${round}: approved with ux/fit notes — the prototypes are not redrawn; the states pass on ${chosen} reads the revised ux`);
+  if (!applyAndPublish && hasUi && redo.ux && plan.changes.some((c) => c.target === "ux" || c.target === "fit")) {
     log(`Plan round ${round}: ux/fit changed — regenerating the prototypes (prototyper, gate, critic) before the next review`);
     critique.a = []; critique.b = []; critique.c = [];
     protos = await protoJob();
@@ -1243,7 +1279,7 @@ for (let round = 1; round <= maxRounds; round++) {
     log(`Prototypes regenerated: ${survivors().length} ok; chosen ${chosen}`);
   }
   if (hit.has("other") && !hit.has("fit") && !hit.has("ux") && !hit.has("architect") && !hit.has("stack")) log("Plan: only 'other' change requests — passed to the assembler, no producer re-run");
-  const re = await assemble(`\nThe human asked for changes after reading the plan. Rebuild the record from the outputs above, and honour these requests:\n${changes.map((c) => `- [${c.target}] ${c.text}`).join("\n")}`);
+  const re = await assemble(`\nThe human ${applyAndPublish ? "approved the plan with these notes" : "asked for changes after reading the plan"}. Rebuild the record from the outputs above, and honour these requests:\n${changes.map((c) => `- [${c.target}] ${c.text}`).join("\n")}`);
   if (!re) {
     log("Stopped at Plan: the assembler returned nothing after change requests");
     return { stopped: "Plan", reason: "assembler returned nothing after change requests" };
@@ -1259,6 +1295,15 @@ for (let round = 1; round <= maxRounds; round++) {
     }
   }
   await flushAccepted();
+  if (applyAndPublish) {
+    // No human sees this draft before Publish, so the whole-record judge stands in for the next round.
+    const why = await judgeRecord(`record:plan-round-${round}`, changes.map((c) => `- [${c.target}] ${c.text}`));
+    if (why) return { stopped: "Plan", reason: why };
+    await flushAccepted();
+    approvedPlan = plan;
+    log(`Plan approved in round ${round}; the notes are applied to the record`);
+    break;
+  }
 }
 if (!approvedPlan) return { stopped: "Plan", reason: "plan was not approved" };
 
