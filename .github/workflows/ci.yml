@@ -4,6 +4,9 @@ on:
   push:
     branches: [staging, production]
   # Every PR, not only those into staging: a stacked PR targets the PR below it.
+  # Which jobs run depends on the PR's base: into the default branch or production,
+  # everything; into any other branch (a stacked PR), the lean job only. The default
+  # branch is read from the event, never named here.
   pull_request:
 
 permissions:
@@ -14,8 +17,36 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # A stacked PR: typecheck, the house linter and the unit tests. Not a required check;
+  # the full suite runs once, on the PR into the default branch.
+  lean:
+    name: Lean (stacked PR, typecheck + lint + unit)
+    if: github.event_name == 'pull_request' && github.base_ref != github.event.repository.default_branch && github.base_ref != 'production'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.2.19"  # pinned: gate behaviour must be reproducible across PRs
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Typecheck
+        run: ./scripts/verify.sh --only typecheck
+
+      - name: Lint (non-negotiables)
+        run: ./scripts/verify.sh --only non-negotiables
+
+      - name: Unit tests
+        run: ./scripts/verify.sh --only test
+
   baseline:
     name: Baseline (typecheck + test + harness-check)
+    if: github.event_name != 'pull_request' || github.base_ref == github.event.repository.default_branch || github.base_ref == 'production'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -39,6 +70,7 @@ jobs:
 
   build:
     name: Build (Cloudflare Workers)
+    if: github.event_name != 'pull_request' || github.base_ref == github.event.repository.default_branch || github.base_ref == 'production'
     runs-on: ubuntu-latest
     needs: baseline
     timeout-minutes: 10
@@ -62,6 +94,7 @@ jobs:
   # Feature-level proof is the feature-verifier sub-agent → .verify/<slug>/verdict.md in the PR (not run in CI).
   e2e:
     name: E2E smoke (Playwright)
+    if: github.event_name != 'pull_request' || github.base_ref == github.event.repository.default_branch || github.base_ref == 'production'
     # Pinned: Playwright ships no Chromium for ubuntu-latest (26.04) yet.
     runs-on: ubuntu-24.04
     needs: baseline

@@ -140,6 +140,8 @@ State lives in GitHub: the spec is an issue, each ticket is an issue, and a merg
 
 `./scripts/verify.sh --baseline` runs the quick set; bare `./scripts/verify.sh` runs them all. CI runs the same script, so adding a gate is a one-line change there.
 
+**Which checks run where.** A pull request into the default branch (`staging`) or `production` runs everything: Baseline, Build, E2E smoke and the preview. A stacked PR, one whose base is any other branch, gates nothing, so it runs one lean job instead (typecheck, the non-negotiables linter, unit tests) and no preview; the full suite runs once, on the PR that lands the stack. Pushes to `staging` and `production` run everything. The jobs choose with a job-level `if:` on `github.base_ref` against the repo's default branch, so a fork with another default branch name needs no edit. GitHub counts a skipped job as passed, so after retargeting a stacked PR onto the default branch, push a commit (or close and reopen it) to run the full suite.
+
 ### Slash commands
 
 | Command | What it does |
