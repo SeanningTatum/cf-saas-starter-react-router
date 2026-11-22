@@ -2,13 +2,12 @@ import {
   test,
   expect,
   type APIResponse,
-  type BrowserContext,
   type Locator,
   type Page,
-  type Response,
 } from "@playwright/test";
-import path from "node:path";
 import { securityHeaders } from "../workers/security-headers";
+import { useAdminSessionSignedInOncePerFile } from "./lib/admin-session";
+import { loadHydratedReloadingWhileViteReoptimizesDeps } from "./lib/hydration";
 
 /**
  * Security headers and the nonce CSP (issue #72), on the pages a user sees.
@@ -29,7 +28,6 @@ import { securityHeaders } from "../workers/security-headers";
  */
 
 const DOC = "docs/security-headers.md";
-const AUTH = path.join("test-results", ".auth", "security-headers-admin.json");
 
 type Violation = { directive: string; blocked: string; sample: string };
 
@@ -114,43 +112,6 @@ const watchViolations = async (page: Page) => {
   };
 };
 
-/**
- * Wait until React has hydrated `ready`: React sets its `__reactProps$…` key
- * on a DOM node only when it claims the node during hydration, so the server
- * HTML alone never passes.
- */
-const hydrated = (ready: Locator, timeout: number) =>
-  expect
-    .poll(
-      () =>
-        ready
-          .evaluate((node) => Object.keys(node).some((k) => k.startsWith("__reactProps$")), undefined, {
-            timeout: 1_000,
-          })
-          .catch(() => false),
-      { timeout, message: "the page never hydrated" },
-    )
-    .toBe(true)
-    .then(
-      () => true,
-      () => false,
-    );
-
-/**
- * Load `url` and wait for hydration. On a cold dev server the first load can
- * die on Vite's "504 Outdated Optimize Dep" and never hydrate (issue #50);
- * one reload recovers it, as in e2e/auth.spec.ts.
- */
-const loadHydrated = async (page: Page, url: string, ready: (page: Page) => Locator): Promise<Response> => {
-  let response = await page.goto(url);
-  if (!(await hydrated(ready(page), 15_000))) {
-    response = await page.reload();
-    expect(await hydrated(ready(page), 30_000), `${url} never hydrated`).toBe(true);
-  }
-  expect(response, `${url}: no document response`).not.toBeNull();
-  return response!;
-};
-
 const watchers = new WeakMap<Page, Awaited<ReturnType<typeof watchViolations>>>();
 
 /** Headers, nonce on every script, and no violation, for one page. */
@@ -161,7 +122,7 @@ const checkPage = async (page: Page, url: string, ready: (page: Page) => Locator
     watchers.set(page, violations);
   }
   violations.clear();
-  const response = await loadHydrated(page, url, ready);
+  const response = await loadHydratedReloadingWhileViteReoptimizesDeps(page, url, ready);
   expect(new URL(page.url()).pathname, `${url} redirected; is the fixture signed in?`).toBe(url);
   expect(response.status()).toBe(200);
   const nonce = expectSecurityHeaders(await response.allHeaders(), url);
@@ -193,27 +154,8 @@ test.describe("Security headers, signed out", () => {
   });
 });
 
-// Sign in through the Better Auth API, not the form: on a cold dev server the
-// form can be submitted before hydration and the login silently fails.
-const login = async (context: BrowserContext, baseURL: string) => {
-  const res = await context.request.post("/api/auth/sign-in/email", {
-    headers: { Origin: baseURL },
-    data: { email: "admin@preview.local", password: "Password123!" },
-  });
-  expect(res.ok(), `sign-in returned ${res.status()}`).toBe(true);
-};
-
 test.describe("Security headers, signed in as admin", () => {
-  // One login for the file, in one worker: a login per test trips Better
-  // Auth's sign-in rate limit. The admin can open /dashboard too.
-  test.describe.configure({ mode: "default" });
-  test.use({ storageState: AUTH });
-  test.beforeAll(async ({ browser, baseURL }) => {
-    const context = await browser.newContext({ storageState: undefined, baseURL });
-    await login(context, baseURL ?? "");
-    await context.storageState({ path: AUTH });
-    await context.close();
-  });
+  useAdminSessionSignedInOncePerFile("security-headers");
 
   const sidebarToggle = (p: Page) => p.getByRole("button", { name: "Toggle Sidebar" }).first();
 

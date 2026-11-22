@@ -1,4 +1,5 @@
 import { Context, Effect, Layer } from "effect";
+import { resolveAuthConfig, type AuthRuntimeOptions } from "@/auth/config";
 import { createAuth, type Auth } from "@/auth/server";
 import { CloudflareEnv } from "./cloudflare";
 import { ExternalServiceError } from "@/models/errors/repository";
@@ -13,15 +14,14 @@ export class AuthApi extends Context.Tag("app/AuthApi")<
   AuthApiShape
 >() {}
 
-// `baseURL` is request-scoped (the request's own origin) rather than
-// env-scoped, so `AuthApiLive` is a factory — mirrors `SessionLive(headers)`.
-export const AuthApiLive = (baseURL?: string) =>
+export const AuthApiLive = (options: AuthRuntimeOptions) =>
   Layer.effect(
     AuthApi,
     Effect.gen(function* () {
       const env = yield* CloudflareEnv;
+      const config = yield* resolveAuthConfig(env, options);
       const auth = yield* Effect.try({
-        try: () => createAuth(env.DATABASE, env.BETTER_AUTH_SECRET, baseURL),
+        try: () => createAuth(env.DATABASE, config),
         catch: (cause) =>
           new ExternalServiceError({ service: "BetterAuth", cause }),
       });

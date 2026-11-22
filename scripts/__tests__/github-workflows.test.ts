@@ -136,6 +136,15 @@ describe("workflows keep secrets and PR data out of shell text", () => {
     },
   );
 
+  it("deploy.yml records the restore point before it applies migrations: a backup after the schema change is no way back", () => {
+    const lines = codeLines("deploy.yml");
+    const backup = lines.findIndex((l) => /scripts\/ci\/d1-backup\.ts/.test(l));
+    const migrate = lines.findIndex((l) => /db:migrate:remote/.test(l));
+    expect(backup).toBeGreaterThanOrEqual(0);
+    expect(migrate).toBeGreaterThanOrEqual(0);
+    expect(backup).toBeLessThan(migrate);
+  });
+
   it.each(["preview.yml", "preview-cleanup.yml"])(
     "%s never names the production token: jobs that run PR code must not read it",
     (f) => {
