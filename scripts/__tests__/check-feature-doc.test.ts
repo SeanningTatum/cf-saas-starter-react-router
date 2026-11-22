@@ -171,9 +171,7 @@ describe("checkFeatureDoc edge cases", () => {
   });
 
   it("a hyphen before 'source:' is accepted for Context bullets: editors turn em dashes into hyphens", () => {
-    const doc = good
-      .replace("schema.ts", "schema.ts")
-      .replace(" — source: app/db/schema.ts", " - source: app/db/schema.ts");
+    const doc = good.replace(" — source: app/db/schema.ts", " - source: app/db/schema.ts");
     expect(checkFeatureDoc(doc)).toEqual([]);
   });
 
