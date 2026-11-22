@@ -1,0 +1,25 @@
+{
+  "suppressions": 0,
+  "boundaries": {
+    "no-throw": {
+      "app/lib/effect-trpc.ts": "The one place an Effect failure becomes a TRPCError; tRPC reads a thrown error.",
+      "app/trpc/index.ts": "tRPC middleware and the error formatter throw TRPCError by contract."
+    }
+  },
+  "debt": {
+    "no-effect-promise": {},
+    "no-process-env": {},
+    "no-throw": {},
+    "no-try-catch": {
+      "app/routes/admin/components/user-data-table.tsx": 1,
+      "app/routes/authentication/components/login-form.tsx": 1,
+      "app/routes/authentication/components/signup-form.tsx": 1,
+      "workers/app.ts": 1
+    },
+    "no-zod": {},
+    "tagged-error-mapped": {},
+    "unit-test": {
+      "app/lib/logger.ts": 1
+    }
+  }
+}
