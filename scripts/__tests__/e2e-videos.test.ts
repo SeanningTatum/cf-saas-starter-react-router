@@ -5,7 +5,14 @@ const spec = (title: string, tags: string[], results: { status: string; video?: 
   title,
   file: "auth.spec.ts",
   tags,
-  tests: [{ results: results.map((r) => ({ status: r.status, attachments: r.video ? [{ name: "video", path: r.video }] : [] })) }],
+  tests: [
+    {
+      results: results.map((r) => ({
+        status: r.status,
+        attachments: r.video ? [{ name: "video", path: r.video }] : [],
+      })),
+    },
+  ],
 });
 
 // The shape Playwright 1.58's JSON reporter writes: nested suites, tags without "@".
@@ -15,8 +22,19 @@ const report: Report = {
       suites: [
         {
           specs: [
-            spec("signup → dashboard", ["golden"], [{ status: "failed", video: "/r/try1.webm" }, { status: "passed", video: "/r/try2.webm" }]),
-            spec("login rejects bad credentials", ["error"], [{ status: "passed", video: "/r/err.webm" }]),
+            spec(
+              "signup → dashboard",
+              ["golden"],
+              [
+                { status: "failed", video: "/r/try1.webm" },
+                { status: "passed", video: "/r/try2.webm" },
+              ],
+            ),
+            spec(
+              "login rejects bad credentials",
+              ["error"],
+              [{ status: "passed", video: "/r/err.webm" }],
+            ),
             spec("pillars render", [], [{ status: "passed", video: "/r/home.webm" }]),
           ],
         },
@@ -45,16 +63,25 @@ describe("collectVideos", () => {
   });
 
   it("takes the last attempt's video: a retried test must show the run that counted, not the flake", () => {
-    expect(collectVideos(report).videos[0]).toMatchObject({ source: "/r/try2.webm", status: "passed" });
+    expect(collectVideos(report).videos[0]).toMatchObject({
+      source: "/r/try2.webm",
+      status: "passed",
+    });
   });
 
   it("accepts tags with or without '@', in case the reporter format changes", () => {
-    const at: Report = { suites: [{ specs: [spec("x", ["@golden"], [{ status: "passed", video: "/v.webm" }])] }] };
+    const at: Report = {
+      suites: [{ specs: [spec("x", ["@golden"], [{ status: "passed", video: "/v.webm" }])] }],
+    };
     expect(collectVideos(at).videos).toHaveLength(1);
   });
 
   it("lists a tagged test with no video as unrecorded, so a skipped flow cannot vanish from the reel", () => {
-    const skipped: Report = { suites: [{ specs: [spec("x", ["error"], [{ status: "skipped" }]), spec("y", ["golden"], [])] }] };
+    const skipped: Report = {
+      suites: [
+        { specs: [spec("x", ["error"], [{ status: "skipped" }]), spec("y", ["golden"], [])] },
+      ],
+    };
     expect(collectVideos(skipped)).toEqual({
       videos: [],
       unrecorded: [
@@ -67,7 +94,9 @@ describe("collectVideos", () => {
 
 describe("videoName", () => {
   it("turns a title with arrows and commas into a safe file name", () => {
-    expect(videoName({ kind: "golden", title: "signup → dashboard, signout → login" })).toBe("golden-signup-dashboard-signout-login.webm");
+    expect(videoName({ kind: "golden", title: "signup → dashboard, signout → login" })).toBe(
+      "golden-signup-dashboard-signout-login.webm",
+    );
   });
 
   it("never yields an empty slug: a title of symbols still gets a name", () => {
@@ -79,7 +108,14 @@ describe("run", () => {
   it("records with E2E_VIDEO and CI set, filtered to the tagged tests, on the given specs", () => {
     const { deps, calls } = stub();
     run(["--out", ".verify/x/video", "e2e/auth.spec.ts"], deps);
-    expect(calls[0]?.args).toEqual(["playwright", "test", "e2e/auth.spec.ts", "--grep", "@golden|@error", "--reporter=json"]);
+    expect(calls[0]?.args).toEqual([
+      "playwright",
+      "test",
+      "e2e/auth.spec.ts",
+      "--grep",
+      "@golden|@error",
+      "--reporter=json",
+    ]);
     expect(calls[0]?.env).toEqual({ E2E_VIDEO: "1", CI: "1" });
   });
 
@@ -97,8 +133,18 @@ describe("run", () => {
     const long = "a".repeat(60);
     const twins: Report = {
       suites: [
-        { specs: [spec("signup", ["golden"], [{ status: "passed", video: "/a.webm" }]), spec(`${long} one`, ["golden"], [{ status: "passed", video: "/c.webm" }])] },
-        { specs: [spec("signup", ["golden"], [{ status: "passed", video: "/b.webm" }]), spec(`${long} two`, ["golden"], [{ status: "passed", video: "/d.webm" }])] },
+        {
+          specs: [
+            spec("signup", ["golden"], [{ status: "passed", video: "/a.webm" }]),
+            spec(`${long} one`, ["golden"], [{ status: "passed", video: "/c.webm" }]),
+          ],
+        },
+        {
+          specs: [
+            spec("signup", ["golden"], [{ status: "passed", video: "/b.webm" }]),
+            spec(`${long} two`, ["golden"], [{ status: "passed", video: "/d.webm" }]),
+          ],
+        },
       ],
     };
     const { deps, copies } = stub(0, JSON.stringify(twins));
@@ -112,7 +158,9 @@ describe("run", () => {
   });
 
   it("a failing run still saves its videos but exits 1: the video shows the failure, the code blocks the ship", () => {
-    const failed: Report = { suites: [{ specs: [spec("x", ["golden"], [{ status: "failed", video: "/f.webm" }])] }] };
+    const failed: Report = {
+      suites: [{ specs: [spec("x", ["golden"], [{ status: "failed", video: "/f.webm" }])] }],
+    };
     const { deps, copies } = stub(1, JSON.stringify(failed));
     const r = run(["--out", "out"], deps);
     expect(r.code).toBe(1);
@@ -143,12 +191,23 @@ describe("run", () => {
 
   it("exits 2 when Playwright crashes before writing a report, quoting its stderr", () => {
     const { deps } = stub(1, "not json");
-    expect(run(["--out", "out"], deps)).toMatchObject({ code: 2, err: expect.stringContaining("boom") });
+    expect(run(["--out", "out"], deps)).toMatchObject({
+      code: 2,
+      err: expect.stringContaining("boom"),
+    });
   });
 
   it("exits 2 when no test is tagged, rather than reporting success with no videos", () => {
-    const { deps } = stub(0, JSON.stringify({ suites: [{ specs: [spec("x", [], [{ status: "passed", video: "/v.webm" }])] }] }));
-    expect(run(["--out", "out"], deps)).toMatchObject({ code: 2, err: expect.stringContaining("@golden") });
+    const { deps } = stub(
+      0,
+      JSON.stringify({
+        suites: [{ specs: [spec("x", [], [{ status: "passed", video: "/v.webm" }])] }],
+      }),
+    );
+    expect(run(["--out", "out"], deps)).toMatchObject({
+      code: 2,
+      err: expect.stringContaining("@golden"),
+    });
   });
 
   it("exits 2 without --out, before starting a browser", () => {

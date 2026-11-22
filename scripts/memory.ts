@@ -56,7 +56,19 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const STATUSES = ["planned", "in-progress", "blocked", "done", "dropped"] as const;
-const KEYS = ["status", "issue", "context", "log", "stopped", "waiting", "next", "decision", "link", "todo", "done"] as const;
+const KEYS = [
+  "status",
+  "issue",
+  "context",
+  "log",
+  "stopped",
+  "waiting",
+  "next",
+  "decision",
+  "link",
+  "todo",
+  "done",
+] as const;
 type Key = (typeof KEYS)[number];
 type Fields = Partial<Record<Key, string[]>>;
 
@@ -114,7 +126,8 @@ export function parseFields(stdin: string): { fields: Fields } | { error: string
   const issue = fields.issue?.at(-1);
   if (issue) {
     if (/^\d+$/.test(issue)) fields.issue = [`#${issue}`];
-    else if (!/^(#\d+|none|https?:\/\/\S+)$/.test(issue)) return { error: `bad issue "${issue}" (#12 or a URL)` };
+    else if (!/^(#\d+|none|https?:\/\/\S+)$/.test(issue))
+      return { error: `bad issue "${issue}" (#12 or a URL)` };
   }
   if (!Object.keys(fields).length) return { error: "no fields on stdin" };
   return { fields };
@@ -180,7 +193,11 @@ function newDoc(slug: string): Doc {
   return {
     fm: [`feature: ${slug}`, "status: in-progress", "issue: none", "updated:"],
     preamble: [],
-    sections: SECTIONS.map((n) => ({ name: n.toLowerCase(), heading: `## ${n}`, body: n === "Context" ? [TEMPLATE_CONTEXT] : [] })),
+    sections: SECTIONS.map((n) => ({
+      name: n.toLowerCase(),
+      heading: `## ${n}`,
+      body: n === "Context" ? [TEMPLATE_CONTEXT] : [],
+    })),
   };
 }
 
@@ -245,7 +262,12 @@ function readTodos(body: string[]): Todo[] {
     const m = TODO_LINE.exec(l);
     if (!m) return;
     const date = new RegExp(`\\((${DATE.source})\\)\\s*$`).exec(m[3] ?? "")?.[1];
-    out.push({ at, ticked: m[2] !== " ", text: (m[3] ?? "").trim().replace(new RegExp(`\\s*\\(${DATE.source}\\)\\s*$`), ""), date });
+    out.push({
+      at,
+      ticked: m[2] !== " ",
+      text: (m[3] ?? "").trim().replace(new RegExp(`\\s*\\(${DATE.source}\\)\\s*$`), ""),
+      date,
+    });
   });
   return out;
 }
@@ -270,12 +292,17 @@ function foldedForm(entry: string[]): string {
 }
 
 /** Drops old ticked todos, adds new ones, ticks done ones. Returns the counts. */
-function mergeTodos(todo: Section, fields: Fields, today: string): { todos: number; ticked: number; pruned: number } {
+function mergeTodos(
+  todo: Section,
+  fields: Fields,
+  today: string,
+): { todos: number; ticked: number; pruned: number } {
   const n = { todos: 0, ticked: 0, pruned: 0 };
   // Old ticked items go first, so a todo the user re-adds is not blocked by a ghost.
   const drop = new Set<number>();
   for (const t of readTodos(todo.body))
-    if (t.ticked && t.date && (dayMs(today) - dayMs(t.date)) / 86_400_000 > TODO_DAYS) drop.add(t.at);
+    if (t.ticked && t.date && (dayMs(today) - dayMs(t.date)) / 86_400_000 > TODO_DAYS)
+      drop.add(t.at);
   if (drop.size) {
     todo.body = todo.body.filter((_, at) => !drop.has(at));
     n.pruned = drop.size;
@@ -331,7 +358,12 @@ interface Merge {
 }
 
 /** Merges `fields` into the file's text (null for a new file). Pure. */
-export function mergeRecord(existing: string | null, slug: string, fields: Fields, today: string): Merge {
+export function mergeRecord(
+  existing: string | null,
+  slug: string,
+  fields: Fields,
+  today: string,
+): Merge {
   const d = existing === null ? newDoc(slug) : parseDoc(existing);
   const isNew = existing === null;
   if (getFm(d, "feature") === undefined) d.fm.unshift(`feature: ${slug}`);
@@ -385,12 +417,18 @@ export function mergeRecord(existing: string | null, slug: string, fields: Field
   let logLine = "no new entry";
   if (entryParts.length) {
     n.folded = mergeLog(section(d, "Log"), [today, ...entryParts].join(" — "));
-    logLine = n.folded ? `new entry at the top, ${n.folded} folded into earlier` : "new entry at the top";
+    logLine = n.folded
+      ? `new entry at the top, ${n.folded} folded into earlier`
+      : "new entry at the top";
   }
 
   const text = renderDoc(d);
   const lines = text.trimEnd().split("\n").length;
-  const statusNote = isNew ? `status ${status}` : status === was ? `status ${status} (unchanged)` : `status ${was} -> ${status}`;
+  const statusNote = isNew
+    ? `status ${status}`
+    : status === was
+      ? `status ${status} (unchanged)`
+      : `status ${was} -> ${status}`;
   const issueNote = issue === (wasIssue ?? "none") && !isNew ? "" : `, issue ${issue}`;
   const summary = [
     `${isNew ? "created" : "merged"} ${slug}: ${statusNote}${issueNote}`,
@@ -398,13 +436,24 @@ export function mergeRecord(existing: string | null, slug: string, fields: Field
     `log: ${logLine}; file is ${lines} lines`,
   ];
   const blurb = fields.log?.[0] ?? (one("stopped") ? one("stopped") : one("next"));
-  return { text, slug, status, issue, blurb, next: one("next"), summary, lines, tooLong: lines > MAX_LINES };
+  return {
+    text,
+    slug,
+    status,
+    issue,
+    blurb,
+    next: one("next"),
+    summary,
+    lines,
+    tooLong: lines > MAX_LINES,
+  };
 }
 
 // ---- INDEX.md and MEMORY.md -----------------------------------------------------------------------
 
 const FEATURE_LINE = /^- \[([^\]]+)\]\(([^)]*)\)/;
-const rank = (status: string) => ({ "in-progress": 0, blocked: 1, planned: 2, done: 3, dropped: 3 })[status as "done"] ?? 4;
+const rank = (status: string) =>
+  ({ "in-progress": 0, blocked: 1, planned: 2, done: 3, dropped: 3 })[status as "done"] ?? 4;
 
 interface IndexLine {
   slug: string;
@@ -420,8 +469,17 @@ function parseIndex(text: string | null): { head: string[]; lines: IndexLine[]; 
   for (const raw of (text ?? "").replace(/\r/g, "").split("\n")) {
     const m = FEATURE_LINE.exec(raw);
     if (m) {
-      const [status = "", issue = "", ...rest] = raw.slice(m[0].length).replace(/^\s*—\s*/, "").split(" — ");
-      lines.push({ slug: m[1] ?? "", status: status.trim(), issue: issue.trim(), blurb: rest.join(" — ").trim(), raw });
+      const [status = "", issue = "", ...rest] = raw
+        .slice(m[0].length)
+        .replace(/^\s*—\s*/, "")
+        .split(" — ");
+      lines.push({
+        slug: m[1] ?? "",
+        status: status.trim(),
+        issue: issue.trim(),
+        blurb: rest.join(" — ").trim(),
+        raw,
+      });
     } else if (lines.length) {
       if (raw.trim()) tail.push(raw);
     } else head.push(raw);
@@ -430,14 +488,23 @@ function parseIndex(text: string | null): { head: string[]; lines: IndexLine[]; 
 }
 
 /** Puts this feature's line in INDEX.md (keeping its old blurb when `blurb` is undefined) and sorts. */
-export function updateIndex(text: string | null, m: { slug: string; status: string; issue: string; blurb?: string }): string {
+export function updateIndex(
+  text: string | null,
+  m: { slug: string; status: string; issue: string; blurb?: string },
+): string {
   const { head, lines, tail } = parseIndex(text);
   const old = lines.find((l) => l.slug === m.slug);
   const blurb = m.blurb ?? old?.blurb ?? "none";
   const line = `- [${m.slug}](${m.slug}.md) — ${m.status} — ${m.issue} — ${blurb}`;
   const next = lines.filter((l) => l.slug !== m.slug);
   const at = old ? lines.indexOf(old) : lines.length;
-  next.splice(Math.min(at, next.length), 0, { slug: m.slug, status: m.status, issue: m.issue, blurb, raw: line });
+  next.splice(Math.min(at, next.length), 0, {
+    slug: m.slug,
+    status: m.status,
+    issue: m.issue,
+    blurb,
+    raw: line,
+  });
   next.sort((a, b) => rank(a.status) - rank(b.status));
   const top = trimBlank(head);
   if (!top.length) top.push("# Features");
@@ -447,7 +514,12 @@ export function updateIndex(text: string | null, m: { slug: string; status: stri
 const MEMORY_LINE = "- [Feature memory](";
 
 /** Replaces the one Feature memory line in MEMORY.md, or adds it; every other line stays. */
-function updateMemoryLine(text: string | null, link: string, indexText: string, record: { slug: string; next?: string }): string {
+function updateMemoryLine(
+  text: string | null,
+  link: string,
+  indexText: string,
+  record: { slug: string; next?: string },
+): string {
   const { lines } = parseIndex(indexText);
   const active = lines.filter((l) => l.status === "in-progress");
   const mine = active.find((l) => l.slug === record.slug);
@@ -496,7 +568,9 @@ function brief(text: string, slug: string): string {
   const d = parseDoc(text);
   const get = (n: string) => d.sections.find((s) => s.name === n)?.body ?? [];
   const list = (ls: string[]) => (ls.length ? ls.join("\n") : "none");
-  const context = get("context").filter((l) => !blank(l) && l.trim() !== TEMPLATE_CONTEXT).slice(0, 4);
+  const context = get("context")
+    .filter((l) => !blank(l) && l.trim() !== TEMPLATE_CONTEXT)
+    .slice(0, 4);
   const decisions = get("decisions").filter((l) => !/\(superseded/.test(l));
   const open = get("todo").filter((l) => TODO_LINE.exec(l)?.[2] === " ");
   return [
@@ -513,7 +587,9 @@ function recall(what: string, deps: Deps): Outcome {
   const dir = deps.dir();
   const indexText = deps.read(join(dir, "INDEX.md"));
   if (what === "status") {
-    const live = parseIndex(indexText).lines.filter((l) => l.status === "in-progress" || l.status === "blocked");
+    const live = parseIndex(indexText).lines.filter(
+      (l) => l.status === "in-progress" || l.status === "blocked",
+    );
     if (!live.length) return ok("no in-progress or blocked features");
     return ok(
       live
@@ -525,20 +601,28 @@ function recall(what: string, deps: Deps): Outcome {
     );
   }
   const slug = what.replace(/^#/, "");
-  if (!SLUG.test(slug)) return bad(`"${what}" is not a kebab-case slug, an issue number, or "status"`);
+  if (!SLUG.test(slug))
+    return bad(`"${what}" is not a kebab-case slug, an issue number, or "status"`);
   let file = deps.read(join(dir, `${slug}.md`));
   let found = slug;
   if (file === null && /^\d+$/.test(slug)) {
-    const byIssue = parseIndex(indexText).lines.find((l) => l.issue === `#${slug}` || l.issue.endsWith(`/${slug}`));
+    const byIssue = parseIndex(indexText).lines.find(
+      (l) => l.issue === `#${slug}` || l.issue.endsWith(`/${slug}`),
+    );
     if (byIssue) {
       found = byIssue.slug;
       file = deps.read(join(dir, `${found}.md`));
     }
   }
   if (file === null) {
-    const slugs = deps.list(dir).filter((f) => f.endsWith(".md") && f !== "INDEX.md").map((f) => f.slice(0, -3));
+    const slugs = deps
+      .list(dir)
+      .filter((f) => f.endsWith(".md") && f !== "INDEX.md")
+      .map((f) => f.slice(0, -3));
     const near = closestSlugs(slug, slugs);
-    return ok(`nothing recorded for ${what}${near.length ? `\nclosest slugs: ${near.join(", ")}` : ""}`);
+    return ok(
+      `nothing recorded for ${what}${near.length ? `\nclosest slugs: ${near.join(", ")}` : ""}`,
+    );
   }
   return ok(brief(file, found));
 }
@@ -561,13 +645,16 @@ function record(slug: string, stdin: string, deps: Deps): Outcome {
   const memPath = deps.memoryIndex();
   deps.write(memPath, updateMemoryLine(deps.read(memPath), deps.memoryLink(), indexText, merged));
 
-  const extra = merged.tooLong ? [`over ${MAX_LINES} lines: ask context-memory to shorten Context and the earlier log`] : [];
+  const extra = merged.tooLong
+    ? [`over ${MAX_LINES} lines: ask context-memory to shorten Context and the earlier log`]
+    : [];
   return ok([path, ...merged.summary, ...extra].join("\n"));
 }
 
 export function run(argv: string[], stdin: string, deps: Deps): Outcome {
   const [verb, arg, ...rest] = argv;
-  const usage = "usage: bun scripts/memory.ts record <slug> (fields on stdin) | recall <slug|status>";
+  const usage =
+    "usage: bun scripts/memory.ts record <slug> (fields on stdin) | recall <slug|status>";
   if (!arg || rest.length) return bad(usage);
   if (verb === "record") return record(arg, stdin, deps);
   if (verb === "recall") return recall(arg, deps);
@@ -579,7 +666,8 @@ export function run(argv: string[], stdin: string, deps: Deps): Outcome {
 const SCRIPT = join(dirname(fileURLToPath(import.meta.url)), "memory-dir.sh");
 function viaScript(flag?: string): string {
   const r = spawnSync(SCRIPT, flag ? [flag] : [], { encoding: "utf8" });
-  if (r.status !== 0) throw new Error(`memory-dir.sh failed: ${r.stderr.trim() || r.stdout.trim()}`);
+  if (r.status !== 0)
+    throw new Error(`memory-dir.sh failed: ${r.stderr.trim() || r.stdout.trim()}`);
   return r.stdout.trim();
 }
 

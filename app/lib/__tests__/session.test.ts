@@ -1,10 +1,6 @@
 import { describe, it, expect } from "vitest";
 import type { AppLoadContext } from "react-router";
-import {
-  requireSession,
-  requireAdmin,
-  redirectIfAuthenticated,
-} from "../session";
+import { requireSession, requireAdmin, redirectIfAuthenticated } from "../session";
 
 const makeContext = (session: unknown): AppLoadContext =>
   ({
@@ -37,10 +33,7 @@ describe("requireSession", () => {
   });
 
   it("redirects to /login when there is no session", async () => {
-    await expectRedirect(
-      requireSession(request(), makeContext(null)),
-      "/login"
-    );
+    await expectRedirect(requireSession(request(), makeContext(null)), "/login");
   });
 });
 
@@ -53,40 +46,29 @@ describe("requireAdmin", () => {
 
   it("redirects to /dashboard when the user is not an admin", async () => {
     const session = { session: {}, user: { id: "u1", role: "user" } };
-    await expectRedirect(
-      requireAdmin(request(), makeContext(session)),
-      "/dashboard"
-    );
+    await expectRedirect(requireAdmin(request(), makeContext(session)), "/dashboard");
   });
 
   it("redirects to /login when there is no session", async () => {
-    await expectRedirect(
-      requireAdmin(request(), makeContext(null)),
-      "/login"
-    );
+    await expectRedirect(requireAdmin(request(), makeContext(null)), "/login");
   });
 });
 
 describe("redirectIfAuthenticated", () => {
   it("redirects to /dashboard by default when a session exists", async () => {
     const session = { session: {}, user: { id: "u1", role: "user" } };
-    await expectRedirect(
-      redirectIfAuthenticated(request(), makeContext(session)),
-      "/dashboard"
-    );
+    await expectRedirect(redirectIfAuthenticated(request(), makeContext(session)), "/dashboard");
   });
 
   it("redirects to a custom destination", async () => {
     const session = { session: {}, user: { id: "u1", role: "user" } };
     await expectRedirect(
       redirectIfAuthenticated(request(), makeContext(session), "/somewhere"),
-      "/somewhere"
+      "/somewhere",
     );
   });
 
   it("does nothing when there is no session", async () => {
-    await expect(
-      redirectIfAuthenticated(request(), makeContext(null))
-    ).resolves.toBeUndefined();
+    await expect(redirectIfAuthenticated(request(), makeContext(null))).resolves.toBeUndefined();
   });
 });

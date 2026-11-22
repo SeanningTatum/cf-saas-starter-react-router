@@ -3,10 +3,7 @@ import { sql, count, eq, gte, lte, and } from "drizzle-orm";
 import { user } from "@/db/schema";
 import { Database } from "@/services/database";
 import { tryQuery } from "@/lib/effect-utils";
-import type {
-  DateRangeInput,
-  GetRecentSignupsCountInput,
-} from "@/lib/schemas/analytics";
+import type { DateRangeInput, GetRecentSignupsCountInput } from "@/lib/schemas/analytics";
 
 export class AnalyticsRepository extends Effect.Service<AnalyticsRepository>()(
   "app/AnalyticsRepository",
@@ -22,33 +19,27 @@ export class AnalyticsRepository extends Effect.Service<AnalyticsRepository>()(
               count: count(),
             })
             .from(user)
-            .where(
-              and(
-                gte(user.createdAt, input.startDate),
-                lte(user.createdAt, input.endDate)
-              )
-            )
+            .where(and(gte(user.createdAt, input.startDate), lte(user.createdAt, input.endDate)))
             .groupBy(sql`date(${user.createdAt} / 1000, 'unixepoch')`)
-            .orderBy(sql`date(${user.createdAt} / 1000, 'unixepoch')`)
+            .orderBy(sql`date(${user.createdAt} / 1000, 'unixepoch')`),
         );
 
       const getUserStats = Effect.gen(function* () {
-        const [totalResult, verifiedResult, bannedResult, adminResult] =
-          yield* Effect.all(
-            [
-              tryQuery("user_stats", () => db.select({ count: count() }).from(user)),
-              tryQuery("user_stats", () =>
-                db.select({ count: count() }).from(user).where(eq(user.emailVerified, true))
-              ),
-              tryQuery("user_stats", () =>
-                db.select({ count: count() }).from(user).where(eq(user.banned, true))
-              ),
-              tryQuery("user_stats", () =>
-                db.select({ count: count() }).from(user).where(eq(user.role, "admin"))
-              ),
-            ],
-            { concurrency: "unbounded" }
-          );
+        const [totalResult, verifiedResult, bannedResult, adminResult] = yield* Effect.all(
+          [
+            tryQuery("user_stats", () => db.select({ count: count() }).from(user)),
+            tryQuery("user_stats", () =>
+              db.select({ count: count() }).from(user).where(eq(user.emailVerified, true)),
+            ),
+            tryQuery("user_stats", () =>
+              db.select({ count: count() }).from(user).where(eq(user.banned, true)),
+            ),
+            tryQuery("user_stats", () =>
+              db.select({ count: count() }).from(user).where(eq(user.role, "admin")),
+            ),
+          ],
+          { concurrency: "unbounded" },
+        );
 
         const totalUsers = totalResult[0]?.count ?? 0;
         const verifiedUsers = verifiedResult[0]?.count ?? 0;
@@ -74,7 +65,7 @@ export class AnalyticsRepository extends Effect.Service<AnalyticsRepository>()(
               value: count(),
             })
             .from(user)
-            .groupBy(user.role)
+            .groupBy(user.role),
         );
         return results.map((r) => ({
           name: r.name.charAt(0).toUpperCase() + r.name.slice(1),
@@ -86,13 +77,13 @@ export class AnalyticsRepository extends Effect.Service<AnalyticsRepository>()(
         const [verifiedResult, unverifiedResult] = yield* Effect.all(
           [
             tryQuery("verification_distribution", () =>
-              db.select({ count: count() }).from(user).where(eq(user.emailVerified, true))
+              db.select({ count: count() }).from(user).where(eq(user.emailVerified, true)),
             ),
             tryQuery("verification_distribution", () =>
-              db.select({ count: count() }).from(user).where(eq(user.emailVerified, false))
+              db.select({ count: count() }).from(user).where(eq(user.emailVerified, false)),
             ),
           ],
-          { concurrency: "unbounded" }
+          { concurrency: "unbounded" },
         );
         return [
           { name: "Verified", value: verifiedResult[0]?.count ?? 0 },
@@ -105,7 +96,7 @@ export class AnalyticsRepository extends Effect.Service<AnalyticsRepository>()(
           const startDate = new Date();
           startDate.setDate(startDate.getDate() - input.days);
           const result = yield* tryQuery("recent_signups", () =>
-            db.select({ count: count() }).from(user).where(gte(user.createdAt, startDate))
+            db.select({ count: count() }).from(user).where(gte(user.createdAt, startDate)),
           );
           return result[0]?.count ?? 0;
         });
@@ -118,5 +109,5 @@ export class AnalyticsRepository extends Effect.Service<AnalyticsRepository>()(
         getRecentSignupsCount,
       } as const;
     }),
-  }
+  },
 ) {}

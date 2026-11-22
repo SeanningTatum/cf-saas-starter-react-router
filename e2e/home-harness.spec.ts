@@ -36,13 +36,25 @@ test.describe("Home — harness section", () => {
 
   test("zh: pillar copy is translated, unsupported locale is rejected", async ({ page }) => {
     await page.goto("/");
-    const ok = await page.evaluate(async () =>
-      (await fetch("/api/set-locale", { method: "POST", body: new URLSearchParams({ lng: "zh" }) })).status
+    const ok = await page.evaluate(
+      async () =>
+        (
+          await fetch("/api/set-locale", {
+            method: "POST",
+            body: new URLSearchParams({ lng: "zh" }),
+          })
+        ).status,
     );
     expect(ok).toBe(200);
 
-    const rejected = await page.evaluate(async () =>
-      (await fetch("/api/set-locale", { method: "POST", body: new URLSearchParams({ lng: "xx" }) })).status
+    const rejected = await page.evaluate(
+      async () =>
+        (
+          await fetch("/api/set-locale", {
+            method: "POST",
+            body: new URLSearchParams({ lng: "xx" }),
+          })
+        ).status,
     );
     expect(rejected).toBe(400);
 

@@ -36,7 +36,11 @@ describe("buildWorkflow", () => {
 
   it("replaces the `// @lib` line with banner, library and end marker, in that order, and leaves no marker behind", () => {
     expect(out).not.toMatch(/^\/\/ @lib$/m);
-    const banner = lines.findIndex((l) => l.startsWith("// ---- generated from .claude/workflow-src/lib.js by scripts/workflows.ts; edit the source, then run `bun scripts/workflows.ts build`"));
+    const banner = lines.findIndex((l) =>
+      l.startsWith(
+        "// ---- generated from .claude/workflow-src/lib.js by scripts/workflows.ts; edit the source, then run `bun scripts/workflows.ts build`",
+      ),
+    );
     const end = lines.indexOf("// ---- end of .claude/workflow-src/lib.js ----");
     expect(banner).toBeGreaterThan(lines.indexOf("// header comment"));
     expect(end).toBeGreaterThan(banner);
@@ -44,7 +48,7 @@ describe("buildWorkflow", () => {
   });
 
   it("strips `export ` from every library declaration: a script body with `export function` does not parse", () => {
-    expect(out).toContain("const STR = { type: \"string\" };");
+    expect(out).toContain('const STR = { type: "string" };');
     expect(out).toContain("function twice(fn) {");
     expect(out).toContain("async function asyncHelper() {}");
     expect(out.split("\n").filter((l) => /^export /.test(l))).toEqual(["export const meta = {"]);
@@ -55,12 +59,18 @@ describe("buildWorkflow", () => {
   });
 
   it("refuses a source that does not begin with the meta literal", () => {
-    expect(() => buildWorkflow("demo", `// hello\n${SRC}`, LIB)).toThrow(/must begin with "export const meta = "/);
+    expect(() => buildWorkflow("demo", `// hello\n${SRC}`, LIB)).toThrow(
+      /must begin with "export const meta = "/,
+    );
   });
 
   it("refuses a source with no `// @lib` line, or with two: the library would be missing or defined twice", () => {
-    expect(() => buildWorkflow("demo", SRC.replace("// @lib\n", ""), LIB)).toThrow(/exactly one "\/\/ @lib" line, found 0/);
-    expect(() => buildWorkflow("demo", SRC.replace("// @lib\n", "// @lib\n// @lib\n"), LIB)).toThrow(/found 2/);
+    expect(() => buildWorkflow("demo", SRC.replace("// @lib\n", ""), LIB)).toThrow(
+      /exactly one "\/\/ @lib" line, found 0/,
+    );
+    expect(() =>
+      buildWorkflow("demo", SRC.replace("// @lib\n", "// @lib\n// @lib\n"), LIB),
+    ).toThrow(/found 2/);
   });
 
   it("refuses an `// @lib` line placed before the end of meta, which would paste the library inside the literal", () => {
@@ -69,8 +79,12 @@ describe("buildWorkflow", () => {
   });
 
   it("refuses a library that imports: a workflow script has no import", () => {
-    expect(() => buildWorkflow("demo", SRC, `import { a } from "./a.js";\n${LIB}`)).toThrow(/must not import/);
-    expect(() => buildWorkflow("demo", SRC, `${LIB}const m = await import('x');\n`)).toThrow(/must not import/);
+    expect(() => buildWorkflow("demo", SRC, `import { a } from "./a.js";\n${LIB}`)).toThrow(
+      /must not import/,
+    );
+    expect(() => buildWorkflow("demo", SRC, `${LIB}const m = await import('x');\n`)).toThrow(
+      /must not import/,
+    );
   });
 });
 
@@ -81,13 +95,18 @@ describe("stripLib", () => {
   });
 
   it("does not touch the word export inside a string or a comment", () => {
-    expect(stripLib('export const a = "export const b";\n// export const c\n')).toBe('const a = "export const b";\n// export const c');
+    expect(stripLib('export const a = "export const b";\n// export const c\n')).toBe(
+      'const a = "export const b";\n// export const c',
+    );
   });
 });
 
 describe("sourceNames", () => {
   it("takes every .js file but lib.js, sorted, and ignores other files", () => {
-    expect(sourceNames(["ship.js", "lib.js", "README.md", "plan.js", "notes.json"])).toEqual(["plan", "ship"]);
+    expect(sourceNames(["ship.js", "lib.js", "README.md", "plan.js", "notes.json"])).toEqual([
+      "plan",
+      "ship",
+    ]);
   });
 });
 
@@ -110,7 +129,9 @@ describe("drift", () => {
   });
 
   it("flags a source with no built file", () => {
-    expect(drift(sources, { a: good.a }, LIB)).toEqual(["b.js: no built file for .claude/workflow-src/b.js"]);
+    expect(drift(sources, { a: good.a }, LIB)).toEqual([
+      "b.js: no built file for .claude/workflow-src/b.js",
+    ]);
   });
 
   it("flags a built file with no source (a renamed or deleted workflow left behind)", () => {
@@ -135,7 +156,13 @@ function memfs(files: Record<string, string>) {
     },
     listDir: (p) => {
       const prefix = p.endsWith("/") ? p : `${p}/`;
-      return [...new Set([...Object.keys(files), ...Object.keys(written)].filter((k) => k.startsWith(prefix) && !k.slice(prefix.length).includes("/")).map((k) => k.slice(prefix.length)))];
+      return [
+        ...new Set(
+          [...Object.keys(files), ...Object.keys(written)]
+            .filter((k) => k.startsWith(prefix) && !k.slice(prefix.length).includes("/"))
+            .map((k) => k.slice(prefix.length)),
+        ),
+      ];
     },
     mkdirp: (p) => void made.push(p),
   };
@@ -157,7 +184,9 @@ describe("run build", () => {
     expect(Object.keys(written)).toEqual(["/repo/.claude/workflows/demo.js"]);
     expect(written["/repo/.claude/workflows/demo.js"]).toBe(buildWorkflow("demo", SRC, LIB));
     expect(made).toEqual(["/repo/.claude/workflows"]);
-    expect(r.stdout).toEqual([`built .claude/workflows/demo.js (${buildWorkflow("demo", SRC, LIB).split("\n").length} lines)`]);
+    expect(r.stdout).toEqual([
+      `built .claude/workflows/demo.js (${buildWorkflow("demo", SRC, LIB).split("\n").length} lines)`,
+    ]);
   });
 
   it("builds into --out instead, leaving .claude/workflows alone: the test lanes read those files while a build runs elsewhere", () => {
@@ -176,7 +205,13 @@ describe("run build", () => {
 
   it("exits 1 with a usage line for a missing verb, an unknown verb, an unknown flag or a bare --out", () => {
     const { deps } = memfs(tree());
-    for (const argv of [[], ["bild"], ["build", "--into", "x"], ["build", "--out"], ["build", "--out", "--x"]]) {
+    for (const argv of [
+      [],
+      ["bild"],
+      ["build", "--into", "x"],
+      ["build", "--out"],
+      ["build", "--out", "--x"],
+    ]) {
       const r = run(argv, ROOT, deps);
       expect(r.code, argv.join(" ")).toBe(1);
       expect(r.stderr.join("\n")).toContain("usage: bun scripts/workflows.ts build|check");
@@ -215,7 +250,13 @@ describe("run check", () => {
     const missing = run(["check"], ROOT, memfs(tree()).deps);
     expect(missing.code).toBe(1);
     expect(missing.stderr[0]).toContain("demo.js: no built file");
-    const orphan = run(["check"], ROOT, memfs(tree({ "/repo/.claude/workflows/demo.js": built, "/repo/.claude/workflows/gone.js": "x" })).deps);
+    const orphan = run(
+      ["check"],
+      ROOT,
+      memfs(
+        tree({ "/repo/.claude/workflows/demo.js": built, "/repo/.claude/workflows/gone.js": "x" }),
+      ).deps,
+    );
     expect(orphan.code).toBe(1);
     expect(orphan.stderr[0]).toContain("gone.js: no source");
   });
@@ -226,7 +267,12 @@ describe("run check", () => {
   });
 
   it("exits 1 with the build error, not a crash, when a source cannot build", () => {
-    const { deps } = memfs(tree({ "/repo/.claude/workflows/demo.js": built, "/repo/.claude/workflow-src/demo.js": SRC.replace("// @lib\n", "") }));
+    const { deps } = memfs(
+      tree({
+        "/repo/.claude/workflows/demo.js": built,
+        "/repo/.claude/workflow-src/demo.js": SRC.replace("// @lib\n", ""),
+      }),
+    );
     const r = run(["check"], ROOT, deps);
     expect(r.code).toBe(1);
     expect(r.stderr[0]).toContain('exactly one "// @lib" line');

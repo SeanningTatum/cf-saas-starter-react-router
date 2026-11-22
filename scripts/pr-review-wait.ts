@@ -52,13 +52,20 @@ const bad = (code: number, kind: string, error: string, help: string): Outcome =
   err: { error, code: kind, help },
 });
 const usage = (error: string): Outcome =>
-  bad(1, "USAGE", error, "usage: pr-review-wait <pr> [--timeout 900] [--interval 30] [--retrigger-after 300]");
+  bad(
+    1,
+    "USAGE",
+    error,
+    "usage: pr-review-wait <pr> [--timeout 900] [--interval 30] [--retrigger-after 300]",
+  );
 const ghFailure = (r: GhResult, what: string): Outcome =>
   bad(
     2,
     "GH",
     `${what}: ${r.stderr.trim() || r.stdout.trim() || `gh exited ${r.code}`}`,
-    r.code === 127 ? "install the GitHub CLI and run: gh auth login" : "run the same gh command by hand to see why",
+    r.code === 127
+      ? "install the GitHub CLI and run: gh auth login"
+      : "run the same gh command by hand to see why",
   );
 
 export const defaultDeps: Deps = {
@@ -124,7 +131,9 @@ function num(flags: Map<string, string>, name: string, dflt: number): number | O
   const raw = flags.get(name);
   if (raw === undefined) return dflt;
   const n = Number(raw);
-  return Number.isFinite(n) && n >= 0 ? n : usage(`${name} must be a non-negative number, got "${raw}"`);
+  return Number.isFinite(n) && n >= 0
+    ? n
+    : usage(`${name} must be a non-negative number, got "${raw}"`);
 }
 const isOutcome = (v: unknown): v is Outcome => typeof v === "object" && v !== null && "code" in v;
 
@@ -140,10 +149,13 @@ export async function run(argv: string[], deps: Deps = defaultDeps): Promise<Out
       i++;
     } else positional.push(a);
   }
-  const unknown = [...flags.keys()].filter((f) => !["--timeout", "--interval", "--retrigger-after"].includes(f));
+  const unknown = [...flags.keys()].filter(
+    (f) => !["--timeout", "--interval", "--retrigger-after"].includes(f),
+  );
   if (unknown.length) return usage(`unknown flag ${unknown.join(", ")}`);
   const prRaw = positional[0]?.replace(/^#/, "");
-  if (!prRaw || !/^\d+$/.test(prRaw)) return usage(`<pr> must be a number, got "${positional[0] ?? ""}"`);
+  if (!prRaw || !/^\d+$/.test(prRaw))
+    return usage(`<pr> must be a number, got "${positional[0] ?? ""}"`);
   const pr = Number(prRaw);
   const timeout = num(flags, "--timeout", 900);
   if (isOutcome(timeout)) return timeout;
@@ -154,19 +166,33 @@ export async function run(argv: string[], deps: Deps = defaultDeps): Promise<Out
 
   const repoR = deps.gh(["repo", "view", "--json", "nameWithOwner", "-q", ".nameWithOwner"]);
   const repo = repoR.stdout.trim();
-  if (repoR.code !== 0 || !repo) return ghFailure(repoR.code !== 0 ? repoR : { ...repoR, stderr: "could not resolve the repository" }, "gh repo view");
+  if (repoR.code !== 0 || !repo)
+    return ghFailure(
+      repoR.code !== 0 ? repoR : { ...repoR, stderr: "could not resolve the repository" },
+      "gh repo view",
+    );
 
   const h = deps.gh(["pr", "view", String(pr), "--json", "headRefOid", "-q", ".headRefOid"]);
   const sha = h.stdout.trim();
-  if (h.code !== 0 || !sha) return ghFailure(h.code !== 0 ? h : { ...h, stderr: "no head sha" }, `gh pr view ${pr}`);
+  if (h.code !== 0 || !sha)
+    return ghFailure(h.code !== 0 ? h : { ...h, stderr: "no head sha" }, `gh pr view ${pr}`);
 
-  const isBot = (login: unknown) => typeof login === "string" && login.toLowerCase().startsWith(BOT);
+  const isBot = (login: unknown) =>
+    typeof login === "string" && login.toLowerCase().startsWith(BOT);
   const readSummary = (): string | Outcome => {
     const ir = deps.gh(["api", "--paginate", `repos/${repo}/issues/${pr}/comments`]);
     if (ir.code !== 0) return ghFailure(ir, "gh api issue comments");
-    return parseItems(ir.stdout)
-      .filter((c): c is ApiItem & { body: string } => isBot(c?.user?.login) && typeof c?.body === "string" && c.body.includes(MARKER) && c.body.includes(sha))
-      .pop()?.body ?? "";
+    return (
+      parseItems(ir.stdout)
+        .filter(
+          (c): c is ApiItem & { body: string } =>
+            isBot(c?.user?.login) &&
+            typeof c?.body === "string" &&
+            c.body.includes(MARKER) &&
+            c.body.includes(sha),
+        )
+        .pop()?.body ?? ""
+    );
   };
   const start = deps.now();
   let retriggered = false;
@@ -175,7 +201,13 @@ export async function run(argv: string[], deps: Deps = defaultDeps): Promise<Out
 
   for (;;) {
     // Every page, one run per line: a commit with many checks can put Greptile's past the first page.
-    const cr = deps.gh(["api", "--paginate", "--jq", ".check_runs[]", `repos/${repo}/commits/${sha}/check-runs?per_page=100`]);
+    const cr = deps.gh([
+      "api",
+      "--paginate",
+      "--jq",
+      ".check_runs[]",
+      `repos/${repo}/commits/${sha}/check-runs?per_page=100`,
+    ]);
     if (cr.code !== 0) return ghFailure(cr, "gh api check-runs");
     const runs = parseItems(cr.stdout).filter((x) => isBot(x?.app?.slug));
     const checkDone = runs.some((x) => x?.status === "completed");
@@ -184,7 +216,10 @@ export async function run(argv: string[], deps: Deps = defaultDeps): Promise<Out
     if (r.code !== 0) return ghFailure(r, "gh api reviews");
     const hits = parseItems(r.stdout).filter((x) => isBot(x?.user?.login) && x?.commit_id === sha);
     // Latest submission wins; a re-review of the same commit supersedes the first.
-    review = hits.sort((a, b) => String(a.submitted_at ?? "").localeCompare(String(b.submitted_at ?? ""))).pop() ?? null;
+    review =
+      hits
+        .sort((a, b) => String(a.submitted_at ?? "").localeCompare(String(b.submitted_at ?? "")))
+        .pop() ?? null;
     if (review) break;
     if (checkDone) {
       // The summary lands a moment after the check completes; until it names the head, keep polling.
@@ -207,8 +242,24 @@ export async function run(argv: string[], deps: Deps = defaultDeps): Promise<Out
 
   if (!review && summary === null) {
     return {
-      ...ok({ status: "timeout", pr, sha, review: null, confidence: null, summary: "", comments: [], retriggered }, 5),
-      err: { error: `no ${BOT} review of ${sha} within ${timeout}s`, code: "TIMEOUT", help: "check the PR on GitHub, or run again with a longer --timeout" },
+      ...ok(
+        {
+          status: "timeout",
+          pr,
+          sha,
+          review: null,
+          confidence: null,
+          summary: "",
+          comments: [],
+          retriggered,
+        },
+        5,
+      ),
+      err: {
+        error: `no ${BOT} review of ${sha} within ${timeout}s`,
+        code: "TIMEOUT",
+        help: "check the PR on GitHub, or run again with a longer --timeout",
+      },
     };
   }
 
@@ -219,7 +270,13 @@ export async function run(argv: string[], deps: Deps = defaultDeps): Promise<Out
     if (pc.code !== 0) return ghFailure(pc, "gh api pull comments");
     comments = parseItems(pc.stdout)
       .filter((c) => c?.pull_request_review_id === reviewId)
-      .map((c) => ({ id: c.id, path: c.path, line: c.line ?? c.original_line ?? null, body: c.body, url: c.html_url }));
+      .map((c) => ({
+        id: c.id,
+        path: c.path,
+        line: c.line ?? c.original_line ?? null,
+        body: c.body,
+        url: c.html_url,
+      }));
   }
   if (summary === null) {
     const s = readSummary();
@@ -231,7 +288,14 @@ export async function run(argv: string[], deps: Deps = defaultDeps): Promise<Out
     status: "reviewed",
     pr,
     sha,
-    review: review ? { id: review.id, state: review.state, submitted_at: review.submitted_at, body: review.body ?? "" } : null,
+    review: review
+      ? {
+          id: review.id,
+          state: review.state,
+          submitted_at: review.submitted_at,
+          body: review.body ?? "",
+        }
+      : null,
     confidence: parseConfidence(summary),
     summary,
     comments,

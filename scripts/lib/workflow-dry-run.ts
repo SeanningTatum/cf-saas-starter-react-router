@@ -116,7 +116,8 @@ export function schemaErrors(schema: unknown, value: unknown, path = "$"): strin
       return [`${path}: want ${want.join("|")}, got ${got}`];
     }
   }
-  if (s.enum && !s.enum.some((e) => e === value)) errors.push(`${path}: ${JSON.stringify(value)} is not one of ${JSON.stringify(s.enum)}`);
+  if (s.enum && !s.enum.some((e) => e === value))
+    errors.push(`${path}: ${JSON.stringify(value)} is not one of ${JSON.stringify(s.enum)}`);
   if (typeOf(value) === "object") {
     const o = value as Record<string, unknown>;
     for (const k of s.required ?? []) if (!(k in o)) errors.push(`${path}.${k}: required`);
@@ -124,12 +125,14 @@ export function schemaErrors(schema: unknown, value: unknown, path = "$"): strin
       const sub = s.properties?.[k];
       if (sub) errors.push(...schemaErrors(sub, v, `${path}.${k}`));
       else if (s.additionalProperties === false) errors.push(`${path}.${k}: not in the schema`);
-      else if (s.additionalProperties && typeof s.additionalProperties === "object") errors.push(...schemaErrors(s.additionalProperties, v, `${path}.${k}`));
+      else if (s.additionalProperties && typeof s.additionalProperties === "object")
+        errors.push(...schemaErrors(s.additionalProperties, v, `${path}.${k}`));
     }
   }
-  if (Array.isArray(value) && s.items) value.forEach((v, i) => {
-    errors.push(...schemaErrors(s.items, v, `${path}[${i}]`));
-  });
+  if (Array.isArray(value) && s.items)
+    value.forEach((v, i) => {
+      errors.push(...schemaErrors(s.items, v, `${path}[${i}]`));
+    });
   return errors;
 }
 
@@ -138,22 +141,29 @@ const banned = (what: string) => () => {
 };
 const GuardedDate = new Proxy(Date, {
   apply: banned("Date()"),
-  construct: (target, argv) => (argv.length ? new target(...(argv as [number])) : banned("new Date()")()),
-  get: (target, key, receiver) => (key === "now" ? banned("Date.now()") : Reflect.get(target, key, receiver)),
+  construct: (target, argv) =>
+    argv.length ? new target(...(argv as [number])) : banned("new Date()")(),
+  get: (target, key, receiver) =>
+    key === "now" ? banned("Date.now()") : Reflect.get(target, key, receiver),
 });
 const GuardedMath = Object.create(Math, { random: { value: banned("Math.random()") } });
 
 const matches = (m: Matcher, call: Omit<AnswerInput, "nth">): boolean =>
   typeof m === "string" ? m === call.label : m instanceof RegExp ? m.test(call.label) : m(call);
 
-const AsyncFunction = Object.getPrototypeOf(async () => {}).constructor as new (...a: string[]) => (...a: unknown[]) => Promise<unknown>;
+const AsyncFunction = Object.getPrototypeOf(async () => {}).constructor as new (
+  ...a: string[]
+) => (...a: unknown[]) => Promise<unknown>;
 
 /** Run the workflow `name` with scripted agents. Rejects when the script throws or an agent call went unanswered. */
 export async function dryRun(name: string, options: DryRunOptions): Promise<DryRunResult> {
   // WORKFLOW_DRY_RUN_DIR=<dir>: read the scripts from there, to test a build before it replaces the live ones.
-  const file = options.file ?? join(process.env.WORKFLOW_DRY_RUN_DIR ?? join(REPO_ROOT, ".claude", "workflows"), `${name}.js`);
+  const file =
+    options.file ??
+    join(process.env.WORKFLOW_DRY_RUN_DIR ?? join(REPO_ROOT, ".claude", "workflows"), `${name}.js`);
   const source = readFileSync(file, "utf8");
-  if (!/^export const meta = /.test(source)) throw new Error(`${file}: a workflow script must begin with "export const meta = "`);
+  if (!/^export const meta = /.test(source))
+    throw new Error(`${file}: a workflow script must begin with "export const meta = "`);
   const metaBox: { value?: WorkflowMeta } = {};
   const body = source.replace(/^export const meta = /, "const meta = __meta.value = ");
 
@@ -168,14 +178,21 @@ export async function dryRun(name: string, options: DryRunOptions): Promise<DryR
 
   const agent = async (prompt: string, opts: AgentOpts = {}): Promise<unknown> => {
     if (typeof prompt !== "string") throw new Error("agent(prompt): prompt must be a string");
-    if (calls.length >= MAX_AGENTS) throw new Error(`more than ${MAX_AGENTS} agent calls: runaway loop`);
+    if (calls.length >= MAX_AGENTS)
+      throw new Error(`more than ${MAX_AGENTS} agent calls: runaway loop`);
     const n = calls.length;
     const head = { n, prompt, opts, label: opts.label ?? "", phase: opts.phase ?? currentPhase };
     const call: AgentCall = { ...head, cached: false, result: null };
     calls.push(call);
 
     const prev = old[n];
-    if (replaying && prev && prev.result !== null && prev.prompt === prompt && JSON.stringify(prev.opts) === JSON.stringify(opts)) {
+    if (
+      replaying &&
+      prev &&
+      prev.result !== null &&
+      prev.prompt === prompt &&
+      JSON.stringify(prev.opts) === JSON.stringify(opts)
+    ) {
       call.cached = true;
       call.result = structuredClone(prev.result);
       return call.result;
@@ -190,7 +207,10 @@ export async function dryRun(name: string, options: DryRunOptions): Promise<DryR
     }
     const nth = answered.get(rule) ?? 0;
     answered.set(rule, nth + 1);
-    const answer = typeof rule[1] === "function" ? await (rule[1] as (c: AnswerInput) => unknown)({ ...head, nth }) : rule[1];
+    const answer =
+      typeof rule[1] === "function"
+        ? await (rule[1] as (c: AnswerInput) => unknown)({ ...head, nth })
+        : rule[1];
     const result = answer === undefined ? null : structuredClone(answer);
     if (result !== null && opts.schema) {
       const errors = schemaErrors(opts.schema, result);
@@ -212,15 +232,18 @@ export async function dryRun(name: string, options: DryRunOptions): Promise<DryR
     }
   };
   const parallel = (thunks: (() => unknown)[]) => Promise.all(thunks.map((t) => settle(t)));
-  const pipeline = (items: unknown[], ...stages: ((prev: unknown, item: unknown, i: number) => unknown)[]) =>
+  const pipeline = (
+    items: unknown[],
+    ...stages: ((prev: unknown, item: unknown, i: number) => unknown)[]
+  ) =>
     Promise.all(
       items.map((item, i) =>
         settle(async () => {
           let prev: unknown = item;
           for (const stage of stages) prev = await stage(prev, item, i);
           return prev;
-        })
-      )
+        }),
+      ),
     );
   const phase = (title: string) => {
     currentPhase = title;
@@ -232,11 +255,36 @@ export async function dryRun(name: string, options: DryRunOptions): Promise<DryR
     throw new Error("dry run: workflow() is not stubbed");
   };
 
-  const run = new AsyncFunction("agent", "parallel", "pipeline", "phase", "log", "args", "budget", "workflow", "Date", "Math", "__meta", body);
+  const run = new AsyncFunction(
+    "agent",
+    "parallel",
+    "pipeline",
+    "phase",
+    "log",
+    "args",
+    "budget",
+    "workflow",
+    "Date",
+    "Math",
+    "__meta",
+    body,
+  );
   let result: unknown;
   let thrown: unknown;
   try {
-    result = await run(agent, parallel, pipeline, phase, log, options.args, budget, workflow, GuardedDate, GuardedMath, metaBox);
+    result = await run(
+      agent,
+      parallel,
+      pipeline,
+      phase,
+      log,
+      options.args,
+      budget,
+      workflow,
+      GuardedDate,
+      GuardedMath,
+      metaBox,
+    );
   } catch (e) {
     thrown = e;
   }
@@ -244,12 +292,29 @@ export async function dryRun(name: string, options: DryRunOptions): Promise<DryR
   // JSON line. Diff two trace files to prove an edit to a workflow changed no prompt.
   const traceFile = process.env.WORKFLOW_DRY_RUN_TRACE;
   if (traceFile) {
-    const trace = { name, args: options.args, calls: calls.map(({ prompt, opts, cached, result: r }) => ({ prompt, opts, cached, result: r })), logs, phases, result, threw: thrown ? String(thrown) : null };
+    const trace = {
+      name,
+      args: options.args,
+      calls: calls.map(({ prompt, opts, cached, result: r }) => ({
+        prompt,
+        opts,
+        cached,
+        result: r,
+      })),
+      logs,
+      phases,
+      result,
+      threw: thrown ? String(thrown) : null,
+    };
     appendFileSync(traceFile, `${JSON.stringify(trace)}\n`);
   }
   if (problems.length) {
-    const after = thrown ? `\n  then the script threw: ${thrown instanceof Error ? thrown.message : JSON.stringify(thrown)}` : "";
-    throw new Error(`dry run of ${name}: ${problems.length} problem(s):\n  ${problems.join("\n  ")}${after}`);
+    const after = thrown
+      ? `\n  then the script threw: ${thrown instanceof Error ? thrown.message : JSON.stringify(thrown)}`
+      : "";
+    throw new Error(
+      `dry run of ${name}: ${problems.length} problem(s):\n  ${problems.join("\n  ")}${after}`,
+    );
   }
   if (thrown) throw thrown;
   if (!metaBox.value) throw new Error(`${file}: meta was never set`);

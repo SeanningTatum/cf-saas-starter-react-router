@@ -60,7 +60,9 @@ export function parseFrontmatter(text: string): Record<string, string> | null {
 
 /** The text up to the first ". " or " Examples - ", whichever comes first. A closing period is dropped. */
 export function firstSentence(description: string): string {
-  const cuts = [description.indexOf(". "), description.indexOf(" Examples - ")].filter((i) => i >= 0);
+  const cuts = [description.indexOf(". "), description.indexOf(" Examples - ")].filter(
+    (i) => i >= 0,
+  );
   const text = cuts.length ? description.slice(0, Math.min(...cuts)) : description;
   return text.trim().replace(/\.$/, "");
 }
@@ -76,11 +78,18 @@ export function validate(files: Record<string, string>): string[] {
       continue;
     }
     if (!fm.name) problems.push(`${where}: no \`name\``);
-    else if (fm.name !== file) problems.push(`${where}: \`name\` is "${fm.name}" but the file is ${where}; they must match`);
+    else if (fm.name !== file)
+      problems.push(`${where}: \`name\` is "${fm.name}" but the file is ${where}; they must match`);
     if (!fm.description) problems.push(`${where}: no \`description\``);
     if (!fm.tools) problems.push(`${where}: no \`tools\``);
-    if (!MODELS.includes(fm.model ?? "")) problems.push(`${where}: \`model\` is ${fm.model ? `"${fm.model}"` : "missing"}; use one of ${MODELS.join(", ")}`);
-    if (!EFFORTS.includes(fm.effort ?? "")) problems.push(`${where}: \`effort\` is ${fm.effort ? `"${fm.effort}"` : "missing"}; use one of ${EFFORTS.join(", ")}`);
+    if (!MODELS.includes(fm.model ?? ""))
+      problems.push(
+        `${where}: \`model\` is ${fm.model ? `"${fm.model}"` : "missing"}; use one of ${MODELS.join(", ")}`,
+      );
+    if (!EFFORTS.includes(fm.effort ?? ""))
+      problems.push(
+        `${where}: \`effort\` is ${fm.effort ? `"${fm.effort}"` : "missing"}; use one of ${EFFORTS.join(", ")}`,
+      );
   }
   return problems;
 }
@@ -105,7 +114,10 @@ const cell = (s: string): string => s.replace(/\|/g, "\\|");
 
 /** The text between the markers, markers included. */
 export function renderBlock(agents: Agent[]): string {
-  const rows = agents.map((a) => `| [\`${a.name}\`](${a.name}.md) | ${a.model} | ${a.effort} | ${cell(firstSentence(a.description))} |`);
+  const rows = agents.map(
+    (a) =>
+      `| [\`${a.name}\`](${a.name}.md) | ${a.model} | ${a.effort} | ${cell(firstSentence(a.description))} |`,
+  );
   const counts = MODELS.map((m) => ({ m, n: agents.filter((a) => a.model === m).length }))
     .filter((c) => c.n > 0)
     .map((c) => `${c.n} ${c.m}`)
@@ -127,8 +139,12 @@ export function renderBlock(agents: Agent[]): string {
 function blockSpan(readme: string): [number, number] {
   const s = readme.indexOf(START);
   const e = readme.indexOf(END);
-  if (s < 0 || e < 0) throw new Error(`${README}: needs one ${START} line and one ${END} line around the roster table`);
-  if (readme.indexOf(START, s + 1) >= 0 || readme.indexOf(END, e + 1) >= 0) throw new Error(`${README}: ${START} and ${END} must each appear once`);
+  if (s < 0 || e < 0)
+    throw new Error(
+      `${README}: needs one ${START} line and one ${END} line around the roster table`,
+    );
+  if (readme.indexOf(START, s + 1) >= 0 || readme.indexOf(END, e + 1) >= 0)
+    throw new Error(`${README}: ${START} and ${END} must each appear once`);
   if (e < s) throw new Error(`${README}: ${END} comes before ${START}`);
   return [s, e + END.length];
 }
@@ -145,7 +161,10 @@ const fail = (...stderr: string[]): Outcome => ({ code: 1, stdout: [], stderr })
 export function run(argv: string[], root: string, deps: Deps): Outcome {
   const verb = argv[0];
   if (argv.length !== 1 || (verb !== "write" && verb !== "check")) {
-    return fail(`roster: ${verb ? `unknown arguments "${argv.join(" ")}"` : "a verb is required"}`, "usage: bun scripts/roster.ts write|check");
+    return fail(
+      `roster: ${verb ? `unknown arguments "${argv.join(" ")}"` : "a verb is required"}`,
+      "usage: bun scripts/roster.ts write|check",
+    );
   }
   const dir = join(root, AGENTS_DIR);
   const files: Record<string, string> = {};
@@ -173,10 +192,22 @@ export function run(argv: string[], root: string, deps: Deps): Outcome {
   const n = Object.keys(files).length;
   if (verb === "write") {
     if (want !== readme) deps.writeFile(path, want);
-    return { code: 0, stdout: [`roster: wrote ${n} agents to ${README}${want === readme ? " (no change)" : ""}`], stderr: [] };
+    return {
+      code: 0,
+      stdout: [`roster: wrote ${n} agents to ${README}${want === readme ? " (no change)" : ""}`],
+      stderr: [],
+    };
   }
-  if (want !== readme) return fail(`roster: the table in ${README} is stale (it must match the agents' frontmatter)`, `fix: run \`${WRITE_CMD}\` and commit the result`);
-  return { code: 0, stdout: [`roster: ${n} agents valid, table in ${README} is current`], stderr: [] };
+  if (want !== readme)
+    return fail(
+      `roster: the table in ${README} is stale (it must match the agents' frontmatter)`,
+      `fix: run \`${WRITE_CMD}\` and commit the result`,
+    );
+  return {
+    code: 0,
+    stdout: [`roster: ${n} agents valid, table in ${README} is current`],
+    stderr: [],
+  };
 }
 
 export const defaultDeps: Deps = {

@@ -65,7 +65,10 @@ function parseFrontmatter(markdown: string): Parsed {
     // Drop a trailing ` # comment`, then surrounding quotes.
     const key = m[1];
     if (key === undefined) continue;
-    const value = (m[2] ?? "").replace(/\s+#.*$/, "").trim().replace(/^["']|["']$/g, "");
+    const value = (m[2] ?? "")
+      .replace(/\s+#.*$/, "")
+      .trim()
+      .replace(/^["']|["']$/g, "");
     front[key] = value;
   }
   return { front, body: lines.slice(end + 1) };
@@ -178,7 +181,8 @@ function checkDecisions(s: Section, fail: (rule: string, detail: string) => void
     if (!field("Chosen")[0]) fail("decisions", `${id}: Chosen is missing`);
     if (!field("Why")[0]) fail("decisions", `${id}: Why is missing`);
     const by = field("Decided by")[0];
-    if (!by || !["user", "agent"].includes(by)) fail("decisions", `${id}: Decided by must be user or agent`);
+    if (!by || !["user", "agent"].includes(by))
+      fail("decisions", `${id}: Decided by must be user or agent`);
     const rejected = field("Rejected");
     if (!rejected.some((r) => /\s—\s+\S/.test(r)))
       fail("decisions", `${id}: needs a Rejected line with a reason after " — "`);
@@ -196,26 +200,42 @@ function checkPrototypes(s: Section, slug: string, fail: (rule: string, detail: 
   const end = rest.findIndex((l) => /^#{2,3}\s/.test(l));
   const block = end === -1 ? rest : rest.slice(0, end);
   const items = block.filter((l) => /^\s*[-*]\s+/.test(l));
-  if (items.length !== 3) fail("prototypes", `expected exactly 3 prototype lines, found ${items.length}`);
+  if (items.length !== 3)
+    fail("prototypes", `expected exactly 3 prototype lines, found ${items.length}`);
   const ids: string[] = [];
   for (const line of items) {
-    const m = /^\s*[-*]\s+(\S+) [—-] (.+?) [—-] `(plans\/([^`/]+)-proto-([^`/]+)\.html)`\s*$/.exec(line);
+    const m = /^\s*[-*]\s+(\S+) [—-] (.+?) [—-] `(plans\/([^`/]+)-proto-([^`/]+)\.html)`\s*$/.exec(
+      line,
+    );
     if (!m) {
-      fail("prototypes", `line is not "- <id> — <name> — \`plans/…-proto-<id>.html\`": ${line.trim().slice(0, 60)}`);
+      fail(
+        "prototypes",
+        `line is not "- <id> — <name> — \`plans/…-proto-<id>.html\`": ${line.trim().slice(0, 60)}`,
+      );
       continue;
     }
-    if (m[1] !== m[5]) fail("prototypes", `id "${m[1]}" does not match the file name's "-proto-${m[5]}.html"`);
-    if (slug && m[4] !== slug) fail("prototypes", `file "${m[3]}" should be plans/${slug}-proto-${m[1]}.html (frontmatter slug)`);
+    if (m[1] !== m[5])
+      fail("prototypes", `id "${m[1]}" does not match the file name's "-proto-${m[5]}.html"`);
+    if (slug && m[4] !== slug)
+      fail(
+        "prototypes",
+        `file "${m[3]}" should be plans/${slug}-proto-${m[1]}.html (frontmatter slug)`,
+      );
     ids.push(m[1] ?? "");
   }
-  if (ids.length === 3 && [...ids].sort().join(",") !== "a,b,c") fail("prototypes", `ids must be a, b, c; found ${ids.join(", ")}`);
+  if (ids.length === 3 && [...ids].sort().join(",") !== "a,b,c")
+    fail("prototypes", `ids must be a, b, c; found ${ids.join(", ")}`);
   const chosen = block.map((l) => /^\s*Chosen:\s*(\S+)\s*$/.exec(l)?.[1]).find((v) => v);
-  if (!chosen || !["a", "b", "c"].includes(chosen)) fail("prototypes", "needs a `Chosen: <id>` line naming a, b or c");
+  if (!chosen || !["a", "b", "c"].includes(chosen))
+    fail("prototypes", "needs a `Chosen: <id>` line naming a, b or c");
 }
 
 /** Normalise a fence path: drop leading ./, collapse //. Returns null for absolute paths or `..`. */
 function normPath(p: string): string | null {
-  const q = p.trim().replace(/\/+/g, "/").replace(/^(\.\/)+/, "");
+  const q = p
+    .trim()
+    .replace(/\/+/g, "/")
+    .replace(/^(\.\/)+/, "");
   if (q.startsWith("/") || q.split("/").includes("..")) return null;
   return q;
 }
@@ -246,15 +266,18 @@ function checkStack(s: Section, base: string, fail: (rule: string, detail: strin
     if (seen.has(branch)) fail("stack", `row ${n}: branch "${branch}" is repeated`);
     seen.add(branch);
     const wantBase = i === 0 ? base : table.rows[i - 1]?.[1];
-    if (rowBase !== wantBase) fail("stack", `row ${n}: base is "${rowBase}", expected "${wantBase}"`);
+    if (rowBase !== wantBase)
+      fail("stack", `row ${n}: base is "${rowBase}", expected "${wantBase}"`);
     const paths = [...(fence ?? "").matchAll(/`([^`]+)`/g)].map((m) => m[1] ?? "");
     if (paths.length === 0) fail("stack", `row ${n}: fence has no backticked path`);
     for (const raw of paths) {
       const path = normPath(raw);
-      if (path === null) fail("stack", `row ${n}: fence path "${raw}" is absolute or contains ".."`);
+      if (path === null)
+        fail("stack", `row ${n}: fence path "${raw}" is absolute or contains ".."`);
       else fences.push({ n, path });
     }
-    if (size === undefined || !["S", "M", "L"].includes(size)) fail("stack", `row ${n}: Size is "${size}", expected S, M or L`);
+    if (size === undefined || !["S", "M", "L"].includes(size))
+      fail("stack", `row ${n}: Size is "${size}", expected S, M or L`);
   });
   for (let i = 0; i < fences.length; i++)
     for (let j = i + 1; j < fences.length; j++) {
@@ -347,14 +370,18 @@ export function checkFeatureDoc(markdown: string): Failure[] {
 function main(argv: string[]): number {
   const file = argv[0];
   if (!file || argv.length > 1) {
-    console.error(JSON.stringify({ error: "usage: check-feature-doc.ts <file.md>", code: "USAGE" }));
+    console.error(
+      JSON.stringify({ error: "usage: check-feature-doc.ts <file.md>", code: "USAGE" }),
+    );
     return 2;
   }
   let text: string;
   try {
     text = readFileSync(file, "utf8");
   } catch (e) {
-    console.error(JSON.stringify({ error: `cannot read ${file}: ${(e as Error).message}`, code: "UNREADABLE" }));
+    console.error(
+      JSON.stringify({ error: `cannot read ${file}: ${(e as Error).message}`, code: "UNREADABLE" }),
+    );
     return 2;
   }
   const failures = checkFeatureDoc(text);

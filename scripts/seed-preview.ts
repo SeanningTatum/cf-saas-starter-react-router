@@ -170,7 +170,8 @@ export function parseArgs(
     );
   }
 
-  if (has("--preview") && has("--remote")) return bad("Pass either --preview or --remote, not both.");
+  if (has("--preview") && has("--remote"))
+    return bad("Pass either --preview or --remote, not both.");
 
   if (has("--remote") && !has("--force-production")) return bad(productionRefusal());
 
@@ -187,7 +188,11 @@ export function parseArgs(
   }
 
   if (has("--preview")) {
-    const target: Target = { flags: ["--env", "preview", "--remote"], label: "preview", local: false };
+    const target: Target = {
+      flags: ["--env", "preview", "--remote"],
+      label: "preview",
+      local: false,
+    };
     return Either.flatMap(readSecret(env, "PREVIEW_SEED_SECRET"), (secret) =>
       Either.map(
         readSlug(argv, "shared"),

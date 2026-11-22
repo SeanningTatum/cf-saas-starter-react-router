@@ -1,12 +1,6 @@
-import { cn } from "@/lib/utils"
-import { Button } from "@/components/ui/button"
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card"
+import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Form,
   FormControl,
@@ -15,24 +9,24 @@ import {
   FormItem,
   FormLabel,
   FormMessage,
-} from "@/components/ui/form"
-import { Input } from "@/components/ui/input"
-import { Link, useNavigate } from "react-router"
-import { authClient } from "@/auth/client"
-import { effectTsResolver as effectResolver } from "@hookform/resolvers/effect-ts"
-import { useForm } from "react-hook-form"
-import { SignupSchema, type SignupInput } from "@/lib/schemas/auth"
-import { useState } from "react"
-import { useTranslation } from "react-i18next"
-import { useHydrated } from "@/hooks/use-hydrated"
+} from "@/components/ui/form";
+import { Input } from "@/components/ui/input";
+import { Link, useNavigate } from "react-router";
+import { authClient } from "@/auth/client";
+import { effectTsResolver as effectResolver } from "@hookform/resolvers/effect-ts";
+import { useForm } from "react-hook-form";
+import { SignupSchema, type SignupInput } from "@/lib/schemas/auth";
+import { useState } from "react";
+import { useTranslation } from "react-i18next";
+import { useHydrated } from "@/hooks/use-hydrated";
 
-interface SignupFormProps extends React.ComponentProps<"div"> { }
+interface SignupFormProps extends React.ComponentProps<"div"> {}
 
 export function SignupForm({ className, ...props }: SignupFormProps) {
-  const navigate = useNavigate()
-  const [authError, setAuthError] = useState<string>()
-  const { t } = useTranslation("auth")
-  const hydrated = useHydrated()
+  const navigate = useNavigate();
+  const [authError, setAuthError] = useState<string>();
+  const { t } = useTranslation("auth");
+  const hydrated = useHydrated();
 
   const form = useForm<SignupInput>({
     resolver: effectResolver(SignupSchema),
@@ -42,26 +36,26 @@ export function SignupForm({ className, ...props }: SignupFormProps) {
       password: "",
       confirmPassword: "",
     },
-  })
+  });
 
   async function onSubmit(data: SignupInput) {
-    setAuthError(undefined)
+    setAuthError(undefined);
 
     try {
       const result = await authClient.signUp.email({
         email: data.email,
         password: data.password,
         name: data.name,
-      })
+      });
 
       if (result.error) {
-        setAuthError(result.error.message || t("signup.error_failed"))
-        return
+        setAuthError(result.error.message || t("signup.error_failed"));
+        return;
       }
 
-      navigate("/dashboard")
+      navigate("/dashboard");
     } catch (err) {
-      setAuthError(err instanceof Error ? err.message : t("signup.error_failed"))
+      setAuthError(err instanceof Error ? err.message : t("signup.error_failed"));
     }
   }
 
@@ -74,7 +68,12 @@ export function SignupForm({ className, ...props }: SignupFormProps) {
         </CardHeader>
         <CardContent>
           <Form {...form}>
-            <form method="post" onSubmit={form.handleSubmit(onSubmit)} className="space-y-6" data-testid="signup-form">
+            <form
+              method="post"
+              onSubmit={form.handleSubmit(onSubmit)}
+              className="space-y-6"
+              data-testid="signup-form"
+            >
               <FormField
                 control={form.control}
                 name="name"
@@ -183,5 +182,5 @@ export function SignupForm({ className, ...props }: SignupFormProps) {
         </CardContent>
       </Card>
     </div>
-  )
+  );
 }

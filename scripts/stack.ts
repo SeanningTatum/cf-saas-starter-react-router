@@ -71,9 +71,19 @@ const bad = (code: number, kind: string, error: string, help: string): Outcome =
   err: { error, code: kind, help },
 });
 const usage = (error: string): Outcome =>
-  bad(1, "USAGE", error, "verbs: assign --plan <f> | split --plan <f> | restack --plan <f> --from <n>");
+  bad(
+    1,
+    "USAGE",
+    error,
+    "verbs: assign --plan <f> | split --plan <f> | restack --plan <f> --from <n>",
+  );
 const gitFailure = (r: GitResult, what: string): Outcome =>
-  bad(2, "GIT", `${what}: ${r.stderr.trim() || r.stdout.trim() || `git exited ${r.code}`}`, "run the same git command by hand to see why");
+  bad(
+    2,
+    "GIT",
+    `${what}: ${r.stderr.trim() || r.stdout.trim() || `git exited ${r.code}`}`,
+    "run the same git command by hand to see why",
+  );
 
 export const defaultDeps: Deps = {
   git: (args) => {
@@ -92,10 +102,14 @@ export function normalizePath(p: string): string {
 }
 
 // A fence with or without a trailing "/" owns its children when it names a directory: the same rule the workflow's covers() uses.
-const matches = (fence: string, path: string) => (fence.endsWith("/") ? path.startsWith(fence) : path === fence || path.startsWith(`${fence}/`));
+const matches = (fence: string, path: string) =>
+  fence.endsWith("/") ? path.startsWith(fence) : path === fence || path.startsWith(`${fence}/`);
 
 /** Changed paths from `git status --porcelain=v1 -z -uall`: NUL-separated "XY path" entries, so odd filenames arrive raw, never quoted or escaped. A rename is "XY new" then "old"; it gives the new path and records the old one. */
-export function parsePorcelain(text: string): { paths: string[]; renamedFrom: Map<string, string> } {
+export function parsePorcelain(text: string): {
+  paths: string[];
+  renamedFrom: Map<string, string>;
+} {
   const paths: string[] = [];
   const renamedFrom = new Map<string, string>();
   const parts = text.split("\0");
@@ -113,9 +127,16 @@ export function parsePorcelain(text: string): { paths: string[]; renamedFrom: Ma
 }
 
 /** Pure assignment of changed paths to PRs by fence. */
-export function assignPaths(plan: Plan, changed: string[], renamedFrom: Map<string, string> = new Map()): Assigned {
+export function assignPaths(
+  plan: Plan,
+  changed: string[],
+  renamedFrom: Map<string, string> = new Map(),
+): Assigned {
   const oldPaths = new Set(renamedFrom.values());
-  const fences = plan.prs.map((p) => ({ pr: p, fence: p.fence.map(normalizePath).filter(Boolean) }));
+  const fences = plan.prs.map((p) => ({
+    pr: p,
+    fence: p.fence.map(normalizePath).filter(Boolean),
+  }));
   const buckets = new Map<number, string[]>(plan.prs.map((p) => [p.n, []]));
   const unassigned: string[] = [];
   const excluded: string[] = [];
@@ -155,15 +176,27 @@ function loadPlan(path: string | undefined, deps: Deps): Plan | Outcome {
   }
   const p = raw as Partial<Plan>;
   if (!p || typeof p.base !== "string" || !p.base) return usage("plan.base must be a branch name");
-  if (!Array.isArray(p.prs) || p.prs.length === 0) return usage("plan.prs must be a non-empty array");
+  if (!Array.isArray(p.prs) || p.prs.length === 0)
+    return usage("plan.prs must be a non-empty array");
   for (const pr of p.prs) {
-    if (typeof pr?.n !== "number" || typeof pr.branch !== "string" || !pr.branch || !Array.isArray(pr.fence) || typeof pr.message !== "string")
+    if (
+      typeof pr?.n !== "number" ||
+      typeof pr.branch !== "string" ||
+      !pr.branch ||
+      !Array.isArray(pr.fence) ||
+      typeof pr.message !== "string"
+    )
       return usage("each plan.prs entry needs n (number), branch, fence (array) and message");
   }
   const ns = p.prs.map((x) => x.n);
   if (new Set(ns).size !== ns.length) return usage("plan.prs has a duplicate n");
-  if (p.exclude !== undefined && (!Array.isArray(p.exclude) || p.exclude.some((e) => typeof e !== "string"))) return usage("plan.exclude must be an array of strings");
-  if (p.rest !== undefined && !ns.includes(p.rest)) return usage(`plan.rest ${p.rest} is not a PR in plan.prs`);
+  if (
+    p.exclude !== undefined &&
+    (!Array.isArray(p.exclude) || p.exclude.some((e) => typeof e !== "string"))
+  )
+    return usage("plan.exclude must be an array of strings");
+  if (p.rest !== undefined && !ns.includes(p.rest))
+    return usage(`plan.rest ${p.rest} is not a PR in plan.prs`);
   return { ...(p as Plan), prs: [...p.prs].sort((a, b) => a.n - b.n) };
 }
 
@@ -184,7 +217,12 @@ function split(plan: Plan, deps: Deps): Outcome {
   const a = computeAssign(plan, deps);
   if (isOutcome(a)) return a;
   if (a.unassigned.length)
-    return bad(3, "DIRTY_UNASSIGNED", `no fence matches: ${a.unassigned.join(", ")}`, "add the paths to a PR fence or set plan.rest, then retry");
+    return bad(
+      3,
+      "DIRTY_UNASSIGNED",
+      `no fence matches: ${a.unassigned.join(", ")}`,
+      "add the paths to a PR fence or set plan.rest, then retry",
+    );
   if (a.overlaps.length)
     return bad(
       3,
@@ -194,7 +232,12 @@ function split(plan: Plan, deps: Deps): Outcome {
     );
   const empty = a.assignments.filter((x) => x.paths.length === 0);
   if (empty.length)
-    return bad(3, "EMPTY_PR", `PR ${empty.map((e) => e.n).join(", ")} has no changed paths`, "drop the PR from the plan or widen its fence");
+    return bad(
+      3,
+      "EMPTY_PR",
+      `PR ${empty.map((e) => e.n).join(", ")} has no changed paths`,
+      "drop the PR from the plan or widen its fence",
+    );
   const ahead = deps.git(["rev-list", "--count", `${plan.base}..HEAD`]);
   if (ahead.code !== 0) return gitFailure(ahead, "git rev-list");
   if (Number(ahead.stdout.trim()) > 0)
@@ -244,7 +287,10 @@ function restack(plan: Plan, from: string | undefined, deps: Deps): Outcome {
   const rb = deps.git(["rebase", "--update-refs", target.branch]);
   if (rb.code !== 0) {
     const u = deps.git(["diff", "--name-only", "--diff-filter=U"]);
-    const paths = u.stdout.split("\n").map((l) => l.trim()).filter(Boolean);
+    const paths = u.stdout
+      .split("\n")
+      .map((l) => l.trim())
+      .filter(Boolean);
     const ab = deps.git(["rebase", "--abort"]);
     if (!paths.length) return gitFailure(rb, "git rebase");
     const e = bad(
@@ -280,10 +326,12 @@ export function run(argv: string[], deps: Deps = defaultDeps): Outcome {
     } else positional.push(a);
   }
   const verb = positional[0] ?? "";
-  if (!["assign", "split", "restack"].includes(verb)) return usage(verb ? `unknown verb "${verb}"` : "a verb is required");
+  if (!["assign", "split", "restack"].includes(verb))
+    return usage(verb ? `unknown verb "${verb}"` : "a verb is required");
   const allowed = verb === "restack" ? ["--plan", "--from"] : ["--plan"];
   const unknown = [...flags.keys()].filter((f) => !allowed.includes(f));
-  if (unknown.length) return usage(`unknown flag ${unknown.join(", ")} for ${verb}; accepts ${allowed.join(" ")}`);
+  if (unknown.length)
+    return usage(`unknown flag ${unknown.join(", ")} for ${verb}; accepts ${allowed.join(" ")}`);
   const plan = loadPlan(flags.get("--plan"), deps);
   if (isOutcome(plan)) return plan;
   if (verb === "assign") {

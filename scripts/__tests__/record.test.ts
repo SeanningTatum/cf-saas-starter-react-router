@@ -12,8 +12,15 @@ function fakeBrowser(fail: { newContext?: boolean; saveAs?: boolean } = {}) {
     },
     delete: async () => void calls.push("delete"),
   };
-  const page = { video: () => video, waitForTimeout: async () => void calls.push("hold"), goto: async () => {} };
-  const context = { newPage: async () => page, close: async () => void calls.push("context.close") };
+  const page = {
+    video: () => video,
+    waitForTimeout: async () => void calls.push("hold"),
+    goto: async () => {},
+  };
+  const context = {
+    newPage: async () => page,
+    close: async () => void calls.push("context.close"),
+  };
   const browser = {
     newContext: async (o: { recordVideo: { dir: string } }) => {
       if (fail.newContext) throw new Error("no context");
@@ -34,14 +41,31 @@ const noMkdir = () => {};
 describe("record", () => {
   it("saves <out>/<name>.webm after the context closes, then drops Playwright's randomly named copy", async () => {
     const f = fakeBrowser();
-    const r = await record({ out: ".verify/x/video", name: "demo-tour" }, async () => {}, f.launch, noMkdir);
+    const r = await record(
+      { out: ".verify/x/video", name: "demo-tour" },
+      async () => {},
+      f.launch,
+      noMkdir,
+    );
     expect(r).toEqual({ path: ".verify/x/video/demo-tour.webm", ok: true });
-    expect(f.calls).toEqual(["newContext .verify/x/video", "hold", "context.close", "saveAs .verify/x/video/demo-tour.webm", "delete", "browser.close"]);
+    expect(f.calls).toEqual([
+      "newContext .verify/x/video",
+      "hold",
+      "context.close",
+      "saveAs .verify/x/video/demo-tour.webm",
+      "delete",
+      "browser.close",
+    ]);
   });
 
   it("a step that throws still saves the video and closes the browser: the half-walk is the evidence", async () => {
     const f = fakeBrowser();
-    const r = await record({ out: "o", name: "demo-x" }, async () => Promise.reject(new Error("no button")), f.launch, noMkdir);
+    const r = await record(
+      { out: "o", name: "demo-x" },
+      async () => Promise.reject(new Error("no button")),
+      f.launch,
+      noMkdir,
+    );
     expect(r).toMatchObject({ ok: false, error: expect.stringContaining("no button") });
     expect(f.calls).toContain("saveAs o/demo-x.webm");
     expect(f.calls.at(-1)).toBe("browser.close");

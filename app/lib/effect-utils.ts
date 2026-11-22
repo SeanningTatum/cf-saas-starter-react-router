@@ -47,15 +47,13 @@ export const tryDelete = <A>(entity: string, run: () => Promise<A>) =>
  */
 export const requireFoundOrFail = <A, E>(
   value: A | null | undefined,
-  onMissing: () => E
+  onMissing: () => E,
 ): Effect.Effect<A, E> =>
-  value === null || value === undefined
-    ? Effect.fail(onMissing())
-    : Effect.succeed(value);
+  value === null || value === undefined ? Effect.fail(onMissing()) : Effect.succeed(value);
 
 export const requireFound = <A>(
   entity: string,
   identifier: string,
-  value: A | null | undefined
+  value: A | null | undefined,
 ): Effect.Effect<A, NotFoundError> =>
   requireFoundOrFail(value, () => new NotFoundError({ entity, identifier }));

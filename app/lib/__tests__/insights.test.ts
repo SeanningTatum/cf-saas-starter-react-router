@@ -23,7 +23,7 @@ describe("buildUserInsights", () => {
     const insights = buildUserInsights(
       { ...baseStats, verificationRate: VERIFICATION_RATE_EXCELLENT_THRESHOLD },
       [],
-      t
+      t,
     );
     expect(insights[0]).toEqual({
       text: "insights.verification_excellent",
@@ -35,7 +35,7 @@ describe("buildUserInsights", () => {
     const insights = buildUserInsights(
       { ...baseStats, verificationRate: VERIFICATION_RATE_MODERATE_THRESHOLD },
       [],
-      t
+      t,
     );
     expect(insights[0]).toEqual({
       text: "insights.verification_moderate",
@@ -47,7 +47,7 @@ describe("buildUserInsights", () => {
     const insights = buildUserInsights(
       { ...baseStats, verificationRate: VERIFICATION_RATE_MODERATE_THRESHOLD - 1 },
       [],
-      t
+      t,
     );
     expect(insights[0]).toEqual({
       text: "insights.verification_low",
@@ -68,7 +68,7 @@ describe("buildUserInsights", () => {
     const insights = buildUserInsights(
       { ...baseStats, bannedUsers: BANNED_PERCENT_HIGH_THRESHOLD },
       [],
-      t
+      t,
     );
     expect(insights).toContainEqual({
       text: "insights.banned_users",
@@ -78,11 +78,7 @@ describe("buildUserInsights", () => {
 
   it("reports banned users as negative above the high threshold", () => {
     // 10/100 = 10% > BANNED_PERCENT_HIGH_THRESHOLD
-    const insights = buildUserInsights(
-      { ...baseStats, bannedUsers: 10 },
-      [],
-      t
-    );
+    const insights = buildUserInsights({ ...baseStats, bannedUsers: 10 }, [], t);
     expect(insights).toContainEqual({
       text: "insights.banned_users",
       type: "negative",
@@ -99,23 +95,19 @@ describe("buildUserInsights", () => {
 
   it("omits the admins insight when there are no admins", () => {
     const insights = buildUserInsights(baseStats, [], t);
-    expect(
-      insights.some((i) => i.text === "insights.admins_managing")
-    ).toBe(false);
+    expect(insights.some((i) => i.text === "insights.admins_managing")).toBe(false);
   });
 
   it("omits the recent-signups insight when growthData is empty", () => {
     const insights = buildUserInsights(baseStats, [], t);
-    expect(
-      insights.some((i) => i.text === "insights.recent_signups")
-    ).toBe(false);
+    expect(insights.some((i) => i.text === "insights.recent_signups")).toBe(false);
   });
 
   it("sums only the trailing 7-day window for recent signups", () => {
-    const growthData: UserGrowthPoint[] = Array.from(
-      { length: 10 },
-      (_, i) => ({ date: `2026-01-${i + 1}`, count: 1 })
-    );
+    const growthData: UserGrowthPoint[] = Array.from({ length: 10 }, (_, i) => ({
+      date: `2026-01-${i + 1}`,
+      count: 1,
+    }));
     const insights = buildUserInsights(baseStats, growthData, t);
     const recent = insights.find((i) => i.text === "insights.recent_signups");
     expect(recent).toEqual({ text: "insights.recent_signups", type: "positive" });

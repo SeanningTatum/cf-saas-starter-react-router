@@ -60,7 +60,7 @@ function add(
   node: ts.Node,
   sf: ts.SourceFile,
   detail: string,
-  kind?: ViolationKind
+  kind?: ViolationKind,
 ) {
   const { line } = sf.getLineAndCharacterOfPosition(node.getStart(sf));
   violations.push({ rule, file: relative(ROOT, file), line: line + 1, detail, kind });
@@ -236,7 +236,7 @@ function checkSourceFile(file: string, sf: ts.SourceFile) {
           node,
           sf,
           "bare `throw` — use Effect.fail (or throw inside Effect.tryPromise). " +
-            `Allowed only at ${THROW_BOUNDARY.join(", ")}, in ${VENDORED_UI}, or as framework control flow (throw redirect(...))`
+            `Allowed only at ${THROW_BOUNDARY.join(", ")}, in ${VENDORED_UI}, or as framework control flow (throw redirect(...))`,
         );
       }
     }
@@ -253,7 +253,7 @@ function checkSourceFile(file: string, sf: ts.SourceFile) {
         file,
         node,
         sf,
-        "`try`/`catch` — wrap the failing call in Effect.tryPromise instead"
+        "`try`/`catch` — wrap the failing call in Effect.tryPromise instead",
       );
     }
 
@@ -278,7 +278,7 @@ function checkSourceFile(file: string, sf: ts.SourceFile) {
         node,
         sf,
         "Effect.promise assumes the promise cannot reject — use Effect.tryPromise unless that is provably true (then add `// effect-promise-ok: <why>`)",
-        "effect-promise"
+        "effect-promise",
       );
     }
 
@@ -336,7 +336,8 @@ function checkSourceFile(file: string, sf: ts.SourceFile) {
       ts.isPropertyAccessExpression(node.expression) &&
       node.expression.name.text === "process" &&
       ts.isIdentifier(node.expression.expression) &&
-      (node.expression.expression.text === "globalThis" || node.expression.expression.text === "global")
+      (node.expression.expression.text === "globalThis" ||
+        node.expression.expression.text === "global")
     ) {
       add("5-cloudflare", file, node, sf, `globalThis.process.env — ${PROCESS_ENV_MSG}`);
     }
@@ -420,7 +421,12 @@ function checkTaggedErrorsMapped(root: string = ROOT) {
    * at all. A substring search cannot tell code from prose.
    */
   const mapped = new Set<string>();
-  const mapSf = ts.createSourceFile(mapFile, readFileSync(mapFile, "utf8"), ts.ScriptTarget.Latest, true);
+  const mapSf = ts.createSourceFile(
+    mapFile,
+    readFileSync(mapFile, "utf8"),
+    ts.ScriptTarget.Latest,
+    true,
+  );
 
   /**
    * Only branches INSIDE the mapper count. Collecting over the whole file meant a
@@ -507,7 +513,7 @@ function checkTaggedErrorsMapped(root: string = ROOT) {
               if (arg !== undefined && ts.isStringLiteralLike(arg)) tag = arg.text;
             }
             return true;
-          })
+          }),
         );
         if (tag && tag !== name) {
           // Not a violation by itself, but it is a trap worth naming.
@@ -517,7 +523,7 @@ function checkTaggedErrorsMapped(root: string = ROOT) {
               file,
               node,
               sf,
-              `class ${name} has runtime tag "${tag}" — app/lib/effect-trpc.ts must branch on "${tag}", not the class name`
+              `class ${name} has runtime tag "${tag}" — app/lib/effect-trpc.ts must branch on "${tag}", not the class name`,
             );
           // `const key = tag ?? name` was computed above this branch and read
           // only below it, where `tag` is known falsy or equal to `name` — so it
@@ -528,7 +534,7 @@ function checkTaggedErrorsMapped(root: string = ROOT) {
             file,
             node,
             sf,
-            `tagged error ${name} is not referenced in app/lib/effect-trpc.ts — add it to the tag -> HTTP mapping`
+            `tagged error ${name} is not referenced in app/lib/effect-trpc.ts — add it to the tag -> HTTP mapping`,
           );
         }
       }
@@ -556,7 +562,11 @@ function hasExportedValue(sf: ts.SourceFile): boolean {
     if (!exported) return;
     // Type-only exports need no test.
     if (ts.isTypeAliasDeclaration(node) || ts.isInterfaceDeclaration(node)) return;
-    if (ts.isFunctionDeclaration(node) || ts.isClassDeclaration(node) || ts.isVariableStatement(node))
+    if (
+      ts.isFunctionDeclaration(node) ||
+      ts.isClassDeclaration(node) ||
+      ts.isVariableStatement(node)
+    )
       found = true;
   });
   return found;
@@ -576,7 +586,11 @@ function firstExportedValue(sf: ts.SourceFile): ts.Node | null {
     if (hit) return;
     const mods = ts.canHaveModifiers(node) ? ts.getModifiers(node) : undefined;
     if (!mods?.some((m) => m.kind === ts.SyntaxKind.ExportKeyword)) return;
-    if (ts.isFunctionDeclaration(node) || ts.isClassDeclaration(node) || ts.isVariableStatement(node))
+    if (
+      ts.isFunctionDeclaration(node) ||
+      ts.isClassDeclaration(node) ||
+      ts.isVariableStatement(node)
+    )
       hit = node;
   });
   return hit;
@@ -594,7 +608,12 @@ function checkTestParity(root: string = ROOT) {
       const rel = relative(root, full);
       if (TEST_PARITY_GRANDFATHERED.has(rel)) continue;
 
-      const sf = ts.createSourceFile(full, readFileSync(full, "utf8"), ts.ScriptTarget.Latest, true);
+      const sf = ts.createSourceFile(
+        full,
+        readFileSync(full, "utf8"),
+        ts.ScriptTarget.Latest,
+        true,
+      );
       if (!hasExportedValue(sf)) continue; // types-only module
 
       const stem = basename(file, ".ts");
@@ -628,7 +647,7 @@ function checkTestParity(root: string = ROOT) {
             n.moduleSpecifier &&
             ts.isStringLiteralLike(n.moduleSpecifier) &&
             new RegExp(`(^|/)${stem.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(\\.[jt]s)?$`).test(
-              n.moduleSpecifier.text
+              n.moduleSpecifier.text,
             )
           )
             importsSubjectAst = true;
@@ -651,7 +670,8 @@ function checkTestParity(root: string = ROOT) {
             rule: "4-unit-tests",
             file: relative(root, found),
             line: 1,
-            detail: "no expect()/assert() call in the parsed source — a commented-out or assertion-free test is not coverage",
+            detail:
+              "no expect()/assert() call in the parsed source — a commented-out or assertion-free test is not coverage",
           });
           continue;
         }
@@ -694,26 +714,82 @@ function checkTestParity(root: string = ROOT) {
 // ---------------------------------------------------------------------------
 function selftest() {
   const cases: Array<{ name: string; code: string; expect: string }> = [
-    { name: "bare throw (grep missed: no `new`)", code: "export function f(e: Error) { throw e; }", expect: "1-effect-ts" },
-    { name: "throw new Error", code: "export function f() { throw new Error('x'); }", expect: "1-effect-ts" },
-    { name: "bare try/catch (never checked before)", code: "export function f() { try { g(); } catch {} }", expect: "1-effect-ts" },
-    { name: "single-quoted zod (grep was double-quote only)", code: "import { z } from 'zod';", expect: "2-effect-schema" },
+    {
+      name: "bare throw (grep missed: no `new`)",
+      code: "export function f(e: Error) { throw e; }",
+      expect: "1-effect-ts",
+    },
+    {
+      name: "throw new Error",
+      code: "export function f() { throw new Error('x'); }",
+      expect: "1-effect-ts",
+    },
+    {
+      name: "bare try/catch (never checked before)",
+      code: "export function f() { try { g(); } catch {} }",
+      expect: "1-effect-ts",
+    },
+    {
+      name: "single-quoted zod (grep was double-quote only)",
+      code: "import { z } from 'zod';",
+      expect: "2-effect-schema",
+    },
     { name: "double-quoted zod", code: 'import { z } from "zod";', expect: "2-effect-schema" },
     { name: "zod subpath", code: "import { z } from 'zod/v4';", expect: "2-effect-schema" },
-    { name: "Effect.promise (never checked before)", code: "export const a = Effect.promise(() => p());", expect: "1-effect-ts" },
+    {
+      name: "Effect.promise (never checked before)",
+      code: "export const a = Effect.promise(() => p());",
+      expect: "1-effect-ts",
+    },
     { name: "process.env", code: "export const a = process.env.FOO;", expect: "5-cloudflare" },
-    { name: "throw inside Effect.tryPromise is ALLOWED", code: "export const a = Effect.tryPromise({ try: () => { throw new Error('x'); }, catch: (e) => e });", expect: "" },
+    {
+      name: "throw inside Effect.tryPromise is ALLOWED",
+      code: "export const a = Effect.tryPromise({ try: () => { throw new Error('x'); }, catch: (e) => e });",
+      expect: "",
+    },
 
     // Bypasses found by adversarial review AFTER the first version shipped.
     // Each walked straight through the checks above.
-    { name: 'process["env"] element access', code: 'export const a = process["env"].FOO;', expect: "5-cloudflare" },
-    { name: "process['env'] single-quoted", code: "export const a = process['env'];", expect: "5-cloudflare" },
-    { name: "const { env } = process destructuring", code: "const { env } = process; export const a = env.FOO;", expect: "5-cloudflare" },
-    { name: "const { env: e } = process renamed", code: "const { env: e } = process; export const a = e;", expect: "5-cloudflare" },
-    { name: 'await import("zod") dynamic import', code: 'export const a = async () => (await import("zod")).z;', expect: "2-effect-schema" },
-    { name: "dynamic import of a zod subpath", code: "export const a = async () => await import('zod/v4');", expect: "2-effect-schema" },
-    { name: "process.versions is NOT process.env", code: "export const a = process.versions;", expect: "" },
-    { name: "an unrelated destructure off process is fine", code: "const { argv } = process; export const a = argv;", expect: "" },
+    {
+      name: 'process["env"] element access',
+      code: 'export const a = process["env"].FOO;',
+      expect: "5-cloudflare",
+    },
+    {
+      name: "process['env'] single-quoted",
+      code: "export const a = process['env'];",
+      expect: "5-cloudflare",
+    },
+    {
+      name: "const { env } = process destructuring",
+      code: "const { env } = process; export const a = env.FOO;",
+      expect: "5-cloudflare",
+    },
+    {
+      name: "const { env: e } = process renamed",
+      code: "const { env: e } = process; export const a = e;",
+      expect: "5-cloudflare",
+    },
+    {
+      name: 'await import("zod") dynamic import',
+      code: 'export const a = async () => (await import("zod")).z;',
+      expect: "2-effect-schema",
+    },
+    {
+      name: "dynamic import of a zod subpath",
+      code: "export const a = async () => await import('zod/v4');",
+      expect: "2-effect-schema",
+    },
+    {
+      name: "process.versions is NOT process.env",
+      code: "export const a = process.versions;",
+      expect: "",
+    },
+    {
+      name: "an unrelated destructure off process is fine",
+      code: "const { argv } = process; export const a = argv;",
+      expect: "",
+    },
 
     // effect-promise-ok is LINE-scoped: it used to be file-scoped, so one
     // justified use licensed every other use in the file.
@@ -723,12 +799,36 @@ function selftest() {
       expect: "",
     },
     // Attacker-controlled exemptions — each of these was clean before.
-    { name: "throw data(err) with a LOCAL data() is not framework control flow", code: "const data = (e: unknown) => e;\nexport function f(err: Error) { throw data(err); }", expect: "1-effect-ts" },
-    { name: "throw redirect() WITH the react-router import is allowed", code: 'import { redirect } from "react-router";\nexport function f() { throw redirect("/login"); }', expect: "" },
-    { name: "throw redirect() WITHOUT the import is not", code: 'const redirect = (s: string) => s;\nexport function f() { throw redirect("/x"); }', expect: "1-effect-ts" },
-    { name: "foo.try() on a non-Effect receiver does not exempt a throw", code: "export const a = foo.try(() => { throw new Error('x'); });", expect: "1-effect-ts" },
-    { name: "Effect.try() DOES exempt a throw", code: "export const a = Effect.try(() => { throw new Error('x'); });", expect: "" },
-    { name: "globalThis.process.env", code: "export const a = globalThis.process.env.FOO;", expect: "5-cloudflare" },
+    {
+      name: "throw data(err) with a LOCAL data() is not framework control flow",
+      code: "const data = (e: unknown) => e;\nexport function f(err: Error) { throw data(err); }",
+      expect: "1-effect-ts",
+    },
+    {
+      name: "throw redirect() WITH the react-router import is allowed",
+      code: 'import { redirect } from "react-router";\nexport function f() { throw redirect("/login"); }',
+      expect: "",
+    },
+    {
+      name: "throw redirect() WITHOUT the import is not",
+      code: 'const redirect = (s: string) => s;\nexport function f() { throw redirect("/x"); }',
+      expect: "1-effect-ts",
+    },
+    {
+      name: "foo.try() on a non-Effect receiver does not exempt a throw",
+      code: "export const a = foo.try(() => { throw new Error('x'); });",
+      expect: "1-effect-ts",
+    },
+    {
+      name: "Effect.try() DOES exempt a throw",
+      code: "export const a = Effect.try(() => { throw new Error('x'); });",
+      expect: "",
+    },
+    {
+      name: "globalThis.process.env",
+      code: "export const a = globalThis.process.env.FOO;",
+      expect: "5-cloudflare",
+    },
     {
       name: "effect-promise-ok does NOT excuse a call 5 lines away",
       code: "// effect-promise-ok: cannot reject\nexport const a = Effect.promise(() => p());\nconst x = 1;\nconst y = 2;\nexport const b = Effect.promise(() => q());",
@@ -749,7 +849,7 @@ function selftest() {
       console.error(
         `  selftest FAIL: ${c.name} — expected ${c.expect || "no violation"}, got ${
           violations.map((v) => v.rule).join(",") || "none"
-        }`
+        }`,
       );
     }
   }
@@ -782,7 +882,7 @@ function selftest() {
       treeFailed++;
       console.error(
         `  selftest FAIL: ${label} — expected ${rule || "no violation"}, got ${got.join(",") || "none"}` +
-          (violations.length ? ` (${violations[0]?.detail})` : "")
+          (violations.length ? ` (${violations[0]?.detail})` : ""),
       );
     }
   }
@@ -800,9 +900,9 @@ function selftest() {
         tree("t3-unmapped", {
           "app/models/errors/boom.ts": ERR("BoomError"),
           "app/lib/effect-trpc.ts": `export function tagToTRPC(t: string) { switch (t) { case "OtherError": return 1; } }`,
-        })
+        }),
       ),
-    "3-tagged-errors"
+    "3-tagged-errors",
   );
   expectRule(
     "3: a tagged error WITH a case branch is clean",
@@ -811,9 +911,9 @@ function selftest() {
         tree("t3-mapped", {
           "app/models/errors/boom.ts": ERR("BoomError"),
           "app/lib/effect-trpc.ts": `export function tagToTRPC(t: string) { switch (t) { case "BoomError": return 1; } }`,
-        })
+        }),
       ),
-    ""
+    "",
   );
   expectRule(
     "3: a bare COMMENT naming the error does not count as mapping",
@@ -822,9 +922,9 @@ function selftest() {
         tree("t3-comment", {
           "app/models/errors/boom.ts": ERR("BoomError"),
           "app/lib/effect-trpc.ts": `export function tagToTRPC(t: string) { /* BoomError mapped */ return 0; }`,
-        })
+        }),
       ),
-    "3-tagged-errors"
+    "3-tagged-errors",
   );
   expectRule(
     "3: a case branch in a NESTED dead function does not count",
@@ -836,20 +936,20 @@ function selftest() {
             `export function tagToTRPC(t: string) {\n` +
             `  function unused(x: string) { switch (x) { case "BoomError": return 9; } }\n` +
             `  return 0;\n}`,
-        })
+        }),
       ),
-    "3-tagged-errors"
+    "3-tagged-errors",
   );
   expectRule(
-    "3: `_tag === \"X\"` counts as a branch, not just `case`",
+    '3: `_tag === "X"` counts as a branch, not just `case`',
     () =>
       checkTaggedErrorsMapped(
         tree("t3-eq", {
           "app/models/errors/boom.ts": ERR("BoomError"),
           "app/lib/effect-trpc.ts": `export function tagToTRPC(e: any) { if (e._tag === "BoomError") return 1; return 0; }`,
-        })
+        }),
       ),
-    ""
+    "",
   );
   expectRule(
     "3: a runtime tag differing from the class name is reported",
@@ -858,9 +958,9 @@ function selftest() {
         tree("t3-renamed", {
           "app/models/errors/boom.ts": ERR("BoomError", "boom_failed"),
           "app/lib/effect-trpc.ts": `export function tagToTRPC(t: string) { switch (t) { case "BoomError": return 1; } }`,
-        })
+        }),
       ),
-    "3-tagged-errors"
+    "3-tagged-errors",
   );
   expectRule(
     "3: a missing mapper function is itself a violation",
@@ -869,9 +969,9 @@ function selftest() {
         tree("t3-nomapper", {
           "app/models/errors/boom.ts": ERR("BoomError"),
           "app/lib/effect-trpc.ts": `export const somethingElse = 1;`,
-        })
+        }),
       ),
-    "3-tagged-errors"
+    "3-tagged-errors",
   );
 
   // --- check 4: test parity -------------------------------------------------
@@ -884,23 +984,29 @@ function selftest() {
   expectRule(
     "4: an exported helper with NO test file is caught",
     () => checkTestParity(tree("t4-none", { "app/lib/helper.ts": HELPER })),
-    "4-unit-tests"
+    "4-unit-tests",
   );
   expectRule(
     "4: an exported helper WITH a real test is clean",
     () =>
       checkTestParity(
-        tree("t4-ok", { "app/lib/helper.ts": HELPER, "app/lib/__tests__/helper.test.ts": REAL_TEST })
+        tree("t4-ok", {
+          "app/lib/helper.ts": HELPER,
+          "app/lib/__tests__/helper.test.ts": REAL_TEST,
+        }),
       ),
-    ""
+    "",
   );
   expectRule(
     "4: an effectively empty test file is not coverage",
     () =>
       checkTestParity(
-        tree("t4-empty", { "app/lib/helper.ts": HELPER, "app/lib/__tests__/helper.test.ts": "// todo\n" })
+        tree("t4-empty", {
+          "app/lib/helper.ts": HELPER,
+          "app/lib/__tests__/helper.test.ts": "// todo\n",
+        }),
       ),
-    "4-unit-tests"
+    "4-unit-tests",
   );
   expectRule(
     "4: a COMMENTED-OUT test file is not coverage",
@@ -914,9 +1020,9 @@ function selftest() {
             `import { helper } from "../helper";\n` +
             `// describe("helper", () => { it("adds", () => { expect(helper(1)).toBe(2); }); });\n` +
             `// more commentary to clear the minimum-length floor comfortably\n`,
-        })
+        }),
       ),
-    "4-unit-tests"
+    "4-unit-tests",
   );
   expectRule(
     "4: a test that imports its subject but asserts nothing is not coverage",
@@ -924,11 +1030,10 @@ function selftest() {
       checkTestParity(
         tree("t4-noassert", {
           "app/lib/helper.ts": HELPER,
-          "app/lib/__tests__/helper.test.ts":
-            `import { helper } from "../helper";\nvoid helper;\nconst padding = "xxxxxxxxxxxxxxxxxxxxxxxxxxxx";\n`,
-        })
+          "app/lib/__tests__/helper.test.ts": `import { helper } from "../helper";\nvoid helper;\nconst padding = "xxxxxxxxxxxxxxxxxxxxxxxxxxxx";\n`,
+        }),
       ),
-    "4-unit-tests"
+    "4-unit-tests",
   );
   expectRule(
     "4: a test that asserts but never imports its subject is not coverage",
@@ -936,26 +1041,26 @@ function selftest() {
       checkTestParity(
         tree("t4-noimport", {
           "app/lib/helper.ts": HELPER,
-          "app/lib/__tests__/helper.test.ts":
-            `import { expect, it } from "vitest";\nit("x", () => { expect(1).toBe(1); });\n`,
-        })
+          "app/lib/__tests__/helper.test.ts": `import { expect, it } from "vitest";\nit("x", () => { expect(1).toBe(1); });\n`,
+        }),
       ),
-    "4-unit-tests"
+    "4-unit-tests",
   );
   expectRule(
     "4: a types-only module needs no test",
-    () => checkTestParity(tree("t4-types", { "app/lib/kinds.ts": `export type A = { a: number };\n` })),
-    ""
+    () =>
+      checkTestParity(tree("t4-types", { "app/lib/kinds.ts": `export type A = { a: number };\n` })),
+    "",
   );
   expectRule(
     "4: nested subdirectories are swept, not just the top level",
     () => checkTestParity(tree("t4-nested", { "app/lib/schemas/user.ts": HELPER })),
-    "4-unit-tests"
+    "4-unit-tests",
   );
   expectRule(
     "4: repositories are swept too, not only app/lib",
     () => checkTestParity(tree("t4-repo", { "app/repositories/user.ts": HELPER })),
-    "4-unit-tests"
+    "4-unit-tests",
   );
 
   rmSync(tmpRoot, { recursive: true, force: true });
@@ -967,7 +1072,7 @@ function selftest() {
     process.exit(1);
   }
   console.log(
-    `non-negotiables selftest: ok — ${total} fixtures (each one the grep sweep missed, or a bypass adversarial review found in this checker)`
+    `non-negotiables selftest: ok — ${total} fixtures (each one the grep sweep missed, or a bypass adversarial review found in this checker)`,
   );
 }
 
@@ -977,7 +1082,7 @@ if (process.argv.includes("--selftest")) {
   selftest();
 } else {
   const files = [...walkDir(join(ROOT, "app")), ...walkDir(join(ROOT, "workers"))].filter(
-    (f) => !isTestPath(f)
+    (f) => !isTestPath(f),
   );
   for (const file of files) {
     const sf = ts.createSourceFile(file, readFileSync(file, "utf8"), ts.ScriptTarget.Latest, true);
@@ -1001,11 +1106,11 @@ if (process.argv.includes("--selftest")) {
     console.error(
       `\n  ${files.length} source file(s) swept. Grandfathered for #4: ${
         [...TEST_PARITY_GRANDFATHERED].join(", ") || "none"
-      }`
+      }`,
     );
     process.exit(1);
   }
   console.log(
-    `Five non-negotiables: clean — ${files.length} source file(s), AST-swept (throw, try/catch, Effect.promise, zod, process.env, tagged-error mapping, test parity)`
+    `Five non-negotiables: clean — ${files.length} source file(s), AST-swept (throw, try/catch, Effect.promise, zod, process.env, tagged-error mapping, test parity)`,
   );
 }

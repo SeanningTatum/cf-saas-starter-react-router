@@ -27,14 +27,33 @@ export interface Video {
   source: string;
 }
 
-interface Attachment { name: string; path?: string }
-interface Result { status: string; attachments: Attachment[] }
-interface Spec { title: string; file: string; tags?: string[]; tests: { results: Result[] }[] }
-interface Suite { specs?: Spec[]; suites?: Suite[] }
-export interface Report { suites?: Suite[] }
+interface Attachment {
+  name: string;
+  path?: string;
+}
+interface Result {
+  status: string;
+  attachments: Attachment[];
+}
+interface Spec {
+  title: string;
+  file: string;
+  tags?: string[];
+  tests: { results: Result[] }[];
+}
+interface Suite {
+  specs?: Spec[];
+  suites?: Suite[];
+}
+export interface Report {
+  suites?: Suite[];
+}
 
 export interface Deps {
-  playwright: (args: string[], env: Record<string, string>) => { code: number; stdout: string; stderr: string };
+  playwright: (
+    args: string[],
+    env: Record<string, string>,
+  ) => { code: number; stdout: string; stderr: string };
   mkdir: (dir: string) => void;
   copy: (from: string, to: string) => void;
 }
@@ -51,13 +70,16 @@ export function collectVideos(report: Report): { videos: Video[]; unrecorded: Un
   const visit = (suite: Suite) => {
     for (const spec of suite.specs ?? []) {
       // The JSON reporter drops the "@" from tags.
-      const kind = (spec.tags ?? []).map((t) => t.replace(/^@/, "")).find((t): t is Kind => t === "golden" || t === "error");
+      const kind = (spec.tags ?? [])
+        .map((t) => t.replace(/^@/, ""))
+        .find((t): t is Kind => t === "golden" || t === "error");
       if (!kind) continue;
       for (const test of spec.tests) {
         const last = test.results[test.results.length - 1];
         const video = last?.attachments.find((a) => a.name === "video" && a.path);
         const status = last?.status ?? "not run";
-        if (video?.path) videos.push({ kind, title: spec.title, file: spec.file, status, source: video.path });
+        if (video?.path)
+          videos.push({ kind, title: spec.title, file: spec.file, status, source: video.path });
         else unrecorded.push({ kind, title: spec.title, file: spec.file, status });
       }
     }
@@ -69,26 +91,42 @@ export function collectVideos(report: Report): { videos: Video[]; unrecorded: Un
 
 /** "signup → dashboard, signout → login" -> "golden-signup-dashboard-signout-login.webm" */
 export function videoName(v: Pick<Video, "kind" | "title">): string {
-  const slug = v.title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 60).replace(/-+$/, "");
+  const slug = v.title
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 60)
+    .replace(/-+$/, "");
   return `${v.kind}-${slug || "test"}.webm`;
 }
 
 export function run(argv: string[], deps: Deps): { code: number; out?: unknown; err?: string } {
   const at = argv.indexOf("--out");
   const outDir = at >= 0 ? argv[at + 1] : undefined;
-  if (!outDir || outDir.startsWith("--")) return { code: 2, err: "usage: bun run scripts/e2e-videos.ts --out <dir> [spec ...]" };
+  if (!outDir || outDir.startsWith("--"))
+    return { code: 2, err: "usage: bun run scripts/e2e-videos.ts --out <dir> [spec ...]" };
   const specs = argv.filter((_, i) => i !== at && i !== at + 1);
 
-  const pw = deps.playwright(["playwright", "test", ...specs, "--grep", "@golden|@error", "--reporter=json"], { E2E_VIDEO: "1", CI: "1" });
+  const pw = deps.playwright(
+    ["playwright", "test", ...specs, "--grep", "@golden|@error", "--reporter=json"],
+    { E2E_VIDEO: "1", CI: "1" },
+  );
   let report: Report;
   try {
     report = JSON.parse(pw.stdout) as Report;
   } catch {
-    return { code: 2, err: `playwright gave no JSON report (exit ${pw.code}): ${pw.stderr.trim().split("\n").slice(-15).join("\n")}` };
+    return {
+      code: 2,
+      err: `playwright gave no JSON report (exit ${pw.code}): ${pw.stderr.trim().split("\n").slice(-15).join("\n")}`,
+    };
   }
 
   const { videos: found, unrecorded } = collectVideos(report);
-  if (!found.length && !unrecorded.length) return { code: 2, err: "no @golden or @error test ran; tag them: test(title, { tag: \"@golden\" }, ...)" };
+  if (!found.length && !unrecorded.length)
+    return {
+      code: 2,
+      err: 'no @golden or @error test ran; tag them: test(title, { tag: "@golden" }, ...)',
+    };
   deps.mkdir(outDir);
   // Two tests can share a title (across spec files, or after the slug is cut): number the later ones,
   // or the second copy would overwrite the first.
@@ -102,14 +140,19 @@ export function run(argv: string[], deps: Deps): { code: number; out?: unknown; 
     deps.copy(v.source, path);
     return { kind: v.kind, title: v.title, file: v.file, status: v.status, path };
   });
-  const passed = pw.code === 0 && unrecorded.length === 0 && videos.every((v) => v.status === "passed");
+  const passed =
+    pw.code === 0 && unrecorded.length === 0 && videos.every((v) => v.status === "passed");
   return { code: passed ? 0 : 1, out: { passed, videos, unrecorded } };
 }
 
 if (import.meta.main) {
   const result = run(process.argv.slice(2), {
     playwright: (args, env) => {
-      const r = spawnSync("bunx", args, { env: { ...process.env, ...env }, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
+      const r = spawnSync("bunx", args, {
+        env: { ...process.env, ...env },
+        encoding: "utf8",
+        maxBuffer: 64 * 1024 * 1024,
+      });
       return { code: r.status ?? 1, stdout: r.stdout ?? "", stderr: r.stderr ?? "" };
     },
     mkdir: (dir) => mkdirSync(dir, { recursive: true }),

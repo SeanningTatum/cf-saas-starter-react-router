@@ -8,7 +8,10 @@ const files = fs.readdirSync(DIR).filter((f) => /\.ya?ml$/.test(f));
 const read = (f: string) => fs.readFileSync(path.join(DIR, f), "utf-8");
 
 /** Lines of a workflow with comment-only lines removed. */
-const codeLines = (f: string) => read(f).split("\n").filter((l) => !/^\s*#/.test(l));
+const codeLines = (f: string) =>
+  read(f)
+    .split("\n")
+    .filter((l) => !/^\s*#/.test(l));
 
 describe("workflows pin Bun in one place", () => {
   it(".bun-version holds one plain version: setup-bun reads it as is", () => {
@@ -98,13 +101,18 @@ describe("workflows hold least-privilege permissions", () => {
 
 describe(".github/dependabot.yml", () => {
   const text = fs.readFileSync(path.join(ROOT, ".github", "dependabot.yml"), "utf-8");
-  const code = text.split("\n").filter((l) => !/^\s*#/.test(l)).join("\n");
+  const code = text
+    .split("\n")
+    .filter((l) => !/^\s*#/.test(l))
+    .join("\n");
 
   it.each(["bun", "github-actions"])(
     "has a weekly %s entry with groups (without groups every package is its own pull request)",
     (ecosystem) => {
       const entries = code.split(/^\s*- package-ecosystem:/m).slice(1);
-      const entry = entries.find((e) => e.trim().startsWith(`"${ecosystem}"`) || e.trim().startsWith(ecosystem));
+      const entry = entries.find(
+        (e) => e.trim().startsWith(`"${ecosystem}"`) || e.trim().startsWith(ecosystem),
+      );
       expect(entry, `no ${ecosystem} entry`).toBeDefined();
       expect(entry).toMatch(/interval:\s*"?weekly"?/);
       expect(entry).toMatch(/^\s+groups:\s*$/m);
@@ -126,7 +134,8 @@ describe("workflows keep secrets and PR data out of shell text", () => {
       const offenders: string[] = [];
       for (const line of lines) {
         const indent = line.length - line.trimStart().length;
-        if (runIndent !== undefined && line.trim() !== "" && indent <= runIndent) runIndent = undefined;
+        if (runIndent !== undefined && line.trim() !== "" && indent <= runIndent)
+          runIndent = undefined;
         if (runIndent !== undefined && /\$\{\{/.test(line)) offenders.push(line.trim());
         const m = line.match(/^(\s*)(?:-\s+)?run:\s*(.*)$/);
         if (m) {
@@ -144,13 +153,17 @@ describe("workflows keep secrets and PR data out of shell text", () => {
       const uses = codeLines(f).filter((l) => /secrets\.CLOUDFLARE_API_TOKEN\b/.test(l));
       // The readiness job may test whether it is set (it sees a boolean, not the value).
       for (const line of uses) {
-        expect(line).toMatch(/PROD_TOKEN_AT_REPO_LEVEL:\s*\$\{\{\s*secrets\.CLOUDFLARE_API_TOKEN != ''\s*\}\}/);
+        expect(line).toMatch(
+          /PROD_TOKEN_AT_REPO_LEVEL:\s*\$\{\{\s*secrets\.CLOUDFLARE_API_TOKEN != ''\s*\}\}/,
+        );
       }
     },
   );
 
   it("deploy.yml gives the token only to steps, never at job level", () => {
-    const tokenLines = codeLines("deploy.yml").filter((l) => /CLOUDFLARE_API_TOKEN:\s*\$\{\{\s*secrets\./.test(l));
+    const tokenLines = codeLines("deploy.yml").filter((l) =>
+      /CLOUDFLARE_API_TOKEN:\s*\$\{\{\s*secrets\./.test(l),
+    );
     expect(tokenLines.length).toBeGreaterThan(0);
     for (const line of tokenLines) {
       // Step-level env sits at 10 spaces; job-level env at 6.

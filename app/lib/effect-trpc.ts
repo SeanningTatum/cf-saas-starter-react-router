@@ -38,7 +38,7 @@ const assertNever = (x: never): TRPCError => {
       : "unknown";
   loggers.trpc.error(
     { tag },
-    "appErrorToTRPC: unhandled tagged error variant — add a case + a tagToTRPC test"
+    "appErrorToTRPC: unhandled tagged error variant — add a case + a tagToTRPC test",
   );
   return new TRPCError({
     code: "INTERNAL_SERVER_ERROR",
@@ -92,9 +92,7 @@ const appErrorToTRPC = (e: AppError): TRPCError => {
     case "ConfigurationError":
       return new TRPCError({
         code: "INTERNAL_SERVER_ERROR",
-        message: `Configuration error for ${e.service}${
-          e.field ? ` (${e.field})` : ""
-        }`,
+        message: `Configuration error for ${e.service}${e.field ? ` (${e.field})` : ""}`,
       });
     case "ExternalServiceError":
       return new TRPCError({
@@ -162,12 +160,9 @@ const toTRPC = (err: unknown): TRPCError => {
   if (isAppError(err)) return appErrorToTRPC(err);
   loggers.trpc.error(
     {
-      err:
-        err instanceof Error
-          ? { name: err.name, message: err.message, stack: err.stack }
-          : err,
+      err: err instanceof Error ? { name: err.name, message: err.message, stack: err.stack } : err,
     },
-    "Unhandled error in tRPC procedure"
+    "Unhandled error in tRPC procedure",
   );
   return new TRPCError({
     code: "INTERNAL_SERVER_ERROR",
@@ -176,9 +171,8 @@ const toTRPC = (err: unknown): TRPCError => {
 };
 
 export const tagToTRPC = <A, E, R>(
-  effect: Effect.Effect<A, E, R>
-): Effect.Effect<A, TRPCError, R> =>
-  Effect.catchAll(effect, (err) => Effect.fail(toTRPC(err)));
+  effect: Effect.Effect<A, E, R>,
+): Effect.Effect<A, TRPCError, R> => Effect.catchAll(effect, (err) => Effect.fail(toTRPC(err)));
 
 // The runtime's own layer construction can fail — a missing D1/R2
 // binding or a broken Better Auth config surfaces as ConfigurationError |
@@ -194,7 +188,7 @@ export const tagToTRPC = <A, E, R>(
 export const runProcedure = <A, E, R extends AppServices = AppServices>(
   runtime: ManagedRuntime.ManagedRuntime<AppServices, AppError>,
   effect: Effect.Effect<A, E, R>,
-  options?: { readonly span?: string }
+  options?: { readonly span?: string },
 ): Promise<A> =>
   runtime
     .runPromiseExit(
@@ -202,10 +196,8 @@ export const runProcedure = <A, E, R extends AppServices = AppServices>(
         Effect.annotateLogs({ layer: "trpc" }),
         // Root span per procedure — every db.* child span and every log's
         // traceId hang off this. Name convention: `trpc.<router>.<procedure>`.
-        options?.span
-          ? Effect.withSpan(options.span, { kind: "server" })
-          : (self) => self
-      )
+        options?.span ? Effect.withSpan(options.span, { kind: "server" }) : (self) => self,
+      ),
     )
     .then((exit) =>
       Exit.match(exit, {
@@ -217,14 +209,11 @@ export const runProcedure = <A, E, R extends AppServices = AppServices>(
           }
           // Unrecoverable defect (interruption, die, etc) — log full cause,
           // never leak it to the client.
-          loggers.trpc.error(
-            { cause: Cause.pretty(cause) },
-            "Unhandled defect in tRPC procedure"
-          );
+          loggers.trpc.error({ cause: Cause.pretty(cause) }, "Unhandled defect in tRPC procedure");
           throw new TRPCError({
             code: "INTERNAL_SERVER_ERROR",
             message: "Internal Server Error",
           });
         },
-      })
+      }),
     );

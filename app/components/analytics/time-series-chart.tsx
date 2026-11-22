@@ -1,7 +1,17 @@
 "use client";
 
 import * as React from "react";
-import { Area, AreaChart, CartesianGrid, XAxis, YAxis, Bar, BarChart, Line, LineChart } from "recharts";
+import {
+  Area,
+  AreaChart,
+  CartesianGrid,
+  XAxis,
+  YAxis,
+  Bar,
+  BarChart,
+  Line,
+  LineChart,
+} from "recharts";
 import { useTranslation } from "react-i18next";
 
 import { formatDate as formatDateI18n } from "@/lib/date-utils";
@@ -115,8 +125,7 @@ export function TimeSeriesChart({
     },
   } satisfies ChartConfig;
 
-  const formatDate = (value: string) =>
-    formatDateI18n(new Date(value), "MMM d", i18n.language);
+  const formatDate = (value: string) => formatDateI18n(new Date(value), "MMM d", i18n.language);
 
   const formatTooltipDate = (value: string) =>
     formatDateI18n(new Date(value), "MMMM d, yyyy", i18n.language);
@@ -135,18 +144,12 @@ export function TimeSeriesChart({
       tickFormatter: formatDate,
     };
 
-    const yAxisProps = showYAxis
-      ? { tickLine: false, axisLine: false, width: 40 }
-      : { hide: true };
+    const yAxisProps = showYAxis ? { tickLine: false, axisLine: false, width: 40 } : { hide: true };
 
     const tooltipContent = (
       <ChartTooltipContent
         labelFormatter={formatTooltipDate}
-        formatter={
-          valueFormatter
-            ? (value) => valueFormatter(value as number)
-            : undefined
-        }
+        formatter={valueFormatter ? (value) => valueFormatter(value as number) : undefined}
       />
     );
 
@@ -157,11 +160,7 @@ export function TimeSeriesChart({
           <XAxis {...xAxisProps} />
           <YAxis {...yAxisProps} />
           <ChartTooltip content={tooltipContent} />
-          <Bar
-            dataKey={dataKey}
-            fill={`var(--color-${dataKey})`}
-            radius={[4, 4, 0, 0]}
-          />
+          <Bar dataKey={dataKey} fill={`var(--color-${dataKey})`} radius={[4, 4, 0, 0]} />
         </BarChart>
       );
     }
@@ -189,16 +188,8 @@ export function TimeSeriesChart({
       <AreaChart {...commonProps}>
         <defs>
           <linearGradient id={`fill-${dataKey}`} x1="0" y1="0" x2="0" y2="1">
-            <stop
-              offset="5%"
-              stopColor={`var(--color-${dataKey})`}
-              stopOpacity={0.8}
-            />
-            <stop
-              offset="95%"
-              stopColor={`var(--color-${dataKey})`}
-              stopOpacity={0.1}
-            />
+            <stop offset="5%" stopColor={`var(--color-${dataKey})`} stopOpacity={0.8} />
+            <stop offset="95%" stopColor={`var(--color-${dataKey})`} stopOpacity={0.1} />
           </linearGradient>
         </defs>
         <CartesianGrid vertical={false} />
@@ -245,11 +236,7 @@ export function TimeSeriesChart({
               </SelectTrigger>
               <SelectContent className="rounded-xl">
                 {timeRanges.map((range) => (
-                  <SelectItem
-                    key={range.value}
-                    value={range.value}
-                    className="rounded-lg"
-                  >
+                  <SelectItem key={range.value} value={range.value} className="rounded-lg">
                     {range.label}
                   </SelectItem>
                 ))}
@@ -259,11 +246,7 @@ export function TimeSeriesChart({
         )}
       </CardHeader>
       <CardContent className="px-2 pt-4 sm:px-6 sm:pt-6">
-        <ChartContainer
-          config={chartConfig}
-          className="w-full"
-          style={{ height }}
-        >
+        <ChartContainer config={chartConfig} className="w-full" style={{ height }}>
           {renderChart()}
         </ChartContainer>
       </CardContent>

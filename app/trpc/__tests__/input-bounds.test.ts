@@ -41,7 +41,7 @@ const violationsIn = (
   ast: SchemaAST.AST,
   at: string,
   caps: Caps,
-  seen: ReadonlySet<SchemaAST.AST>
+  seen: ReadonlySet<SchemaAST.AST>,
 ): string[] => {
   if (seen.has(ast)) return [];
   const down = (child: SchemaAST.AST, path = at, childCaps: Caps = {}) =>
@@ -91,7 +91,7 @@ const violationsIn = (
       return down(ast.f());
     case "Declaration":
       return FIXED_SIZE.some(
-        (d) => SchemaAST.isDeclaration(d) && d.decodeUnknown === ast.decodeUnknown
+        (d) => SchemaAST.isDeclaration(d) && d.decodeUnknown === ast.decodeUnknown,
       )
         ? []
         : [`${at}: declared type not known to have a fixed size`];
@@ -109,7 +109,7 @@ const parserViolations = (parser: unknown): string[] => [
   ...new Set(
     Schema.isSchema(parser)
       ? violationsIn(parser.ast, "input", {}, new Set())
-      : ["input: not an Effect Schema, so it cannot be checked"]
+      : ["input: not an Effect Schema, so it cannot be checked"],
   ),
 ];
 
@@ -117,7 +117,7 @@ const routerViolations = (router: AnyRouter): string[] => {
   const procedures: Record<string, AnyProcedure> = router._def.procedures;
   return Object.entries(procedures)
     .flatMap(([path, procedure]) =>
-      procedure._def.inputs.flatMap(parserViolations).map((v) => `${path}: ${v}`)
+      procedure._def.inputs.flatMap(parserViolations).map((v) => `${path}: ${v}`),
     )
     .sort();
 };
@@ -139,7 +139,7 @@ describe("every procedure input is bounded", () => {
 
   const capped = Schema.String.pipe(Schema.maxLength(9));
   const boundedRecord = Schema.Record({ key: capped, value: capped }).pipe(
-    Schema.filter(() => true, { jsonSchema: { maxProperties: 5 } })
+    Schema.filter(() => true, { jsonSchema: { maxProperties: 5 } }),
   );
 
   it.each<[string, unknown, string[]]>([
@@ -204,8 +204,8 @@ describe("bulk procedures and search on real D1", { timeout: 60_000 }, () => {
       rows.map((r) =>
         app.db
           .prepare("INSERT INTO user (id, name, email) VALUES (?, ?, ?)")
-          .bind(r.id, r.name, r.email)
-      )
+          .bind(r.id, r.name, r.email),
+      ),
     );
     return rows.map((r) => r.id);
   };
@@ -216,16 +216,14 @@ describe("bulk procedures and search on real D1", { timeout: 60_000 }, () => {
         id: `${prefix}-${i}`,
         name: `${prefix} ${i}`,
         email: `${prefix}-${i}@bounds.test`,
-      }))
+      })),
     );
 
   /** Rows with this prefix still as seeded: present, not banned, role user. */
   const untouched = async (prefix: string) =>
     (
       await app.db
-        .prepare(
-          "SELECT count(*) AS n FROM user WHERE id LIKE ? AND banned = 0 AND role = 'user'"
-        )
+        .prepare("SELECT count(*) AS n FROM user WHERE id LIKE ? AND banned = 0 AND role = 'user'")
         .bind(`${prefix}-%`)
         .first<{ n: number }>()
     )?.n;
@@ -243,19 +241,22 @@ describe("bulk procedures and search on real D1", { timeout: 60_000 }, () => {
     "admin.bulkDeleteUsers": (caller, userIds) => caller.admin.bulkDeleteUsers({ userIds }),
   };
 
-  it.each(Object.entries(BULK))("%s works on MAX_BULK_USER_IDS users in one call", async (path, run) => {
-    // Catches: a cap raised past what D1's 100-variable limit allows, or a
-    // new SET column pushing the bulk statement over it.
-    const prefix = `cap-${path}`;
-    const userIds = await seedUsers(prefix, MAX_BULK_USER_IDS);
+  it.each(Object.entries(BULK))(
+    "%s works on MAX_BULK_USER_IDS users in one call",
+    async (path, run) => {
+      // Catches: a cap raised past what D1's 100-variable limit allows, or a
+      // new SET column pushing the bulk statement over it.
+      const prefix = `cap-${path}`;
+      const userIds = await seedUsers(prefix, MAX_BULK_USER_IDS);
 
-    expect(await run(await asAdmin(), userIds)).toEqual({
-      success: true,
-      affectedCount: MAX_BULK_USER_IDS,
-      skippedCount: 0,
-    });
-    expect(await untouched(prefix), "rows the action missed").toBe(0);
-  });
+      expect(await run(await asAdmin(), userIds)).toEqual({
+        success: true,
+        affectedCount: MAX_BULK_USER_IDS,
+        skippedCount: 0,
+      });
+      expect(await untouched(prefix), "rows the action missed").toBe(0);
+    },
+  );
 
   it("refuses one id over the cap at the input, and touches no row", async () => {
     // Catches: maxItems dropped or raised past MAX_BULK_USER_IDS, or checked

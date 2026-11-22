@@ -31,9 +31,7 @@ export type AppServices =
  * `request.id` is not set here: the tracer stamps it on every span, this one
  * included (see `makeOtlpTracer`), so it has one source.
  */
-const requestLayer = (
-  request: RequestContext
-): Layer.Layer<CurrentRequest | Tracer.ParentSpan> =>
+const requestLayer = (request: RequestContext): Layer.Layer<CurrentRequest | Tracer.ParentSpan> =>
   Layer.merge(
     Layer.succeed(CurrentRequest, request),
     Layer.span("http.request", {
@@ -49,7 +47,7 @@ const requestLayer = (
         "http.request.method": request.method,
         "url.path": request.path,
       },
-    })
+    }),
   );
 
 /**
@@ -65,13 +63,9 @@ const requestLayer = (
 export const observabilityLayer = (
   env: object,
   request?: RequestContext,
-  fetchFn?: FetchLike
+  fetchFn?: FetchLike,
 ): Layer.Layer<never> => {
-  const base = Layer.mergeAll(
-    LoggerLive,
-    MinLogLevelLive,
-    TracingLayer(env, fetchFn, request)
-  );
+  const base = Layer.mergeAll(LoggerLive, MinLogLevelLive, TracingLayer(env, fetchFn, request));
   // Typed as `Layer<never>` on purpose: without `request` the runtime holds
   // neither service, so its type must not promise them. Code that wants the
   // request reads it with `Effect.serviceOption(CurrentRequest)`.
@@ -82,22 +76,13 @@ export const observabilityLayer = (
 // via `AuthApiLive(baseURL)` so the single construction path (Effect.try →
 // ExternalServiceError, unit-tested in services/__tests__/auth.test.ts) is
 // used in production too. No more raw `createAuth(...)` call outside Effect.
-export const makeAppRuntime = (
-  env: Env,
-  baseURL?: string,
-  request?: RequestContext
-) => {
-  const baseLayer = Layer.mergeAll(
-    DatabaseLive,
-    BucketLive,
-    AuthApiLive(baseURL),
-    AnalyticsLive
-  );
+export const makeAppRuntime = (env: Env, baseURL?: string, request?: RequestContext) => {
+  const baseLayer = Layer.mergeAll(DatabaseLive, BucketLive, AuthApiLive(baseURL), AnalyticsLive);
   const reposLayer = Layer.mergeAll(
     UserRepository.Default,
     AnalyticsRepository.Default,
     BucketRepository.Default,
-    HealthRepository.Default
+    HealthRepository.Default,
   );
   const layer = reposLayer
     .pipe(Layer.provideMerge(baseLayer))

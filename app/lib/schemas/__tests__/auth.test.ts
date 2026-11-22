@@ -2,8 +2,7 @@ import { describe, it, expect } from "vitest";
 import { Schema } from "effect";
 import { LoginSchema, SignupSchema, Email, Password } from "../auth";
 
-const decode = <A, I>(schema: Schema.Schema<A, I>) =>
-  Schema.decodeUnknownEither(schema);
+const decode = <A, I>(schema: Schema.Schema<A, I>) => Schema.decodeUnknownEither(schema);
 
 describe("Email", () => {
   it("accepts valid emails", () => {
@@ -34,14 +33,10 @@ describe("LoginSchema", () => {
     expect(result._tag).toBe("Right");
   });
   it("rejects an empty password", () => {
-    expect(
-      decode(LoginSchema)({ email: "a@b.co", password: "" })._tag
-    ).toBe("Left");
+    expect(decode(LoginSchema)({ email: "a@b.co", password: "" })._tag).toBe("Left");
   });
   it("rejects an invalid email", () => {
-    expect(
-      decode(LoginSchema)({ email: "bad", password: "x" })._tag
-    ).toBe("Left");
+    expect(decode(LoginSchema)({ email: "bad", password: "x" })._tag).toBe("Left");
   });
 });
 
@@ -59,12 +54,7 @@ describe("form caps: at the cap decodes, one over fails", () => {
     ...fields,
   });
   const cases: ReadonlyArray<
-    [
-      string,
-      (u: unknown) => { readonly _tag: "Left" | "Right" },
-      number,
-      (n: number) => unknown,
-    ]
+    [string, (u: unknown) => { readonly _tag: "Left" | "Right" }, number, (n: number) => unknown]
   > = [
     ["Email", decode(Email), 254, email],
     ["Password", decode(Password), 128, s],
@@ -92,7 +82,7 @@ describe("SignupSchema", () => {
         email: "a@b.co",
         password: "12345678",
         confirmPassword: "12345678",
-      })._tag
+      })._tag,
     ).toBe("Right");
   });
   it("rejects mismatched passwords", () => {
@@ -111,7 +101,7 @@ describe("SignupSchema", () => {
         email: "a@b.co",
         password: "short",
         confirmPassword: "short",
-      })._tag
+      })._tag,
     ).toBe("Left");
   });
   it("rejects empty name", () => {
@@ -121,7 +111,7 @@ describe("SignupSchema", () => {
         email: "a@b.co",
         password: "12345678",
         confirmPassword: "12345678",
-      })._tag
+      })._tag,
     ).toBe("Left");
   });
 });

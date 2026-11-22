@@ -64,7 +64,7 @@ describe("GetUsersInput", () => {
         search: "alice",
         role: "user",
         status: "banned",
-      })._tag
+      })._tag,
     ).toBe("Right");
   });
 });
@@ -86,22 +86,16 @@ describe("BulkDeleteUsersInput", () => {
 
 describe("BulkUpdateUserRolesInput", () => {
   it("requires role", () => {
-    expect(
-      decode(BulkUpdateUserRolesInput)({ userIds: ["a"] })._tag
-    ).toBe("Left");
+    expect(decode(BulkUpdateUserRolesInput)({ userIds: ["a"] })._tag).toBe("Left");
   });
   it("accepts user role", () => {
-    expect(
-      decode(BulkUpdateUserRolesInput)({ userIds: ["a"], role: "user" })._tag
-    ).toBe("Right");
+    expect(decode(BulkUpdateUserRolesInput)({ userIds: ["a"], role: "user" })._tag).toBe("Right");
   });
 });
 
 describe("UpdateUserInput", () => {
   it("decodes minimal payload", () => {
-    expect(
-      decode(UpdateUserInput)({ userId: "u1", data: {} })._tag
-    ).toBe("Right");
+    expect(decode(UpdateUserInput)({ userId: "u1", data: {} })._tag).toBe("Right");
   });
 });
 
@@ -111,9 +105,7 @@ describe("UpdateUserData email pattern", () => {
   });
 
   it("rejects a malformed email", () => {
-    expect(decode(UpdateUserData)({ email: "not-an-email" })._tag).toBe(
-      "Left"
-    );
+    expect(decode(UpdateUserData)({ email: "not-an-email" })._tag).toBe("Left");
   });
 });
 
@@ -134,7 +126,7 @@ describe("BanUserInput", () => {
         userId: "u1",
         reason: "spam",
         expiresAt: new Date(),
-      })._tag
+      })._tag,
     ).toBe("Right");
   });
 });
@@ -159,12 +151,7 @@ describe("input caps: at the cap decodes, one over fails", () => {
   const ids = (n: number) => Array.from({ length: n }, (_, i) => `u${i}`);
   const email = (n: number) => `${"a".repeat(n - "@b.co".length)}@b.co`;
   const cases: ReadonlyArray<
-    [
-      string,
-      (u: unknown) => { readonly _tag: "Left" | "Right" },
-      number,
-      (n: number) => unknown,
-    ]
+    [string, (u: unknown) => { readonly _tag: "Left" | "Right" }, number, (n: number) => unknown]
   > = [
     ["UserId (GetUserInput.userId)", decode(GetUserInput), 128, (n) => ({ userId: s(n) })],
     [

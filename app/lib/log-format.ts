@@ -31,8 +31,7 @@ const COLORS: Record<LogLevel, string> = {
 };
 const RESET = "\x1b[0m";
 
-export const shouldLog = (level: LogLevel) =>
-  isLevelEnabled(level, isDev ? "trace" : "info");
+export const shouldLog = (level: LogLevel) => isLevelEnabled(level, isDev ? "trace" : "info");
 
 type LogContextProvider = () => Record<string, unknown>;
 
@@ -51,7 +50,7 @@ export const setLogContext = (provider: LogContextProvider): void => {
 export function emitLog(
   level: LogLevel,
   message: string,
-  annotations: Record<string, unknown> = {}
+  annotations: Record<string, unknown> = {},
 ): void {
   if (!shouldLog(level)) return;
 
@@ -69,24 +68,14 @@ export function emitLog(
     // id leads as before. Whichever id leads stays out of the trailing JSON.
     const { layer, requestId, traceId, ...others } = data;
     const shortRequestId =
-      typeof requestId === "string" && requestId.length > 0
-        ? requestId.slice(0, 8)
-        : undefined;
+      typeof requestId === "string" && requestId.length > 0 ? requestId.slice(0, 8) : undefined;
     const id = shortRequestId ?? traceId;
-    const rest =
-      shortRequestId && traceId !== undefined ? { ...others, traceId } : others;
-    const prefix = [
-      layer ? `[${layer}]` : "",
-      id ? `(${id})` : "",
-    ]
-      .filter(Boolean)
-      .join(" ");
-    const ctx =
-      Object.keys(rest).length > 3 ? ` ${JSON.stringify(rest)}` : "";
-    const fn =
-      level === "fatal" ? "error" : level === "trace" ? "debug" : level;
+    const rest = shortRequestId && traceId !== undefined ? { ...others, traceId } : others;
+    const prefix = [layer ? `[${layer}]` : "", id ? `(${id})` : ""].filter(Boolean).join(" ");
+    const ctx = Object.keys(rest).length > 3 ? ` ${JSON.stringify(rest)}` : "";
+    const fn = level === "fatal" ? "error" : level === "trace" ? "debug" : level;
     console[fn](
-      `${COLORS[level]}${level.toUpperCase().padEnd(5)}${RESET} ${prefix} ${message}${ctx}`
+      `${COLORS[level]}${level.toUpperCase().padEnd(5)}${RESET} ${prefix} ${message}${ctx}`,
     );
   } else {
     console.log(JSON.stringify(data));

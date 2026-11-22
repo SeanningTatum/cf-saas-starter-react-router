@@ -13,7 +13,7 @@ const leafKeys = (obj: Record<string, unknown>, prefix = ""): string[] =>
   Object.entries(obj).flatMap(([k, v]) =>
     v !== null && typeof v === "object"
       ? leafKeys(v as Record<string, unknown>, `${prefix}${k}.`)
-      : [`${prefix}${k}`]
+      : [`${prefix}${k}`],
   );
 
 const namespaces = fs
@@ -42,7 +42,7 @@ describe("home route i18n keys", () => {
         "harness.pillars.specs.title",
         "harness.pillars.skills.title",
         "harness.pillars.gates.title",
-      ])
+      ]),
     );
   });
 

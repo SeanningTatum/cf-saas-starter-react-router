@@ -16,7 +16,7 @@ export default async function handleRequest(
   responseStatusCode: number,
   responseHeaders: Headers,
   routerContext: EntryContext,
-  loadContext: AppLoadContext
+  loadContext: AppLoadContext,
 ) {
   const nonce = loadContext.cspNonce;
   let shellRendered = false;
@@ -30,9 +30,8 @@ export default async function handleRequest(
     .use(initReactI18next)
     .use(
       resourcesToBackend(
-        (language: string, namespace: string) =>
-          import(`./locales/${language}/${namespace}.json`)
-      )
+        (language: string, namespace: string) => import(`./locales/${language}/${namespace}.json`),
+      ),
     )
     .init({
       supportedLngs: [...supportedLngs],
@@ -46,11 +45,7 @@ export default async function handleRequest(
     <NonceContext.Provider value={nonce}>
       <RequestIdContext.Provider value={loadContext.requestId}>
         <I18nextProvider i18n={instance}>
-          <ServerRouter
-            context={routerContext}
-            url={request.url}
-            nonce={nonce}
-          />
+          <ServerRouter context={routerContext} url={request.url} nonce={nonce} />
         </I18nextProvider>
       </RequestIdContext.Provider>
     </NonceContext.Provider>,
@@ -61,11 +56,11 @@ export default async function handleRequest(
         if (shellRendered) {
           loggers.server.error(
             { err: error instanceof Error ? error.message : String(error) },
-            "SSR render error"
+            "SSR render error",
           );
         }
       },
-    }
+    },
   );
   shellRendered = true;
 

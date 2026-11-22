@@ -42,9 +42,7 @@
       "Bash(git clean -fd:*)",
       "Bash(git clean -fdx:*)"
     ],
-    "allow": [
-      "mcp__codegraph__*"
-    ]
+    "allow": ["mcp__codegraph__*"]
   },
   "skillOverrides": {
     "embedded-captions": "off",

@@ -10,10 +10,9 @@ describe("UploadOptions", () => {
   });
 
   it("decodes a full payload", () => {
-    expect(
-      decode(UploadOptions)({ key: "uploads/a.png", contentType: "image/png" })
-        ._tag
-    ).toBe("Right");
+    expect(decode(UploadOptions)({ key: "uploads/a.png", contentType: "image/png" })._tag).toBe(
+      "Right",
+    );
   });
 });
 
@@ -22,20 +21,10 @@ describe("UploadOptions", () => {
 describe("caps: at the cap decodes, one over fails", () => {
   const s = (n: number) => "a".repeat(n);
   const cases: ReadonlyArray<
-    [
-      string,
-      (u: unknown) => { readonly _tag: "Left" | "Right" },
-      number,
-      (n: number) => unknown,
-    ]
+    [string, (u: unknown) => { readonly _tag: "Left" | "Right" }, number, (n: number) => unknown]
   > = [
     ["UploadOptions.key", decode(UploadOptions), 1024, (n) => ({ key: s(n) })],
-    [
-      "UploadOptions.contentType",
-      decode(UploadOptions),
-      255,
-      (n) => ({ contentType: s(n) }),
-    ],
+    ["UploadOptions.contentType", decode(UploadOptions), 255, (n) => ({ contentType: s(n) })],
   ];
   for (const [name, check, cap, build] of cases) {
     it(`${name}: ${cap} decodes, ${cap + 1} fails`, () => {
@@ -52,9 +41,7 @@ describe("ListR2Input", () => {
   });
 
   it("accepts a prefix with an explicit limit", () => {
-    expect(
-      decode(ListR2Input)({ prefix: "uploads/", limit: 50 })._tag
-    ).toBe("Right");
+    expect(decode(ListR2Input)({ prefix: "uploads/", limit: 50 })._tag).toBe("Right");
   });
 
   it("rejects limit below 1", () => {

@@ -52,22 +52,17 @@ const setup = (run: (advance: (ms: number) => void) => Promise<unknown>) => {
   const runSpy = vi.fn(() => run(advance));
   const runtime = ManagedRuntime.make(
     Layer.mergeAll(
-      HealthRepository.Default.pipe(
-        Layer.provide(makeTestDatabase({ run: runSpy }))
-      ),
+      HealthRepository.Default.pipe(Layer.provide(makeTestDatabase({ run: runSpy }))),
       Layer.setTracer(makeOtlpTracer(buffer)),
-      Layer.setClock(clock)
-    )
+      Layer.setClock(clock),
+    ),
   );
   runtimes.push(runtime);
   const caller = (role: "admin" | "user" | null) =>
     createCallerFactory(appRouter)({
       headers: new Headers(),
       runtime: runtime as unknown as AppRuntime,
-      auth:
-        role === null
-          ? null
-          : { session: { id: "s1" }, user: { id: "u1", role } },
+      auth: role === null ? null : { session: { id: "s1" }, user: { id: "u1", role } },
     } as unknown as Context);
   return { caller, runSpy, buffer };
 };

@@ -67,10 +67,7 @@ describe("stripStackOutsideDev", () => {
       customField: { nested: true },
     };
 
-    const result = stripStackOutsideDev(
-      { message: "m", data: { ...kept, stack: "trace" } },
-      false
-    );
+    const result = stripStackOutsideDev({ message: "m", data: { ...kept, stack: "trace" } }, false);
 
     expect(Object.keys(result.data).sort()).toEqual(Object.keys(kept).sort());
     expect(result.data).toEqual(kept);
@@ -89,9 +86,7 @@ describe("stripStackOutsideDev", () => {
     const result = stripStackOutsideDev(withSchemaError, false);
 
     expect(result.data).not.toHaveProperty("stack");
-    expect(result.data.schemaError).toEqual([
-      { path: ["email"], message: "Invalid email" },
-    ]);
+    expect(result.data.schemaError).toEqual([{ path: ["email"], message: "Invalid email" }]);
   });
 
   it("is a no-op when there is no stack to strip", () => {

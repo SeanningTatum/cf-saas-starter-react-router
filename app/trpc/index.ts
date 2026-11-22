@@ -17,23 +17,20 @@ import { setRequestUser } from "@/lib/request-context";
 // api.getSession(...))`, which turned a throwing Better Auth call into an
 // unrecoverable defect; `SessionLive` already wraps it in `Effect.tryPromise`
 // mapped to `ExternalServiceError`.
-export const createTRPCContext = async (opts: {
-  headers: Headers;
-  runtime: AppRuntime;
-}) => {
+export const createTRPCContext = async (opts: { headers: Headers; runtime: AppRuntime }) => {
   const exit = await opts.runtime.runPromiseExit(
     Session.pipe(
       Effect.provide(SessionLive(opts.headers)),
       // Stamp the signed-in user on the request: every later log line of this
       // request carries `userId`, and the request span gets `user.id`.
-      Effect.tap(({ user }) => setRequestUser(user?.id))
-    )
+      Effect.tap(({ user }) => setRequestUser(user?.id)),
+    ),
   );
 
   if (Exit.isFailure(exit)) {
     loggers.trpc.error(
       { cause: Cause.pretty(exit.cause) },
-      "Failed to resolve session for tRPC context"
+      "Failed to resolve session for tRPC context",
     );
     throw new TRPCError({
       code: "INTERNAL_SERVER_ERROR",
@@ -65,10 +62,7 @@ type ErrorShapeLike = { data?: Record<string, unknown>; [key: string]: unknown }
  * own `isDev` is set, so this is defence in depth rather than the primary fix —
  * it keeps stacks out of client payloads even if that config regresses.
  */
-export const stripStackOutsideDev = <S extends ErrorShapeLike>(
-  shape: S,
-  dev: boolean
-): S => {
+export const stripStackOutsideDev = <S extends ErrorShapeLike>(shape: S, dev: boolean): S => {
   if (dev || shape.data?.stack === undefined) return shape;
   const { stack: _stack, ...data } = shape.data;
   // TS cannot prove a generic spread still satisfies `S`, so the cast is
@@ -115,7 +109,7 @@ const t = initTRPC.context<typeof createTRPCContext>().create({
           schemaError: formatSchemaError(error.cause),
         },
       },
-      isDev
+      isDev,
     ),
 });
 
@@ -145,22 +139,20 @@ const timingMiddleware = t.middleware(async ({ next, path }) => {
 
 export const publicProcedure = t.procedure.use(timingMiddleware);
 
-export const protectedProcedure = t.procedure
-  .use(timingMiddleware)
-  .use(({ ctx, next }) => {
-    if (!ctx.auth) {
-      throw new TRPCError({ code: "UNAUTHORIZED" });
-    }
-    return next({
-      ctx: {
-        ...ctx,
-        auth: {
-          session: ctx.auth.session,
-          user: ctx.auth.user,
-        },
+export const protectedProcedure = t.procedure.use(timingMiddleware).use(({ ctx, next }) => {
+  if (!ctx.auth) {
+    throw new TRPCError({ code: "UNAUTHORIZED" });
+  }
+  return next({
+    ctx: {
+      ...ctx,
+      auth: {
+        session: ctx.auth.session,
+        user: ctx.auth.user,
       },
-    });
+    },
   });
+});
 
 export const adminProcedure = protectedProcedure.use(({ ctx, next }) => {
   if (ctx.auth.user.role !== "admin") {

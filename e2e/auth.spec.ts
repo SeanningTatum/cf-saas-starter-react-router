@@ -25,7 +25,10 @@ async function waitForHydration(page: Page, submitTestId: string) {
   const submit = page.getByTestId(submitTestId);
   const hydrated = await expect(submit)
     .toBeEnabled({ timeout: 15_000 })
-    .then(() => true, () => false);
+    .then(
+      () => true,
+      () => false,
+    );
   if (hydrated) return;
   await page.reload();
   await expect(submit).toBeEnabled({ timeout: 30_000 });
@@ -51,7 +54,9 @@ test.describe("Authentication", () => {
   const password = "E2EPass123!";
   const name = "E2E User";
 
-  test("signup → dashboard, signout → login, signin → dashboard", { tag: "@golden" }, async ({ page }) => {
+  test("signup → dashboard, signout → login, signin → dashboard", { tag: "@golden" }, async ({
+    page,
+  }) => {
     // 1. Sign up
     await page.goto("/sign-up");
     await waitForHydration(page, "signup-submit");
@@ -124,12 +129,18 @@ test.describe("Banned account", () => {
 // Catches issue #49: a submit before hydration must never put a field in the URL.
 test.describe("Auth forms before hydration", () => {
   const forms = [
-    { path: "/sign-up", prefix: "signup", passwordFields: ["signup-password", "signup-confirm-password"] },
+    {
+      path: "/sign-up",
+      prefix: "signup",
+      passwordFields: ["signup-password", "signup-confirm-password"],
+    },
     { path: "/login", prefix: "login", passwordFields: ["login-password"] },
   ] as const;
 
   for (const { path, prefix, passwordFields } of forms) {
-    test(`${path} ignores an early submit and keeps the password out of the URL`, async ({ page }) => {
+    test(`${path} ignores an early submit and keeps the password out of the URL`, async ({
+      page,
+    }) => {
       const release = await holdScripts(page);
       await page.goto(path, { waitUntil: "commit" });
 

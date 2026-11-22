@@ -36,7 +36,9 @@ describe("derivePreviewPassword", () => {
   });
 
   it("differs per secret: rotating the secret must rotate the password", () => {
-    expect(derivePreviewPassword(SECRET, "12")).not.toBe(derivePreviewPassword(`${SECRET}-2`, "12"));
+    expect(derivePreviewPassword(SECRET, "12")).not.toBe(
+      derivePreviewPassword(`${SECRET}-2`, "12"),
+    );
   });
 
   it("never equals the local password", () => {
@@ -47,7 +49,11 @@ describe("derivePreviewPassword", () => {
 describe("parseArgs targets", () => {
   it("local keeps the in-repo password and needs no secret: dev and the e2e specs depend on it", () => {
     const p = Either.getOrThrow(plan([], {}));
-    expect(p).toMatchObject({ kind: "seed", password: LOCAL_PASSWORD, target: { local: true, flags: ["--local"] } });
+    expect(p).toMatchObject({
+      kind: "seed",
+      password: LOCAL_PASSWORD,
+      target: { local: true, flags: ["--local"] },
+    });
   });
 
   it("--preview uses the derived password for its slug, default 'shared'", () => {
@@ -55,12 +61,17 @@ describe("parseArgs targets", () => {
     expect(withPr).toMatchObject({ kind: "seed", password: derivePreviewPassword(SECRET, "42") });
     const shared = Either.getOrThrow(plan(["--preview"]));
     expect(shared).toMatchObject({ password: derivePreviewPassword(SECRET, "shared") });
-    expect(shared).toMatchObject({ target: { local: false, flags: ["--env", "preview", "--remote"] } });
+    expect(shared).toMatchObject({
+      target: { local: false, flags: ["--env", "preview", "--remote"] },
+    });
   });
 
   it("--remote --force-production derives from PRODUCTION_SEED_SECRET and is not local", () => {
     const p = Either.getOrThrow(plan(["--remote", "--force-production"]));
-    expect(p).toMatchObject({ password: deriveProductionPassword(PROD_SECRET), target: { local: false } });
+    expect(p).toMatchObject({
+      password: deriveProductionPassword(PROD_SECRET),
+      target: { local: false },
+    });
   });
 
   it("the production password differs from every preview password for the same secret value: PR code can read the preview secret", () => {
@@ -85,9 +96,15 @@ describe("parseArgs targets", () => {
   });
 
   it("preview and production refuse to run without their secret: the in-repo password must never reach them", () => {
-    for (const argv of [["--preview"], ["--preview", "--pr", "1"], ["--remote", "--force-production"]]) {
+    for (const argv of [
+      ["--preview"],
+      ["--preview", "--pr", "1"],
+      ["--remote", "--force-production"],
+    ]) {
       expect(Either.isLeft(plan(argv, {}))).toBe(true);
-      expect(Either.isLeft(plan(argv, { PREVIEW_SEED_SECRET: "", PRODUCTION_SEED_SECRET: "" }))).toBe(true);
+      expect(
+        Either.isLeft(plan(argv, { PREVIEW_SEED_SECRET: "", PRODUCTION_SEED_SECRET: "" })),
+      ).toBe(true);
     }
   });
 

@@ -176,8 +176,12 @@ export function run(deps: Deps): number {
     return 0;
   }
   for (const f of findings) deps.log(`${f.path}:${f.line}  ${f.rule}`);
-  deps.log(`If a hit is a false alarm, add "${ALLOW_MARKER} <rule>" to that line (never honoured for ${NEVER_ALLOWED}).`);
-  deps.log("If it is a real credential, rotate it first, then remove it. See docs/ci/supply-chain.md");
+  deps.log(
+    `If a hit is a false alarm, add "${ALLOW_MARKER} <rule>" to that line (never honoured for ${NEVER_ALLOWED}).`,
+  );
+  deps.log(
+    "If it is a real credential, rotate it first, then remove it. See docs/ci/supply-chain.md",
+  );
   return 1;
 }
 
@@ -185,7 +189,11 @@ export function realDeps(): Deps {
   const root = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
   return {
     git: (args) => {
-      const out = spawnSync("git", args, { cwd: root, encoding: "utf8", maxBuffer: 256 * 1024 * 1024 });
+      const out = spawnSync("git", args, {
+        cwd: root,
+        encoding: "utf8",
+        maxBuffer: 256 * 1024 * 1024,
+      });
       return { ok: out.error === undefined && out.status === 0, stdout: out.stdout ?? "" };
     },
     size: (file) => {

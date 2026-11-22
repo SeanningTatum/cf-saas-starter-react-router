@@ -64,7 +64,9 @@ export function parseArgs(argv: readonly string[]): Request {
 }
 
 const PackageScripts = Schema.parseJson(
-  Schema.Struct({ scripts: Schema.optional(Schema.Record({ key: Schema.String, value: Schema.String })) }),
+  Schema.Struct({
+    scripts: Schema.optional(Schema.Record({ key: Schema.String, value: Schema.String })),
+  }),
 );
 
 function hasHouseScript(deps: Deps): boolean {
@@ -74,7 +76,8 @@ function hasHouseScript(deps: Deps): boolean {
 
 function stagedFiles(deps: Deps): Either.Either<string[], string> {
   const listed = deps.run("git", STAGED_FILES_ARGS);
-  if (listed.status !== 0) return Either.left(`git could not list the staged files: ${listed.stderr.trim()}`);
+  if (listed.status !== 0)
+    return Either.left(`git could not list the staged files: ${listed.stderr.trim()}`);
   return Either.right(listed.stdout.split("\n").filter((file) => file !== "" && deps.exists(file)));
 }
 
@@ -125,18 +128,30 @@ function runHouse(deps: Deps, scoped: boolean, files: readonly string[]): ToolOu
     const result = deps.run("bun", ["run", HOUSE_SCRIPT, ...(scoped ? files : [])]);
     const findings = parseHouse(`${result.stdout}\n${result.stderr}`);
     if (result.status !== 0 && findings.length === 0) {
-      return { tool: TOOL.house, findings, error: `the house linter failed with no finding. ${result.stderr.trim()}` };
+      return {
+        tool: TOOL.house,
+        findings,
+        error: `the house linter failed with no finding. ${result.stderr.trim()}`,
+      };
     }
     return { tool: TOOL.house, findings };
   }
-  if (scoped && !files.some((file) => LEGACY_HOUSE_SCOPE.test(file))) return { tool: TOOL.house, findings: [] };
+  if (scoped && !files.some((file) => LEGACY_HOUSE_SCOPE.test(file)))
+    return { tool: TOOL.house, findings: [] };
   const result = deps.run("bun", ["run", LEGACY_HOUSE_CHECKER]);
   const all = parseLegacyHouse(`${result.stdout}\n${result.stderr}`);
   if (result.status !== 0 && all.length === 0) {
-    return { tool: TOOL.house, findings: all, error: `the house linter failed with no finding. ${result.stderr.trim()}` };
+    return {
+      tool: TOOL.house,
+      findings: all,
+      error: `the house linter failed with no finding. ${result.stderr.trim()}`,
+    };
   }
   const wanted = new Set(files);
-  return { tool: TOOL.house, findings: scoped ? all.filter((finding) => wanted.has(finding.path)) : all };
+  return {
+    tool: TOOL.house,
+    findings: scoped ? all.filter((finding) => wanted.has(finding.path)) : all,
+  };
 }
 
 function runDeadCode(deps: Deps): ToolOutcome {
@@ -147,7 +162,11 @@ function runDeadCode(deps: Deps): ToolOutcome {
     return { tool: TOOL.deadCode, findings: [], error: `${parsed.left}. ${result.stderr.trim()}` };
   }
   if (result.status !== 0 && parsed.right.length === 0) {
-    return { tool: TOOL.deadCode, findings: [], error: `knip failed with no finding. ${result.stderr.trim()}` };
+    return {
+      tool: TOOL.deadCode,
+      findings: [],
+      error: `knip failed with no finding. ${result.stderr.trim()}`,
+    };
   }
   return { tool: TOOL.deadCode, findings: parsed.right };
 }
@@ -160,7 +179,9 @@ export function lint(argv: readonly string[], deps: Deps): number {
     return EXIT.toolFailed;
   }
   const scoped = request.staged || request.files.length > 0;
-  const files = (request.staged ? staged.right : request.files).filter((file) => LINTABLE_FILE.test(file));
+  const files = (request.staged ? staged.right : request.files).filter((file) =>
+    LINTABLE_FILE.test(file),
+  );
   if (scoped && files.length === 0) {
     deps.print("lint: clean (no file to check)");
     return EXIT.clean;
@@ -173,12 +194,15 @@ export function lint(argv: readonly string[], deps: Deps): number {
     for (const finding of sortFindings(outcome.findings)) deps.print(formatFinding(finding));
   }
   const failed = outcomes.filter((outcome) => outcome.error !== undefined);
-  for (const outcome of failed) deps.printError(`error: ${outcome.tool} could not run: ${outcome.error}`);
+  for (const outcome of failed)
+    deps.printError(`error: ${outcome.tool} could not run: ${outcome.error}`);
 
   const counts = outcomes.map((outcome) => `${outcome.tool} ${outcome.findings.length}`).join(", ");
   const total = outcomes.reduce((sum, outcome) => sum + outcome.findings.length, 0);
   if (failed.length > 0) {
-    deps.printError(`lint: ${failed.length} tool(s) could not run, which is a failure, not a pass (${counts})`);
+    deps.printError(
+      `lint: ${failed.length} tool(s) could not run, which is a failure, not a pass (${counts})`,
+    );
     return EXIT.toolFailed;
   }
   if (total > 0) {
@@ -193,11 +217,23 @@ export function realDeps(): Deps {
   const root = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
   return {
     run: (command, args) => {
-      const result = spawnSync(command, [...args], { cwd: root, encoding: "utf8", maxBuffer: MAX_OUTPUT_BYTES });
+      const result = spawnSync(command, [...args], {
+        cwd: root,
+        encoding: "utf8",
+        maxBuffer: MAX_OUTPUT_BYTES,
+      });
       if (result.error) {
-        return { status: SPAWN_FAILED_STATUS, stdout: "", stderr: `cannot run ${command}: ${result.error.message}` };
+        return {
+          status: SPAWN_FAILED_STATUS,
+          stdout: "",
+          stderr: `cannot run ${command}: ${result.error.message}`,
+        };
       }
-      return { status: result.status ?? EXIT.findings, stdout: result.stdout ?? "", stderr: result.stderr ?? "" };
+      return {
+        status: result.status ?? EXIT.findings,
+        stdout: result.stdout ?? "",
+        stderr: result.stderr ?? "",
+      };
     },
     readFile: (file) => {
       const full = path.join(root, file);

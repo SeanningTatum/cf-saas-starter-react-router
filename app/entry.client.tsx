@@ -11,6 +11,6 @@ startTransition(() => {
       <StrictMode>
         <HydratedRouter />
       </StrictMode>
-    </I18nextProvider>
+    </I18nextProvider>,
   );
 });

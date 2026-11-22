@@ -63,7 +63,6 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import type { User } from "@/db/schema";
 
-
 type UserDataTableProps = {
   initialUsers: User[];
   initialTotal: number;
@@ -79,11 +78,15 @@ type UserDataTableProps = {
  */
 async function runAdminAction<T extends { error?: unknown } | null | undefined>(
   action: () => Promise<T>,
-  { successMessage, errorMessage, onSuccess }: {
+  {
+    successMessage,
+    errorMessage,
+    onSuccess,
+  }: {
     successMessage: string;
     errorMessage: string;
     onSuccess?: () => void;
-  }
+  },
 ): Promise<void> {
   try {
     const response = await action();
@@ -108,14 +111,11 @@ export function UserDataTable({
   const revalidator = useRevalidator();
   const { t, i18n } = useTranslation("admin");
   const [rowSelection, setRowSelection] = React.useState({});
-  const [columnVisibility, setColumnVisibility] =
-    React.useState<VisibilityState>({});
+  const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>({});
   const [sorting, setSorting] = React.useState<SortingState>([]);
 
   // Debounced search to avoid too many updates
-  const [searchInput, setSearchInput] = React.useState(
-    searchParams.get("search") || ""
-  );
+  const [searchInput, setSearchInput] = React.useState(searchParams.get("search") || "");
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: updateSearchParams is rebuilt on every render, so listing it would reset the 500ms debounce timer on each render
   React.useEffect(() => {
@@ -150,15 +150,11 @@ export function UserDataTable({
     });
 
   const handleBanUser = (userId: string, userName: string) =>
-    runAdminAction(
-      () =>
-        authClient.admin.banUser({ userId, banReason: "Banned by admin" }),
-      {
-        successMessage: t("users_table.toasts.ban_success", { name: userName }),
-        errorMessage: t("users_table.toasts.ban_error", { name: userName }),
-        onSuccess: () => revalidator.revalidate(),
-      }
-    );
+    runAdminAction(() => authClient.admin.banUser({ userId, banReason: "Banned by admin" }), {
+      successMessage: t("users_table.toasts.ban_success", { name: userName }),
+      errorMessage: t("users_table.toasts.ban_error", { name: userName }),
+      onSuccess: () => revalidator.revalidate(),
+    });
 
   const handleUnbanUser = (userId: string, userName: string) =>
     runAdminAction(() => authClient.admin.unbanUser({ userId }), {
@@ -167,22 +163,15 @@ export function UserDataTable({
       onSuccess: () => revalidator.revalidate(),
     });
 
-  const handleRoleChange = (
-    userId: string,
-    userName: string,
-    newRole: "user" | "admin"
-  ) =>
-    runAdminAction(
-      () => authClient.admin.setRole({ userId, role: newRole }),
-      {
-        successMessage: t("users_table.toasts.role_update_success", {
-          name: userName,
-          role: t(`users_table.roles.${newRole}`),
-        }),
-        errorMessage: t("users_table.toasts.role_update_error", { name: userName }),
-        onSuccess: () => revalidator.revalidate(),
-      }
-    );
+  const handleRoleChange = (userId: string, userName: string, newRole: "user" | "admin") =>
+    runAdminAction(() => authClient.admin.setRole({ userId, role: newRole }), {
+      successMessage: t("users_table.toasts.role_update_success", {
+        name: userName,
+        role: t(`users_table.roles.${newRole}`),
+      }),
+      errorMessage: t("users_table.toasts.role_update_error", { name: userName }),
+      onSuccess: () => revalidator.revalidate(),
+    });
 
   const columns: ColumnDef<User>[] = [
     {
@@ -224,9 +213,7 @@ export function UserDataTable({
             </Avatar>
             <div className="flex flex-col">
               <span className="font-medium">{user.name}</span>
-              <span className="text-muted-foreground text-sm">
-                {user.email}
-              </span>
+              <span className="text-muted-foreground text-sm">{user.email}</span>
             </div>
           </div>
         );
@@ -239,10 +226,7 @@ export function UserDataTable({
       cell: ({ row }) => {
         const role = row.original.role;
         return (
-          <Badge
-            variant={role === "admin" ? "default" : "outline"}
-            className="capitalize"
-          >
+          <Badge variant={role === "admin" ? "default" : "outline"} className="capitalize">
             {role === "admin" ? (
               <IconShieldCheck className="mr-1 h-3 w-3" />
             ) : (
@@ -274,12 +258,8 @@ export function UserDataTable({
 
         return (
           <Badge variant={verified ? "default" : "outline"}>
-            {verified ? (
-              <IconUserCheck className="mr-1 h-3 w-3" />
-            ) : null}
-            {verified
-              ? t("users_table.statuses.verified")
-              : t("users_table.statuses.unverified")}
+            {verified ? <IconUserCheck className="mr-1 h-3 w-3" /> : null}
+            {verified ? t("users_table.statuses.verified") : t("users_table.statuses.unverified")}
           </Badge>
         );
       },
@@ -294,11 +274,7 @@ export function UserDataTable({
       accessorKey: "createdAt",
       header: t("users_table.columns.joined"),
       cell: ({ row }) => {
-        return formatDate(
-          new Date(row.original.createdAt),
-          "MMM d, yyyy",
-          i18n.language
-        );
+        return formatDate(new Date(row.original.createdAt), "MMM d, yyyy", i18n.language);
       },
     },
     {
@@ -456,20 +432,14 @@ export function UserDataTable({
           <DropdownMenuContent align="end" className="w-48">
             {table
               .getAllColumns()
-              .filter(
-                (column) =>
-                  typeof column.accessorFn !== "undefined" &&
-                  column.getCanHide()
-              )
+              .filter((column) => typeof column.accessorFn !== "undefined" && column.getCanHide())
               .map((column) => {
                 return (
                   <DropdownMenuCheckboxItem
                     key={column.id}
                     className="capitalize"
                     checked={column.getIsVisible()}
-                    onCheckedChange={(value) =>
-                      column.toggleVisibility(!!value)
-                    }
+                    onCheckedChange={(value) => column.toggleVisibility(!!value)}
                   >
                     {column.id}
                   </DropdownMenuCheckboxItem>
@@ -490,10 +460,7 @@ export function UserDataTable({
                     <TableHead key={header.id} colSpan={header.colSpan}>
                       {header.isPlaceholder
                         ? null
-                        : flexRender(
-                          header.column.columnDef.header,
-                          header.getContext()
-                        )}
+                        : flexRender(header.column.columnDef.header, header.getContext())}
                     </TableHead>
                   );
                 })}
@@ -503,35 +470,23 @@ export function UserDataTable({
           <TableBody>
             {revalidator.state === "loading" ? (
               <TableRow>
-                <TableCell
-                  colSpan={columns.length}
-                  className="h-24 text-center"
-                >
+                <TableCell colSpan={columns.length} className="h-24 text-center">
                   {t("users_table.loading_users")}
                 </TableCell>
               </TableRow>
             ) : table.getRowModel().rows?.length ? (
               table.getRowModel().rows.map((row) => (
-                <TableRow
-                  key={row.id}
-                  data-state={row.getIsSelected() && "selected"}
-                >
+                <TableRow key={row.id} data-state={row.getIsSelected() && "selected"}>
                   {row.getVisibleCells().map((cell) => (
                     <TableCell key={cell.id}>
-                      {flexRender(
-                        cell.column.columnDef.cell,
-                        cell.getContext()
-                      )}
+                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
                     </TableCell>
                   ))}
                 </TableRow>
               ))
             ) : (
               <TableRow>
-                <TableCell
-                  colSpan={columns.length}
-                  className="h-24 text-center"
-                >
+                <TableCell colSpan={columns.length} className="h-24 text-center">
                   {t("users_table.no_users_found")}
                 </TableCell>
               </TableRow>
@@ -591,9 +546,7 @@ export function UserDataTable({
               variant="outline"
               className="size-8"
               size="icon"
-              onClick={() =>
-                updateSearchParams({ page: String(initialPage - 1) })
-              }
+              onClick={() => updateSearchParams({ page: String(initialPage - 1) })}
               disabled={initialPage <= 1}
             >
               <span className="sr-only">{t("users_table.previous_page")}</span>
@@ -603,9 +556,7 @@ export function UserDataTable({
               variant="outline"
               className="size-8"
               size="icon"
-              onClick={() =>
-                updateSearchParams({ page: String(initialPage + 1) })
-              }
+              onClick={() => updateSearchParams({ page: String(initialPage + 1) })}
               disabled={initialPage >= totalPages}
             >
               <span className="sr-only">{t("users_table.next_page")}</span>

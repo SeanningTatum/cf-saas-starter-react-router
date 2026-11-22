@@ -1,5 +1,16 @@
 import { describe, it, expect } from "vitest";
-import { applyBlock, firstSentence, parseFrontmatter, renderBlock, run, toAgents, validate, END, START, type Deps } from "../roster";
+import {
+  applyBlock,
+  firstSentence,
+  parseFrontmatter,
+  renderBlock,
+  run,
+  toAgents,
+  validate,
+  END,
+  START,
+  type Deps,
+} from "../roster";
 
 const agent = (over: Record<string, string | null> = {}, name = "alpha"): string => {
   const fm: Record<string, string | null> = {
@@ -10,7 +21,9 @@ const agent = (over: Record<string, string | null> = {}, name = "alpha"): string
     effort: "medium",
     ...over,
   };
-  const body = Object.entries(fm).filter(([, v]) => v !== null).map(([k, v]) => `${k}: ${v}`);
+  const body = Object.entries(fm)
+    .filter(([, v]) => v !== null)
+    .map(([k, v]) => `${k}: ${v}`);
   return ["---", ...body, "---", "", "Body."].join("\n");
 };
 
@@ -40,7 +53,9 @@ function memDeps(files: Record<string, string>) {
     },
     listDir: (p) => {
       const pre = `${p}/`;
-      return Object.keys(disk).filter((k) => k.startsWith(pre) && !k.slice(pre.length).includes("/")).map((k) => k.slice(pre.length));
+      return Object.keys(disk)
+        .filter((k) => k.startsWith(pre) && !k.slice(pre.length).includes("/"))
+        .map((k) => k.slice(pre.length));
     },
   };
   return { disk, writes, deps };
@@ -53,13 +68,17 @@ describe("firstSentence", () => {
     expect(firstSentence("Grades a ticket. Used by the workflow. More.")).toBe("Grades a ticket");
   });
   it("cuts at ' Examples - ' when that comes before any period, so the example list never lands in the table", () => {
-    expect(firstSentence('Reviews a diff against rules Examples - "review my branch". Read-only.')).toBe("Reviews a diff against rules");
+    expect(
+      firstSentence('Reviews a diff against rules Examples - "review my branch". Read-only.'),
+    ).toBe("Reviews a diff against rules");
   });
   it("cuts at the period when it comes before ' Examples - '", () => {
     expect(firstSentence('Writes tests. Examples - "write tests"')).toBe("Writes tests");
   });
   it("returns a description with no period whole instead of dropping it", () => {
-    expect(firstSentence("Runs shell steps and reports output")).toBe("Runs shell steps and reports output");
+    expect(firstSentence("Runs shell steps and reports output")).toBe(
+      "Runs shell steps and reports output",
+    );
   });
   it("drops a lone closing period so rows read the same whether or not the author ended with one", () => {
     expect(firstSentence("Runs shell steps.")).toBe("Runs shell steps");
@@ -71,7 +90,9 @@ describe("parseFrontmatter", () => {
     expect(parseFrontmatter("# Title\nname: x")).toBeNull();
   });
   it("keeps a colon inside the value (descriptions contain colons)", () => {
-    expect(parseFrontmatter("---\ndescription: Does x: and y\n---\n")).toEqual({ description: "Does x: and y" });
+    expect(parseFrontmatter("---\ndescription: Does x: and y\n---\n")).toEqual({
+      description: "Does x: and y",
+    });
   });
   it("ignores lines after the closing ---", () => {
     expect(parseFrontmatter("---\nname: a\n---\nmodel: opus\n")).toEqual({ name: "a" });
@@ -133,7 +154,9 @@ describe("renderBlock", () => {
     expect(b.indexOf("[`alpha`]")).toBeLessThan(b.indexOf("[`zed`]"));
   });
   it("writes name, link, model, effort and sentence in the row", () => {
-    expect(block({ alpha: agent() })).toContain("| [`alpha`](alpha.md) | sonnet | medium | Does the thing |");
+    expect(block({ alpha: agent() })).toContain(
+      "| [`alpha`](alpha.md) | sonnet | medium | Does the thing |",
+    );
   });
   it("counts agents per model and leaves out a model with none", () => {
     const b = block({ a: agent({ model: "opus" }, "a"), b: agent({}, "b"), c: agent({}, "c") });

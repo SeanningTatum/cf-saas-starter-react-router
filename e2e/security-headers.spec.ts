@@ -124,9 +124,13 @@ const hydrated = (ready: Locator, timeout: number) =>
     .poll(
       () =>
         ready
-          .evaluate((node) => Object.keys(node).some((k) => k.startsWith("__reactProps$")), undefined, {
-            timeout: 1_000,
-          })
+          .evaluate(
+            (node) => Object.keys(node).some((k) => k.startsWith("__reactProps$")),
+            undefined,
+            {
+              timeout: 1_000,
+            },
+          )
           .catch(() => false),
       { timeout, message: "the page never hydrated" },
     )
@@ -141,7 +145,11 @@ const hydrated = (ready: Locator, timeout: number) =>
  * die on Vite's "504 Outdated Optimize Dep" and never hydrate (issue #50);
  * one reload recovers it, as in e2e/auth.spec.ts.
  */
-const loadHydrated = async (page: Page, url: string, ready: (page: Page) => Locator): Promise<Response> => {
+const loadHydrated = async (
+  page: Page,
+  url: string,
+  ready: (page: Page) => Locator,
+): Promise<Response> => {
   let response = await page.goto(url);
   if (!(await hydrated(ready(page), 15_000))) {
     response = await page.reload();
@@ -172,7 +180,9 @@ const checkPage = async (page: Page, url: string, ready: (page: Page) => Locator
 test.describe("Security headers, signed out", () => {
   // Catches: a page the CSP breaks (an inline script without the nonce, a
   // script host missing from script-src), or a header dropped from the set.
-  test("home and login send the headers and load with no CSP violation", { tag: "@golden" }, async ({ page }) => {
+  test("home and login send the headers and load with no CSP violation", {
+    tag: "@golden",
+  }, async ({ page }) => {
     await checkPage(page, "/", (p) => p.getByTestId("topbar-sign-in"));
     await checkPage(page, "/login", (p) => p.getByTestId("login-submit"));
   });

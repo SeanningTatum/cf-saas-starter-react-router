@@ -17,8 +17,7 @@ import path from "node:path";
 import { stripJsonc } from "../lib/wrangler-config";
 
 const WRANGLER_PATH = path.join(__dirname, "..", "..", "wrangler.jsonc");
-const UUID_REGEX =
-  /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
+const UUID_REGEX = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
 
 interface WranglerConfig {
   name: string;
@@ -69,10 +68,7 @@ function writeWranglerConfig(config: WranglerConfig): void {
   // Keep a generated-file header comment line, 2-space indent, trailing newline.
   const header =
     "// Patched by scripts/ci/setup-preview-db.ts — per-PR preview D1 (CI checkout only, never committed).";
-  fs.writeFileSync(
-    WRANGLER_PATH,
-    `${header}\n${JSON.stringify(config, null, 2)}\n`
-  );
+  fs.writeFileSync(WRANGLER_PATH, `${header}\n${JSON.stringify(config, null, 2)}\n`);
 }
 
 function provisionDatabase(dbName: string): string {
@@ -107,7 +103,7 @@ function provisionDatabase(dbName: string): string {
   fail(
     `Failed to create or find database ${dbName}.\n` +
       `Create error: ${createOutput.message}\n` +
-      `Info error: ${infoOutput.message}`
+      `Info error: ${infoOutput.message}`,
   );
 }
 
@@ -123,9 +119,7 @@ function main(): void {
   const config = readWranglerConfig();
   const dbName = `${config.name}-db-pr-${slug}`;
 
-  const previewDb = config.env?.preview?.d1_databases?.find(
-    (db) => db.binding === "DATABASE"
-  );
+  const previewDb = config.env?.preview?.d1_databases?.find((db) => db.binding === "DATABASE");
   if (!previewDb) {
     fail('wrangler.jsonc has no env.preview d1_databases entry with binding "DATABASE" to patch');
   }

@@ -12,9 +12,7 @@ export class BucketGetError extends Data.TaggedError("BucketGetError")<{
   readonly cause?: unknown;
 }> {}
 
-export class BucketNotFoundError extends Data.TaggedError(
-  "BucketNotFoundError"
-)<{
+export class BucketNotFoundError extends Data.TaggedError("BucketNotFoundError")<{
   readonly key: string;
 }> {}
 
@@ -26,9 +24,7 @@ export class BucketListError extends Data.TaggedError("BucketListError")<{
   readonly cause?: unknown;
 }> {}
 
-export class BucketValidationError extends Data.TaggedError(
-  "BucketValidationError"
-)<{
+export class BucketValidationError extends Data.TaggedError("BucketValidationError")<{
   readonly message: string;
   readonly field?: string;
 }> {}

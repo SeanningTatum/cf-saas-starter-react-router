@@ -37,17 +37,22 @@ const SIZE = { width: 1280, height: 720 };
 export async function record(
   { out, name, slowMo = 250 }: RecordOptions,
   steps: (page: Page) => Promise<void>,
-  launch: (slowMo: number) => Promise<Browser> = (ms) => chromium.launch({ args: ["--disable-extensions"], slowMo: ms }),
-  mkdir: (dir: string) => void = (dir) => mkdirSync(dir, { recursive: true })
+  launch: (slowMo: number) => Promise<Browser> = (ms) =>
+    chromium.launch({ args: ["--disable-extensions"], slowMo: ms }),
+  mkdir: (dir: string) => void = (dir) => mkdirSync(dir, { recursive: true }),
 ): Promise<Recording> {
-  if (!/^[a-z0-9]+(-[a-z0-9]+)*$/.test(name)) return { path: "", ok: false, error: `name must be kebab-case: ${name}` };
+  if (!/^[a-z0-9]+(-[a-z0-9]+)*$/.test(name))
+    return { path: "", ok: false, error: `name must be kebab-case: ${name}` };
   mkdir(out);
   const path = `${out}/${name}.webm`;
   const browser = await launch(slowMo);
   let error: string | undefined;
   // The outer try owns the browser: a failure to open the page or to save the video still closes it.
   try {
-    const context = await browser.newContext({ recordVideo: { dir: out, size: SIZE }, viewport: SIZE });
+    const context = await browser.newContext({
+      recordVideo: { dir: out, size: SIZE },
+      viewport: SIZE,
+    });
     const page = await context.newPage();
     try {
       await steps(page);

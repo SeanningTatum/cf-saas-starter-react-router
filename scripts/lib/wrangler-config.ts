@@ -29,9 +29,7 @@ export function buildWranglerConfig(input: WranglerConfigInput): object {
   const previewBucketName = `${bucketName}-preview`;
 
   const r2Buckets = [{ binding: "BUCKET", bucket_name: bucketName }];
-  const previewR2Buckets = [
-    { binding: "BUCKET", bucket_name: previewBucketName },
-  ];
+  const previewR2Buckets = [{ binding: "BUCKET", bucket_name: previewBucketName }];
 
   return {
     name: projectName,
@@ -109,8 +107,7 @@ export function stripJsonc(text: string): string {
 export function writeWranglerJsonc(config: object): void {
   const wranglerJsonPath = path.join(__dirname, "..", "..", "wrangler.jsonc");
 
-  const jsonContent =
-    `${HEADER_COMMENT}\n${JSON.stringify(config, null, 2)}\n`;
+  const jsonContent = `${HEADER_COMMENT}\n${JSON.stringify(config, null, 2)}\n`;
 
   fs.writeFileSync(wranglerJsonPath, jsonContent);
 }

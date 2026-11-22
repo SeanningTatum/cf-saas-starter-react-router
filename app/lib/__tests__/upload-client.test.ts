@@ -28,7 +28,7 @@ describe("uploadFile", () => {
       expect(url).toBe(UPLOAD_ENDPOINT);
       expect(init.method).toBe("POST");
       expect((init.body as FormData).get("file")).toBe(picked);
-    })
+    }),
   );
 
   // Catches: losing the key the success panel shows.
@@ -36,7 +36,7 @@ describe("uploadFile", () => {
     Effect.gen(function* () {
       replyWith(JSON.stringify({ success: true, key: "uploads/abc.png" }));
       expect(yield* uploadFile(file())).toEqual({ key: "uploads/abc.png" });
-    })
+    }),
   );
 
   // Catches: a 400 from the route turning into a generic error and hiding the
@@ -50,16 +50,19 @@ describe("uploadFile", () => {
         expect(result.left._tag).toBe("BucketValidationError");
         expect(result.left).toMatchObject({ message: "Too big" });
       }
-    })
+    }),
   );
 
   // Catches: a network failure escaping as a rejected promise instead of a value.
   it.effect("fails with ExternalServiceError when fetch rejects", () =>
     Effect.gen(function* () {
-      vi.stubGlobal("fetch", vi.fn(async () => Promise.reject(new TypeError("offline"))));
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(async () => Promise.reject(new TypeError("offline"))),
+      );
       const result = yield* Effect.either(uploadFile(file()));
       expect(Either.isLeft(result) && result.left._tag).toBe("ExternalServiceError");
-    })
+    }),
   );
 
   // Catches: an HTML error page (e.g. a proxy 502) crashing the JSON parse.
@@ -68,7 +71,7 @@ describe("uploadFile", () => {
       replyWith("<html>Bad gateway</html>", 502);
       const result = yield* Effect.either(uploadFile(file()));
       expect(Either.isLeft(result) && result.left._tag).toBe("ExternalServiceError");
-    })
+    }),
   );
 
   // Catches: trusting a reply that is JSON but not the route's shape.
@@ -77,6 +80,6 @@ describe("uploadFile", () => {
       replyWith(JSON.stringify({ ok: true }));
       const result = yield* Effect.either(uploadFile(file()));
       expect(Either.isLeft(result) && result.left._tag).toBe("ExternalServiceError");
-    })
+    }),
   );
 });

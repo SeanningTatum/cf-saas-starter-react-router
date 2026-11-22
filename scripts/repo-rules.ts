@@ -66,7 +66,10 @@ const DeclaredRuleset = Schema.Struct({
   enforcement: Schema.String,
   bypass_actors: Schema.Array(Schema.Unknown),
   conditions: Schema.Struct({
-    ref_name: Schema.Struct({ include: Schema.Array(Schema.String), exclude: Schema.Array(Schema.String) }),
+    ref_name: Schema.Struct({
+      include: Schema.Array(Schema.String),
+      exclude: Schema.Array(Schema.String),
+    }),
   }),
   rules: Schema.Array(Rule),
 });
@@ -77,9 +80,15 @@ const PathSafe = Schema.String.pipe(
   }),
 );
 const Reviewer = Schema.String.pipe(
-  Schema.filter((s) => s === "@owner" || /^[A-Za-z0-9-]+$/.test(s) || (/^[A-Za-z0-9-]+\/[\w-][\w.-]*$/.test(s) && !s.includes("..")), {
-    message: () => "a reviewer is @owner, a GitHub login, or org/team-slug",
-  }),
+  Schema.filter(
+    (s) =>
+      s === "@owner" ||
+      /^[A-Za-z0-9-]+$/.test(s) ||
+      (/^[A-Za-z0-9-]+\/[\w-][\w.-]*$/.test(s) && !s.includes("..")),
+    {
+      message: () => "a reviewer is @owner, a GitHub login, or org/team-slug",
+    },
+  ),
 );
 const DeclaredEnv = Schema.Struct({
   name: PathSafe,
@@ -138,7 +147,9 @@ const LiveEnv = Schema.Struct({
     ),
   ),
   deployment_branch_policy: Schema.optional(
-    Schema.NullOr(Schema.Struct({ protected_branches: Schema.Boolean, custom_branch_policies: Schema.Boolean })),
+    Schema.NullOr(
+      Schema.Struct({ protected_branches: Schema.Boolean, custom_branch_policies: Schema.Boolean }),
+    ),
   ),
 });
 const BranchPolicies = Schema.Struct({
@@ -173,12 +184,20 @@ function makeOut(env: Deps["env"]) {
 }
 type Out = ReturnType<typeof makeOut>;
 
-const finish = (out: Out): Outcome => ({ code: out.failed ? 1 : 0, stdout: out.stdout, stderr: [] });
+const finish = (out: Out): Outcome => ({
+  code: out.failed ? 1 : 0,
+  stdout: out.stdout,
+  stderr: [],
+});
 
 // ---------------------------------------------------------------- small helpers
 
 const squash = (s: string) => s.replace(/\s+/g, " ").trim();
-const firstLine = (s: string) => s.split("\n").find((l) => l.trim())?.trim() ?? "";
+const firstLine = (s: string) =>
+  s
+    .split("\n")
+    .find((l) => l.trim())
+    ?.trim() ?? "";
 
 /** JSON with sorted keys, so two equal values compare equal whatever their key order. */
 function stable(v: unknown): string {
@@ -235,7 +254,8 @@ function staticCheck(deps: Deps, out: Out): typeof Config.Type | null {
     r.type === "required_status_checks" ? contextsOf(r.parameters?.required_status_checks) : [],
   );
   const missing = required.filter((c) => !jobs.includes(c));
-  for (const c of missing) out.line("error", `required check "${c}" is not a job name in ${CI_PATH}`);
+  for (const c of missing)
+    out.line("error", `required check "${c}" is not a job name in ${CI_PATH}`);
   if (missing.length) return null;
   out.line("ok", `${CONFIG_PATH} is valid and every required check is a job name in ${CI_PATH}`);
   return config;
@@ -243,7 +263,9 @@ function staticCheck(deps: Deps, out: Out): typeof Config.Type | null {
 
 // ---------------------------------------------------------------- reading GitHub
 
-type Read<T> = { ok: true; value: T } | { ok: false; kind: "unreadable" | "config"; reason: string };
+type Read<T> =
+  | { ok: true; value: T }
+  | { ok: false; kind: "unreadable" | "config"; reason: string };
 const good = <T>(value: T): Read<T> => ({ ok: true, value });
 const unreadable = (reason: string): Read<never> => ({ ok: false, kind: "unreadable", reason });
 const configError = (reason: string): Read<never> => ({ ok: false, kind: "config", reason });
@@ -254,14 +276,20 @@ function failureReason(r: GhResult): string {
 }
 
 /** GET a path and decode it. With `allow404`, HTTP 404 reads as null. */
-function getJson<A, I>(deps: Deps, schema: Schema.Schema<A, I>, path: string, allow404 = false): Read<A | null> {
+function getJson<A, I>(
+  deps: Deps,
+  schema: Schema.Schema<A, I>,
+  path: string,
+  allow404 = false,
+): Read<A | null> {
   const r = deps.gh(["api", path]);
   if (r.code !== 0) {
     if (allow404 && /HTTP 404/.test(r.stderr)) return good(null);
     return unreadable(failureReason(r));
   }
   const d = Schema.decodeUnknownEither(Schema.parseJson(schema))(r.stdout);
-  if (Either.isLeft(d)) return unreadable(`unexpected answer for ${path}: ${squash(d.left.message)}`);
+  if (Either.isLeft(d))
+    return unreadable(`unexpected answer for ${path}: ${squash(d.left.message)}`);
   return good(d.right);
 }
 
@@ -280,7 +308,8 @@ function readRepo(deps: Deps): Read<Repo> {
     if (r.code !== 0) return unreadable(failureReason(r));
     nwo = r.stdout.trim();
   }
-  if (!/^[\w.-]+\/[\w.-]+$/.test(nwo) || nwo.split("/").some((seg) => /^\.+$/.test(seg))) return unreadable(`unexpected repository name "${nwo}"`);
+  if (!/^[\w.-]+\/[\w.-]+$/.test(nwo) || nwo.split("/").some((seg) => /^\.+$/.test(seg)))
+    return unreadable(`unexpected repository name "${nwo}"`);
   const info = getJson(deps, RepoInfo, `repos/${nwo}`);
   if (!info.ok) return info;
   if (!info.value) return unreadable(`no answer for repos/${nwo}`);
@@ -331,7 +360,9 @@ function resolveEnv(decl: DeclaredEnvironment, repo: Repo, deps: Deps): Read<Res
     name: decl.name,
     reviewers,
     preventSelfReview: decl.prevent_self_review,
-    branches: decl.deployment_branches.map((b) => (b === "~DEFAULT_BRANCH" ? repo.defaultBranch : b)),
+    branches: decl.deployment_branches.map((b) =>
+      b === "~DEFAULT_BRANCH" ? repo.defaultBranch : b,
+    ),
   });
 }
 
@@ -375,7 +406,8 @@ function gather(config: typeof Config.Type, repo: Repo, deps: Deps): Read<Gather
   return good({ ruleset, envs });
 }
 
-const envPath = (repo: Repo, name: string) => `repos/${repo.nwo}/environments/${encodeURIComponent(name)}`;
+const envPath = (repo: Repo, name: string) =>
+  `repos/${repo.nwo}/environments/${encodeURIComponent(name)}`;
 
 // ---------------------------------------------------------------- planning (pure)
 
@@ -404,7 +436,8 @@ function differ(prefix: string) {
   return {
     lines,
     cmp(field: string, declared: unknown, live: unknown) {
-      if (stable(declared) !== stable(live)) lines.push(`${prefix} ${field}: declared ${show(declared)}, live ${show(live)}`);
+      if (stable(declared) !== stable(live))
+        lines.push(`${prefix} ${field}: declared ${show(declared)}, live ${show(live)}`);
     },
   };
 }
@@ -413,12 +446,21 @@ function rulesetDiffs(decl: Ruleset, live: LiveRulesetT): string[] {
   const d = differ(`ruleset "${decl.name}"`);
   // GitHub leaves bypass_actors out for a caller without admin rights; the caller reports that.
   const actors = (xs: readonly unknown[]) => xs.map(stable).sort();
-  if (live.bypass_actors !== undefined) d.cmp("bypass_actors", actors(decl.bypass_actors), actors(live.bypass_actors));
+  if (live.bypass_actors !== undefined)
+    d.cmp("bypass_actors", actors(decl.bypass_actors), actors(live.bypass_actors));
   d.cmp("target", decl.target, live.target);
   d.cmp("enforcement", decl.enforcement, live.enforcement);
   const ref = live.conditions?.ref_name;
-  d.cmp("conditions.ref_name.include", sorted(decl.conditions.ref_name.include), sorted(ref?.include ?? []));
-  d.cmp("conditions.ref_name.exclude", sorted(decl.conditions.ref_name.exclude), sorted(ref?.exclude ?? []));
+  d.cmp(
+    "conditions.ref_name.include",
+    sorted(decl.conditions.ref_name.include),
+    sorted(ref?.include ?? []),
+  );
+  d.cmp(
+    "conditions.ref_name.exclude",
+    sorted(decl.conditions.ref_name.exclude),
+    sorted(ref?.exclude ?? []),
+  );
 
   const liveByType = new Map(live.rules.map((r) => [r.type, r]));
   for (const r of decl.rules) {
@@ -431,13 +473,18 @@ function rulesetDiffs(decl: Ruleset, live: LiveRulesetT): string[] {
       const field = `rules.${r.type}.${key}`;
       const liveValue = l.parameters?.[key];
       if (r.type === "required_status_checks" && key === "required_status_checks")
-        d.cmp(field, contextsOf(value), liveValue === undefined ? undefined : contextsOf(liveValue));
+        d.cmp(
+          field,
+          contextsOf(value),
+          liveValue === undefined ? undefined : contextsOf(liveValue),
+        );
       else d.cmp(field, value, liveValue);
     }
   }
   const declaredTypes = new Set(decl.rules.map((r) => r.type));
   for (const t of liveByType.keys())
-    if (!declaredTypes.has(t)) d.lines.push(`ruleset "${decl.name}" rules.${t}: declared absent, live present`);
+    if (!declaredTypes.has(t))
+      d.lines.push(`ruleset "${decl.name}" rules.${t}: declared absent, live present`);
   return d.lines;
 }
 
@@ -452,11 +499,17 @@ function planRuleset(decl: Ruleset, live: Gathered["ruleset"], base: string): Pl
   const diffs = rulesetDiffs(decl, live.live);
   const findings: Finding[] = diffs.map((text) => ({ level: "drift", text }));
   if (live.live.bypass_actors === undefined)
-    findings.push({ level: "notice", text: `ruleset "${name}" bypass list cannot be read without admin rights; not checked` });
-  else if (!diffs.length) findings.push({ level: "ok", text: `ruleset "${name}" matches ${CONFIG_PATH}` });
+    findings.push({
+      level: "notice",
+      text: `ruleset "${name}" bypass list cannot be read without admin rights; not checked`,
+    });
+  else if (!diffs.length)
+    findings.push({ level: "ok", text: `ruleset "${name}" matches ${CONFIG_PATH}` });
   return {
     findings,
-    actions: diffs.length ? [{ method: "PUT", path: `${base}/rulesets/${live.id}`, body: decl }] : [],
+    actions: diffs.length
+      ? [{ method: "PUT", path: `${base}/rulesets/${live.id}`, body: decl }]
+      : [],
     applied: true,
   };
 }
@@ -466,10 +519,18 @@ function branchPolicyActions(decl: ResolvedEnv, policies: Policy[], path: string
   return [
     ...decl.branches
       .filter((b) => !liveNames.includes(b))
-      .map((b): Action => ({ method: "POST", path: `${path}/deployment-branch-policies`, body: { name: b, type: "branch" } })),
+      .map(
+        (b): Action => ({
+          method: "POST",
+          path: `${path}/deployment-branch-policies`,
+          body: { name: b, type: "branch" },
+        }),
+      ),
     ...policies
       .filter((p) => !decl.branches.includes(p.name))
-      .map((p): Action => ({ method: "DELETE", path: `${path}/deployment-branch-policies/${p.id}` })),
+      .map(
+        (p): Action => ({ method: "DELETE", path: `${path}/deployment-branch-policies/${p.id}` }),
+      ),
   ];
 }
 
@@ -510,9 +571,17 @@ function planEnv(e: LiveEnvironment, path: string): Plan {
   const branchActions = branchPolicyActions(decl, policies, path);
 
   if (bare)
-    return { findings: [{ level: "missing", text: `environment "${name}"`, adminOnly: true }], actions: [put, ...branchActions], applied: false };
+    return {
+      findings: [{ level: "missing", text: `environment "${name}"`, adminOnly: true }],
+      actions: [put, ...branchActions],
+      applied: false,
+    };
   if (!d.lines.length)
-    return { findings: [{ level: "ok", text: `environment "${name}" matches ${CONFIG_PATH}` }], actions: [], applied: true };
+    return {
+      findings: [{ level: "ok", text: `environment "${name}" matches ${CONFIG_PATH}` }],
+      actions: [],
+      applied: true,
+    };
   return {
     findings: d.lines.map((text) => ({ level: "drift" as const, text })),
     actions: [...(protectionDrift ? [put] : []), ...branchActions],
@@ -541,7 +610,10 @@ function execute(actions: Action[], dryRun: boolean, deps: Deps, out: Out): bool
     const args = ["api", "-X", a.method, a.path, ...(body ? ["--input", "-"] : [])];
     const r = deps.gh(args, body);
     if (r.code !== 0) {
-      out.line("error", `${a.method} ${a.path} failed: ${failureReason(r)}${adminHint(a.method, a.path, r.stderr)}`);
+      out.line(
+        "error",
+        `${a.method} ${a.path} failed: ${failureReason(r)}${adminHint(a.method, a.path, r.stderr)}`,
+      );
       return false;
     }
     out.line("did", `${a.method} ${a.path}`);
@@ -563,7 +635,11 @@ function parseMode(argv: string[]): Mode | string {
   return { apply: has("--apply"), dryRun: has("--dry-run") };
 }
 
-function unread(r: { kind: "unreadable" | "config"; reason: string }, mode: Mode, out: Out): Outcome {
+function unread(
+  r: { kind: "unreadable" | "config"; reason: string },
+  mode: Mode,
+  out: Out,
+): Outcome {
   if (r.kind === "config") out.line("error", r.reason);
   else if (mode.apply) out.line("error", `cannot apply repo rules: ${r.reason}`);
   else out.line("notice", `repo rules not checked: ${r.reason}`);
@@ -597,8 +673,12 @@ export function run(argv: string[], deps: Deps = defaultDeps): Outcome {
     for (const f of plans.flatMap((p) => p.findings)) {
       if (f.level !== "missing") out.line(f.level, f.text);
       else if (anyApplied && f.adminOnly && !repo.value.admin)
-        out.line("notice", `${f.text} shows no protection to this token; only an admin can check it`);
-      else if (anyApplied) out.line("drift", `${f.text} is not applied but other rules are; run: ${APPLY_CMD}`);
+        out.line(
+          "notice",
+          `${f.text} shows no protection to this token; only an admin can check it`,
+        );
+      else if (anyApplied)
+        out.line("drift", `${f.text} is not applied but other rules are; run: ${APPLY_CMD}`);
       else out.line("notice", `${f.text} is not applied; run: ${APPLY_CMD}`);
     }
     return finish(out);

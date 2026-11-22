@@ -39,36 +39,35 @@ export async function action({ request, context }: Route.ActionArgs) {
           entity: "file",
           field: "file",
           message: "No file provided",
-        })
+        }),
       );
     }
 
     const meta = yield* Schema.decodeUnknown(UploadedFileMeta)(
       { size: file.size, type: file.type },
-      { errors: "all" }
+      { errors: "all" },
     ).pipe(
       Effect.mapError(
         () =>
           new BucketValidationError({
             message: typeAndSizeMessage,
             field: "file",
-          })
-      )
+          }),
+      ),
     );
 
     // The declared multipart type is client-controlled — verify the actual
     // leading bytes match the declared type's signature.
     const head = yield* Effect.tryPromise({
       try: () => file.slice(0, MAGIC_BYTES_SNIFF_LENGTH).arrayBuffer(),
-      catch: (cause) =>
-        new ExternalServiceError({ service: "FileRead", cause }),
+      catch: (cause) => new ExternalServiceError({ service: "FileRead", cause }),
     });
     if (!matchesMagicBytes(meta.type, new Uint8Array(head))) {
       return yield* Effect.fail(
         new BucketValidationError({
           message: "File content does not match its declared type",
           field: "file",
-        })
+        }),
       );
     }
 
@@ -79,23 +78,19 @@ export async function action({ request, context }: Route.ActionArgs) {
     Effect.tapErrorCause((cause) => Effect.logError("Upload failed", cause)),
     Effect.catchTags({
       ValidationError: (e) =>
-        Effect.succeed(
-          data({ success: false as const, error: e.message }, { status: 400 })
-        ),
+        Effect.succeed(data({ success: false as const, error: e.message }, { status: 400 })),
       BucketValidationError: (e) =>
-        Effect.succeed(
-          data({ success: false as const, error: e.message }, { status: 400 })
-        ),
+        Effect.succeed(data({ success: false as const, error: e.message }, { status: 400 })),
       // Transient upstream failure (Better Auth session lookup, file read) —
       // 503 so clients can distinguish "retry later" from a real 500.
       ExternalServiceError: () =>
         Effect.succeed(
           data(
             { success: false as const, error: "Service temporarily unavailable" },
-            { status: 503 }
-          )
+            { status: 503 },
+          ),
         ),
-    })
+    }),
   );
 
   const exit = await context.runtime.runPromiseExit(program);

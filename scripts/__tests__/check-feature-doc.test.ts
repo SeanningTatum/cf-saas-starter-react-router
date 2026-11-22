@@ -51,12 +51,16 @@ describe("checkFeatureDoc edge cases", () => {
   });
 
   it("ui: false drops the UX section and its mermaid and state-table checks", () => {
-    const doc = good.replace("ui: true", "ui: false").replace(/## UX[\s\S]*?(?=## Architecture)/, "");
+    const doc = good
+      .replace("ui: true", "ui: false")
+      .replace(/## UX[\s\S]*?(?=## Architecture)/, "");
     expect(checkFeatureDoc(doc)).toEqual([]);
   });
 
   it("ui: false needs no Prototypes: a backend-only record must not be forced to invent directions", () => {
-    const doc = good.replace("ui: true", "ui: false").replace(/## UX[\s\S]*?(?=## Architecture)/, "");
+    const doc = good
+      .replace("ui: true", "ui: false")
+      .replace(/## UX[\s\S]*?(?=## Architecture)/, "");
     expect(checkFeatureDoc(doc).map((f) => f.rule)).not.toContain("prototypes");
   });
 
@@ -66,7 +70,10 @@ describe("checkFeatureDoc edge cases", () => {
   });
 
   it("a hyphen separator is accepted in prototype lines, like context-source", () => {
-    const doc = good.replace("a — Table with inline revoke — `", "a - Table with inline revoke - `");
+    const doc = good.replace(
+      "a — Table with inline revoke — `",
+      "a - Table with inline revoke - `",
+    );
     expect(checkFeatureDoc(doc)).toEqual([]);
   });
 
@@ -91,22 +98,36 @@ describe("checkFeatureDoc edge cases", () => {
   });
 
   it("a '..' or absolute fence path fails 'stack': it would escape the repo", () => {
-    expect(checkFeatureDoc(good.replace("`app/trpc/routes/invites.ts`", "`../x.ts`")).map((f) => f.rule)).toEqual(["stack"]);
-    expect(checkFeatureDoc(good.replace("`app/trpc/routes/invites.ts`", "`/etc/x`")).map((f) => f.rule)).toEqual(["stack"]);
+    expect(
+      checkFeatureDoc(good.replace("`app/trpc/routes/invites.ts`", "`../x.ts`")).map((f) => f.rule),
+    ).toEqual(["stack"]);
+    expect(
+      checkFeatureDoc(good.replace("`app/trpc/routes/invites.ts`", "`/etc/x`")).map((f) => f.rule),
+    ).toEqual(["stack"]);
   });
 
-  const withFlow = (diagram: string) => good.replace(/```mermaid\nflowchart TD\n {2}P1[\s\S]*?```/, `\`\`\`mermaid\n${diagram}\n\`\`\``);
+  const withFlow = (diagram: string) =>
+    good.replace(
+      /```mermaid\nflowchart TD\n {2}P1[\s\S]*?```/,
+      `\`\`\`mermaid\n${diagram}\n\`\`\``,
+    );
 
   it("an erDiagram cardinality like ||--o{ passes: its { is not an open bracket", () => {
-    expect(checkFeatureDoc(withFlow("erDiagram\n  TEAM ||--o{ MEMBER : has\n  A }|..|{ B : uses"))).toEqual([]);
+    expect(
+      checkFeatureDoc(withFlow("erDiagram\n  TEAM ||--o{ MEMBER : has\n  A }|..|{ B : uses")),
+    ).toEqual([]);
   });
 
   it("brackets inside quoted labels and %% comments are ignored", () => {
-    expect(checkFeatureDoc(withFlow('flowchart TD\n  A["label (with ) paren"] --> B\n  %% a ( comment'))).toEqual([]);
+    expect(
+      checkFeatureDoc(withFlow('flowchart TD\n  A["label (with ) paren"] --> B\n  %% a ( comment')),
+    ).toEqual([]);
   });
 
   it("a genuinely unclosed bracket still fails after the stripping", () => {
-    expect(checkFeatureDoc(withFlow("flowchart TD\n  A[label --> B")).map((f) => f.rule)).toEqual(["mermaid"]);
+    expect(checkFeatureDoc(withFlow("flowchart TD\n  A[label --> B")).map((f) => f.rule)).toEqual([
+      "mermaid",
+    ]);
   });
 
   it("an empty Branch cell fails 'stack': ship-stack could not open that PR", () => {
@@ -120,7 +141,10 @@ describe("checkFeatureDoc edge cases", () => {
   });
 
   it("a PR stack table without the Greptile focus column fails 'stack'", () => {
-    const doc = good.replace("| Size | Greptile focus |", "| Size |").replace(/\| (S|M|L) \| [^|\n]+ \|\n/g, "| $1 |\n").replace("|------|----------------|", "|------|");
+    const doc = good
+      .replace("| Size | Greptile focus |", "| Size |")
+      .replace(/\| (S|M|L) \| [^|\n]+ \|\n/g, "| $1 |\n")
+      .replace("|------|----------------|", "|------|");
     expect(checkFeatureDoc(doc).map((f) => f.rule)).toContain("stack");
   });
 
@@ -130,18 +154,26 @@ describe("checkFeatureDoc edge cases", () => {
   });
 
   it("sections out of order fail: ship-stack reads the record top to bottom", () => {
-    const doc = good.replace("## Fit", "## Tmp").replace("## Success metric", "## Fit").replace("## Tmp", "## Success metric");
+    const doc = good
+      .replace("## Fit", "## Tmp")
+      .replace("## Success metric", "## Fit")
+      .replace("## Tmp", "## Success metric");
     const f = checkFeatureDoc(doc);
     expect(f.some((x) => x.rule === "sections" && x.detail.includes("out of order"))).toBe(true);
   });
 
   it("a '## ' line inside a code fence is not a heading: Contract code may hold comments", () => {
-    const doc = good.replace("// invites.list() -> Invite[]", "## not a heading\n// invites.list() -> Invite[]");
+    const doc = good.replace(
+      "// invites.list() -> Invite[]",
+      "## not a heading\n// invites.list() -> Invite[]",
+    );
     expect(checkFeatureDoc(doc)).toEqual([]);
   });
 
   it("a hyphen before 'source:' is accepted for Context bullets: editors turn em dashes into hyphens", () => {
-    const doc = good.replace("schema.ts", "schema.ts").replace(" — source: app/db/schema.ts", " - source: app/db/schema.ts");
+    const doc = good
+      .replace("schema.ts", "schema.ts")
+      .replace(" — source: app/db/schema.ts", " - source: app/db/schema.ts");
     expect(checkFeatureDoc(doc)).toEqual([]);
   });
 
@@ -151,7 +183,10 @@ describe("checkFeatureDoc edge cases", () => {
   });
 
   it("a PR whose base is not the previous branch fails 'stack': the stack would not merge in order", () => {
-    const doc = good.replace("| feat/team-invites/2-api | feat/team-invites/1-data |", "| feat/team-invites/2-api | main |");
+    const doc = good.replace(
+      "| feat/team-invites/2-api | feat/team-invites/1-data |",
+      "| feat/team-invites/2-api | main |",
+    );
     expect(checkFeatureDoc(doc).map((f) => f.rule)).toEqual(["stack"]);
   });
 
@@ -171,7 +206,9 @@ describe("checkFeatureDoc edge cases", () => {
   });
 
   it("sibling directories with a shared name prefix do not overlap: 'app/routes' is not a prefix of 'app/routes-extra/x'", () => {
-    const doc = good.replace("`app/routes/team/`", "`app/routes-extra/team/`").replace("`app/trpc/routes/invites.ts`", "`app/routes/`");
+    const doc = good
+      .replace("`app/routes/team/`", "`app/routes-extra/team/`")
+      .replace("`app/trpc/routes/invites.ts`", "`app/routes/`");
     expect(checkFeatureDoc(doc)).toEqual([]);
   });
 });

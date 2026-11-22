@@ -13,11 +13,7 @@ const drizzleConfig = {
   plugins: [admin()],
 } satisfies BetterAuthOptions;
 
-export function createAuth(
-  database: D1Database,
-  secret: string,
-  baseURL?: string
-) {
+export function createAuth(database: D1Database, secret: string, baseURL?: string) {
   const db = getDb(database);
 
   return betterAuth({

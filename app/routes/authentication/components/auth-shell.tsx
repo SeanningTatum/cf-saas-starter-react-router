@@ -47,10 +47,7 @@ export function AuthShell({ children }: AuthShellProps) {
 
         <div className="flex flex-1 items-center justify-center py-10">
           <div className="flex w-full max-w-sm flex-col gap-8">
-            <Link
-              to="/"
-              className="flex items-center gap-2 self-start text-sm font-medium"
-            >
+            <Link to="/" className="flex items-center gap-2 self-start text-sm font-medium">
               <span className="flex size-6 items-center justify-center rounded-md bg-primary text-primary-foreground font-mono text-[10px] font-bold">
                 {tc("app_name_short")}
               </span>
@@ -73,12 +70,8 @@ export function AuthShell({ children }: AuthShellProps) {
               <span className="size-1.5 rounded-full bg-primary" />
               {t("shell.eyebrow")}
             </span>
-            <h2 className="text-2xl font-semibold tracking-tight">
-              {t("shell.heading")}
-            </h2>
-            <p className="max-w-md text-sm text-muted-foreground">
-              {t("shell.description")}
-            </p>
+            <h2 className="text-2xl font-semibold tracking-tight">{t("shell.heading")}</h2>
+            <p className="max-w-md text-sm text-muted-foreground">{t("shell.description")}</p>
           </div>
 
           <ul className="flex flex-col gap-4">
@@ -115,15 +108,7 @@ export function AuthShell({ children }: AuthShellProps) {
   );
 }
 
-function ContextRow({
-  icon,
-  title,
-  body,
-}: {
-  icon: React.ReactNode;
-  title: string;
-  body: string;
-}) {
+function ContextRow({ icon, title, body }: { icon: React.ReactNode; title: string; body: string }) {
   return (
     <li className="flex items-start gap-4">
       <span className="mt-0.5 flex size-9 items-center justify-center rounded-md border border-border bg-card text-foreground">

@@ -2,10 +2,7 @@ import type { Insight } from "@/components/analytics/insights-card";
 import type { UserStats, UserGrowthPoint } from "@/lib/schemas/analytics";
 
 /** Translator shape needed to build insight copy — matches `useTranslation("admin").t`. */
-export type InsightsTranslator = (
-  key: string,
-  options?: Record<string, unknown>
-) => string;
+export type InsightsTranslator = (key: string, options?: Record<string, unknown>) => string;
 
 /** Verification rate (%) at or above which the verification insight reads as "positive". */
 export const VERIFICATION_RATE_EXCELLENT_THRESHOLD = 80;
@@ -23,7 +20,7 @@ const RECENT_SIGNUPS_WINDOW_DAYS = 7;
 export function buildUserInsights(
   stats: UserStats,
   growthData: readonly UserGrowthPoint[],
-  t: InsightsTranslator
+  t: InsightsTranslator,
 ): Insight[] {
   const insights: Insight[] = [];
 
@@ -49,9 +46,7 @@ export function buildUserInsights(
   }
 
   if (stats.bannedUsers > 0) {
-    const bannedPercent = Math.round(
-      (stats.bannedUsers / stats.totalUsers) * 100
-    );
+    const bannedPercent = Math.round((stats.bannedUsers / stats.totalUsers) * 100);
     insights.push({
       text: t("insights.banned_users", {
         count: stats.bannedUsers,

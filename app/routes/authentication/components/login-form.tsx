@@ -1,12 +1,6 @@
-import { cn } from "@/lib/utils"
-import { Button } from "@/components/ui/button"
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card"
+import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Form,
   FormControl,
@@ -14,24 +8,24 @@ import {
   FormItem,
   FormLabel,
   FormMessage,
-} from "@/components/ui/form"
-import { Input } from "@/components/ui/input"
-import { Link, useNavigate } from "react-router"
-import { authClient } from "@/auth/client"
-import { effectTsResolver as effectResolver } from "@hookform/resolvers/effect-ts"
-import { useForm } from "react-hook-form"
-import { LoginSchema, type LoginInput } from "@/lib/schemas/auth"
-import { useState } from "react"
-import { useTranslation } from "react-i18next"
-import { useHydrated } from "@/hooks/use-hydrated"
+} from "@/components/ui/form";
+import { Input } from "@/components/ui/input";
+import { Link, useNavigate } from "react-router";
+import { authClient } from "@/auth/client";
+import { effectTsResolver as effectResolver } from "@hookform/resolvers/effect-ts";
+import { useForm } from "react-hook-form";
+import { LoginSchema, type LoginInput } from "@/lib/schemas/auth";
+import { useState } from "react";
+import { useTranslation } from "react-i18next";
+import { useHydrated } from "@/hooks/use-hydrated";
 
-interface LoginFormProps extends React.ComponentProps<"div"> { }
+interface LoginFormProps extends React.ComponentProps<"div"> {}
 
 export function LoginForm({ className, ...props }: LoginFormProps) {
-  const navigate = useNavigate()
-  const [authError, setAuthError] = useState<string>()
-  const { t } = useTranslation("auth")
-  const hydrated = useHydrated()
+  const navigate = useNavigate();
+  const [authError, setAuthError] = useState<string>();
+  const { t } = useTranslation("auth");
+  const hydrated = useHydrated();
 
   const form = useForm<LoginInput>({
     resolver: effectResolver(LoginSchema),
@@ -39,25 +33,25 @@ export function LoginForm({ className, ...props }: LoginFormProps) {
       email: "",
       password: "",
     },
-  })
+  });
 
   async function onSubmit(data: LoginInput) {
-    setAuthError(undefined)
+    setAuthError(undefined);
 
     try {
       const result = await authClient.signIn.email({
         email: data.email,
         password: data.password,
-      })
+      });
 
       if (result.error) {
-        setAuthError(result.error.message || t("login.error_invalid"))
-        return
+        setAuthError(result.error.message || t("login.error_invalid"));
+        return;
       }
 
-      navigate("/dashboard")
+      navigate("/dashboard");
     } catch (err) {
-      setAuthError(err instanceof Error ? err.message : t("login.error_failed"))
+      setAuthError(err instanceof Error ? err.message : t("login.error_failed"));
     }
   }
 
@@ -70,7 +64,12 @@ export function LoginForm({ className, ...props }: LoginFormProps) {
         </CardHeader>
         <CardContent>
           <Form {...form}>
-            <form method="post" onSubmit={form.handleSubmit(onSubmit)} className="space-y-6" data-testid="login-form">
+            <form
+              method="post"
+              onSubmit={form.handleSubmit(onSubmit)}
+              className="space-y-6"
+              data-testid="login-form"
+            >
               <FormField
                 control={form.control}
                 name="email"
@@ -149,5 +148,5 @@ export function LoginForm({ className, ...props }: LoginFormProps) {
         </CardContent>
       </Card>
     </div>
-  )
+  );
 }

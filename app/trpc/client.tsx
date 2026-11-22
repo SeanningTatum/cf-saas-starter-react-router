@@ -1,13 +1,13 @@
-'use client';
+"use client";
 // ^-- to make sure we can mount the Provider from a server component
-import type { QueryClient } from '@tanstack/react-query';
-import { QueryClientProvider } from '@tanstack/react-query';
-import { httpBatchLink } from '@trpc/client';
-import { createTRPCReact } from '@trpc/react-query';
-import { useState } from 'react';
-import type { AppRouter } from './router';
-import superjson from 'superjson';
-import { makeQueryClient } from './query-client';
+import type { QueryClient } from "@tanstack/react-query";
+import { QueryClientProvider } from "@tanstack/react-query";
+import { httpBatchLink } from "@trpc/client";
+import { createTRPCReact } from "@trpc/react-query";
+import { useState } from "react";
+import type { AppRouter } from "./router";
+import superjson from "superjson";
+import { makeQueryClient } from "./query-client";
 
 const api = createTRPCReact<AppRouter>();
 
@@ -20,11 +20,11 @@ function getQueryClient() {
 
 function getUrl() {
   const base = (() => {
-    if (typeof window !== 'undefined') return '';
+    if (typeof window !== "undefined") return "";
     // SSR never issues these requests (queries hydrate client-side), but the
     // link still needs an absolute URL to construct. VITE_AUTH_URL is baked in
     // at build time; localhost covers `bun run dev`.
-    return import.meta.env.VITE_AUTH_URL ?? 'http://localhost:5173';
+    return import.meta.env.VITE_AUTH_URL ?? "http://localhost:5173";
   })();
   return `${base}/api/trpc`;
 }
@@ -51,9 +51,7 @@ export function TRPCProvider(
   );
   return (
     <api.Provider client={trpcClient} queryClient={queryClient}>
-      <QueryClientProvider client={queryClient}>
-        {props.children}
-      </QueryClientProvider>
+      <QueryClientProvider client={queryClient}>{props.children}</QueryClientProvider>
     </api.Provider>
   );
 }

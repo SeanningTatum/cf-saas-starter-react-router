@@ -20,9 +20,7 @@ interface ExportedSpan {
 const env = { OTEL_EXPORTER_OTLP_ENDPOINT: "http://collector:4318" };
 
 const exportedSpans = (bodies: string[]): ExportedSpan[] =>
-  bodies.flatMap(
-    (body) => JSON.parse(body).resourceSpans[0].scopeSpans[0].spans as ExportedSpan[]
-  );
+  bodies.flatMap((body) => JSON.parse(body).resourceSpans[0].scopeSpans[0].spans as ExportedSpan[]);
 
 /** Builds the runtime, runs one child span, disposes, and returns what was exported. */
 const runOneRequest = async (request: RequestContext) => {
@@ -77,10 +75,10 @@ describe("observabilityLayer with a request", () => {
         { key: "request.id", value: { stringValue: "req-1" } },
         { key: "http.request.method", value: { stringValue: "GET" } },
         { key: "url.path", value: { stringValue: "/dashboard" } },
-      ])
+      ]),
     );
     expect(child.attributes).toEqual(
-      expect.arrayContaining([{ key: "request.id", value: { stringValue: "req-1" } }])
+      expect.arrayContaining([{ key: "request.id", value: { stringValue: "req-1" } }]),
     );
   });
 
@@ -100,10 +98,10 @@ describe("observabilityLayer, logs outside any span", () => {
       sampled: true,
     };
     const runtime = ManagedRuntime.make(
-      observabilityLayer({}, request({ requestId: parent.traceId, parent }))
+      observabilityLayer({}, request({ requestId: parent.traceId, parent })),
     );
     const { refs, span } = await runtime.runPromise(
-      Effect.all({ refs: Effect.getFiberRefs, span: Effect.currentSpan })
+      Effect.all({ refs: Effect.getFiberRefs, span: Effect.currentSpan }),
     );
     await runtime.dispose();
 

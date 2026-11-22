@@ -1,10 +1,4 @@
-import {
-  type RouteConfig,
-  index,
-  route,
-  prefix,
-  layout,
-} from "@react-router/dev/routes";
+import { type RouteConfig, index, route, prefix, layout } from "@react-router/dev/routes";
 
 export default [
   // API Routes (no locale prefix)
@@ -27,9 +21,7 @@ export default [
 
   // Dashboard routes — auth-protected, client-side i18n only
   ...prefix("dashboard", [
-    layout("routes/dashboard/_layout.tsx", [
-      route("/", "routes/dashboard/_index.tsx"),
-    ]),
+    layout("routes/dashboard/_layout.tsx", [route("/", "routes/dashboard/_index.tsx")]),
   ]),
 
   // Admin routes — client-side i18n only, no locale prefix

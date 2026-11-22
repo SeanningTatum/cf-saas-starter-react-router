@@ -13,8 +13,7 @@ const authLayer = (api: Api) =>
     api: api as never,
   });
 
-const provide = (api: Api) =>
-  SessionLive(new Headers()).pipe(Layer.provide(authLayer(api)));
+const provide = (api: Api) => SessionLive(new Headers()).pipe(Layer.provide(authLayer(api)));
 
 describe("SessionLive", () => {
   it.effect("returns null pair when getSession resolves null", () =>
@@ -22,7 +21,7 @@ describe("SessionLive", () => {
       const { session, user } = yield* Session;
       expect(session).toBeNull();
       expect(user).toBeNull();
-    }).pipe(Effect.provide(provide({ getSession: async () => null })))
+    }).pipe(Effect.provide(provide({ getSession: async () => null }))),
   );
 
   it.effect("returns session + user when present", () =>
@@ -49,9 +48,9 @@ describe("SessionLive", () => {
               updatedAt: new Date(),
             },
           }),
-        })
-      )
-    )
+        }),
+      ),
+    ),
   );
 
   it.effect("fails with ExternalServiceError when getSession throws", () =>
@@ -62,8 +61,8 @@ describe("SessionLive", () => {
             getSession: async () => {
               throw new Error("auth down");
             },
-          })
-        )
+          }),
+        ),
       );
       const exit = yield* Effect.exit(program);
       expect(Exit.isFailure(exit)).toBe(true);
@@ -71,11 +70,9 @@ describe("SessionLive", () => {
         const failure = Cause.failureOption(exit.cause);
         if (failure._tag === "Some") {
           expect(failure.value).toBeInstanceOf(ExternalServiceError);
-          expect((failure.value as ExternalServiceError).service).toBe(
-            "BetterAuth"
-          );
+          expect((failure.value as ExternalServiceError).service).toBe("BetterAuth");
         }
       }
-    })
+    }),
   );
 });

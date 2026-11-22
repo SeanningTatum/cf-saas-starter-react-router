@@ -1,12 +1,7 @@
 import { TRPCError } from "@trpc/server";
 import { Schema } from "effect";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
-import {
-  createCallerFactory,
-  createTRPCRouter,
-  protectedProcedure,
-  type Context,
-} from "@/trpc";
+import { createCallerFactory, createTRPCRouter, protectedProcedure, type Context } from "@/trpc";
 import { appRouter } from "@/trpc/router";
 import type { AppRuntime } from "@/runtime";
 import { startRealApp, type AppCaller, type RealApp } from "./real-d1";
@@ -63,7 +58,7 @@ const runtime = new Proxy(
   {
     get: (_, key) => () =>
       Promise.reject(new Error(`runtime.${String(key)} reached by a refused call`)),
-  }
+  },
 ) as unknown as AppRuntime;
 
 const contextAs = (user: { id: string; role: "admin" | "user" } | null) =>
@@ -78,8 +73,9 @@ const callAt = (caller: unknown, path: string, input?: unknown): Promise<unknown
   const procedure = path
     .split(".")
     .reduce<unknown>(
-      (node, key) => (node === null || node === undefined ? undefined : Reflect.get(Object(node), key)),
-      caller
+      (node, key) =>
+        node === null || node === undefined ? undefined : Reflect.get(Object(node), key),
+      caller,
     );
   return typeof procedure === "function"
     ? Promise.resolve(procedure(input))
@@ -89,45 +85,44 @@ const callAt = (caller: unknown, path: string, input?: unknown): Promise<unknown
 const call = (role: "admin" | "user" | null, path: string) =>
   callAt(
     createCallerFactory(appRouter)(contextAs(role === null ? null : { id: "u1", role })),
-    path
+    path,
   );
 
 /** "ok", or the tRPC code the call was refused with. */
 const outcomeOf = (call: Promise<unknown>): Promise<string> =>
   call.then(
     () => "ok",
-    (e: unknown) => (e instanceof TRPCError ? e.code : `not a TRPCError: ${String(e)}`)
+    (e: unknown) => (e instanceof TRPCError ? e.code : `not a TRPCError: ${String(e)}`),
   );
 
 /** The assertion every ownership case runs, real or fixture. */
 const expectOtherUsersRowRefused = async <C>(
   path: string,
   makeInput: (other: C) => Promise<unknown>,
-  callers: { me: C; other: C }
+  callers: { me: C; other: C },
 ) => {
   const input = await makeInput(callers.other);
-  expect(["FORBIDDEN", "NOT_FOUND"], `${path} with another user's row, as a user who does not own it`).toContain(
-    await outcomeOf(callAt(callers.me, path, input))
-  );
+  expect(
+    ["FORBIDDEN", "NOT_FOUND"],
+    `${path} with another user's row, as a user who does not own it`,
+  ).toContain(await outcomeOf(callAt(callers.me, path, input)));
   // The control: the owner gets through with the same input, so the refusal
   // above is about ownership, not about an input that names nothing.
   expect(
     await outcomeOf(callAt(callers.other, path, input)),
-    `${path} with the same input, as the row's owner`
+    `${path} with the same input, as the row's owner`,
   ).toBe("ok");
 };
 
 const REAL_CASES = Object.entries(OWNERSHIP).flatMap(([path, entry]) =>
-  entry === "takes no id" ? [] : [{ path, makeInput: entry }]
+  entry === "takes no id" ? [] : [{ path, makeInput: entry }],
 );
 
 describe("procedure auth levels", () => {
   it("lists every procedure in the router, and nothing else", () => {
     // Catches: a procedure added without a declared level, and a removed
     // procedure (such as the old user.deleteUser) coming back unnoticed.
-    expect(Object.keys(appRouter._def.procedures).sort()).toEqual(
-      Object.keys(LEVELS).sort()
-    );
+    expect(Object.keys(appRouter._def.procedures).sort()).toEqual(Object.keys(LEVELS).sort());
   });
 
   it("has no user-level procedure that deletes users", () => {
@@ -153,7 +148,7 @@ describe("procedure auth levels", () => {
     async (path) => {
       // Catches: an admin procedure moved to protectedProcedure.
       await expect(call("user", path)).rejects.toMatchObject({ code: "FORBIDDEN" });
-    }
+    },
   );
 });
 
@@ -162,7 +157,9 @@ describe("ownership of protected procedures", () => {
     // Catches: a new protected procedure shipped without anyone deciding
     // whether it takes another user's id.
     expect(Object.keys(OWNERSHIP).sort()).toEqual(
-      Object.keys(LEVELS).filter((path) => LEVELS[path] === "protected").sort()
+      Object.keys(LEVELS)
+        .filter((path) => LEVELS[path] === "protected")
+        .sort(),
     );
   });
 
@@ -182,8 +179,9 @@ describe("ownership of protected procedures", () => {
       await app?.dispose();
     });
 
-    it.each(REAL_CASES)("$path refuses a signed-in user another user's row", ({ path, makeInput }) =>
-      expectOtherUsersRowRefused(path, makeInput, callers)
+    it.each(REAL_CASES)(
+      "$path refuses a signed-in user another user's row",
+      ({ path, makeInput }) => expectOtherUsersRowRefused(path, makeInput, callers),
     );
   });
 });
@@ -195,7 +193,7 @@ describe("ownership of protected procedures", () => {
 describe("the ownership assertion itself", () => {
   let owner = "";
   const NoteIdInput = Schema.standardSchemaV1(
-    Schema.Struct({ noteId: Schema.String.pipe(Schema.maxLength(64)) })
+    Schema.Struct({ noteId: Schema.String.pipe(Schema.maxLength(64)) }),
   );
 
   const fixtureRouter = createTRPCRouter({
@@ -213,7 +211,8 @@ describe("the ownership assertion itself", () => {
     }),
   });
 
-  const callerAs = (id: string) => createCallerFactory(fixtureRouter)(contextAs({ id, role: "user" }));
+  const callerAs = (id: string) =>
+    createCallerFactory(fixtureRouter)(contextAs({ id, role: "user" }));
   const callers = { me: callerAs("alice"), other: callerAs("bob") };
   const othersNote = async (other: typeof callers.other) => ({
     noteId: (await other.notes.create()).id,
@@ -225,7 +224,7 @@ describe("the ownership assertion itself", () => {
 
   it("fails a procedure that hands one user another user's row", async () => {
     await expect(expectOtherUsersRowRefused("notes.getLeaky", othersNote, callers)).rejects.toThrow(
-      "notes.getLeaky with another user's row, as a user who does not own it"
+      "notes.getLeaky with another user's row, as a user who does not own it",
     );
   });
 });

@@ -19,7 +19,7 @@ const start = (result: UploadResult = Either.right({ key: "k1" })) => {
   const upload = vi.fn(async () => result);
   const actor = createActor(
     fileUploadMachine.provide({ actors: { upload: fromPromise(upload) } }),
-    { input: { maxSize: MAX } }
+    { input: { maxSize: MAX } },
   ).start();
   const emitted: FileUploadEmitted[] = [];
   actor.on("*", (e) => emitted.push(e));
@@ -57,12 +57,15 @@ describe("fileUploadMachine", () => {
   // Catches: the route's reason being swapped for a generic message.
   it("fails with the route's message when the route refuses the file", async () => {
     const { actor, emitted } = start(
-      Either.left(new BucketValidationError({ message: "Wrong type", field: "file" }))
+      Either.left(new BucketValidationError({ message: "Wrong type", field: "file" })),
     );
     actor.send({ type: "PICK", file: small });
     await settled(actor);
     expect(actor.getSnapshot().value).toBe("failed");
-    expect(actor.getSnapshot().context.error).toEqual({ reason: "rejected", message: "Wrong type" });
+    expect(actor.getSnapshot().context.error).toEqual({
+      reason: "rejected",
+      message: "Wrong type",
+    });
     expect(emitted).toEqual([
       { type: "failed", error: { reason: "rejected", message: "Wrong type" } },
     ]);
@@ -137,25 +140,28 @@ describe("fileUploadMachine", () => {
     for (const path of paths) {
       const back = fileUploadPaths(
         { maxSize: MAX, small, big },
-        { fromState: path.state, toState: (s) => s.matches("idle") }
+        { fromState: path.state, toState: (s) => s.matches("idle") },
       );
-      expect(back.length, `no way back to idle from ${describePath(path.steps, String(path.state.value))}`).toBeGreaterThan(0);
+      expect(
+        back.length,
+        `no way back to idle from ${describePath(path.steps, String(path.state.value))}`,
+      ).toBeGreaterThan(0);
     }
   });
 
   it("labels a path by its events", () => {
     const toSuccess = fileUploadPaths({ maxSize: MAX, small, big }).find((p) =>
-      p.state.matches("success")
+      p.state.matches("success"),
     );
     expect(toSuccess && describePath(toSuccess.steps, "success")).toBe(
-      "PICK small.txt → upload ok → success"
+      "PICK small.txt → upload ok → success",
     );
   });
   // Catches: the e2e spec skipping a transition because its target state was
   // already reached another way. The reset edge is the one the old bug broke.
   it("gives the e2e spec one path per transition, the reset edges included", () => {
     const names = fileUploadEdgePaths({ maxSize: MAX, small, big }).map((p) =>
-      describePath(p.steps, String(p.state.value))
+      describePath(p.steps, String(p.state.value)),
     );
     expect(new Set(names).size).toBe(names.length);
     expect(names).toContain("PICK small.txt → upload ok → RESET → idle");

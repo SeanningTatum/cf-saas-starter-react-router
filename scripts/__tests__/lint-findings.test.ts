@@ -14,7 +14,11 @@ import {
 const BIOME_FORMAT =
   '{"summary":{"changed":0,"unchanged":1,"matches":0,"duration":87897208,"errors":1,"warnings":0,"infos":0,"skipped":0,"suggestedFixesSkipped":0,"diagnosticsNotPrinted":0,"scannerDuration":2361579625},"diagnostics":[{"severity":"error","message":"Formatter would have printed the following content:","category":"format","location":{"path":"scripts/lint-all.ts","start":{"line":0,"column":0},"end":{"line":0,"column":0}},"advices":[]}],"command":"check"}';
 
-const biomeDiagnostic = (over: { category?: string; message?: string; start?: { line: number; column: number } | null }) => ({
+const biomeDiagnostic = (over: {
+  category?: string;
+  message?: string;
+  start?: { line: number; column: number } | null;
+}) => ({
   severity: "error",
   message: over.message ?? "Unexpected any. Specify a different type.",
   category: over.category ?? "lint/suspicious/noExplicitAny",
@@ -28,7 +32,8 @@ const biomeDiagnostic = (over: { category?: string; message?: string; start?: { 
 const biomeReport = (diagnostics: readonly unknown[]): string =>
   JSON.stringify({ summary: { errors: diagnostics.length }, diagnostics, command: "check" });
 
-const knipReport = (issues: readonly Record<string, unknown>[]): string => JSON.stringify({ issues });
+const knipReport = (issues: readonly Record<string, unknown>[]): string =>
+  JSON.stringify({ issues });
 
 const onlyFinding = (result: Either.Either<Finding[], string>): Finding | undefined =>
   Either.isRight(result) && result.right.length === 1 ? result.right[0] : undefined;
@@ -56,14 +61,21 @@ describe("parseBiome", () => {
   });
 
   it("drops the position of a lint diagnostic at line 0 or with no start, so nothing prints as path:0", () => {
-    const result = parseBiome(biomeReport([biomeDiagnostic({ start: { line: 0, column: 0 } }), biomeDiagnostic({ start: null })]));
+    const result = parseBiome(
+      biomeReport([
+        biomeDiagnostic({ start: { line: 0, column: 0 } }),
+        biomeDiagnostic({ start: null }),
+      ]),
+    );
     expect(Either.isRight(result)).toBe(true);
     const findings = Either.getOrElse(result, () => []);
     expect(findings).toHaveLength(2);
     for (const finding of findings) {
       expect(finding.line).toBeUndefined();
       expect(finding.column).toBeUndefined();
-      expect(formatFinding(finding)).toBe("scripts/lint-all.ts lint/suspicious/noExplicitAny: Unexpected any. Specify a different type.");
+      expect(formatFinding(finding)).toBe(
+        "scripts/lint-all.ts lint/suspicious/noExplicitAny: Unexpected any. Specify a different type.",
+      );
     }
   });
 
@@ -76,7 +88,10 @@ describe("parseBiome", () => {
     ["plain text", "Biome crashed: the configuration is invalid"],
     ["an array", "[]"],
     ["no diagnostics key", '{"summary":{}}'],
-    ["a diagnostic without a category", '{"diagnostics":[{"severity":"error","message":"m","location":{}}]}'],
+    [
+      "a diagnostic without a category",
+      '{"diagnostics":[{"severity":"error","message":"m","location":{}}]}',
+    ],
   ])("returns left for %s, so a parse failure never reads as no findings", (_name, stdout) => {
     expect(Either.isLeft(parseBiome(stdout))).toBe(true);
   });
@@ -110,18 +125,38 @@ describe("parseKnip", () => {
     ],
     [
       "a duplicate export",
-      { file: "app/lib/c.ts", duplicates: [[{ name: "a", line: 2, col: 1 }, { name: "b", line: 3, col: 1 }]] },
+      {
+        file: "app/lib/c.ts",
+        duplicates: [
+          [
+            { name: "a", line: 2, col: 1 },
+            { name: "b", line: 3, col: 1 },
+          ],
+        ],
+      },
       { path: "app/lib/c.ts", line: 2, column: 1, rule: "knip/duplicates", message: "" },
       "`a, b`",
     ],
-  ])("turns %s into one knip/<kind> finding that names it and says what to do", (_name, issue, expected, named) => {
-    const finding = onlyFinding(parseKnip(knipReport([issue])));
-    expect(finding).toMatchObject({ ...expected, message: expect.stringContaining(named) });
-    expect(finding?.message).toContain("Do this instead");
-  });
+  ])(
+    "turns %s into one knip/<kind> finding that names it and says what to do",
+    (_name, issue, expected, named) => {
+      const finding = onlyFinding(parseKnip(knipReport([issue])));
+      expect(finding).toMatchObject({ ...expected, message: expect.stringContaining(named) });
+      expect(finding?.message).toContain("Do this instead");
+    },
+  );
 
   it("yields nothing for an issue whose arrays are all empty, so knip's per-file skeleton is not a finding", () => {
-    const skeleton = { file: "app/lib/a.ts", files: [], dependencies: [], exports: [], types: [], unlisted: [], duplicates: [], enumMembers: [] };
+    const skeleton = {
+      file: "app/lib/a.ts",
+      files: [],
+      dependencies: [],
+      exports: [],
+      types: [],
+      unlisted: [],
+      duplicates: [],
+      enumMembers: [],
+    };
     expect(parseKnip(knipReport([skeleton]))).toEqual(Either.right([]));
     expect(parseKnip('{"issues":[]}')).toEqual(Either.right([]));
   });
@@ -133,7 +168,9 @@ describe("parseKnip", () => {
         { file: "app/b.ts", unresolved: [{ name: "./gone" }] },
       ]),
     );
-    expect(Either.getOrElse(result, () => []).map((finding) => `${finding.path} ${finding.rule}`)).toEqual([
+    expect(
+      Either.getOrElse(result, () => []).map((finding) => `${finding.path} ${finding.rule}`),
+    ).toEqual([
       "app/a.ts knip/exports",
       "app/a.ts knip/exports",
       "app/a.ts knip/types",
@@ -141,10 +178,20 @@ describe("parseKnip", () => {
     ]);
   });
 
-  it.each(["subpaths", "optionalPeerDependencies", "namespaceMembers", "catalog", "catalogReferences"])(
+  it.each([
+    "subpaths",
+    "optionalPeerDependencies",
+    "namespaceMembers",
+    "catalog",
+    "catalogReferences",
+  ])(
     "turns a %s issue, which knip reports by default, into a finding instead of dropping it",
     (kind) => {
-      const finding = onlyFinding(parseKnip(knipReport([{ file: "package.json", [kind]: [{ name: "thing", line: 1, col: 1 }] }])));
+      const finding = onlyFinding(
+        parseKnip(
+          knipReport([{ file: "package.json", [kind]: [{ name: "thing", line: 1, col: 1 }] }]),
+        ),
+      );
       expect(finding?.rule).toBe(`knip/${kind}`);
       expect(finding?.message).toContain("`thing`");
     },
@@ -155,7 +202,10 @@ describe("parseKnip", () => {
     ["knip's preamble line", "Using latest D1 database: miniflare-D1DatabaseObject/abc.sqlite"],
     ["no issues key", '{"files":[]}'],
     ["an issue without a file", '{"issues":[{"exports":[]}]}'],
-    ["a kind whose list has a shape the parser does not know", '{"issues":[{"file":"app/a.ts","exports":[{"symbol":"x"}]}]}'],
+    [
+      "a kind whose list has a shape the parser does not know",
+      '{"issues":[{"file":"app/a.ts","exports":[{"symbol":"x"}]}]}',
+    ],
     ["a kind that is not a list", '{"issues":[{"file":"app/a.ts","dependencies":"lodash"}]}'],
   ])("returns left for %s, so a parse failure never reads as no findings", (_name, stdout) => {
     expect(Either.isLeft(parseKnip(stdout))).toBe(true);
@@ -169,8 +219,19 @@ describe("parseHouse", () => {
       "app/lib/b.tsx:4:9 house/no-zod: import Schema from effect",
     ].join("\n");
     expect(parseHouse(output)).toEqual([
-      { path: "app/lib/a.ts", line: 12, rule: "house/no-throw", message: "use Effect.fail: see docs/effect.md" },
-      { path: "app/lib/b.tsx", line: 4, column: 9, rule: "house/no-zod", message: "import Schema from effect" },
+      {
+        path: "app/lib/a.ts",
+        line: 12,
+        rule: "house/no-throw",
+        message: "use Effect.fail: see docs/effect.md",
+      },
+      {
+        path: "app/lib/b.tsx",
+        line: 4,
+        column: 9,
+        rule: "house/no-zod",
+        message: "import Schema from effect",
+      },
     ]);
   });
 
@@ -202,15 +263,32 @@ describe("parseLegacyHouse", () => {
 
   it("gives each line the rule of the heading above it, so a finding is never filed under the wrong rule", () => {
     expect(parseLegacyHouse(LEGACY)).toEqual([
-      { path: "app/lib/a.ts", line: 12, rule: "house/1-effect-ts", message: "`throw` statement. Use Effect.fail" },
-      { path: "app/lib/b.ts", line: 4, rule: "house/1-effect-ts", message: "try/catch outside Effect.tryPromise" },
-      { path: "app/lib/c.ts", line: 1, rule: "house/4-unit-tests", message: "no unit test at app/lib/__tests__/c.test.ts" },
+      {
+        path: "app/lib/a.ts",
+        line: 12,
+        rule: "house/1-effect-ts",
+        message: "`throw` statement. Use Effect.fail",
+      },
+      {
+        path: "app/lib/b.ts",
+        line: 4,
+        rule: "house/1-effect-ts",
+        message: "try/catch outside Effect.tryPromise",
+      },
+      {
+        path: "app/lib/c.ts",
+        line: 1,
+        rule: "house/4-unit-tests",
+        message: "no unit test at app/lib/__tests__/c.test.ts",
+      },
     ]);
   });
 
   it("finds nothing in the clean summary, so a clean checker is a clean run", () => {
     expect(
-      parseLegacyHouse("Five non-negotiables: clean — 120 source file(s), AST-swept (throw, try/catch, zod, process.env)\n"),
+      parseLegacyHouse(
+        "Five non-negotiables: clean — 120 source file(s), AST-swept (throw, try/catch, zod, process.env)\n",
+      ),
     ).toEqual([]);
   });
 });
@@ -219,8 +297,16 @@ describe("formatFinding", () => {
   it.each<[string, Finding, string]>([
     ["no line", { path: "app/a.ts", rule: "format", message: "m" }, "app/a.ts format: m"],
     ["a line", { path: "app/a.ts", line: 3, rule: "r", message: "m" }, "app/a.ts:3 r: m"],
-    ["a line and column", { path: "app/a.ts", line: 3, column: 7, rule: "r", message: "m" }, "app/a.ts:3:7 r: m"],
-    ["a column without a line", { path: "app/a.ts", column: 7, rule: "r", message: "m" }, "app/a.ts r: m"],
+    [
+      "a line and column",
+      { path: "app/a.ts", line: 3, column: 7, rule: "r", message: "m" },
+      "app/a.ts:3:7 r: m",
+    ],
+    [
+      "a column without a line",
+      { path: "app/a.ts", column: 7, rule: "r", message: "m" },
+      "app/a.ts r: m",
+    ],
   ])("prints a finding with %s in the one shape", (_name, finding, expected) => {
     expect(formatFinding(finding)).toBe(expected);
   });

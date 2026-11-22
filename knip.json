@@ -1,10 +1,6 @@
 {
   "$schema": "https://unpkg.com/knip@6/schema.json",
-  "entry": [
-    "scripts/*.ts",
-    "scripts/ci/*.ts",
-    "e2e/**/*.spec.ts"
-  ],
+  "entry": ["scripts/*.ts", "scripts/ci/*.ts", "e2e/**/*.spec.ts"],
   "project": [
     "app/**/*.{ts,tsx}",
     "workers/**/*.ts",
@@ -12,11 +8,6 @@
     "e2e/**/*.ts",
     "*.config.ts"
   ],
-  "ignore": [
-    "app/components/ui/**"
-  ],
-  "ignoreDependencies": [
-    "tailwindcss",
-    "tw-animate-css"
-  ]
+  "ignore": ["app/components/ui/**"],
+  "ignoreDependencies": ["tailwindcss", "tw-animate-css"]
 }

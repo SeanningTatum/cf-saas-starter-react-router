@@ -18,7 +18,8 @@ export interface Finding {
 
 export function formatFinding(finding: Finding): string {
   const line = finding.line === undefined ? "" : `:${finding.line}`;
-  const column = finding.line === undefined || finding.column === undefined ? "" : `:${finding.column}`;
+  const column =
+    finding.line === undefined || finding.column === undefined ? "" : `:${finding.column}`;
   return `${finding.path}${line}${column} ${finding.rule}: ${finding.message}`;
 }
 
@@ -51,7 +52,8 @@ const BiomeReport = Schema.parseJson(
 
 export function parseBiome(stdout: string): Either.Either<Finding[], string> {
   const decoded = Schema.decodeUnknownEither(BiomeReport)(stdout);
-  if (Either.isLeft(decoded)) return Either.left("the output is not the JSON that `biome check --reporter=json` prints");
+  if (Either.isLeft(decoded))
+    return Either.left("the output is not the JSON that `biome check --reporter=json` prints");
   return Either.right(
     decoded.right.diagnostics.map((diagnostic) => {
       const isFormat = diagnostic.category === FORMAT_CATEGORY;
@@ -86,13 +88,15 @@ const DEAD_CODE_KINDS = Object.keys(DEAD_CODE_FIX) as DeadCodeKind[];
 
 export function parseKnip(stdout: string): Either.Either<Finding[], string> {
   const decoded = Schema.decodeUnknownEither(KnipReport)(stdout);
-  if (Either.isLeft(decoded)) return Either.left("the output is not the JSON that `knip --reporter json` prints");
+  if (Either.isLeft(decoded))
+    return Either.left("the output is not the JSON that `knip --reporter json` prints");
   const findings: Finding[] = [];
   for (const issue of decoded.right.issues) {
     for (const kind of DEAD_CODE_KINDS) {
       if (issue[kind] === undefined) continue;
       const items = Schema.decodeUnknownEither(KnipItems)(issue[kind]);
-      if (Either.isLeft(items)) return Either.left(`knip printed a \`${kind}\` list in a shape this parser does not know`);
+      if (Either.isLeft(items))
+        return Either.left(`knip printed a \`${kind}\` list in a shape this parser does not know`);
       for (const item of items.right) {
         const group = "name" in item ? [item] : item;
         const [first] = group;
@@ -117,7 +121,13 @@ export function parseHouse(output: string): Finding[] {
     const match = HOUSE_FINDING.exec(line);
     if (match === null) continue;
     const [, path, lineNumber, column, rule, message] = match;
-    if (path === undefined || lineNumber === undefined || rule === undefined || message === undefined) continue;
+    if (
+      path === undefined ||
+      lineNumber === undefined ||
+      rule === undefined ||
+      message === undefined
+    )
+      continue;
     findings.push({
       path,
       line: Number(lineNumber),

@@ -36,9 +36,12 @@ const ok = (stdout: string): RunResult => ({ status: 0, stdout, stderr: "" });
 const failed = (stdout: string, stderr = "boom"): RunResult => ({ status: 1, stdout, stderr });
 
 const CLEAN_BIOME = '{"summary":{"errors":0},"diagnostics":[],"command":"check"}';
-const CLEAN_KNIP = "Using latest D1 database: miniflare-D1DatabaseObject/abc.sqlite\n{\"issues\":[]}\n";
+const CLEAN_KNIP =
+  'Using latest D1 database: miniflare-D1DatabaseObject/abc.sqlite\n{"issues":[]}\n';
 const CLEAN_LEGACY = "Five non-negotiables: clean — 120 source file(s), AST-swept\n";
-const WITH_HOUSE_SCRIPT = JSON.stringify({ scripts: { lint: "bun run scripts/lint-all.ts", "lint:house": "bun scripts/house.ts" } });
+const WITH_HOUSE_SCRIPT = JSON.stringify({
+  scripts: { lint: "bun run scripts/lint-all.ts", "lint:house": "bun scripts/house.ts" },
+});
 const WITHOUT_HOUSE_SCRIPT = JSON.stringify({ scripts: { lint: "bun run scripts/lint-all.ts" } });
 
 const CYCLES_FLAG = `--only=${IMPORT_CYCLE_RULE}`;
@@ -46,7 +49,8 @@ const CYCLE_FINDING =
   '{"diagnostics":[{"severity":"warning","message":"This import is part of a cycle.","category":"lint/suspicious/noImportCycles","location":{"path":"app/lib/a.ts","start":{"line":1,"column":19}}}]}';
 const BIOME_FINDING =
   '{"diagnostics":[{"severity":"error","message":"Unexpected any. Specify a different type.","category":"lint/suspicious/noExplicitAny","location":{"path":"app/a.ts","start":{"line":3,"column":7}}}]}';
-const KNIP_FINDING = '{"issues":[{"file":"app/old.ts","exports":[{"name":"helper","line":4,"col":17}]}]}';
+const KNIP_FINDING =
+  '{"issues":[{"file":"app/old.ts","exports":[{"name":"helper","line":4,"col":17}]}]}';
 const LEGACY_FINDINGS = [
   "Five non-negotiables: 2 violation(s)",
   "",
@@ -64,7 +68,8 @@ function fake(setup: Setup = {}): Fake {
   const deps: Deps = {
     run: (command, args) => {
       calls.push({ command, args });
-      if (command === BIOME_BIN && args.includes(CYCLES_FLAG)) return setup.cycles ?? ok(CLEAN_BIOME);
+      if (command === BIOME_BIN && args.includes(CYCLES_FLAG))
+        return setup.cycles ?? ok(CLEAN_BIOME);
       if (command === BIOME_BIN) return setup.biome ?? ok(CLEAN_BIOME);
       if (command === KNIP_BIN) return setup.knip ?? ok(CLEAN_KNIP);
       if (command === "git") return setup.git ?? ok("");
@@ -90,7 +95,11 @@ describe("parseArgs", () => {
       fix: false,
       files: ["app/a.ts", "README.md"],
     });
-    expect(parseArgs(["--fix", "app/a.ts"])).toEqual({ staged: false, fix: true, files: ["app/a.ts"] });
+    expect(parseArgs(["--fix", "app/a.ts"])).toEqual({
+      staged: false,
+      fix: true,
+      files: ["app/a.ts"],
+    });
     expect(parseArgs([])).toEqual({ staged: false, fix: false, files: [] });
   });
 });
@@ -142,22 +151,33 @@ describe("lint on the whole repo", () => {
     ["Biome prints no JSON", { biome: failed("Biome crashed") }],
     ["Biome exits non-zero with no finding", { biome: failed(CLEAN_BIOME) }],
     ["the house linter exits non-zero with no finding", { house: failed("") }],
-    ["the house binary cannot start", { house: { status: SPAWN_FAILED_STATUS, stdout: "", stderr: "cannot run bun" } }],
-    ["the legacy house checker exits non-zero with no finding", { packageJson: WITHOUT_HOUSE_SCRIPT, house: failed("") }],
+    [
+      "the house binary cannot start",
+      { house: { status: SPAWN_FAILED_STATUS, stdout: "", stderr: "cannot run bun" } },
+    ],
+    [
+      "the legacy house checker exits non-zero with no finding",
+      { packageJson: WITHOUT_HOUSE_SCRIPT, house: failed("") },
+    ],
     ["the import-cycle run prints no JSON", { cycles: failed("Biome crashed") }],
     ["knip prints no JSON", { knip: ok("ERROR: config invalid") }],
     ["knip exits non-zero with no finding", { knip: failed('{"issues":[]}') }],
-  ])("returns 2 and says so on stderr when %s, because could not run is a failure, not a pass", (_name, setup) => {
-    const f = fake(setup);
-    expect(lint([], f.deps)).toBe(EXIT.toolFailed);
-    expect(f.err.join("\n")).toMatch(/could not run/);
-    expect(f.out.some((line) => line.startsWith("lint: clean"))).toBe(false);
-  });
+  ])(
+    "returns 2 and says so on stderr when %s, because could not run is a failure, not a pass",
+    (_name, setup) => {
+      const f = fake(setup);
+      expect(lint([], f.deps)).toBe(EXIT.toolFailed);
+      expect(f.err.join("\n")).toMatch(/could not run/);
+      expect(f.out.some((line) => line.startsWith("lint: clean"))).toBe(false);
+    },
+  );
 
   it("still returns 2 when one tool fails and another has findings, so a broken tool is never hidden behind findings", () => {
     const f = fake({ biome: failed(BIOME_FINDING, ""), knip: ok("not json") });
     expect(lint([], f.deps)).toBe(EXIT.toolFailed);
-    expect(f.out).toContain("app/a.ts:3:7 lint/suspicious/noExplicitAny: Unexpected any. Specify a different type.");
+    expect(f.out).toContain(
+      "app/a.ts:3:7 lint/suspicious/noExplicitAny: Unexpected any. Specify a different type.",
+    );
   });
 });
 
@@ -200,7 +220,9 @@ describe("lint with file arguments", () => {
     const f = fake({ packageJson: WITHOUT_HOUSE_SCRIPT, house: failed(LEGACY_FINDINGS, "") });
     expect(lint(["app/lib/b.ts"], f.deps)).toBe(EXIT.findings);
     expect(argsOf(f, "bun")).toEqual(["run", LEGACY_HOUSE_CHECKER]);
-    expect(f.out).toEqual(["app/lib/b.ts:4 house/1-effect-ts: try/catch outside Effect.tryPromise"]);
+    expect(f.out).toEqual([
+      "app/lib/b.ts:4 house/1-effect-ts: try/catch outside Effect.tryPromise",
+    ]);
   });
 
   it("treats legacy findings outside the given files as clean, so a scoped run does not fail on other files", () => {
@@ -240,7 +262,10 @@ describe("lint with file arguments", () => {
 
 describe("lint --staged", () => {
   it("asks git for the staged files, passes --staged to Biome, the existing lintable files to the house linter, and skips knip", () => {
-    const f = fake({ git: ok("app/a.ts\ndocs/notes.md\napp/gone.ts\n\n"), existing: ["app/a.ts", "docs/notes.md"] });
+    const f = fake({
+      git: ok("app/a.ts\ndocs/notes.md\napp/gone.ts\n\n"),
+      existing: ["app/a.ts", "docs/notes.md"],
+    });
     expect(lint(["--staged"], f.deps)).toBe(EXIT.clean);
     expect(commands(f)).toEqual(["git", BIOME_BIN, "bun"]);
     expect(argsOf(f, "git")).toEqual(expect.arrayContaining(["diff", "--cached", "--name-only"]));

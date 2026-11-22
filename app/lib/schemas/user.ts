@@ -14,7 +14,7 @@ export const MAX_BULK_USER_IDS = 50;
 
 const BulkUserIds = Schema.Array(UserId).pipe(
   Schema.minItems(1),
-  Schema.maxItems(MAX_BULK_USER_IDS)
+  Schema.maxItems(MAX_BULK_USER_IDS),
 );
 
 const BanReason = Schema.String.pipe(Schema.maxLength(500));
@@ -23,13 +23,13 @@ export const GetUsersInput = Schema.Struct({
   page: Schema.Number.pipe(
     Schema.int(),
     Schema.greaterThanOrEqualTo(0),
-    Schema.optionalWith({ default: () => 0 })
+    Schema.optionalWith({ default: () => 0 }),
   ),
   limit: Schema.Number.pipe(
     Schema.int(),
     Schema.greaterThanOrEqualTo(1),
     Schema.lessThanOrEqualTo(100),
-    Schema.optionalWith({ default: () => 10 })
+    Schema.optionalWith({ default: () => 10 }),
   ),
   search: Schema.optional(Schema.String.pipe(Schema.maxLength(100))),
   role: Schema.optional(Role),

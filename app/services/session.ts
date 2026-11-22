@@ -28,10 +28,7 @@ export interface SessionShape {
   readonly user: SessionUser | null;
 }
 
-export class Session extends Context.Tag("app/Session")<
-  Session,
-  SessionShape
->() {}
+export class Session extends Context.Tag("app/Session")<Session, SessionShape>() {}
 
 export const SessionLive = (headers: Headers) =>
   Layer.effect(
@@ -40,8 +37,7 @@ export const SessionLive = (headers: Headers) =>
       const { api } = yield* AuthApi;
       const result = yield* Effect.tryPromise({
         try: () => api.getSession({ headers }),
-        catch: (cause) =>
-          new ExternalServiceError({ service: "BetterAuth", cause }),
+        catch: (cause) => new ExternalServiceError({ service: "BetterAuth", cause }),
       });
       if (!result) {
         return { session: null, user: null };
@@ -50,5 +46,5 @@ export const SessionLive = (headers: Headers) =>
         session: result.session as SessionInfo,
         user: result.user as SessionUser,
       };
-    })
+    }),
   );

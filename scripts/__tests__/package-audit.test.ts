@@ -31,7 +31,9 @@ const entry = (over: Partial<AllowEntry> = {}): AllowEntry => ({
 });
 
 /** The shape bun audit --json prints. */
-function auditJson(items: { pkg: string; severity: string; ghsa: string; title?: string }[]): string {
+function auditJson(
+  items: { pkg: string; severity: string; ghsa: string; title?: string }[],
+): string {
   const out: Record<string, unknown[]> = {};
   for (const i of items) {
     const list = out[i.pkg] ?? [];
@@ -50,7 +52,9 @@ function auditJson(items: { pkg: string; severity: string; ghsa: string; title?:
 
 describe("advisoryId", () => {
   it("takes the GHSA from the url, because the numeric id differs between registries", () => {
-    expect(advisoryId("https://github.com/advisories/GHSA-4x5r-pxfx-6jf8")).toBe("GHSA-4x5r-pxfx-6jf8");
+    expect(advisoryId("https://github.com/advisories/GHSA-4x5r-pxfx-6jf8")).toBe(
+      "GHSA-4x5r-pxfx-6jf8",
+    );
   });
   it("falls back to the url when there is no GHSA, so a finding is never silently unnamed", () => {
     expect(advisoryId("https://example.test/a/1")).toBe("https://example.test/a/1");
@@ -59,7 +63,9 @@ describe("advisoryId", () => {
 
 describe("parseAudit", () => {
   it("reads the bun audit --json shape and ignores fields it does not use", () => {
-    const parsed = parseAudit(auditJson([{ pkg: "a", severity: "high", ghsa: "GHSA-1111-2222-3333", title: "T" }]));
+    const parsed = parseAudit(
+      auditJson([{ pkg: "a", severity: "high", ghsa: "GHSA-1111-2222-3333", title: "T" }]),
+    );
     expect(parsed).toEqual(
       Either.right([{ package: "a", severity: "high", id: "GHSA-1111-2222-3333", title: "T" }]),
     );
@@ -67,19 +73,26 @@ describe("parseAudit", () => {
   it("an empty object is a clean audit, not an error", () => {
     expect(parseAudit("{}")).toEqual(Either.right([]));
   });
-  it.each([["empty stdout", ""], ["plain text", "error: registry unreachable"], ["an array", "[]"], ["wrong value type", '{"a":1}']])(
-    "%s is left, so an audit that did not run cannot pass",
-    (_name, stdout) => {
-      expect(Either.isLeft(parseAudit(stdout))).toBe(true);
-    },
-  );
+  it.each([
+    ["empty stdout", ""],
+    ["plain text", "error: registry unreachable"],
+    ["an array", "[]"],
+    ["wrong value type", '{"a":1}'],
+  ])("%s is left, so an audit that did not run cannot pass", (_name, stdout) => {
+    expect(Either.isLeft(parseAudit(stdout))).toBe(true);
+  });
 });
 
 describe("parseAllow", () => {
   it("decodes a well-formed file", () => {
     expect(parseAllow(JSON.stringify({ allow: [entry()] }))).toEqual(Either.right([entry()]));
   });
-  it.each([["bad json", "{"], ["no allow key", "{}"], ["entry without a reason", '{"allow":[{"id":"x","package":"y"}]}'], ["empty reason", '{"allow":[{"id":"x","package":"y","reason":""}]}']])(
+  it.each([
+    ["bad json", "{"],
+    ["no allow key", "{}"],
+    ["entry without a reason", '{"allow":[{"id":"x","package":"y"}]}'],
+    ["empty reason", '{"allow":[{"id":"x","package":"y","reason":""}]}'],
+  ])(
     "%s is left: a typo in the file must not silently allow nothing or everything",
     (_name, text) => {
       expect(Either.isLeft(parseAllow(text))).toBe(true);
@@ -93,7 +106,11 @@ describe("judge", () => {
     expect(v).toEqual({ blocking: [], allowed: [], expired: [], stale: [] });
   });
   it("high and critical both block", () => {
-    const v = judge([finding(), finding({ severity: "critical", id: "GHSA-dddd-eeee-ffff" })], [], TODAY);
+    const v = judge(
+      [finding(), finding({ severity: "critical", id: "GHSA-dddd-eeee-ffff" })],
+      [],
+      TODAY,
+    );
     expect(v.blocking).toHaveLength(2);
   });
   it("an allowed id and package pair does not block", () => {
@@ -130,7 +147,10 @@ describe("judge", () => {
 });
 
 describe("run", () => {
-  function depsFor(opts: { stdout: string; stderr?: string; status?: number; allow?: string }): { deps: Deps; lines: string[] } {
+  function depsFor(opts: { stdout: string; stderr?: string; status?: number; allow?: string }): {
+    deps: Deps;
+    lines: string[];
+  } {
     const lines: string[] = [];
     const deps: Deps = {
       audit: () => ({ stdout: opts.stdout, stderr: opts.stderr ?? "", status: opts.status ?? 0 }),
@@ -140,7 +160,14 @@ describe("run", () => {
     };
     return { deps, lines };
   }
-  const high = auditJson([{ pkg: "left-pad", severity: "high", ghsa: "GHSA-aaaa-bbbb-cccc", title: "Prototype pollution" }]);
+  const high = auditJson([
+    {
+      pkg: "left-pad",
+      severity: "high",
+      ghsa: "GHSA-aaaa-bbbb-cccc",
+      title: "Prototype pollution",
+    },
+  ]);
 
   it("a blocking finding exits 1 with one blocking line and the fix", () => {
     const { deps, lines } = depsFor({ stdout: high });
@@ -162,7 +189,9 @@ describe("run", () => {
   it("a stale entry is a notice with exit 0: upgrading a package must not break the gate", () => {
     const { deps, lines } = depsFor({ stdout: "{}", allow: JSON.stringify({ allow: [entry()] }) });
     expect(run(deps)).toBe(0);
-    expect(lines[0]).toMatch(/^notice: GHSA-aaaa-bbbb-cccc in left-pad is no longer reported; delete/);
+    expect(lines[0]).toMatch(
+      /^notice: GHSA-aaaa-bbbb-cccc in left-pad is no longer reported; delete/,
+    );
     expect(lines.at(-1)).toBe("ok: no new high or critical findings");
   });
 
@@ -185,17 +214,36 @@ describe("run", () => {
   });
 
   it("an expired entry blocks and the line says the allowance expired", () => {
-    const { deps, lines } = depsFor({ stdout: high, allow: JSON.stringify({ allow: [entry({ expires: "2026-11-21" })] }) });
+    const { deps, lines } = depsFor({
+      stdout: high,
+      allow: JSON.stringify({ allow: [entry({ expires: "2026-11-21" })] }),
+    });
     expect(run(deps)).toBe(1);
-    expect(lines[0]).toBe("blocking: left-pad high GHSA-aaaa-bbbb-cccc Prototype pollution (allowance expired 2026-11-21)");
+    expect(lines[0]).toBe(
+      "blocking: left-pad high GHSA-aaaa-bbbb-cccc Prototype pollution (allowance expired 2026-11-21)",
+    );
   });
 
   it("an entry that expires today still allows: the date is the last day", () => {
-    const { deps } = depsFor({ stdout: high, allow: JSON.stringify({ allow: [entry({ expires: TODAY })] }) });
+    const { deps } = depsFor({
+      stdout: high,
+      allow: JSON.stringify({ allow: [entry({ expires: TODAY })] }),
+    });
     expect(run(deps)).toBe(0);
   });
 
-  it.each([["missing", `{"allow":[{"id":"x","package":"y","reason":"z"}]}`], ["not a date", `{"allow":[{"id":"x","package":"y","reason":"z","expires":"soon"}]}`], ["an impossible date", `{"allow":[{"id":"x","package":"y","reason":"z","expires":"2026-13-45"}]}`], ["a day that month does not have", `{"allow":[{"id":"x","package":"y","reason":"z","expires":"2026-02-30"}]}`]])(
+  it.each([
+    ["missing", `{"allow":[{"id":"x","package":"y","reason":"z"}]}`],
+    ["not a date", `{"allow":[{"id":"x","package":"y","reason":"z","expires":"soon"}]}`],
+    [
+      "an impossible date",
+      `{"allow":[{"id":"x","package":"y","reason":"z","expires":"2026-13-45"}]}`,
+    ],
+    [
+      "a day that month does not have",
+      `{"allow":[{"id":"x","package":"y","reason":"z","expires":"2026-02-30"}]}`,
+    ],
+  ])(
     "an expires that is %s is a config error, so no entry can allow forever by accident",
     (_name, allow) => {
       const { deps, lines } = depsFor({ stdout: "{}", allow });
@@ -205,13 +253,17 @@ describe("run", () => {
   );
 
   it("a severity in capitals still blocks", () => {
-    const { deps, lines } = depsFor({ stdout: auditJson([{ pkg: "a", severity: "HIGH", ghsa: "GHSA-1111-2222-3333" }]) });
+    const { deps, lines } = depsFor({
+      stdout: auditJson([{ pkg: "a", severity: "HIGH", ghsa: "GHSA-1111-2222-3333" }]),
+    });
     expect(run(deps)).toBe(1);
     expect(lines[0]).toContain("blocking: a HIGH");
   });
 
   it("a severity bun adds later blocks: an unknown word must not read as harmless", () => {
-    const { deps } = depsFor({ stdout: auditJson([{ pkg: "a", severity: "severe", ghsa: "GHSA-1111-2222-3333" }]) });
+    const { deps } = depsFor({
+      stdout: auditJson([{ pkg: "a", severity: "severe", ghsa: "GHSA-1111-2222-3333" }]),
+    });
     expect(run(deps)).toBe(1);
   });
 
@@ -244,7 +296,9 @@ describe("the real allow file", () => {
     const entries = Either.getOrThrow(parseAllow(text));
     const keys = entries.map((e) => `${e.package}\0${e.id}`);
     expect(new Set(keys).size).toBe(keys.length);
-    const sorted = [...entries].sort((a, b) => a.package.localeCompare(b.package) || a.id.localeCompare(b.id));
+    const sorted = [...entries].sort(
+      (a, b) => a.package.localeCompare(b.package) || a.id.localeCompare(b.id),
+    );
     expect(entries).toEqual(sorted);
   });
 });

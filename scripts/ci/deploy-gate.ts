@@ -149,7 +149,9 @@ export function readCommittedD1Id(text: string): Either.Either<string | undefine
 /** wrangler.jsonc text with the top-level DATABASE binding pointed at `id`. */
 export function withProductionD1(text: string, id: string): Either.Either<string, string> {
   if (!isRealD1Id(id)) {
-    return Either.left("CLOUDFLARE_D1_DATABASE_ID must be a D1 database UUID that is not all zeros");
+    return Either.left(
+      "CLOUDFLARE_D1_DATABASE_ID must be a D1 database UUID that is not all zeros",
+    );
   }
   return Either.flatMap(parseJsonc(text), (raw) =>
     Either.map(findTopLevelDatabase(raw), ({ index }) => {
@@ -174,10 +176,7 @@ export interface Deps {
 
 const isTrue = (value: string | undefined) => value === "true";
 
-export function factsFromEnv(
-  env: Deps["env"],
-  committedD1Id: string | undefined,
-): Facts {
+export function factsFromEnv(env: Deps["env"], committedD1Id: string | undefined): Facts {
   return {
     hasAccountId: isTrue(env.HAS_ACCOUNT_ID),
     hasToken: isTrue(env.HAS_TOKEN),
@@ -190,7 +189,9 @@ export function factsFromEnv(
 
 function usage(deps: Deps, message: string): number {
   deps.log(`::error::${message}`);
-  deps.log("usage: deploy-gate.ts ready <production|preview|preview-cleanup> | use-d1 | project-name");
+  deps.log(
+    "usage: deploy-gate.ts ready <production|preview|preview-cleanup> | use-d1 | project-name",
+  );
   return 2;
 }
 
@@ -230,7 +231,9 @@ function useD1(deps: Deps): number {
     (text) => withProductionD1(text, (deps.env.D1_DATABASE_ID ?? "").trim()),
     (patched) => {
       deps.writeFile(deps.wranglerPath, patched);
-      deps.log("wrangler.jsonc: top-level DATABASE now uses the CLOUDFLARE_D1_DATABASE_ID variable");
+      deps.log(
+        "wrangler.jsonc: top-level DATABASE now uses the CLOUDFLARE_D1_DATABASE_ID variable",
+      );
     },
   );
 }

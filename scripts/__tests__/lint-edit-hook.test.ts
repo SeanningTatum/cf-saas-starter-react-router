@@ -5,7 +5,10 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
 
-const HOOK = path.join(path.dirname(fileURLToPath(import.meta.url)), "../../.claude/hooks/lint-edit.sh");
+const HOOK = path.join(
+  path.dirname(fileURLToPath(import.meta.url)),
+  "../../.claude/hooks/lint-edit.sh",
+);
 const BLOCKING = 2;
 const made: string[] = [];
 
@@ -22,7 +25,9 @@ function checkout(lintExit: number, lintOutput: string): Checkout {
   fs.mkdirSync(path.join(root, "scripts"), { recursive: true });
   fs.mkdirSync(path.join(root, "app/lib"), { recursive: true });
   fs.writeFileSync(path.join(root, "biome.jsonc"), "{}");
-  fs.writeFileSync(path.join(root, "node_modules/.bin/biome"), "#!/bin/sh\nexit 0\n", { mode: 0o755 });
+  fs.writeFileSync(path.join(root, "node_modules/.bin/biome"), "#!/bin/sh\nexit 0\n", {
+    mode: 0o755,
+  });
   fs.writeFileSync(
     path.join(root, "scripts/lint-all.ts"),
     [
@@ -36,11 +41,14 @@ function checkout(lintExit: number, lintOutput: string): Checkout {
 }
 
 function runHook(stdin: string) {
-  const env = Object.fromEntries(Object.entries(process.env).filter(([name]) => !name.startsWith("GIT_")));
+  const env = Object.fromEntries(
+    Object.entries(process.env).filter(([name]) => !name.startsWith("GIT_")),
+  );
   return spawnSync("bash", [HOOK], { input: stdin, encoding: "utf8", env, cwd: os.tmpdir() });
 }
 
-const edited = (file: string) => JSON.stringify({ tool_name: "Edit", tool_input: { file_path: file } });
+const edited = (file: string) =>
+  JSON.stringify({ tool_name: "Edit", tool_input: { file_path: file } });
 
 afterEach(() => {
   for (const dir of made.splice(0)) fs.rmSync(dir, { recursive: true, force: true });
@@ -48,14 +56,19 @@ afterEach(() => {
 
 describe(".claude/hooks/lint-edit.sh", () => {
   it("exits 2 with the findings on stderr, so the agent is shown what its edit broke", () => {
-    const { root, argsFile } = checkout(1, "app/lib/a.ts:3:7 lint/suspicious/noExplicitAny: Unexpected any.");
+    const { root, argsFile } = checkout(
+      1,
+      "app/lib/a.ts:3:7 lint/suspicious/noExplicitAny: Unexpected any.",
+    );
     const file = path.join(root, "app/lib/a.ts");
     fs.writeFileSync(file, "export const a = 1;\n");
 
     const result = runHook(edited(file));
 
     expect(result.status).toBe(BLOCKING);
-    expect(result.stderr).toContain("app/lib/a.ts:3:7 lint/suspicious/noExplicitAny: Unexpected any.");
+    expect(result.stderr).toContain(
+      "app/lib/a.ts:3:7 lint/suspicious/noExplicitAny: Unexpected any.",
+    );
     expect(result.stdout).toBe("");
     expect(fs.readFileSync(argsFile, "utf8")).toBe("--fix app/lib/a.ts");
   });
@@ -85,16 +98,19 @@ describe(".claude/hooks/lint-edit.sh", () => {
   it.each([
     ["a Markdown file", "README.md"],
     ["a shell script", "scripts/run.sh"],
-  ])("does nothing for %s, so prose and shell edits are never sent to the linter", (_kind, name) => {
-    const { root, argsFile } = checkout(1, "should not run");
-    const file = path.join(root, name);
-    fs.writeFileSync(file, "x\n");
+  ])(
+    "does nothing for %s, so prose and shell edits are never sent to the linter",
+    (_kind, name) => {
+      const { root, argsFile } = checkout(1, "should not run");
+      const file = path.join(root, name);
+      fs.writeFileSync(file, "x\n");
 
-    const result = runHook(edited(file));
+      const result = runHook(edited(file));
 
-    expect(result.status).toBe(0);
-    expect(fs.existsSync(argsFile)).toBe(false);
-  });
+      expect(result.status).toBe(0);
+      expect(fs.existsSync(argsFile)).toBe(false);
+    },
+  );
 
   it("does nothing when the tools are not installed, so a fresh clone can still be edited", () => {
     const { root, argsFile } = checkout(1, "should not run");
@@ -120,7 +136,9 @@ describe(".claude/hooks/lint-edit.sh", () => {
   });
 
   it("exits 0 on a file outside any checkout, so an edit to a scratch file is left alone", () => {
-    const outside = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "lint-edit-hook-outside-")));
+    const outside = fs.realpathSync(
+      fs.mkdtempSync(path.join(os.tmpdir(), "lint-edit-hook-outside-")),
+    );
     made.push(outside);
     const file = path.join(outside, "scratch.ts");
     fs.writeFileSync(file, "export const scratch = 1;\n");

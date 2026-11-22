@@ -35,9 +35,7 @@ const readEnvString = (env: object, key: string): string | undefined => {
  * W3C correlation-context format: `key=value,key2=value2`, values may be
  * percent-encoded (`Authorization=Bearer%20abc`).
  */
-export const parseOtlpHeaders = (
-  raw: string | undefined
-): Record<string, string> => {
+export const parseOtlpHeaders = (raw: string | undefined): Record<string, string> => {
   if (!raw) return {};
   const headers: Record<string, string> = {};
   for (const pair of raw.split(",")) {
@@ -54,9 +52,7 @@ export const parseOtlpHeaders = (
 const decodePercent = (value: string): string => {
   if (!value.includes("%")) return value;
   const decoded = Effect.runSync(
-    Effect.try(() => decodeURIComponent(value)).pipe(
-      Effect.orElseSucceed(() => value)
-    )
+    Effect.try(() => decodeURIComponent(value)).pipe(Effect.orElseSucceed(() => value)),
   );
   return decoded;
 };
@@ -107,12 +103,10 @@ export class OtlpSpan implements Tracer.Span {
     links: ReadonlyArray<Tracer.SpanLink>,
     startTime: bigint,
     readonly kind: Tracer.SpanKind,
-    private readonly buffer: SpanBuffer
+    private readonly buffer: SpanBuffer,
   ) {
     this.spanId = randomHex(8);
-    this.traceId = Option.isSome(parent)
-      ? parent.value.traceId
-      : randomHex(16);
+    this.traceId = Option.isSome(parent) ? parent.value.traceId : randomHex(16);
     this.status = { _tag: "Started", startTime };
     this.links = links;
   }
@@ -135,11 +129,7 @@ export class OtlpSpan implements Tracer.Span {
     this.attributes.set(key, value);
   }
 
-  event(
-    name: string,
-    startTime: bigint,
-    attributes?: Record<string, unknown>
-  ): void {
+  event(name: string, startTime: bigint, attributes?: Record<string, unknown>): void {
     this.events.push({ name, startTime, attributes: attributes ?? {} });
   }
 
@@ -155,10 +145,7 @@ export class OtlpSpan implements Tracer.Span {
  * carry the user. (The tracer's own `context` argument is `SpanOptions.context`,
  * not the fiber's, so the request is handed in here instead.)
  */
-export const makeOtlpTracer = (
-  buffer: SpanBuffer,
-  request?: RequestContext
-): Tracer.Tracer =>
+export const makeOtlpTracer = (buffer: SpanBuffer, request?: RequestContext): Tracer.Tracer =>
   Tracer.make({
     span: (name, parent, _context, links, startTime, kind) => {
       const span = new OtlpSpan(name, parent, links, startTime, kind, buffer);
@@ -190,16 +177,14 @@ export const toOtlpValue = (value: unknown): OtlpValue => {
     case "bigint":
       return { intValue: value.toString() };
     case "number":
-      return Number.isInteger(value)
-        ? { intValue: value.toString() }
-        : { doubleValue: value };
+      return Number.isInteger(value) ? { intValue: value.toString() } : { doubleValue: value };
     default:
       return { stringValue: JSON.stringify(value) ?? "undefined" };
   }
 };
 
 const toOtlpAttributes = (
-  attributes: Iterable<readonly [string, unknown]>
+  attributes: Iterable<readonly [string, unknown]>,
 ): Array<{ key: string; value: OtlpValue }> =>
   Array.from(attributes, ([key, value]) => ({
     key,
@@ -221,9 +206,7 @@ const spanToOtlp = (span: OtlpSpan) => {
   return {
     traceId: span.traceId,
     spanId: span.spanId,
-    ...(Option.isSome(span.parent)
-      ? { parentSpanId: span.parent.value.spanId }
-      : {}),
+    ...(Option.isSome(span.parent) ? { parentSpanId: span.parent.value.spanId } : {}),
     name: span.name,
     kind: SPAN_KIND[span.kind],
     startTimeUnixNano: status.startTime.toString(),
@@ -247,16 +230,11 @@ const exitMessage = (exit: Exit.Exit<unknown, unknown>): string =>
     },
   });
 
-export const buildOtlpPayload = (
-  spans: ReadonlyArray<OtlpSpan>,
-  serviceName: string
-) => ({
+export const buildOtlpPayload = (spans: ReadonlyArray<OtlpSpan>, serviceName: string) => ({
   resourceSpans: [
     {
       resource: {
-        attributes: [
-          { key: "service.name", value: { stringValue: serviceName } },
-        ],
+        attributes: [{ key: "service.name", value: { stringValue: serviceName } }],
       },
       scopeSpans: [
         {
@@ -276,7 +254,7 @@ export type FetchLike = (
     method: string;
     headers: Record<string, string>;
     body: string;
-  }
+  },
 ) => Promise<{ ok: boolean; status: number }>;
 
 /**
@@ -286,7 +264,7 @@ export type FetchLike = (
 export const flushSpans = (
   config: TracingConfig,
   buffer: SpanBuffer,
-  fetchFn: FetchLike = (url, init) => fetch(url, init)
+  fetchFn: FetchLike = (url, init) => fetch(url, init),
 ): Effect.Effect<void> =>
   Effect.suspend(() => {
     const spans = buffer.spans.splice(0);
@@ -306,17 +284,15 @@ export const flushSpans = (
       Effect.flatMap((res) =>
         res.ok
           ? dropped > 0
-            ? Effect.logWarning("tracing.spans_dropped").pipe(
-                Effect.annotateLogs({ dropped })
-              )
+            ? Effect.logWarning("tracing.spans_dropped").pipe(Effect.annotateLogs({ dropped }))
             : Effect.void
           : Effect.logWarning("tracing.export_failed").pipe(
               Effect.annotateLogs({
                 status: res.status,
                 spanCount: spans.length,
                 dropped,
-              })
-            )
+              }),
+            ),
       ),
       Effect.catchAll((cause) =>
         Effect.logWarning("tracing.export_failed").pipe(
@@ -324,9 +300,9 @@ export const flushSpans = (
             cause: String(cause),
             spanCount: spans.length,
             dropped,
-          })
-        )
-      )
+          }),
+        ),
+      ),
     );
   });
 
@@ -339,15 +315,13 @@ export const flushSpans = (
 export const TracingLayer = (
   env: object,
   fetchFn?: FetchLike,
-  request?: RequestContext
+  request?: RequestContext,
 ): Layer.Layer<never> => {
   const config = readTracingConfig(env);
   if (!config) return Layer.empty;
   const buffer = makeSpanBuffer();
   return Layer.merge(
     Layer.setTracer(makeOtlpTracer(buffer, request)),
-    Layer.scopedDiscard(
-      Effect.addFinalizer(() => flushSpans(config, buffer, fetchFn))
-    )
+    Layer.scopedDiscard(Effect.addFinalizer(() => flushSpans(config, buffer, fetchFn))),
   );
 };

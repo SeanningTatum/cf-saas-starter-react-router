@@ -16,11 +16,7 @@ import { observabilityLayer, type AppRuntime } from "@/runtime";
 import { AnalyticsRepository } from "@/repositories/analytics";
 import { chainable, makeTestDatabase } from "@/services/database.test-layer";
 import type { FetchLike } from "@/services/tracing";
-import {
-  makeRequestContext,
-  runWithRequestContext,
-  setRequestUser,
-} from "@/lib/request-context";
+import { makeRequestContext, runWithRequestContext, setRequestUser } from "@/lib/request-context";
 
 /**
  * Ticket #74: "a test follows one request through loader, tRPC and repository
@@ -81,13 +77,9 @@ const walk = async (headers: Record<string, string>, userId: string) => {
     AnalyticsRepository.Default.pipe(
       Layer.provide(makeTestDatabase({ select: () => chainable([row]) })),
       Layer.provideMerge(
-        observabilityLayer(
-          { OTEL_EXPORTER_OTLP_ENDPOINT: "http://collector:4318" },
-          ctx,
-          fetchFn
-        )
-      )
-    )
+        observabilityLayer({ OTEL_EXPORTER_OTLP_ENDPOINT: "http://collector:4318" }, ctx, fetchFn),
+      ),
+    ),
   );
   const caller = createCallerFactory(appRouter)({
     headers: request.headers,
@@ -102,7 +94,7 @@ const walk = async (headers: Record<string, string>, userId: string) => {
   await runtime.dispose();
 
   const spans = bodies.flatMap(
-    (body) => JSON.parse(body).resourceSpans[0].scopeSpans[0].spans as ExportedSpan[]
+    (body) => JSON.parse(body).resourceSpans[0].scopeSpans[0].spans as ExportedSpan[],
   );
   return { requestId: ctx.requestId, spans };
 };
@@ -124,7 +116,12 @@ describe("one request through loader, tRPC and repository", () => {
       expect(line).toMatchObject({ requestId, userId: "u1" });
     }
     // The four procedures each log once through the tRPC timing middleware.
-    expect(lines.filter((l) => l.layer === "trpc").map((l) => l.path).sort()).toEqual([
+    expect(
+      lines
+        .filter((l) => l.layer === "trpc")
+        .map((l) => l.path)
+        .sort(),
+    ).toEqual([
       "analytics.getRoleDistribution",
       "analytics.getUserGrowth",
       "analytics.getUserStats",
@@ -136,8 +133,11 @@ describe("one request through loader, tRPC and repository", () => {
     expect(names.some((n) => n.startsWith("trpc.analytics."))).toBe(true);
     expect(names.some((n) => n.startsWith("db.query "))).toBe(true);
     for (const span of spans) {
-      expect({ name: span.name, id: attr(span, "request.id"), user: attr(span, "user.id") })
-        .toEqual({ name: span.name, id: requestId, user: "u1" });
+      expect({
+        name: span.name,
+        id: attr(span, "request.id"),
+        user: attr(span, "user.id"),
+      }).toEqual({ name: span.name, id: requestId, user: "u1" });
     }
     const traceIds = new Set(spans.map((s) => s.traceId));
     expect(traceIds.size).toBe(1);
@@ -172,10 +172,13 @@ describe("one request through loader, tRPC and repository", () => {
     expect(new Set(linesOf(a.requestId).map((l) => l.userId))).toEqual(new Set(["user-a"]));
     expect(new Set(linesOf(b.requestId).map((l) => l.userId))).toEqual(new Set(["user-b"]));
 
-    for (const [walked, user] of [[a, "user-a"], [b, "user-b"]] as const) {
+    for (const [walked, user] of [
+      [a, "user-a"],
+      [b, "user-b"],
+    ] as const) {
       expect(walked.spans.length).toBeGreaterThan(0);
       expect(new Set(walked.spans.map((s) => attr(s, "request.id")))).toEqual(
-        new Set([walked.requestId])
+        new Set([walked.requestId]),
       );
       expect(new Set(walked.spans.map((s) => attr(s, "user.id")))).toEqual(new Set([user]));
     }

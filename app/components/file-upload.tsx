@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useRef, type ChangeEvent, type DragEvent, type KeyboardEvent } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  type ChangeEvent,
+  type DragEvent,
+  type KeyboardEvent,
+} from "react";
 import { useMachine } from "@xstate/react";
 import { useTranslation } from "react-i18next";
 import { cn } from "@/lib/utils";
@@ -58,7 +65,7 @@ export function FileUpload({
           return t("unreachable");
       }
     },
-    [t, limit]
+    [t, limit],
   );
 
   useEffect(() => {
@@ -177,7 +184,7 @@ export function FileUpload({
               ? "border-primary bg-primary/5 scale-[1.02] motion-reduce:scale-100"
               : "border-input hover:border-muted-foreground/60",
             "bg-background hover:bg-accent/50 dark:bg-input/10",
-            uploading && "pointer-events-none opacity-70"
+            uploading && "pointer-events-none opacity-70",
           )}
         >
           {uploading ? (

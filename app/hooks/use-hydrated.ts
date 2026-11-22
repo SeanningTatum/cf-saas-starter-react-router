@@ -1,6 +1,6 @@
-import { useSyncExternalStore } from "react"
+import { useSyncExternalStore } from "react";
 
-const subscribe = () => () => {}
+const subscribe = () => () => {};
 
 /**
  * False during server render and hydration, true once React has hydrated.
@@ -12,5 +12,5 @@ export function useHydrated() {
     subscribe,
     () => true,
     () => false,
-  )
+  );
 }

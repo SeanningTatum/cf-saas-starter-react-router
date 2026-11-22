@@ -40,7 +40,9 @@ const Advisory = Schema.Struct({
   title: Schema.String,
   severity: Schema.String,
 });
-const AuditOutput = Schema.parseJson(Schema.Record({ key: Schema.String, value: Schema.Array(Advisory) }));
+const AuditOutput = Schema.parseJson(
+  Schema.Record({ key: Schema.String, value: Schema.Array(Advisory) }),
+);
 
 const AllowFile = Schema.parseJson(
   Schema.Struct({
@@ -76,9 +78,15 @@ export function advisoryId(url: string): string {
 
 export function parseAudit(stdout: string): Either.Either<Finding[], string> {
   const decoded = Schema.decodeUnknownEither(AuditOutput)(stdout);
-  if (Either.isLeft(decoded)) return Either.left("the output is not the JSON that bun audit --json prints");
+  if (Either.isLeft(decoded))
+    return Either.left("the output is not the JSON that bun audit --json prints");
   const findings = Object.entries(decoded.right).flatMap(([pkg, list]) =>
-    list.map((a) => ({ package: pkg, severity: a.severity, id: advisoryId(a.url), title: a.title })),
+    list.map((a) => ({
+      package: pkg,
+      severity: a.severity,
+      id: advisoryId(a.url),
+      title: a.title,
+    })),
   );
   return Either.right(findings);
 }
@@ -86,7 +94,9 @@ export function parseAudit(stdout: string): Either.Either<Finding[], string> {
 export function parseAllow(text: string): Either.Either<AllowEntry[], string> {
   const decoded = Schema.decodeUnknownEither(AllowFile)(text);
   return Either.isLeft(decoded)
-    ? Either.left(`${ALLOW_FILE} is malformed: expected {"allow":[{"id","package","reason","expires":"YYYY-MM-DD"}]}`)
+    ? Either.left(
+        `${ALLOW_FILE} is malformed: expected {"allow":[{"id","package","reason","expires":"YYYY-MM-DD"}]}`,
+      )
     : Either.right([...decoded.right.allow]);
 }
 
@@ -123,7 +133,11 @@ export interface Deps {
   log: (line: string) => void;
 }
 
-const firstLine = (text: string) => text.split("\n").find((l) => l.trim() !== "")?.trim();
+const firstLine = (text: string) =>
+  text
+    .split("\n")
+    .find((l) => l.trim() !== "")
+    ?.trim();
 
 function blockingLine(f: Finding, expired: AllowEntry[]): string {
   const lapsed = expired.find((e) => sameAdvisory(f, e));
@@ -145,16 +159,26 @@ export function run(deps: Deps): number {
   if (Either.isLeft(parsed) || (out.status !== 0 && parsed.right.length === 0)) {
     const why = Either.isLeft(parsed)
       ? (firstLine(out.stdout) ?? firstLine(out.stderr) ?? parsed.left)
-      : (firstLine(out.stderr) ?? `bun audit exited with status ${out.status} and reported nothing`);
+      : (firstLine(out.stderr) ??
+        `bun audit exited with status ${out.status} and reported nothing`);
     deps.log(`error: the audit could not run: ${why}`);
     return 1;
   }
 
   const v = judge(parsed.right, allow.right, deps.today());
   for (const f of v.blocking) deps.log(blockingLine(f, v.expired));
-  if (v.blocking.length > 0) deps.log(`fix: run \`bun update <package>\`, or add an entry with a reason and an expiry to ${ALLOW_FILE}`);
-  if (v.allowed.length > 0) deps.log(`notice: ${v.allowed.length} known high or critical findings are allowed in ${ALLOW_FILE}`);
-  for (const e of v.stale) deps.log(`notice: ${e.id} in ${e.package} is no longer reported; delete its entry from ${ALLOW_FILE}`);
+  if (v.blocking.length > 0)
+    deps.log(
+      `fix: run \`bun update <package>\`, or add an entry with a reason and an expiry to ${ALLOW_FILE}`,
+    );
+  if (v.allowed.length > 0)
+    deps.log(
+      `notice: ${v.allowed.length} known high or critical findings are allowed in ${ALLOW_FILE}`,
+    );
+  for (const e of v.stale)
+    deps.log(
+      `notice: ${e.id} in ${e.package} is no longer reported; delete its entry from ${ALLOW_FILE}`,
+    );
   if (v.blocking.length > 0) return 1;
   deps.log("ok: no new high or critical findings");
   return 0;
@@ -165,7 +189,11 @@ export function realDeps(): Deps {
   const allowPath = path.join(root, ALLOW_FILE);
   return {
     audit: () => {
-      const out = spawnSync("bun", ["audit", "--json"], { cwd: root, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
+      const out = spawnSync("bun", ["audit", "--json"], {
+        cwd: root,
+        encoding: "utf8",
+        maxBuffer: 64 * 1024 * 1024,
+      });
       return {
         stdout: out.stdout ?? "",
         stderr: out.error ? out.error.message : (out.stderr ?? ""),

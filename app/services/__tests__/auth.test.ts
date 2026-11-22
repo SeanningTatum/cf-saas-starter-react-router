@@ -13,8 +13,7 @@ import { AuthApi, AuthApiLive } from "../auth";
 import { CloudflareEnv } from "../cloudflare";
 import { ExternalServiceError } from "@/models/errors/repository";
 
-const envLayer = (env: Partial<Env>) =>
-  Layer.succeed(CloudflareEnv, env as Env);
+const envLayer = (env: Partial<Env>) => Layer.succeed(CloudflareEnv, env as Env);
 
 describe("AuthApiLive", () => {
   it.effect("provides api when createAuth succeeds", () =>
@@ -28,19 +27,17 @@ describe("AuthApiLive", () => {
             envLayer({
               DATABASE: {} as D1Database,
               BETTER_AUTH_SECRET: "ok",
-            })
-          )
-        )
-      )
-    )
+            }),
+          ),
+        ),
+      ),
+    ),
   );
 
   it.effect("passes baseURL through to createAuth", () =>
     Effect.gen(function* () {
       const { api } = yield* AuthApi;
-      expect((api as unknown as { baseURL: string }).baseURL).toBe(
-        "https://example.com"
-      );
+      expect((api as unknown as { baseURL: string }).baseURL).toBe("https://example.com");
     }).pipe(
       Effect.provide(
         AuthApiLive("https://example.com").pipe(
@@ -48,11 +45,11 @@ describe("AuthApiLive", () => {
             envLayer({
               DATABASE: {} as D1Database,
               BETTER_AUTH_SECRET: "ok",
-            })
-          )
-        )
-      )
-    )
+            }),
+          ),
+        ),
+      ),
+    ),
   );
 
   it.effect("fails with ExternalServiceError when createAuth throws", () =>
@@ -64,10 +61,10 @@ describe("AuthApiLive", () => {
               envLayer({
                 DATABASE: {} as D1Database,
                 BETTER_AUTH_SECRET: "throw",
-              })
-            )
-          )
-        )
+              }),
+            ),
+          ),
+        ),
       );
       const exit = yield* Effect.exit(program);
       expect(Exit.isFailure(exit)).toBe(true);
@@ -75,11 +72,9 @@ describe("AuthApiLive", () => {
         const failure = Cause.failureOption(exit.cause);
         if (failure._tag === "Some") {
           expect(failure.value).toBeInstanceOf(ExternalServiceError);
-          expect((failure.value as ExternalServiceError).service).toBe(
-            "BetterAuth"
-          );
+          expect((failure.value as ExternalServiceError).service).toBe("BetterAuth");
         }
       }
-    })
+    }),
   );
 });

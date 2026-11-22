@@ -21,22 +21,34 @@ const stubFetch = (impl: () => Promise<{ ok: boolean; status: number }>) => {
 describe("posthogAdapter", () => {
   afterEach(() => vi.unstubAllGlobals());
 
-  it.effect("posts one {api_key, batch} body with snake_case keys, to the US cloud by default", () =>
-    Effect.gen(function* () {
-      // Catches: wrong endpoint, distinctId sent un-renamed, or one request per event.
-      const fetchFn = stubFetch(async () => ({ ok: true, status: 200 }));
-      yield* posthogAdapter({ apiKey: "phc_x" }).send([sample, { ...sample, event: "b" }]);
-      expect(fetchFn).toHaveBeenCalledTimes(1);
-      const [url, init] = fetchFn.mock.calls[0] as unknown as [string, RequestInit];
-      expect(url).toBe("https://us.i.posthog.com/batch/");
-      expect(JSON.parse(init.body as string)).toEqual({
-        api_key: "phc_x",
-        batch: [
-          { event: "user_banned", distinct_id: "admin-1", properties: { targetUserId: "u-9" }, timestamp: sample.timestamp },
-          { event: "b", distinct_id: "admin-1", properties: { targetUserId: "u-9" }, timestamp: sample.timestamp },
-        ],
-      });
-    })
+  it.effect(
+    "posts one {api_key, batch} body with snake_case keys, to the US cloud by default",
+    () =>
+      Effect.gen(function* () {
+        // Catches: wrong endpoint, distinctId sent un-renamed, or one request per event.
+        const fetchFn = stubFetch(async () => ({ ok: true, status: 200 }));
+        yield* posthogAdapter({ apiKey: "phc_x" }).send([sample, { ...sample, event: "b" }]);
+        expect(fetchFn).toHaveBeenCalledTimes(1);
+        const [url, init] = fetchFn.mock.calls[0] as unknown as [string, RequestInit];
+        expect(url).toBe("https://us.i.posthog.com/batch/");
+        expect(JSON.parse(init.body as string)).toEqual({
+          api_key: "phc_x",
+          batch: [
+            {
+              event: "user_banned",
+              distinct_id: "admin-1",
+              properties: { targetUserId: "u-9" },
+              timestamp: sample.timestamp,
+            },
+            {
+              event: "b",
+              distinct_id: "admin-1",
+              properties: { targetUserId: "u-9" },
+              timestamp: sample.timestamp,
+            },
+          ],
+        });
+      }),
   );
 
   it.effect("fails with AnalyticsDeliveryError on a non-2xx status or a rejected fetch", () =>
@@ -50,7 +62,7 @@ describe("posthogAdapter", () => {
       stubFetch(() => Promise.reject(new Error("offline")));
       const down = yield* Effect.flip(posthogAdapter({ apiKey: "k" }).send([sample]));
       expect(down).toBeInstanceOf(AnalyticsDeliveryError);
-    })
+    }),
   );
 
   it.effect("fails with AnalyticsDeliveryError when fetch never responds", () =>
@@ -62,11 +74,11 @@ describe("posthogAdapter", () => {
           (_url: string, init: RequestInit) =>
             new Promise((_, reject) => {
               init.signal?.addEventListener("abort", () => reject(init.signal?.reason));
-            })
-        )
+            }),
+        ),
       );
       const err = yield* Effect.flip(posthogAdapter({ apiKey: "k", timeoutMs: 20 }).send([sample]));
       expect(err).toBeInstanceOf(AnalyticsDeliveryError);
-    })
+    }),
   );
 });

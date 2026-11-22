@@ -54,9 +54,7 @@ const CF_RAY = /^[A-Za-z0-9-]{1,64}$/;
  * W3C trace context: `00-<32 hex>-<16 hex>-<2 hex>`, lower-case hex, neither
  * id all zeros, version not `ff`. Anything else is undefined.
  */
-export const parseTraceparent = (
-  header: string | null | undefined
-): TraceParent | undefined => {
+export const parseTraceparent = (header: string | null | undefined): TraceParent | undefined => {
   if (!header) return undefined;
   const match = TRACEPARENT.exec(header);
   if (!match) return undefined;
@@ -90,8 +88,7 @@ export const makeRequestContext = (request: Request): RequestContext => {
   const parent = parseTraceparent(request.headers.get("traceparent"));
   const cfRay = request.headers.get("cf-ray");
   const requestId =
-    parent?.traceId ??
-    (cfRay !== null && CF_RAY.test(cfRay) ? cfRay : randomHex(16));
+    parent?.traceId ?? (cfRay !== null && CF_RAY.test(cfRay) ? cfRay : randomHex(16));
   return {
     requestId,
     method: request.method,
@@ -103,21 +100,18 @@ export const makeRequestContext = (request: Request): RequestContext => {
 const storage = new AsyncLocalStorage<RequestContext>();
 
 /** Runs `fn` with `context` as the async-local store. */
-export const runWithRequestContext = <A>(
-  context: RequestContext,
-  fn: () => A
-): A => storage.run(context, fn);
+export const runWithRequestContext = <A>(context: RequestContext, fn: () => A): A =>
+  storage.run(context, fn);
 
 /** The store's request, or undefined outside a request. */
-export const currentRequestContext = (): RequestContext | undefined =>
-  storage.getStore();
+export const currentRequestContext = (): RequestContext | undefined => storage.getStore();
 
 /**
  * `{ requestId, userId? }` for a log line; `{}` for undefined. The `userId`
  * key is absent when no one is signed in.
  */
 export const requestLogFields = (
-  context: RequestContext | undefined
+  context: RequestContext | undefined,
 ): { requestId?: string; userId?: string } => {
   if (!context) return {};
   return context.userId === undefined
@@ -130,15 +124,13 @@ export const requestLogFields = (
  * the current span as `user.id`. No-op when there is no `CurrentRequest` or
  * no id.
  */
-export const setRequestUser = (
-  userId: string | undefined
-): Effect.Effect<void> =>
+export const setRequestUser = (userId: string | undefined): Effect.Effect<void> =>
   Effect.serviceOption(CurrentRequest).pipe(
     Effect.flatMap((request) => {
       if (userId === undefined || Option.isNone(request)) return Effect.void;
       request.value.userId = userId;
       return Effect.annotateCurrentSpan("user.id", userId);
-    })
+    }),
   );
 
 // The module's one import-time side effect: hand the async-local store to the

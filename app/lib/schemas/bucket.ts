@@ -15,7 +15,7 @@ export const ListR2Input = Schema.Struct({
     Schema.int(),
     Schema.greaterThanOrEqualTo(1),
     Schema.lessThanOrEqualTo(1000),
-    Schema.optionalWith({ default: () => 1000 })
+    Schema.optionalWith({ default: () => 1000 }),
   ),
 });
 export type ListR2Input = typeof ListR2Input.Type;

@@ -8,27 +8,57 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { dryRun, labels, schemaErrors, seq, type DryRunOptions } from "../lib/workflow-dry-run";
 
-const fixture = (name: string) => fileURLToPath(new URL(`./fixtures/workflow-dry-run/${name}.js`, import.meta.url));
-const run = (name: string, options: DryRunOptions) => dryRun(name, { ...options, file: fixture(name) });
+const fixture = (name: string) =>
+  fileURLToPath(new URL(`./fixtures/workflow-dry-run/${name}.js`, import.meta.url));
+const run = (name: string, options: DryRunOptions) =>
+  dryRun(name, { ...options, file: fixture(name) });
 
 type Step = { prompt: string; opts?: Record<string, unknown> };
-const steps = (...prompts: (string | Step)[]) => ({ steps: prompts.map((p) => (typeof p === "string" ? { prompt: p } : p)) });
+const steps = (...prompts: (string | Step)[]) => ({
+  steps: prompts.map((p) => (typeof p === "string" ? { prompt: p } : p)),
+});
 /** Answers every call with `<tag>-<label>`, so a result shows which run answered it. */
-const tagged = (tag: string): DryRunOptions["answers"] => [[() => true, ({ label }: { label: string }) => `${tag}-${label}`]];
+const tagged = (tag: string): DryRunOptions["answers"] => [
+  [() => true, ({ label }: { label: string }) => `${tag}-${label}`],
+];
 
 describe("a run fails when the script swallowed the problem", () => {
   it("an agent call with no rule fails the run, though try/catch and parallel() both caught the throw", async () => {
-    await expect(run("swallow", { answers: [] })).rejects.toThrow(/2 problem\(s\)[\s\S]*label "try"[\s\S]*label "par"/);
+    await expect(run("swallow", { answers: [] })).rejects.toThrow(
+      /2 problem\(s\)[\s\S]*label "try"[\s\S]*label "par"/,
+    );
   });
 
   it("an answer that breaks its schema fails the run though the script caught it; a fitting answer or a dead agent (null) passes", async () => {
-    const args = { schema: { type: "object", properties: { ok: { type: "boolean" } }, required: ["ok"] } };
-    await expect(run("swallow", { args, answers: [["try", { ok: "yes" }], ["par", 1]] })).rejects.toThrow(/"try" \(call 0\) does not fit its schema: \$\.ok: want boolean, got string/);
+    const args = {
+      schema: { type: "object", properties: { ok: { type: "boolean" } }, required: ["ok"] },
+    };
+    await expect(
+      run("swallow", {
+        args,
+        answers: [
+          ["try", { ok: "yes" }],
+          ["par", 1],
+        ],
+      }),
+    ).rejects.toThrow(/"try" \(call 0\) does not fit its schema: \$\.ok: want boolean, got string/);
 
-    const fits = await run("swallow", { args, answers: [["try", { ok: true }], ["par", 1]] });
+    const fits = await run("swallow", {
+      args,
+      answers: [
+        ["try", { ok: true }],
+        ["par", 1],
+      ],
+    });
     expect(fits.result).toEqual({ caught: 0, p: 1 });
     // null is an agent that died: the script must see it, not a schema failure.
-    const died = await run("swallow", { args, answers: [["try", null], ["par", 1]] });
+    const died = await run("swallow", {
+      args,
+      answers: [
+        ["try", null],
+        ["par", 1],
+      ],
+    });
     expect(died.result).toEqual({ caught: 0, p: 1 });
   });
 });
@@ -36,7 +66,9 @@ describe("a run fails when the script swallowed the problem", () => {
 describe("schemaErrors", () => {
   it("type: a list of types accepts any of them; an integer counts as a number but a fraction is not an integer", () => {
     expect(schemaErrors({ type: ["string", "null"] }, null)).toEqual([]);
-    expect(schemaErrors({ type: ["string", "null"] }, 1)).toEqual(["$: want string|null, got integer"]);
+    expect(schemaErrors({ type: ["string", "null"] }, 1)).toEqual([
+      "$: want string|null, got integer",
+    ]);
     expect(schemaErrors({ type: "number" }, 3)).toEqual([]);
     expect(schemaErrors({ type: "integer" }, 1.5)).toHaveLength(1);
     expect(schemaErrors({ type: "array" }, {})).toHaveLength(1);
@@ -46,7 +78,11 @@ describe("schemaErrors", () => {
   it("required, additionalProperties (false or a schema), enum and items report the path of each bad value", () => {
     const schema = {
       type: "object",
-      properties: { kind: { enum: ["a", "b"] }, need: { type: "number" }, list: { type: "array", items: { type: "string" } } },
+      properties: {
+        kind: { enum: ["a", "b"] },
+        need: { type: "number" },
+        list: { type: "array", items: { type: "string" } },
+      },
       required: ["kind", "need"],
       additionalProperties: false,
     };
@@ -57,7 +93,9 @@ describe("schemaErrors", () => {
       "$.list[1]: want string, got integer",
       "$.extra: not in the schema",
     ]);
-    expect(schemaErrors({ type: "object", additionalProperties: { type: "number" } }, { a: 1, b: "x" })).toEqual(["$.b: want number, got string"]);
+    expect(
+      schemaErrors({ type: "object", additionalProperties: { type: "number" } }, { a: 1, b: "x" }),
+    ).toEqual(["$.b: want number, got string"]);
     // No additionalProperties keyword: unknown keys are allowed.
     expect(schemaErrors({ type: "object", properties: {} }, { anything: 1 })).toEqual([]);
   });
@@ -72,7 +110,11 @@ describe("resume", () => {
     expect(same.live).toEqual([]);
 
     // "c" has the same prompt and opts as before, but it follows a changed call.
-    const changed = await run("steps", { args: steps("a", "X", "c"), answers: tagged("new"), resumeFrom: first });
+    const changed = await run("steps", {
+      args: steps("a", "X", "c"),
+      answers: tagged("new"),
+      resumeFrom: first,
+    });
     expect(changed.result).toEqual(["old-a", "new-X", "new-c"]);
     expect(changed.calls.map((c) => c.cached)).toEqual([true, false, false]);
     expect(labels(changed.live)).toEqual(["X", "c"]);
@@ -87,10 +129,17 @@ describe("resume", () => {
   });
 
   it("a call that returned null is not cached: resume runs it again", async () => {
-    const first = await run("steps", { args: steps("a", "b", "c"), answers: [["b", null], ...tagged("old")] });
+    const first = await run("steps", {
+      args: steps("a", "b", "c"),
+      answers: [["b", null], ...tagged("old")],
+    });
     expect(first.result).toEqual(["old-a", null, "old-c"]);
 
-    const again = await run("steps", { args: steps("a", "b", "c"), answers: tagged("new"), resumeFrom: first });
+    const again = await run("steps", {
+      args: steps("a", "b", "c"),
+      answers: tagged("new"),
+      resumeFrom: first,
+    });
     expect(again.result).toEqual(["old-a", "new-b", "new-c"]);
     expect(labels(again.live)).toEqual(["b", "c"]);
   });
@@ -98,7 +147,12 @@ describe("resume", () => {
 
 describe("parallel and pipeline", () => {
   it("a throw becomes null and the rest still finish; pipeline stages get (prev, item, index)", async () => {
-    const r = await run("fanout", { answers: [["p1", "one"], ["p3", "three"]] });
+    const r = await run("fanout", {
+      answers: [
+        ["p1", "one"],
+        ["p3", "three"],
+      ],
+    });
     expect(r.result).toEqual({
       p: ["one", null, "three"],
       q: [{ prev: 10, item: 1, i: 0 }, null, { prev: 30, item: 3, i: 2 }],
@@ -108,18 +162,30 @@ describe("parallel and pipeline", () => {
 
 describe("clock and randomness", () => {
   it.each(["now", "new", "call", "random"])("%s throws: it would break resume", async (what) => {
-    await expect(run("clock", { args: { what }, answers: [] })).rejects.toThrow(/is not available in a workflow script/);
+    await expect(run("clock", { args: { what }, answers: [] })).rejects.toThrow(
+      /is not available in a workflow script/,
+    );
   });
 
   it("a Date with an argument, Date.UTC and the rest of Math still work", async () => {
     const r = await run("clock", { args: { what: "fixed" }, answers: [] });
-    expect(r.result).toEqual({ date: "2026-01-01T00:00:00.000Z", utc: Date.UTC(2026, 0, 1), floor: 2 });
+    expect(r.result).toEqual({
+      date: "2026-01-01T00:00:00.000Z",
+      utc: Date.UTC(2026, 0, 1),
+      floor: 2,
+    });
   });
 });
 
 describe("answer rules", () => {
   it("the first matching rule wins, even over a more specific later one", async () => {
-    const r = await run("steps", { args: steps("x", "y"), answers: [[/./, "broad"], ["x", "exact"]] });
+    const r = await run("steps", {
+      args: steps("x", "y"),
+      answers: [
+        [/./, "broad"],
+        ["x", "exact"],
+      ],
+    });
     expect(r.result).toEqual(["broad", "broad"]);
   });
 
@@ -127,7 +193,10 @@ describe("answer rules", () => {
     const r = await run("steps", {
       args: steps("x", "y", "x", "x"),
       answers: [
-        [(c) => c.prompt === "y", ({ nth, n }: { nth: number; n: number }) => `y nth=${nth} n=${n}`],
+        [
+          (c) => c.prompt === "y",
+          ({ nth, n }: { nth: number; n: number }) => `y nth=${nth} n=${n}`,
+        ],
         ["x", seq("a", "b")],
       ],
     });
@@ -149,6 +218,8 @@ describe("what a run returns", () => {
   });
 
   it("refuses a script that does not begin with `export const meta = `", async () => {
-    await expect(run("no-meta", { answers: [] })).rejects.toThrow(/must begin with "export const meta = "/);
+    await expect(run("no-meta", { answers: [] })).rejects.toThrow(
+      /must begin with "export const meta = "/,
+    );
   });
 });

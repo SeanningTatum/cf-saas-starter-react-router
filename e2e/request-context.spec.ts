@@ -24,7 +24,9 @@ const HEADER = "x-request-id";
 
 /** `n` random bytes as lower-case hex: a fresh trace or span id per run. */
 const hex = (n: number) =>
-  Array.from(crypto.getRandomValues(new Uint8Array(n)), (b) => b.toString(16).padStart(2, "0")).join("");
+  Array.from(crypto.getRandomValues(new Uint8Array(n)), (b) =>
+    b.toString(16).padStart(2, "0"),
+  ).join("");
 
 const idOf = (headers: Record<string, string>, where: string): string => {
   const id = headers[HEADER];
@@ -57,7 +59,9 @@ const hydrated = (node: Locator, timeout: number) =>
 test.describe("Request id", () => {
   // Catches: the header set only by the page renderer (API routes bare), or an
   // id made once per isolate and shared by every request.
-  test("a page and an API response each carry their own x-request-id", { tag: "@golden" }, async ({ request }) => {
+  test("a page and an API response each carry their own x-request-id", { tag: "@golden" }, async ({
+    request,
+  }) => {
     const page = await request.get("/");
     expect(page.status()).toBe(200);
     const pageId = idOf(page.headers(), "GET /");
@@ -76,12 +80,19 @@ test.describe("Request id", () => {
   test("a valid traceparent is continued and a malformed one is ignored", async ({ request }) => {
     const traceId = hex(16);
     const spanId = hex(8);
-    const valid = await request.get("/", { headers: { traceparent: `00-${traceId}-${spanId}-01` } });
-    expect(idOf(valid.headers(), "valid traceparent"), "the trace id did not become the request id").toBe(traceId);
+    const valid = await request.get("/", {
+      headers: { traceparent: `00-${traceId}-${spanId}-01` },
+    });
+    expect(
+      idOf(valid.headers(), "valid traceparent"),
+      "the trace id did not become the request id",
+    ).toBe(traceId);
 
     // One malformed header is enough here; the unit test walks every shape.
     const bad = hex(16);
-    const malformed = await request.get("/", { headers: { traceparent: `00-${bad}-${spanId}-01 injected` } });
+    const malformed = await request.get("/", {
+      headers: { traceparent: `00-${bad}-${spanId}-01 injected` },
+    });
     const id = idOf(malformed.headers(), "malformed traceparent");
     expect(id, "the malformed trace id came back").not.toBe(bad);
     expect(id, "the id is not a well-formed id").toMatch(/^[A-Za-z0-9-]{1,64}$/);
@@ -101,7 +112,9 @@ test.describe("Error page", () => {
   // Catches: the error page without the id a user needs to report the fault,
   // an id that differs from the one the response (and its logs) carry, or one
   // that vanishes or changes when React hydrates the server HTML.
-  test("a 404 page shows the request id of its own response", { tag: "@error" }, async ({ page }) => {
+  test("a 404 page shows the request id of its own response", { tag: "@error" }, async ({
+    page,
+  }) => {
     let response = await loadErrorPage(page);
     // Wait on the heading, which renders with or without an id, so a missing
     // id line fails below on its own assertion rather than as "never hydrated".

@@ -4,13 +4,7 @@ import * as React from "react";
 import { Pie, PieChart, Cell, Bar, BarChart, XAxis, YAxis } from "recharts";
 import { useTranslation } from "react-i18next";
 
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   ChartContainer,
   ChartTooltip,
@@ -88,13 +82,7 @@ export function DistributionChart({
       return (
         <BarChart data={dataWithColors} layout="vertical">
           <XAxis type="number" hide />
-          <YAxis
-            type="category"
-            dataKey="name"
-            tickLine={false}
-            axisLine={false}
-            width={100}
-          />
+          <YAxis type="category" dataKey="name" tickLine={false} axisLine={false} width={100} />
           <ChartTooltip content={<ChartTooltipContent />} />
           <Bar dataKey="value" radius={[0, 4, 4, 0]}>
             {dataWithColors.map((entry) => (
@@ -137,11 +125,7 @@ export function DistributionChart({
         {description && <CardDescription>{description}</CardDescription>}
       </CardHeader>
       <CardContent className="flex flex-col items-center pb-6">
-        <ChartContainer
-          config={chartConfig}
-          className="w-full"
-          style={{ height }}
-        >
+        <ChartContainer config={chartConfig} className="w-full" style={{ height }}>
           {renderChart()}
         </ChartContainer>
         {type === "donut" && (

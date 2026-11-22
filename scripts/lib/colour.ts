@@ -56,7 +56,11 @@ export function parseColour(input: string): Rgba | null {
   const hex = /^#([0-9a-f]{3,4}|[0-9a-f]{6}|[0-9a-f]{8})$/.exec(s);
   if (hex) {
     let h = hex[1] ?? "";
-    if (h.length <= 4) h = h.split("").map((ch) => ch + ch).join("");
+    if (h.length <= 4)
+      h = h
+        .split("")
+        .map((ch) => ch + ch)
+        .join("");
     const n = (i: number) => parseInt(h.slice(i, i + 2), 16);
     return [n(0), n(2), n(4), h.length === 8 ? n(6) / 255 : 1];
   }
@@ -71,7 +75,8 @@ export function parseColour(input: string): Rgba | null {
     const alpha = alphaPart !== undefined ? alphaPart : parts[3];
     const rgb = parts.slice(0, 3).map((p) => clamp(Math.round(channel(p, 255)), 0, 255));
     const [r, g, b] = rgb;
-    if (r === undefined || g === undefined || b === undefined || rgb.some(Number.isNaN)) return null;
+    if (r === undefined || g === undefined || b === undefined || rgb.some(Number.isNaN))
+      return null;
     return [r, g, b, alphaOf(alpha)];
   }
 
@@ -79,7 +84,8 @@ export function parseColour(input: string): Rgba | null {
     if (parts[0] !== "srgb") return null;
     const rgb = parts.slice(1, 4).map((p) => clamp(Math.round(channel(p, 1) * 255), 0, 255));
     const [r, g, b] = rgb;
-    if (r === undefined || g === undefined || b === undefined || rgb.some(Number.isNaN)) return null;
+    if (r === undefined || g === undefined || b === undefined || rgb.some(Number.isNaN))
+      return null;
     return [r, g, b, alphaOf(alphaPart)];
   }
 

@@ -60,7 +60,7 @@ const nextProtectedCall = (headers: Headers): Promise<string> =>
     .then((ctx) => createCallerFactory(probeRouter)(ctx).ping())
     .then(
       () => "ok",
-      (e: unknown) => (e instanceof TRPCError ? e.code : `not a TRPCError: ${String(e)}`)
+      (e: unknown) => (e instanceof TRPCError ? e.code : `not a TRPCError: ${String(e)}`),
     );
 
 /** "allowed", or "<status> <Location>" of the redirect the loader guard threw. */
@@ -70,7 +70,7 @@ const nextGuardedLoader = (headers: Headers): Promise<string> =>
     (e: unknown) =>
       e instanceof Response
         ? `${e.status} ${e.headers.get("Location")}`
-        : `not a Response: ${String(e)}`
+        : `not a Response: ${String(e)}`,
   );
 
 const stateOf = async (account: Pick<Account, "userId" | "headers">) => ({
@@ -85,7 +85,7 @@ const ENDED = { sessionRows: 0, protectedCall: "UNAUTHORIZED", loader: "302 /log
 const signInRefusal = (email: string): Promise<unknown> =>
   signIn(email).then(
     () => "signed in",
-    (e: unknown) => e
+    (e: unknown) => e,
   );
 
 beforeAll(async () => {
@@ -143,7 +143,7 @@ describe("a ban ends the user's sessions at once", { timeout: 60_000 }, () => {
 
       expect(await bannedFlag(victim.userId), "the ban itself landed").toBe(1);
       expect(await stateOf(victim)).toEqual(ENDED);
-    }
+    },
   );
 
   it("ends only the banned user's sessions: a bystander stays signed in", async () => {

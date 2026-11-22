@@ -33,7 +33,7 @@ declare module "react-router" {
 
 const requestHandler = createRequestHandler(
   () => import("virtual:react-router/server-build"),
-  import.meta.env.MODE
+  import.meta.env.MODE,
 );
 
 const internalError = (requestId: string) =>
@@ -46,13 +46,9 @@ async function handle(
   env: Env,
   ctx: ExecutionContext,
   cspNonce: string,
-  requestContext: RequestContext
+  requestContext: RequestContext,
 ): Promise<Response> {
-  const runtime = makeAppRuntime(
-    env,
-    new URL(request.url).origin,
-    requestContext
-  );
+  const runtime = makeAppRuntime(env, new URL(request.url).origin, requestContext);
 
   try {
     // Single entry edge: read the Better Auth instance off the runtime's
@@ -64,10 +60,7 @@ async function handle(
     // `context.auth` for React Router loaders exactly as before.
     const authExit = await runtime.runPromiseExit(AuthApi);
     if (Exit.isFailure(authExit)) {
-      loggers.server.error(
-        { cause: Cause.pretty(authExit.cause) },
-        "Failed to construct AuthApi"
-      );
+      loggers.server.error({ cause: Cause.pretty(authExit.cause) }, "Failed to construct AuthApi");
       return internalError(requestContext.requestId);
     }
     const { auth } = authExit.value;
@@ -108,7 +101,7 @@ export default {
     const nonce = makeNonce();
     const requestContext = makeRequestContext(request);
     const response = await runWithRequestContext(requestContext, () =>
-      handle(request, env, ctx, nonce, requestContext)
+      handle(request, env, ctx, nonce, requestContext),
     );
     const secured = withSecurityHeaders(response, {
       nonce,

@@ -23,253 +23,238 @@ interface FilterProtectedInput {
 
 export const isProtectedUser = (
   target: { readonly role: string | null; readonly id: string },
-  currentUserId: string
+  currentUserId: string,
 ): boolean => target.role === "admin" || target.id === currentUserId;
 
-export const buildUserConditions = (
-  input: GetUsersInput
-): SQL | undefined => {
+export const buildUserConditions = (input: GetUsersInput): SQL | undefined => {
   const conditions: SQL[] = [];
   if (input.search) {
     // instr, not LIKE: `%` and `_` in the term stay literal, and D1 refuses
     // any LIKE pattern over 50 bytes.
     const cond = or(
       sql`instr(lower(${user.name}), lower(${input.search})) > 0`,
-      sql`instr(lower(${user.email}), lower(${input.search})) > 0`
+      sql`instr(lower(${user.email}), lower(${input.search})) > 0`,
     );
     if (cond) conditions.push(cond);
   }
   if (input.role) conditions.push(eq(user.role, input.role));
   if (input.status === "banned") conditions.push(eq(user.banned, true));
-  else if (input.status === "verified")
-    conditions.push(eq(user.emailVerified, true));
-  else if (input.status === "unverified")
-    conditions.push(eq(user.emailVerified, false));
+  else if (input.status === "verified") conditions.push(eq(user.emailVerified, true));
+  else if (input.status === "unverified") conditions.push(eq(user.emailVerified, false));
   if (conditions.length === 0) return undefined;
   if (conditions.length === 1) return conditions[0];
   return and(...conditions);
 };
 
-export class UserRepository extends Effect.Service<UserRepository>()(
-  "app/UserRepository",
-  {
-    effect: Effect.gen(function* () {
-      const { db } = yield* Database;
+export class UserRepository extends Effect.Service<UserRepository>()("app/UserRepository", {
+  effect: Effect.gen(function* () {
+    const { db } = yield* Database;
 
-      // Nothing reads `banned` when a session is resolved, so a ban must delete
-      // the sessions too. Batch this with the ban: D1 lands both or neither.
-      const endSessions = (userIds: ReadonlyArray<string>) =>
-        db.delete(session).where(inArray(session.userId, [...userIds]));
+    // Nothing reads `banned` when a session is resolved, so a ban must delete
+    // the sessions too. Batch this with the ban: D1 lands both or neither.
+    const endSessions = (userIds: ReadonlyArray<string>) =>
+      db.delete(session).where(inArray(session.userId, [...userIds]));
 
-      const banAndEndSessions = (
-        userIds: ReadonlyArray<string>,
-        ban: { readonly reason?: string; readonly expiresAt?: Date }
-      ) =>
-        db.batch([
+    const banAndEndSessions = (
+      userIds: ReadonlyArray<string>,
+      ban: { readonly reason?: string; readonly expiresAt?: Date },
+    ) =>
+      db.batch([
+        db
+          .update(user)
+          .set({
+            banned: true,
+            banReason: ban.reason ?? null,
+            banExpires: ban.expiresAt ?? null,
+          })
+          .where(inArray(user.id, [...userIds])),
+        endSessions(userIds),
+      ]);
+
+    const getUsers = (input: GetUsersInput) =>
+      Effect.gen(function* () {
+        const offset = input.page * input.limit;
+        const condition = buildUserConditions(input);
+
+        const [users, totalCountResult] = yield* Effect.all(
+          [
+            tryQuery("user", () =>
+              db
+                .select()
+                .from(user)
+                .where(condition)
+                .orderBy(desc(user.createdAt))
+                .limit(input.limit)
+                .offset(offset),
+            ),
+            tryQuery("user", () => db.select({ count: count() }).from(user).where(condition)),
+          ],
+          { concurrency: "unbounded" },
+        );
+
+        const total = totalCountResult[0]?.count ?? 0;
+        return {
+          users,
+          total,
+          page: input.page,
+          limit: input.limit,
+          totalPages: Math.ceil(total / input.limit),
+        };
+      });
+
+    const filterProtectedUsers = (input: FilterProtectedInput) =>
+      Effect.gen(function* () {
+        if (input.userIds.length === 0) {
+          return { validUserIds: [] as string[], skippedCount: 0 };
+        }
+        const usersToCheck = yield* tryQuery("user", () =>
+          db
+            .select({ id: user.id, role: user.role })
+            .from(user)
+            .where(inArray(user.id, [...input.userIds])),
+        );
+        const validUserIds = usersToCheck
+          .filter((u) => !isProtectedUser(u, input.currentUserId))
+          .map((u) => u.id);
+        return {
+          validUserIds,
+          skippedCount: input.userIds.length - validUserIds.length,
+        };
+      });
+
+    const bulkBanUsers = (input: BulkBanUsersInput) =>
+      input.userIds.length === 0
+        ? Effect.succeed(0)
+        : tryUpdate("user", async () => {
+            await banAndEndSessions(input.userIds, input);
+            return input.userIds.length;
+          });
+
+    const bulkDeleteUsers = (input: BulkDeleteUsersInput) =>
+      input.userIds.length === 0
+        ? Effect.succeed(0)
+        : tryDelete("user", async () => {
+            await db.delete(user).where(inArray(user.id, [...input.userIds]));
+            return input.userIds.length;
+          });
+
+    const bulkUpdateUserRoles = (input: BulkUpdateUserRolesInput) =>
+      input.userIds.length === 0
+        ? Effect.succeed(0)
+        : tryUpdate("user", async () => {
+            await db
+              .update(user)
+              .set({ role: input.role })
+              .where(inArray(user.id, [...input.userIds]));
+            return input.userIds.length;
+          });
+
+    const getUser = (input: GetUserInput) =>
+      Effect.gen(function* () {
+        const found = yield* tryQuery("user", () =>
+          db.select().from(user).where(eq(user.id, input.userId)).limit(1),
+        );
+        return yield* requireFound("user", input.userId, found[0]);
+      });
+
+    const assertMutable = (input: { userId: string; currentUserId: string }) =>
+      Effect.gen(function* () {
+        const target = yield* tryQuery("user", () =>
+          db
+            .select({ id: user.id, role: user.role })
+            .from(user)
+            .where(eq(user.id, input.userId))
+            .limit(1),
+        );
+        const found = yield* requireFound("user", input.userId, target[0]);
+        if (isProtectedUser(found, input.currentUserId)) {
+          return yield* Effect.fail(
+            new ValidationError({
+              entity: "user",
+              message: "Cannot modify admin users or yourself",
+              field: "userId",
+            }),
+          );
+        }
+        return found;
+      });
+
+    const updateUser = (input: UpdateUserInput & { currentUserId: string }) =>
+      Effect.gen(function* () {
+        yield* assertMutable({
+          userId: input.userId,
+          currentUserId: input.currentUserId,
+        });
+        yield* tryUpdate<unknown>("user", () => {
+          const update = db
+            .update(user)
+            .set({
+              name: input.data.name,
+              email: input.data.email,
+              role: input.data.role,
+              banned: input.data.banned,
+              banReason: input.data.banReason,
+              banExpires: input.data.banExpires,
+              emailVerified: input.data.verified,
+            })
+            .where(eq(user.id, input.userId));
+          return input.data.banned === true
+            ? db.batch([update, endSessions([input.userId])])
+            : update;
+        });
+        return { success: true } as const;
+      });
+
+    const banUser = (input: BanUserInput & { currentUserId: string }) =>
+      Effect.gen(function* () {
+        yield* assertMutable({
+          userId: input.userId,
+          currentUserId: input.currentUserId,
+        });
+        yield* tryUpdate("user", () => banAndEndSessions([input.userId], input));
+        return { success: true } as const;
+      });
+
+    const unbanUser = (input: UnbanUserInput) =>
+      Effect.gen(function* () {
+        const target = yield* tryQuery("user", () =>
+          db.select({ id: user.id }).from(user).where(eq(user.id, input.userId)).limit(1),
+        );
+        yield* requireFound("user", input.userId, target[0]);
+        yield* tryUpdate("user", () =>
           db
             .update(user)
             .set({
-              banned: true,
-              banReason: ban.reason ?? null,
-              banExpires: ban.expiresAt ?? null,
+              banned: false,
+              banReason: null,
+              banExpires: null,
             })
-            .where(inArray(user.id, [...userIds])),
-          endSessions(userIds),
-        ]);
+            .where(eq(user.id, input.userId)),
+        );
+        return { success: true } as const;
+      });
 
-      const getUsers = (input: GetUsersInput) =>
-        Effect.gen(function* () {
-          const offset = input.page * input.limit;
-          const condition = buildUserConditions(input);
-
-          const [users, totalCountResult] = yield* Effect.all(
-            [
-              tryQuery("user", () =>
-                db
-                  .select()
-                  .from(user)
-                  .where(condition)
-                  .orderBy(desc(user.createdAt))
-                  .limit(input.limit)
-                  .offset(offset)
-              ),
-              tryQuery("user", () =>
-                db.select({ count: count() }).from(user).where(condition)
-              ),
-            ],
-            { concurrency: "unbounded" }
-          );
-
-          const total = totalCountResult[0]?.count ?? 0;
-          return {
-            users,
-            total,
-            page: input.page,
-            limit: input.limit,
-            totalPages: Math.ceil(total / input.limit),
-          };
+    const deleteUser = (input: DeleteUserInput & { currentUserId: string }) =>
+      Effect.gen(function* () {
+        yield* assertMutable({
+          userId: input.userId,
+          currentUserId: input.currentUserId,
         });
+        yield* tryDelete("user", () => db.delete(user).where(eq(user.id, input.userId)));
+        return { success: true } as const;
+      });
 
-      const filterProtectedUsers = (input: FilterProtectedInput) =>
-        Effect.gen(function* () {
-          if (input.userIds.length === 0) {
-            return { validUserIds: [] as string[], skippedCount: 0 };
-          }
-          const usersToCheck = yield* tryQuery("user", () =>
-            db
-              .select({ id: user.id, role: user.role })
-              .from(user)
-              .where(inArray(user.id, [...input.userIds]))
-          );
-          const validUserIds = usersToCheck
-            .filter((u) => !isProtectedUser(u, input.currentUserId))
-            .map((u) => u.id);
-          return {
-            validUserIds,
-            skippedCount: input.userIds.length - validUserIds.length,
-          };
-        });
-
-      const bulkBanUsers = (input: BulkBanUsersInput) =>
-        input.userIds.length === 0
-          ? Effect.succeed(0)
-          : tryUpdate("user", async () => {
-              await banAndEndSessions(input.userIds, input);
-              return input.userIds.length;
-            });
-
-      const bulkDeleteUsers = (input: BulkDeleteUsersInput) =>
-        input.userIds.length === 0
-          ? Effect.succeed(0)
-          : tryDelete("user", async () => {
-              await db.delete(user).where(inArray(user.id, [...input.userIds]));
-              return input.userIds.length;
-            });
-
-      const bulkUpdateUserRoles = (input: BulkUpdateUserRolesInput) =>
-        input.userIds.length === 0
-          ? Effect.succeed(0)
-          : tryUpdate("user", async () => {
-              await db
-                .update(user)
-                .set({ role: input.role })
-                .where(inArray(user.id, [...input.userIds]));
-              return input.userIds.length;
-            });
-
-      const getUser = (input: GetUserInput) =>
-        Effect.gen(function* () {
-          const found = yield* tryQuery("user", () =>
-            db.select().from(user).where(eq(user.id, input.userId)).limit(1)
-          );
-          return yield* requireFound("user", input.userId, found[0]);
-        });
-
-      const assertMutable = (input: { userId: string; currentUserId: string }) =>
-        Effect.gen(function* () {
-          const target = yield* tryQuery("user", () =>
-            db
-              .select({ id: user.id, role: user.role })
-              .from(user)
-              .where(eq(user.id, input.userId))
-              .limit(1)
-          );
-          const found = yield* requireFound("user", input.userId, target[0]);
-          if (isProtectedUser(found, input.currentUserId)) {
-            return yield* Effect.fail(
-              new ValidationError({
-                entity: "user",
-                message: "Cannot modify admin users or yourself",
-                field: "userId",
-              })
-            );
-          }
-          return found;
-        });
-
-      const updateUser = (
-        input: UpdateUserInput & { currentUserId: string }
-      ) =>
-        Effect.gen(function* () {
-          yield* assertMutable({
-            userId: input.userId,
-            currentUserId: input.currentUserId,
-          });
-          yield* tryUpdate<unknown>("user", () => {
-            const update = db
-              .update(user)
-              .set({
-                name: input.data.name,
-                email: input.data.email,
-                role: input.data.role,
-                banned: input.data.banned,
-                banReason: input.data.banReason,
-                banExpires: input.data.banExpires,
-                emailVerified: input.data.verified,
-              })
-              .where(eq(user.id, input.userId));
-            return input.data.banned === true
-              ? db.batch([update, endSessions([input.userId])])
-              : update;
-          });
-          return { success: true } as const;
-        });
-
-      const banUser = (input: BanUserInput & { currentUserId: string }) =>
-        Effect.gen(function* () {
-          yield* assertMutable({
-            userId: input.userId,
-            currentUserId: input.currentUserId,
-          });
-          yield* tryUpdate("user", () =>
-            banAndEndSessions([input.userId], input)
-          );
-          return { success: true } as const;
-        });
-
-      const unbanUser = (input: UnbanUserInput) =>
-        Effect.gen(function* () {
-          const target = yield* tryQuery("user", () =>
-            db.select({ id: user.id }).from(user).where(eq(user.id, input.userId)).limit(1)
-          );
-          yield* requireFound("user", input.userId, target[0]);
-          yield* tryUpdate("user", () =>
-            db
-              .update(user)
-              .set({
-                banned: false,
-                banReason: null,
-                banExpires: null,
-              })
-              .where(eq(user.id, input.userId))
-          );
-          return { success: true } as const;
-        });
-
-      const deleteUser = (
-        input: DeleteUserInput & { currentUserId: string }
-      ) =>
-        Effect.gen(function* () {
-          yield* assertMutable({
-            userId: input.userId,
-            currentUserId: input.currentUserId,
-          });
-          yield* tryDelete("user", () => db.delete(user).where(eq(user.id, input.userId)));
-          return { success: true } as const;
-        });
-
-      return {
-        getUsers,
-        filterProtectedUsers,
-        bulkBanUsers,
-        bulkDeleteUsers,
-        bulkUpdateUserRoles,
-        getUser,
-        updateUser,
-        banUser,
-        unbanUser,
-        deleteUser,
-      } as const;
-    }),
-  }
-) {}
+    return {
+      getUsers,
+      filterProtectedUsers,
+      bulkBanUsers,
+      bulkDeleteUsers,
+      bulkUpdateUserRoles,
+      getUser,
+      updateUser,
+      banUser,
+      unbanUser,
+      deleteUser,
+    } as const;
+  }),
+}) {}

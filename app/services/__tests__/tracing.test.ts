@@ -1,13 +1,6 @@
 import { describe, expect } from "vitest";
 import { it } from "@effect/vitest";
-import {
-  Context,
-  Effect,
-  Exit,
-  Logger,
-  ManagedRuntime,
-  Option,
-} from "effect";
+import { Context, Effect, Exit, Logger, ManagedRuntime, Option } from "effect";
 import {
   MAX_BUFFERED_SPANS,
   OtlpSpan,
@@ -49,7 +42,7 @@ const captureLogs = () => {
     Logger.defaultLogger,
     Logger.make(({ message }) => {
       messages.push(String(message));
-    })
+    }),
   );
   return { messages, layer };
 };
@@ -66,7 +59,7 @@ const makeSpan = (
   buffer = makeSpanBuffer(),
   parent: Option.Option<OtlpSpan> = Option.none(),
   startTime = 100n,
-  kind: "internal" | "client" | "server" = "internal"
+  kind: "internal" | "client" | "server" = "internal",
 ) => new OtlpSpan(name, parent, [], startTime, kind, buffer);
 
 // --- parseOtlpHeaders ---------------------------------------------------------
@@ -120,9 +113,9 @@ describe("readTracingConfig", () => {
   });
 
   it("strips trailing slashes and appends /v1/traces to a base endpoint", () => {
-    expect(
-      readTracingConfig({ OTEL_EXPORTER_OTLP_ENDPOINT: "http://collector:4318//" })?.url
-    ).toBe("http://collector:4318/v1/traces");
+    expect(readTracingConfig({ OTEL_EXPORTER_OTLP_ENDPOINT: "http://collector:4318//" })?.url).toBe(
+      "http://collector:4318/v1/traces",
+    );
   });
 
   it("does not double-append when the endpoint already ends in /v1/traces", () => {
@@ -130,7 +123,7 @@ describe("readTracingConfig", () => {
     expect(
       readTracingConfig({
         OTEL_EXPORTER_OTLP_ENDPOINT: "https://api.honeycomb.io/v1/traces/",
-      })?.url
+      })?.url,
     ).toBe("https://api.honeycomb.io/v1/traces");
   });
 
@@ -216,7 +209,7 @@ describe("makeOtlpTracer", () => {
       Context.empty(),
       [],
       50n,
-      "server"
+      "server",
     );
 
     expect(span).toBeInstanceOf(OtlpSpan);
@@ -316,9 +309,7 @@ describe("buildOtlpPayload", () => {
     expect(span?.kind).toBe(3);
     expect(span?.startTimeUnixNano).toBe("200");
     expect(span?.endTimeUnixNano).toBe("300");
-    expect(span?.attributes).toEqual([
-      { key: "db.entity", value: { stringValue: "user" } },
-    ]);
+    expect(span?.attributes).toEqual([{ key: "db.entity", value: { stringValue: "user" } }]);
     expect(span?.events).toEqual([
       {
         name: "retry",
@@ -347,8 +338,8 @@ describe("buildOtlpPayload", () => {
     const bad = makeSpan("bad", buffer);
     bad.end(200n, Exit.fail(new Error("boom".padEnd(2000, "!"))));
 
-    const [okOut, badOut] = (buildOtlpPayload([ok, bad], "svc").resourceSpans[0]
-      ?.scopeSpans[0]?.spans ?? []) as ReadonlyArray<{
+    const [okOut, badOut] = (buildOtlpPayload([ok, bad], "svc").resourceSpans[0]?.scopeSpans[0]
+      ?.spans ?? []) as ReadonlyArray<{
       status: { code: number; message?: string };
     }>;
     expect(okOut?.status).toEqual({ code: 1 });
@@ -366,7 +357,7 @@ describe("flushSpans", () => {
       const { calls, fetchFn } = stubFetch();
       yield* flushSpans(config(), makeSpanBuffer(), fetchFn);
       expect(calls).toHaveLength(0);
-    })
+    }),
   );
 
   it.effect("POSTs one JSON request to config.url with content-type + config headers", () =>
@@ -377,11 +368,7 @@ describe("flushSpans", () => {
       const buffer = makeSpanBuffer();
       makeSpan("work", buffer).end(200n, Exit.void);
 
-      yield* flushSpans(
-        config({ headers: { "x-api-key": "abc" } }),
-        buffer,
-        fetchFn
-      );
+      yield* flushSpans(config({ headers: { "x-api-key": "abc" } }), buffer, fetchFn);
 
       expect(calls).toHaveLength(1);
       expect(calls[0]?.url).toBe("http://collector:4318/v1/traces");
@@ -391,10 +378,10 @@ describe("flushSpans", () => {
         "x-api-key": "abc",
       });
       const body = JSON.parse(calls[0]?.init.body ?? "");
-      expect(body.resourceSpans[0].scopeSpans[0].spans.map((s: { name: string }) => s.name)).toEqual(
-        ["work"]
-      );
-    })
+      expect(
+        body.resourceSpans[0].scopeSpans[0].spans.map((s: { name: string }) => s.name),
+      ).toEqual(["work"]);
+    }),
   );
 
   it.effect("drains the buffer so a second flush exports nothing", () =>
@@ -410,7 +397,7 @@ describe("flushSpans", () => {
 
       expect(calls).toHaveLength(1);
       expect(buffer.spans).toHaveLength(0);
-    })
+    }),
   );
 
   it.effect("succeeds (never fails the app) and logs when the collector returns !ok", () =>
@@ -423,13 +410,13 @@ describe("flushSpans", () => {
       makeSpan("work", buffer).end(200n, Exit.void);
 
       const exit = yield* Effect.exit(
-        flushSpans(config(), buffer, fetchFn).pipe(Effect.provide(layer))
+        flushSpans(config(), buffer, fetchFn).pipe(Effect.provide(layer)),
       );
 
       expect(Exit.isSuccess(exit)).toBe(true);
       expect(calls).toHaveLength(1);
       expect(messages).toContain("tracing.export_failed");
-    })
+    }),
   );
 
   it.effect("succeeds and logs when fetch itself rejects", () =>
@@ -440,12 +427,12 @@ describe("flushSpans", () => {
       makeSpan("work", buffer).end(200n, Exit.void);
 
       const exit = yield* Effect.exit(
-        flushSpans(config(), buffer, fetchFn).pipe(Effect.provide(layer))
+        flushSpans(config(), buffer, fetchFn).pipe(Effect.provide(layer)),
       );
 
       expect(Exit.isSuccess(exit)).toBe(true);
       expect(messages).toContain("tracing.export_failed");
-    })
+    }),
   );
 
   it.effect("reports dropped spans once and resets the counter", () =>
@@ -462,7 +449,7 @@ describe("flushSpans", () => {
 
       expect(messages).toContain("tracing.spans_dropped");
       expect(buffer.dropped).toBe(0);
-    })
+    }),
   );
 });
 
@@ -474,7 +461,7 @@ describe("TracingLayer", () => {
     // ever exported) or building the wrong URL from the endpoint env var.
     const { calls, fetchFn } = stubFetch();
     const runtime = ManagedRuntime.make(
-      TracingLayer({ OTEL_EXPORTER_OTLP_ENDPOINT: "http://localhost:4318" }, fetchFn)
+      TracingLayer({ OTEL_EXPORTER_OTLP_ENDPOINT: "http://localhost:4318" }, fetchFn),
     );
 
     await runtime.runPromise(Effect.void.pipe(Effect.withSpan("test.span")));
@@ -489,7 +476,7 @@ describe("TracingLayer", () => {
       { key: "service.name", value: { stringValue: "cf-saas-starter" } },
     ]);
     expect(
-      body.resourceSpans[0].scopeSpans[0].spans.map((s: { name: string }) => s.name)
+      body.resourceSpans[0].scopeSpans[0].spans.map((s: { name: string }) => s.name),
     ).toContain("test.span");
   });
 

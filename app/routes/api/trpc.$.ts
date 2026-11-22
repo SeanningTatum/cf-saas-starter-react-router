@@ -18,10 +18,7 @@ const handler = async (req: Request, context: AppLoadContext) => {
         runtime: context.runtime,
       }),
     onError({ error, path }) {
-      loggers.trpc.error(
-        { path, code: error.code, stack: error.stack },
-        error.message
-      );
+      loggers.trpc.error({ path, code: error.code, stack: error.stack }, error.message);
     },
   });
 };

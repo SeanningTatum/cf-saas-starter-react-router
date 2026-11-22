@@ -61,13 +61,7 @@ beforeEach(() => {
 describe("buildAccountIdVariableArgs", () => {
   it("carries the account ID as a single, unmodified argv element", () => {
     const args = buildAccountIdVariableArgs("abc123");
-    expect(args).toEqual([
-      "variable",
-      "set",
-      "CLOUDFLARE_ACCOUNT_ID",
-      "--body",
-      "abc123",
-    ]);
+    expect(args).toEqual(["variable", "set", "CLOUDFLARE_ACCOUNT_ID", "--body", "abc123"]);
   });
 
   it.each(INJECTION_PAYLOADS)(
@@ -79,7 +73,7 @@ describe("buildAccountIdVariableArgs", () => {
       // It must not be split, escaped, or merged into other elements.
       expect(args).toHaveLength(5);
       expect(args.filter((a) => a === payload)).toHaveLength(1);
-    }
+    },
   );
 });
 
@@ -90,9 +84,8 @@ describe("executeArgv (shell-injection safety)", () => {
       executeArgv("gh", buildAccountIdVariableArgs(payload), true);
 
       expect(spawnSync).toHaveBeenCalledTimes(1);
-      const [file, argv, options] = (spawnSync as unknown as ReturnType<
-        typeof vi.fn
-      >).mock.calls[0] ?? [];
+      const [file, argv, options] =
+        (spawnSync as unknown as ReturnType<typeof vi.fn>).mock.calls[0] ?? [];
 
       // Correct executable, argv array (not a shell string).
       expect(file).toBe("gh");
@@ -106,7 +99,7 @@ describe("executeArgv (shell-injection safety)", () => {
       // Sanity: the payload never appears interpolated into any single string arg
       // that a shell could re-parse (i.e. no `... --body "<payload>"` blob).
       expect(argv).not.toContain(`--body "${payload}"`);
-    }
+    },
   );
 
   it("returns stdout on success (status 0) so the success branch still fires", () => {
@@ -175,11 +168,14 @@ describe("setupGitHubCiCredentials secrets (pipelines)", () => {
     for (const a of answers) (password as unknown as Mock).mockResolvedValueOnce(a);
     const saved: [string, string][] = [];
     const logged: string[] = [];
-    const log = vi.spyOn(console, "log").mockImplementation((...a) => void logged.push(a.join(" ")));
+    const log = vi
+      .spyOn(console, "log")
+      .mockImplementation((...a) => void logged.push(a.join(" ")));
     await setupGitHubCiCredentials("acct", (k, v) => void saved.push([k, v]));
     log.mockRestore();
-    const secretCalls = vi.mocked(execSync).mock.calls
-      .filter(([cmd]) => String(cmd).startsWith("gh secret set"))
+    const secretCalls = vi
+      .mocked(execSync)
+      .mock.calls.filter(([cmd]) => String(cmd).startsWith("gh secret set"))
       .map(([cmd, opts]) => ({ cmd: String(cmd), input: opts?.input }));
     const argvs = vi.mocked(spawnSync).mock.calls.map(([, args]) => args ?? []);
     return { saved, logged, secretCalls, argvs };
@@ -198,7 +194,9 @@ describe("setupGitHubCiCredentials secrets (pipelines)", () => {
     const { argvs, secretCalls } = await wizard([PROD, ""], OK);
     expect(argvs).toContainEqual(["api", ENDPOINT]);
     expect(argvs.filter((a) => a.includes("PUT"))).toEqual([]);
-    expect(secretCalls.map((c) => c.cmd)).toContain("gh secret set CLOUDFLARE_API_TOKEN --env production");
+    expect(secretCalls.map((c) => c.cmd)).toContain(
+      "gh secret set CLOUDFLARE_API_TOKEN --env production",
+    );
   });
 
   it("a missing production environment (404) is created with a PUT, through argv and no shell", async () => {
@@ -210,7 +208,9 @@ describe("setupGitHubCiCredentials secrets (pipelines)", () => {
     const denied = { ...NOT_FOUND, stderr: "gh: Forbidden (HTTP 403)" };
     const { argvs, secretCalls } = await wizard([PROD, ""], denied);
     expect(argvs.filter((a) => a.includes("PUT"))).toEqual([]);
-    expect(secretCalls.map((c) => c.cmd)).not.toContain("gh secret set CLOUDFLARE_API_TOKEN --env production");
+    expect(secretCalls.map((c) => c.cmd)).not.toContain(
+      "gh secret set CLOUDFLARE_API_TOKEN --env production",
+    );
   });
 
   it("warns to protect the environment before it asks for the production token", async () => {
@@ -234,7 +234,9 @@ describe("setupGitHubCiCredentials secrets (pipelines)", () => {
 
   it("a blank preview token sets neither preview secret and writes no .env line", async () => {
     const { secretCalls, saved } = await wizard([PROD, ""]);
-    expect(secretCalls.map((c) => c.cmd)).not.toContain("gh secret set CLOUDFLARE_PREVIEW_API_TOKEN");
+    expect(secretCalls.map((c) => c.cmd)).not.toContain(
+      "gh secret set CLOUDFLARE_PREVIEW_API_TOKEN",
+    );
     expect(secretCalls.map((c) => c.cmd)).not.toContain("gh secret set PREVIEW_SEED_SECRET");
     expect(saved).toEqual([]);
   });
@@ -299,25 +301,23 @@ describe("setupGitHubCiCredentials (call-site shell-injection regression)", () =
       await setupGitHubCiCredentials(payload, () => {});
 
       // The account ID reached `gh` as a discrete argv element via spawnSync (no shell).
-      const ghVarCall = vi.mocked(spawnSync).mock.calls.find(
-        ([file, args]) =>
-          file === "gh" &&
-          Array.isArray(args) &&
-          args[2] === "CLOUDFLARE_ACCOUNT_ID"
-      );
+      const ghVarCall = vi
+        .mocked(spawnSync)
+        .mock.calls.find(
+          ([file, args]) =>
+            file === "gh" && Array.isArray(args) && args[2] === "CLOUDFLARE_ACCOUNT_ID",
+        );
       expect(ghVarCall).toBeDefined();
       expect(ghVarCall?.[1]?.[4]).toBe(payload);
 
       // The payload must NEVER be interpolated into a shell command string handed to
       // execSync. This is what fails if someone reverts to `gh variable set ... --body
       // "${accountId}"` (the original P1 bug).
-      for (const [cmd] of (
-        execSync as unknown as ReturnType<typeof vi.fn>
-      ).mock.calls) {
+      for (const [cmd] of (execSync as unknown as ReturnType<typeof vi.fn>).mock.calls) {
         expect(String(cmd)).not.toContain(`--body "${payload}"`);
         expect(String(cmd)).not.toContain(payload);
       }
-    }
+    },
   );
 });
 

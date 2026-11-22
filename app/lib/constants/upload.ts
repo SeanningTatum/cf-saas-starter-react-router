@@ -19,12 +19,9 @@ export const ALLOWED_UPLOAD_CONTENT_TYPES = [
   "application/pdf",
 ] as const;
 
-export type AllowedUploadContentType =
-  (typeof ALLOWED_UPLOAD_CONTENT_TYPES)[number];
+export type AllowedUploadContentType = (typeof ALLOWED_UPLOAD_CONTENT_TYPES)[number];
 
-export const isAllowedUploadContentType = (
-  value: string
-): value is AllowedUploadContentType =>
+export const isAllowedUploadContentType = (value: string): value is AllowedUploadContentType =>
   (ALLOWED_UPLOAD_CONTENT_TYPES as readonly string[]).includes(value);
 
 /** How many leading bytes `matchesMagicBytes` needs to make a decision. */
@@ -38,10 +35,7 @@ const startsWith = (bytes: Uint8Array, signature: number[], offset = 0) =>
  * client-controlled and trivially spoofed, so the upload route also checks
  * the file's leading bytes against the signature of the declared type.
  */
-export const matchesMagicBytes = (
-  type: AllowedUploadContentType,
-  bytes: Uint8Array
-): boolean => {
+export const matchesMagicBytes = (type: AllowedUploadContentType, bytes: Uint8Array): boolean => {
   switch (type) {
     case "image/png":
       return startsWith(bytes, [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);

@@ -7,11 +7,7 @@ import {
   currentRequestAnnotations,
   LoggerLive,
 } from "../logger";
-import {
-  CurrentRequest,
-  runWithRequestContext,
-  type RequestContext,
-} from "@/lib/request-context";
+import { CurrentRequest, runWithRequestContext, type RequestContext } from "@/lib/request-context";
 
 describe("toAppLevel", () => {
   it("maps Trace to trace", () => {
@@ -61,9 +57,7 @@ describe("stringify", () => {
   });
 
   it("joins a mixed array, JSON-stringifying non-string entries", () => {
-    expect(stringify(["msg", { count: 3 }, 42])).toBe(
-      'msg {"count":3} 42'
-    );
+    expect(stringify(["msg", { count: 3 }, 42])).toBe('msg {"count":3} 42');
   });
 });
 
@@ -84,7 +78,7 @@ describe("currentSpanAnnotations", () => {
           refs: yield* Effect.getFiberRefs,
           span: yield* Effect.currentSpan,
         };
-      }).pipe(Effect.withSpan("unit.span"))
+      }).pipe(Effect.withSpan("unit.span")),
     );
 
     expect(currentSpanAnnotations(refs)).toEqual({
@@ -105,7 +99,7 @@ describe("LoggerLive", () => {
         Effect.gen(function* () {
           yield* Effect.logInfo("inside span");
           return (yield* Effect.currentSpan).traceId;
-        }).pipe(Effect.withSpan("unit.span"), Effect.provide(LoggerLive))
+        }).pipe(Effect.withSpan("unit.span"), Effect.provide(LoggerLive)),
       );
 
       const output = spy.mock.calls.map((args) => String(args[0])).join("\n");
@@ -126,8 +120,8 @@ describe("LoggerLive", () => {
         Effect.logInfo("annotated").pipe(
           Effect.annotateLogs({ layer: "trpc", requestId: "req-1" }),
           Effect.withSpan("unit.span"),
-          Effect.provide(LoggerLive)
-        )
+          Effect.provide(LoggerLive),
+        ),
       );
 
       const output = spy.mock.calls.map((args) => String(args[0])).join("\n");
@@ -140,13 +134,18 @@ describe("LoggerLive", () => {
 });
 
 describe("currentRequestAnnotations", () => {
-  const request: RequestContext = { requestId: "req-fiber", method: "GET", path: "/", userId: "u1" };
+  const request: RequestContext = {
+    requestId: "req-fiber",
+    method: "GET",
+    path: "/",
+    userId: "u1",
+  };
 
   it("returns the request and user ids when CurrentRequest is in the fiber context", () => {
     // Catches reading the wrong tag or FiberRef: every Effect log line would
     // lose its request id.
     const refs = Effect.runSync(
-      Effect.getFiberRefs.pipe(Effect.provide(Layer.succeed(CurrentRequest, request)))
+      Effect.getFiberRefs.pipe(Effect.provide(Layer.succeed(CurrentRequest, request))),
     );
     expect(currentRequestAnnotations(refs)).toStrictEqual({
       requestId: "req-fiber",
@@ -172,13 +171,12 @@ describe("LoggerLive with a request", () => {
           requestId: "fiber-request-id",
           method: "GET",
           path: "/",
-        })
-      )
+        }),
+      ),
     );
     try {
-      await runWithRequestContext(
-        { requestId: "other-request-id", method: "GET", path: "/" },
-        () => runtime.runPromise(Effect.logInfo("through runtime"))
+      await runWithRequestContext({ requestId: "other-request-id", method: "GET", path: "/" }, () =>
+        runtime.runPromise(Effect.logInfo("through runtime")),
       );
 
       const output = spy.mock.calls.map((args) => String(args[0])).join("\n");

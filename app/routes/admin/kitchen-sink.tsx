@@ -27,11 +27,7 @@ import { Button } from "@/components/ui/button";
 import { ButtonGroup } from "@/components/ui/button-group";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "@/components/ui/collapsible";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import {
   Empty,
   EmptyDescription,
@@ -110,21 +106,9 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
-import {
-  HoverCard,
-  HoverCardContent,
-  HoverCardTrigger,
-} from "@/components/ui/hover-card";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
 import {
   ContextMenu,
   ContextMenuContent,
@@ -244,9 +228,7 @@ export default function KitchenSink() {
                     </CollapsibleTrigger>
                   </div>
                   <CollapsibleContent className="mt-2">
-                    <div className="rounded-md border px-4 py-2 text-sm">
-                      Hidden content
-                    </div>
+                    <div className="rounded-md border px-4 py-2 text-sm">Hidden content</div>
                   </CollapsibleContent>
                 </Collapsible>
               </CardContent>
@@ -258,9 +240,7 @@ export default function KitchenSink() {
               </CardHeader>
               <CardContent>
                 <AspectRatio ratio={16 / 9} className="bg-muted rounded-md">
-                  <div className="flex h-full items-center justify-center">
-                    16:9
-                  </div>
+                  <div className="flex h-full items-center justify-center">16:9</div>
                 </AspectRatio>
               </CardContent>
             </Card>
@@ -449,14 +429,8 @@ export default function KitchenSink() {
                 <CardTitle>Slider</CardTitle>
               </CardHeader>
               <CardContent>
-                <Slider
-                  value={sliderValue}
-                  onValueChange={setSliderValue}
-                  max={100}
-                />
-                <p className="text-sm text-muted-foreground mt-2">
-                  Value: {sliderValue}
-                </p>
+                <Slider value={sliderValue} onValueChange={setSliderValue} max={100} />
+                <p className="text-sm text-muted-foreground mt-2">Value: {sliderValue}</p>
               </CardContent>
             </Card>
 
@@ -565,9 +539,7 @@ export default function KitchenSink() {
               </CardHeader>
               <CardContent className="flex gap-2">
                 <Button onClick={() => toast("Hello!")}>Toast</Button>
-                <Button onClick={() => toast.success("Success!")}>
-                  Success
-                </Button>
+                <Button onClick={() => toast.success("Success!")}>Success</Button>
               </CardContent>
             </Card>
           </div>
@@ -640,9 +612,7 @@ export default function KitchenSink() {
                   <DialogContent>
                     <DialogHeader>
                       <DialogTitle>Edit profile</DialogTitle>
-                      <DialogDescription>
-                        Make changes to your profile here.
-                      </DialogDescription>
+                      <DialogDescription>Make changes to your profile here.</DialogDescription>
                     </DialogHeader>
                     <div className="py-4">
                       <Input placeholder="Name" />
@@ -717,9 +687,7 @@ export default function KitchenSink() {
                   <AlertDialogContent>
                     <AlertDialogHeader>
                       <AlertDialogTitle>Are you sure?</AlertDialogTitle>
-                      <AlertDialogDescription>
-                        This action cannot be undone.
-                      </AlertDialogDescription>
+                      <AlertDialogDescription>This action cannot be undone.</AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
                       <AlertDialogCancel>Cancel</AlertDialogCancel>

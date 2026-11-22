@@ -47,7 +47,10 @@ function wrangler(top: string, preview = ZERO_ID): string {
 
 const REAL_FILE = fs.readFileSync(path.join(__dirname, "..", "..", "wrangler.jsonc"), "utf-8");
 
-function harness(env: Record<string, string>, files: Record<string, string> = { w: wrangler(ZERO_ID) }) {
+function harness(
+  env: Record<string, string>,
+  files: Record<string, string> = { w: wrangler(ZERO_ID) },
+) {
   const out: string[] = [];
   const appended: Record<string, string> = {};
   const written: Record<string, string> = {};
@@ -97,12 +100,18 @@ describe("decide production", () => {
   });
 
   it("is ready when the placeholder is overridden by the variable: this template keeps placeholders committed", () => {
-    expect(decide("production", facts({ committedD1Id: ZERO_ID, d1Override: REAL_ID })).ready).toBe(true);
+    expect(decide("production", facts({ committedD1Id: ZERO_ID, d1Override: REAL_ID })).ready).toBe(
+      true,
+    );
   });
 
   it("stays blocked when the override is itself a placeholder or junk: a bad variable must not pass the gate", () => {
-    expect(decide("production", facts({ committedD1Id: ZERO_ID, d1Override: ZERO_ID })).ready).toBe(false);
-    expect(decide("production", facts({ committedD1Id: ZERO_ID, d1Override: "oops" })).ready).toBe(false);
+    expect(decide("production", facts({ committedD1Id: ZERO_ID, d1Override: ZERO_ID })).ready).toBe(
+      false,
+    );
+    expect(decide("production", facts({ committedD1Id: ZERO_ID, d1Override: "oops" })).ready).toBe(
+      false,
+    );
   });
 
   it("does not read the token or seed facts: the production token is an environment secret this job cannot see", () => {
@@ -149,7 +158,9 @@ describe("warnings", () => {
   );
 
   it("warns even when the gate skips", () => {
-    expect(decide("preview", facts({ hasToken: false, prodTokenAtRepoLevel: true })).warnings).toHaveLength(1);
+    expect(
+      decide("preview", facts({ hasToken: false, prodTokenAtRepoLevel: true })).warnings,
+    ).toHaveLength(1);
   });
 });
 
@@ -230,7 +241,12 @@ describe("run ready", () => {
   });
 
   it("prints each warning on its own ::warning:: line after the verdict", () => {
-    const h = harness({ HAS_ACCOUNT_ID: "true", HAS_TOKEN: "true", HAS_SEED_SECRET: "true", PROD_TOKEN_AT_REPO_LEVEL: "true" });
+    const h = harness({
+      HAS_ACCOUNT_ID: "true",
+      HAS_TOKEN: "true",
+      HAS_SEED_SECRET: "true",
+      PROD_TOKEN_AT_REPO_LEVEL: "true",
+    });
     run(["ready", "preview"], h.deps);
     expect(h.out[0]).toBe("ready");
     expect(h.out[1]).toMatch(/^::warning::a repo-level CLOUDFLARE_API_TOKEN/);

@@ -8,7 +8,7 @@ const ShowNonce = () => createElement("span", null, useNonce() ?? "none");
 describe("useNonce", () => {
   it("returns the provided nonce inside the provider (catches a broken nonce hand-off to root.tsx)", () => {
     const html = renderToStaticMarkup(
-      createElement(NonceContext.Provider, { value: "abc123" }, createElement(ShowNonce))
+      createElement(NonceContext.Provider, { value: "abc123" }, createElement(ShowNonce)),
     );
     expect(html).toBe("<span>abc123</span>");
   });

@@ -53,7 +53,7 @@ function parseArgs(): Args {
   const url = get("--url");
   if (!url) {
     console.error(
-      "usage: bun run design:audit -- --url <url> [--scope <selector>] [--accent <#hex>] [--login <email:password>] [--json]"
+      "usage: bun run design:audit -- --url <url> [--scope <selector>] [--accent <#hex>] [--login <email:password>] [--json]",
     );
     process.exit(2);
   }
@@ -189,7 +189,7 @@ async function measure(page: Page, args: Args) {
       scopeSel: string;
       accent?: string;
     }) => Promise<Record<string, unknown>>,
-    { scopeSel: args.scope, accent: args.accent }
+    { scopeSel: args.scope, accent: args.accent },
   );
 }
 
@@ -212,9 +212,14 @@ if (args.login) {
   await page.getByTestId("login-submit").click();
   const left = await page
     .waitForURL((u) => !u.pathname.endsWith("/login"), { timeout: 10_000 })
-    .then(() => true, () => false);
+    .then(
+      () => true,
+      () => false,
+    );
   if (!left) {
-    console.error(`login as ${args.login.email} did not leave /login: wrong credentials or unseeded DB?`);
+    console.error(
+      `login as ${args.login.email} did not leave /login: wrong credentials or unseeded DB?`,
+    );
     await browser.close();
     process.exit(2);
   }
@@ -253,18 +258,18 @@ const overflowDesktop = await overflow();
 const animatedDefault = await page.evaluate(
   (sel) =>
     Array.from((document.querySelector(sel) || document.body).querySelectorAll("*")).filter(
-      (el) => getComputedStyle(el).animationName !== "none"
+      (el) => getComputedStyle(el).animationName !== "none",
     ).length,
-  args.scope
+  args.scope,
 );
 await page.emulateMedia({ reducedMotion: "reduce" });
 await page.reload({ waitUntil: "networkidle" });
 const animatedReduced = await page.evaluate(
   (sel) =>
     Array.from((document.querySelector(sel) || document.body).querySelectorAll("*")).filter(
-      (el) => getComputedStyle(el).animationName !== "none"
+      (el) => getComputedStyle(el).animationName !== "none",
     ).length,
-  args.scope
+  args.scope,
 );
 await page.emulateMedia({ reducedMotion: "no-preference" });
 
@@ -299,33 +304,44 @@ console.log(line("surface levels", String(desktop.surfaceLevels.length)));
 console.log(
   line(
     "type faces",
-    desktop.fontFamilies.map((f) => `${f.family}(${f.elements})`).join(" · ") || "none"
-  )
+    desktop.fontFamilies.map((f) => `${f.family}(${f.elements})`).join(" · ") || "none",
+  ),
 );
 console.log(line("display sizes ≥28px", desktop.displaySizes.join(", ") || "none"));
 console.log(line("radii", desktop.radiiUsed.join(", ") || "0 (square)"));
-console.log(line("shadowed / bordered", `${desktop.shadowedElements} / ${desktop.borderedElements}`));
+console.log(
+  line("shadowed / bordered", `${desktop.shadowedElements} / ${desktop.borderedElements}`),
+);
 console.log(line("panels (border+shadow)", String(desktop.panelElements)));
 console.log(line("chromatic colours", String(desktop.chromaticColours)));
 if (desktop.accent)
   console.log(
-    line("accent economy", `${desktop.accent.elements} elements (${desktop.accent.shareOfPainted}% of painted)`)
+    line(
+      "accent economy",
+      `${desktop.accent.elements} elements (${desktop.accent.shareOfPainted}% of painted)`,
+    ),
   );
 console.log(line("product data rows", `${desktop.dataRows} in ${desktop.tables} table(s)`));
 console.log(line("body contrast", `${desktop.bodyContrast}:1`));
 console.log(
-  line("motion", `${animatedDefault} animated → ${animatedReduced} under reduced-motion`)
+  line("motion", `${animatedDefault} animated → ${animatedReduced} under reduced-motion`),
 );
 console.log(
-  line("overflow", `desktop ${overflowDesktop.scrollWidth}/${overflowDesktop.clientWidth} · mobile ${overflowMobile.scrollWidth}/${overflowMobile.clientWidth}`)
+  line(
+    "overflow",
+    `desktop ${overflowDesktop.scrollWidth}/${overflowDesktop.clientWidth} · mobile ${overflowMobile.scrollWidth}/${overflowMobile.clientWidth}`,
+  ),
 );
 
 // HARD checks — these are defects, not opinions.
 if (overflowMobile.scrollWidth > overflowMobile.clientWidth)
-  hard.push(`horizontal page scroll at 390px (${overflowMobile.scrollWidth} > ${overflowMobile.clientWidth})`);
+  hard.push(
+    `horizontal page scroll at 390px (${overflowMobile.scrollWidth} > ${overflowMobile.clientWidth})`,
+  );
 if (overflowDesktop.scrollWidth > overflowDesktop.clientWidth)
   hard.push("horizontal page scroll at 1440px");
-if (desktop.bodyContrast < 4.5) hard.push(`body copy contrast ${desktop.bodyContrast}:1 is below AA`);
+if (desktop.bodyContrast < 4.5)
+  hard.push(`body copy contrast ${desktop.bodyContrast}:1 is below AA`);
 for (const a of desktop.actionContrast)
   if (a.ratio < 4.5) hard.push(`action "${a.label}" contrast ${a.ratio}:1 is below AA`);
 if (animatedDefault > 0 && animatedReduced === animatedDefault)
@@ -334,9 +350,13 @@ if (jsErrors.length) hard.push(`${jsErrors.length} console/page error(s)`);
 
 // SOFT notes — the craft signals five rejected passes of /demo all failed on.
 if (desktop.fontFamilies.length < 2)
-  notes.push("one type face only — a display/data pairing is most of the distance from a framework default");
+  notes.push(
+    "one type face only — a display/data pairing is most of the distance from a framework default",
+  );
 if (desktop.displaySizes.length < 2)
-  notes.push("no second display size — the page has one typographic register and will flatten below the fold");
+  notes.push(
+    "no second display size — the page has one typographic register and will flatten below the fold",
+  );
 if (desktop.panelElements === 0 && desktop.shadowedElements === 0)
   notes.push("no raised surfaces — deliberate for a flat direction, absent craft otherwise");
 if (desktop.dataRows === 0)
@@ -344,7 +364,9 @@ if (desktop.dataRows === 0)
 if (animatedDefault === 0)
   notes.push("nothing moves — if the subject changes over time, consider whether it should");
 if (desktop.accent && desktop.accent.shareOfPainted > 4)
-  notes.push(`accent paints ${desktop.accent.shareOfPainted}% of elements — an accent spent everywhere is decoration`);
+  notes.push(
+    `accent paints ${desktop.accent.shareOfPainted}% of elements — an accent spent everywhere is decoration`,
+  );
 if (desktop.chromaticColours > 4)
   notes.push(`${desktop.chromaticColours} chromatic colours — check each one earns its place`);
 
@@ -353,7 +375,9 @@ if (hard.length) {
   console.log("HARD FAILURES");
   for (const h of hard) console.log(`  ✗ ${h}`);
 } else {
-  console.log("HARD CHECKS: pass (no overflow, contrast ≥ AA, motion respects reduced-motion, no console errors)");
+  console.log(
+    "HARD CHECKS: pass (no overflow, contrast ≥ AA, motion respects reduced-motion, no console errors)",
+  );
 }
 if (notes.length) {
   console.log("\nCRAFT NOTES (judgement, not verdicts)");
