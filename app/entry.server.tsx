@@ -27,11 +27,8 @@ export const handleError: HandleErrorFunction = (error, { request, context }) =>
 
 export const reportRenderError = (
   loadContext: Pick<AppLoadContext, "reportError">,
-  shellRendered: boolean,
   error: unknown
-): void => {
-  if (shellRendered) loadContext.reportError({ error, source: "render" });
-};
+): void => loadContext.reportError({ error, source: "render" });
 
 export default async function handleRequest(
   request: Request,
@@ -41,7 +38,6 @@ export default async function handleRequest(
   loadContext: AppLoadContext
 ) {
   const nonce = loadContext.cspNonce;
-  let shellRendered = false;
   const userAgent = request.headers.get("user-agent");
 
   const instance = createInstance();
@@ -80,11 +76,10 @@ export default async function handleRequest(
       nonce,
       onError(error: unknown) {
         responseStatusCode = FIRST_SERVER_ERROR_STATUS;
-        reportRenderError(loadContext, shellRendered, error);
+        reportRenderError(loadContext, error);
       },
     }
   );
-  shellRendered = true;
 
   if ((userAgent && isbot(userAgent)) || routerContext.isSpaMode) {
     await body.allReady;

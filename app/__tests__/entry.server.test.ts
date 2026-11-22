@@ -1,6 +1,13 @@
 import { describe, expect, it, vi } from "vitest";
+import { Effect } from "effect";
 import type { AppLoadContext, HandleErrorFunction } from "react-router";
 import { handleError, reportRenderError } from "../entry.server";
+import type { ErrorReport } from "@/lib/error-reporting/adapter";
+import type { ErrorCapture } from "@/lib/error-reporting/report";
+import {
+  makeErrorReporter,
+  reportError as reportErrorWith,
+} from "@/services/error-reporter";
 
 type HandleErrorArgs = Parameters<HandleErrorFunction>[1];
 
@@ -47,20 +54,32 @@ describe("handleError", () => {
 });
 
 describe("reportRenderError", () => {
-  it("reports a stream error after the shell as a render error, so a broken Suspense boundary is seen", () => {
+  it("reports every render error as a render error, so one caught by a Suspense boundary before the shell is not lost", () => {
     const reportError = vi.fn();
-    const error = new Error("late render");
+    const error = new Error("suspended child failed");
 
-    reportRenderError({ reportError }, true, error);
+    reportRenderError({ reportError }, error);
 
     expect(reportError).toHaveBeenCalledWith({ error, source: "render" });
   });
 
-  it("reports nothing before the shell, so the error handleError already got is not counted twice", () => {
-    const reportError = vi.fn();
+  it("is counted once when the same error also reaches handleError, so a failed shell is not reported twice", async () => {
+    const reports: ErrorReport[] = [];
+    const deliveries: Array<Promise<void>> = [];
+    const reporter = makeErrorReporter({
+      adapter: { name: "rec", send: (batch) => Effect.sync(() => void reports.push(...batch)) },
+      release: "v1",
+      environment: "test",
+      waitUntil: (delivery) => void deliveries.push(delivery),
+    });
+    const reportError = (capture: ErrorCapture) => reportErrorWith(reporter, capture);
+    const error = new Error("shell failed");
+    const { args } = argsFor(new Request("https://app.example.com/dashboard"));
 
-    reportRenderError({ reportError }, false, new Error("shell failed"));
+    reportRenderError({ reportError }, error);
+    handleError(error, { ...args, context: { reportError } as unknown as AppLoadContext });
+    await Promise.all(deliveries);
 
-    expect(reportError).not.toHaveBeenCalled();
+    expect(reports.map((report) => report.source)).toEqual(["render"]);
   });
 });

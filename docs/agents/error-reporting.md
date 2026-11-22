@@ -10,7 +10,7 @@ There is one capture path. Plain code in a request calls `context.reportError({ 
 |----------|----------------------|
 | `fetch` | The fetch handler in `workers/app.ts`: a thrown error, or a failed auth runtime. Both answer 500 with the request id in the body. |
 | `loader` / `action` | `handleError` in `app/entry.server.tsx`, which React Router calls for a failed loader or action. `GET` and `HEAD` give `loader`; other methods give `action`. An aborted request is skipped. |
-| `render` | The server render's `onError` in `app/entry.server.tsx`, only after the shell has rendered. |
+| `render` | The server render's `onError` in `app/entry.server.tsx`: every render error, before or after the shell. When a failed shell also reaches `handleError`, the reporter counts the one error object once. |
 | `trpc` | `onError` of the HTTP handler in `app/routes/api/trpc.$.ts`, and of the server-side caller in `workers/app.ts`. |
 | `upload` | `app/routes/api/upload-file.ts`: a defect (answers 500), and a failed session lookup or file read (answers 503). A bad file (400) is not reported. |
 | `boundary` | The root error boundary in `app/root.tsx`, in the browser. It skips an error the server already rendered and a route response below 500. |
@@ -155,4 +155,4 @@ If the span is missing or malformed, the fix is in `app/services/tracing.ts`. No
 - The Sentry adapter has not been run against a real Sentry project.
 - The browser hook in the error boundary is covered by the e2e spec (a failed client navigation), not by a unit test. No test renders a server 500 page and checks that the browser does not report it again; the rule behind it (`shouldReportBoundaryError`) has a unit test.
 - An anonymous caller can post made-up browser errors. They are capped, redacted, tagged with their `source` and bounded by the two budgets, but they are not proof that a user saw an error. Filter on `source` in the backend if they become noise.
-- A source label is a best guess for `loader` and `action`: a render error that fails before the shell reaches `handleError` and is labelled by the request method.
+- `loader` and `action` are told apart by the request method (`GET` and `HEAD` are `loader`), which is right for every route in this app but is a rule of thumb, not something React Router tells the handler.
