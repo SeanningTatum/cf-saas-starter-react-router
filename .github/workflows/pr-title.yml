@@ -3,7 +3,9 @@ name: PR title
 # A feature PR is squashed, so its title becomes the commit subject, and release versions are
 # computed from commit subjects: feat bumps the minor, fix the patch, a "!" the major. A title
 # that is not a Conventional Commits subject would ship as a patch or break the version script.
-# This job lints the title with the same .commitlintrc.json the commit-msg hook uses.
+# This job lints the title with the same rules the commit-msg hook uses (.commitlintrc.title.json takes them
+# from .commitlintrc.json). One difference: a commit may be a merge commit, a title may not. A title such as
+# "Merge branch 'staging' into x" would become a plain subject once squashed and be read as a patch.
 on:
   # Never pull_request_target: this job checks out and runs the PR's own config with no secrets.
   pull_request:
@@ -37,7 +39,7 @@ jobs:
       - name: Lint the PR title
         # The title is untrusted text. It reaches the shell only through env, and commitlint reads it on stdin.
         run: |
-          printf '%s\n' "$PR_TITLE" | bunx --no-install commitlint --verbose || {
+          printf '%s\n' "$PR_TITLE" | bunx --no-install commitlint --config .commitlintrc.title.json --verbose || {
             echo "::error::PR title must look like 'type(scope): subject' (for example 'feat(auth): add passkeys'), 100 characters at most. Types and scopes are in .commitlintrc.json; the rules are in docs/ci/pipelines.md under 'Commit subjects and PR titles'."
             exit 1
           }

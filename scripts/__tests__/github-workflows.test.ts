@@ -202,6 +202,12 @@ describe("pr-title.yml checks the title with the repo's commitlint config", () =
   it("lints on stdin with the local commitlint: no title in argv, no package fetched at run time", () => {
     expect(text).toContain(`printf '%s\\n' "$PR_TITLE" | bunx --no-install commitlint`);
   });
+
+  it("uses the title config, which refuses merge-shaped titles: squashed, such a title is a subject with no type", () => {
+    expect(text).toContain("commitlint --config .commitlintrc.title.json");
+    const titleConfig = JSON.parse(fs.readFileSync(path.join(ROOT, ".commitlintrc.title.json"), "utf-8"));
+    expect(titleConfig).toEqual({ extends: ["./.commitlintrc.json"], defaultIgnores: false });
+  });
 });
 
 describe("workflows follow the staging to production flow", () => {

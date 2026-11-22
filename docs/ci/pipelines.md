@@ -68,7 +68,7 @@ Three checks read the same rule:
 - the `PR title (Conventional Commits)` job in `pr-title.yml` lints the PR title on open, edit, push and reopen, on every base branch;
 - once the repo ruleset lists that job as required, a PR with a bad title cannot merge.
 
-The types and the scopes live in `.commitlintrc.json` and nowhere else; read that file for the lists. Merge commits (`Merge pull request ...`, `Merge branch ...`) pass. Body and footer lines may be as long as you like.
+The types and the scopes live in `.commitlintrc.json` and nowhere else; read that file for the lists. Merge commits (`Merge pull request ...`, `Merge branch ...`) pass the hook. A PR title shaped like one does not pass the title job (`.commitlintrc.title.json` takes every rule from the first file and turns that one exception off): squashed, such a title would be a subject with no type. Body and footer lines may be as long as you like.
 
 Four PRs carry a title the version script reads, so word each one on purpose:
 
@@ -77,7 +77,7 @@ Four PRs carry a title the version script reads, so word each one on purpose:
 | A feature PR into `staging` or into a stacked branch | `feat(scope): ...`, `fix(scope): ...` | It is squashed, so this line is the commit the version script reads. |
 | A wave roll-up into `release/v3.0` | `feat: v3.0 wave <n>, <what it brings>` (`feat!:` if it breaks something) | It is squashed into the release branch. |
 | The release PR squashing `release/v3.0` into `staging` | `feat!: v3.0, <summary>` | The `!` makes a major bump. |
-| `staging` into `production` | any title that passes the check | It is merged with a merge commit, so its own title is not read. |
+| `staging` into `production` | any title that passes the check, for example `chore(release): staging to production` | It is merged with a merge commit, so its own title is not read. |
 
 Worked example: the release PR is titled `feat!: v3.0, the new starter`. It lands on `staging` as one commit with that subject. The merge-commit PR into `production` carries it, `release.yml` reads the `!`, and the tag comes out as `v3.0.0` (the last tag is `v2.4.0`). Titled `v3.0 wave 0: guardrails, trim and foundations` instead, the same commit would have read as a patch: `v2.4.1`.
 
