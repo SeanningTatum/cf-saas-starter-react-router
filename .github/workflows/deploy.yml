@@ -1,6 +1,6 @@
-# Production deploy on push to main.
+# Production deploy on push to production.
 #
-# Fires only AFTER the `CI` workflow concludes successfully on `main`, so a
+# Fires only AFTER the `CI` workflow concludes successfully on `production`, so a
 # red typecheck / test / harness-check never reaches production. (Deploy runs
 # once per green push — it does not re-run the test suite.)
 #
@@ -24,7 +24,7 @@ on:
   workflow_run:
     workflows: [CI]
     types: [completed]
-    branches: [main]
+    branches: [production]
 
 concurrency:
   group: deploy-production
@@ -38,7 +38,7 @@ jobs:
   deploy:
     name: Deploy to Cloudflare (production)
     runs-on: ubuntu-latest
-    # Only on a green CI run for a push to main (CI also runs on PRs), and only when credentials are wired up.
+    # Only on a green CI run for a push to production (CI also runs on PRs), and only when credentials are wired up.
     if: >-
       ${{ github.event.workflow_run.conclusion == 'success'
           && github.event.workflow_run.event == 'push'
