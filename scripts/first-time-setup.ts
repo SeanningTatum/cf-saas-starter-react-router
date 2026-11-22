@@ -339,11 +339,6 @@ function createEnvFile(betterAuthSecret: string) {
 async function runDatabaseMigrations(accountId?: string) {
   const env = accountId ? { CLOUDFLARE_ACCOUNT_ID: accountId } : undefined;
 
-  const generateSpinner = spinner();
-  generateSpinner.start("Generating migration...");
-  executeCommand("bunx drizzle-kit generate --name setup", true);
-  generateSpinner.stop("\x1b[32m✓ Migration generated\x1b[0m");
-
   const localSpinner = spinner();
   localSpinner.start("Applying local migrations...");
   executeCommand(

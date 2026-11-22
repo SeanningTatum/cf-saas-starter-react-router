@@ -1,6 +1,7 @@
-import { Context, Effect, Layer } from "effect";
+import { Clock, Context, Effect, Layer } from "effect";
 import { AuthApi } from "./auth";
 import { ExternalServiceError } from "@/models/errors/repository";
+import { activeSession } from "@/auth/ban";
 
 type SessionUser = {
   id: string;
@@ -43,12 +44,13 @@ export const SessionLive = (headers: Headers) =>
         catch: (cause) =>
           new ExternalServiceError({ service: "BetterAuth", cause }),
       });
-      if (!result) {
+      const live = activeSession(result, new Date(yield* Clock.currentTimeMillis));
+      if (!live) {
         return { session: null, user: null };
       }
       return {
-        session: result.session as SessionInfo,
-        user: result.user as SessionUser,
+        session: live.session as SessionInfo,
+        user: live.user as SessionUser,
       };
     })
   );
