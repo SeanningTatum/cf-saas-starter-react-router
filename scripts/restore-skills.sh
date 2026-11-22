@@ -16,7 +16,7 @@ LOCK="$ROOT/skills-lock.json"
 SKILLS_CLI="skills@1.7.4"
 # Lock and log live in the gitignored, user-owned .agents/ — not a shared temp dir, where a
 # predictable path lets another user plant a symlink for the log or squat the lock.
-LOCKDIR="$ROOT/.agents/.restore.lock"
+RUNLOCK="$ROOT/.agents/.restore.lock"
 LOG="$ROOT/.agents/.restore.log"
 
 [ -f "$LOCK" ] || exit 0
@@ -84,32 +84,26 @@ fi
 
 older_than_2m() { [ -n "$(find "$1" -maxdepth 0 -mmin +2 2>/dev/null)" ]; }
 
-# A process's start time; empty when the PID is not running. Two reads of one live process
-# must give the same text, or a waiter takes a live owner for a dead one and steals its lock.
-# On Linux that rules out `ps -o lstart=`, which ps works out from the clock on each call and
-# which can come out a second apart; the kernel's own start tick in /proc does not move.
-started() {
-  local stat
-  if [ -r "/proc/$1/stat" ]; then
-    stat=$(cat "/proc/$1/stat" 2>/dev/null) || return 0
-    stat=${stat##*) } # the command name may hold spaces; the fields resume after the last ")"
-    # shellcheck disable=SC2086
-    set -- $stat
-    echo "tick ${20}" # field 22 of the full line: start time in clock ticks since boot
-  else
-    ps -o lstart= -p "$1" 2>/dev/null | awk '{$1=$1; print}'
-  fi
-}
+# A process's start time, whitespace-normalised; empty when the PID is not running.
+started() { ps -o lstart= -p "$1" 2>/dev/null | awk '{$1=$1; print}'; }
 
-# Stale = the owner died before cleanup (SIGKILL, crash, reboot), or died between mkdir and
-# writing its owner line. The owner line is "<pid> <start time>": a PID alone is not
+# Create file $1 holding line $2, only if $1 does not exist. bash's noclobber opens with the
+# kernel's O_EXCL, so of any number of racing callers exactly one succeeds. Not `mkdir`: on
+# CI's Ubuntu 26.04 runners a `mkdir` lock was seen to go to two owners at once (two
+# processes inside the reclaim guard, two owners writing the same lock).
+create_excl() { (set -o noclobber; printf '%s\n' "$2" >"$1") 2>/dev/null; }
+
+# Stale = the owner died before cleanup (SIGKILL, crash, reboot), or died between creating
+# the lock and writing its line. The owner line is "<pid> <start time>": a PID alone is not
 # identity, since after a reboot or exit it can belong to an unrelated live process.
+# A lock with no readable line (also a lock directory left by an older version of this
+# script) is stale once it is two minutes old.
 lock_is_stale() {
   local owner pid start
-  [ -d "$LOCKDIR" ] || return 1
-  owner=$(cat "$LOCKDIR/owner" 2>/dev/null || true)
+  [ -e "$RUNLOCK" ] || return 1
+  owner=$(cat "$RUNLOCK" 2>/dev/null || true)
   if [ -z "$owner" ]; then
-    older_than_2m "$LOCKDIR"
+    older_than_2m "$RUNLOCK"
     return
   fi
   pid=${owner%% *}
@@ -121,25 +115,23 @@ lock_is_stale() {
   fi
 }
 
-# mkdir is atomic, so one restore runs at a time. The owner records who it is, and a stale
-# lock is reclaimed instead of blocking every retry. Reclaim happens under a second mutex
-# that re-reads the owner inside it: two waiters that saw the same dead PID must not both
-# delete, or the second deletes the lock a new owner took in between.
+ME="$$ $(started $$)"
+
+# One restore runs at a time: the lock is a file only one caller can create. A stale lock is
+# reclaimed instead of blocking every retry. Reclaim happens under a second lock, and reads
+# the owner inside it: two waiters that saw the same dead PID must not both delete, or the
+# second deletes the lock a new owner took in between.
 take_lock() {
-  if mkdir "$LOCKDIR" 2>/dev/null; then
-    # Written via rename so a reader never sees a half-written owner line.
-    printf '%s %s\n' $$ "$(started $$)" >"$LOCKDIR/owner.tmp" && mv "$LOCKDIR/owner.tmp" "$LOCKDIR/owner"
-    return 0
-  fi
-  if mkdir "$LOCKDIR.reclaim" 2>/dev/null; then
+  if create_excl "$RUNLOCK" "$ME"; then return 0; fi
+  if create_excl "$RUNLOCK.reclaim" "$ME"; then
     if lock_is_stale; then
       # Say whose lock went, so a wrong reclaim can be traced from the log.
-      echo "restore-skills: reclaiming a stale lock (owner: $(cat "$LOCKDIR/owner" 2>/dev/null || echo unknown))" >&2
-      rm -r "$LOCKDIR" 2>/dev/null
+      echo "restore-skills: reclaiming a stale lock (owner: $(cat "$RUNLOCK" 2>/dev/null || echo unknown))" >&2
+      rm -rf "$RUNLOCK"
     fi
-    rmdir "$LOCKDIR.reclaim"
-  elif older_than_2m "$LOCKDIR.reclaim"; then
-    rmdir "$LOCKDIR.reclaim" 2>/dev/null # held for milliseconds; this old, its holder died
+    rm -f "$RUNLOCK.reclaim"
+  elif older_than_2m "$RUNLOCK.reclaim"; then
+    rm -f "$RUNLOCK.reclaim" # held for milliseconds; this old, its holder died
   fi
   return 1
 }
@@ -147,13 +139,14 @@ take_lock() {
 waited=0
 until take_lock; do
   if [ $waited -ge 180 ]; then
-    echo "restore-skills: another restore still holds $LOCKDIR after 180s — giving up" >&2
+    echo "restore-skills: another restore still holds $RUNLOCK after 180s — giving up" >&2
     exit 1
   fi
   sleep 1
   waited=$((waited + 1))
 done
-trap 'rm -r "$LOCKDIR" 2>/dev/null' EXIT
+# Release only our own lock: if it was reclaimed from under us, the file is someone else's.
+trap '[ "$(cat "$RUNLOCK" 2>/dev/null)" = "$ME" ] && rm -f "$RUNLOCK"' EXIT
 trap 'exit 1' INT TERM HUP
 
 # The restore we waited on may already have installed everything.
