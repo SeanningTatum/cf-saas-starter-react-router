@@ -1,8 +1,10 @@
+import { commentsIn } from "./comments";
 import { isSourcePath } from "./source";
 import type { FileHit, FileRule, Finding, Hit, Repo, Rule, RunResult, Source } from "./types";
 
 interface Marker {
   line: number;
+  endLine: number;
   reason: string;
 }
 
@@ -11,14 +13,12 @@ interface Suppressed {
   count: number;
 }
 
-const COMMENT_CLOSE = /\*\/\s*\}?\s*$/;
-
 function markers(source: Source, marker: string): Marker[] {
-  return source.text.split("\n").flatMap((text, index) => {
-    const at = text.indexOf(marker);
-    if (at < 0) return [];
-    return [{ line: index + 1, reason: text.slice(at + marker.length).replace(COMMENT_CLOSE, "").trim() }];
-  });
+  return commentsIn(source).flatMap((comment) =>
+    comment.body.startsWith(marker)
+      ? [{ line: comment.line, endLine: comment.endLine, reason: comment.body.slice(marker.length).trim() }]
+      : []
+  );
 }
 
 export function applySuppression(rule: FileRule, source: Source, hits: FileHit[]): Suppressed {
@@ -27,7 +27,7 @@ export function applySuppression(rule: FileRule, source: Source, hits: FileHit[]
   const found = markers(source, marker);
   const withReason = found.filter((entry) => entry.reason !== "");
   const excusedBy = (hit: FileHit): Marker | undefined =>
-    withReason.find((entry) => hit.line === entry.line || hit.line === entry.line + 1);
+    withReason.find((entry) => hit.line >= entry.line && hit.line <= entry.endLine + 1);
   const used = new Set(hits.flatMap((hit) => excusedBy(hit) ?? []));
   const kept = hits.filter((hit) => !excusedBy(hit));
   const noReason = found
@@ -41,7 +41,7 @@ export function applySuppression(rule: FileRule, source: Source, hits: FileHit[]
     .filter((entry) => !used.has(entry))
     .map((entry) => ({
       line: entry.line,
-      message: `\`${marker}\` excuses nothing on its own line or the next`,
+      message: `\`${marker}\` excuses nothing on its own lines or the line after`,
       fix: "delete the comment, or move it to the line right above the call it excuses",
     }));
   return { hits: [...kept, ...noReason, ...unused], count: withReason.length };
@@ -78,7 +78,7 @@ export function runRules(rules: Rule[], repo: Repo, roots: readonly string[], on
   }
   for (const rule of rules) {
     if (rule.scope !== "repo") continue;
-    const hits = rule.check(repo).filter((hit) => !only || only.has(hit.file));
+    const hits = rule.check(repo).filter((hit) => !only || [hit.file, ...(hit.related ?? [])].some((path) => only.has(path)));
     findings.push(...hits.map((hit) => toFinding(rule, hit)));
   }
   return { findings: findings.sort(byPlace), suppressions, filesChecked };

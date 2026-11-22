@@ -17,6 +17,7 @@ export interface Hit {
   line: number;
   message: string;
   fix?: string;
+  related?: string[];
 }
 
 export type FileHit = Omit<Hit, "file">;

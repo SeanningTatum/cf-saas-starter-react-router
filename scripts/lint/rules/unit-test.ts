@@ -55,11 +55,11 @@ function checkModule(repo: Repo, path: string): Hit | undefined {
   const expected = `${dir}/__tests__/${stem}.test.ts`;
   const test = repo.source(expected) ?? repo.source(`${dir}/${stem}.test.ts`);
   if (!test) {
-    return { file: path, line: lineOf(source.ast, exported), message: `exports values and has no unit test at ${expected}` };
+    return { file: path, line: lineOf(source.ast, exported), related: [expected], message: `exports values and has no unit test at ${expected}` };
   }
   const weakness = weakTest(test, stem);
   return weakness
-    ? { file: test.path, line: 1, message: weakness, fix: `import what ${path} exports and assert on what it returns` }
+    ? { file: test.path, line: 1, related: [path], message: weakness, fix: `import what ${path} exports and assert on what it returns` }
     : undefined;
 }
 
