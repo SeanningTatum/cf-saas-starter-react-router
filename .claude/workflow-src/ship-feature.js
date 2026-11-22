@@ -1,7 +1,7 @@
 export const meta = {
   name: "ship-feature",
   description:
-    "Ship a ready ticket, prompt or plan-feature record — specialist build lanes, unit and e2e tests, security, scale and regression review, docs, one stop before push, a local code-review loop on each stacked branch, then stacked PRs with seeded previews, a roll-up PR, and Greptile on the roll-up only",
+    "Ship a ready ticket, prompt or plan-feature record — specialist build lanes, unit and e2e tests, security, scale and regression review, docs, one stop before push, a local code-review loop on each stacked branch, then stacked PRs on lean checks, a roll-up PR with the full suite and a seeded preview, and Greptile on the roll-up only",
   whenToUse:
     "A feature that is already well defined: a plan-feature decision record on the issue, a GitHub issue the ticket-auditor rates ready, or a precise prompt. Not for planning (plan-feature does that), not for a one-file change.",
   phases: [
@@ -14,9 +14,9 @@ export const meta = {
     { title: "Fix", detail: "each P0/P1 goes back to the lane that owns the file; failed checks re-run; two rounds" },
     { title: "Docs", detail: "docs-writer: the record, glossary, ADR, changed docs and one PR body per PR" },
     { title: "Ship", detail: "the @golden and @error specs re-run on video; the run stops on a lavish page: the stack, the verdicts, the open findings, the videos; you approve or ask for changes" },
-    { title: "Split", detail: "split into stacked branches by fence, typecheck and test each on its own" },
-    { title: "Local review", detail: "per stacked branch in order, before any push: the code-review skill (high) on its diff against the branch below, review-responder fixes or declines each P0/P1, restack, re-check; two rounds" },
-    { title: "Open", detail: "more than one PR: push review/<slug> at the base first, PR 1 targets it; push, open the PRs, wait for every PR's checks and the seeded preview, walk the preview" },
+    { title: "Split", detail: "split into stacked branches by fence, then the lean gates on each against the branch below (verify.sh --changed)" },
+    { title: "Local review", detail: "per stacked branch in order, before any push: the code-review skill (high) on its diff against the branch below, review-responder fixes or declines each P0/P1, restack, lean re-check; one round (the second look is Greptile on the roll-up)" },
+    { title: "Open", detail: "more than one PR: push review/<slug> at the base first, PR 1 targets it; push, open the PRs, wait for every PR's checks (lean on a stacked PR; a single PR into the base gets the full suite and its seeded preview, which is walked)" },
     { title: "Rollup", detail: "more than one PR: merge the stacked PRs bottom-up into review/<slug> (merge commits, each retargeted first), then one roll-up PR review/<slug> -> base for the human, all in one step" },
     { title: "Roll-up Greptile", detail: "Greptile on the roll-up (or the single PR) only: one trigger, fixes committed on review/<slug> inside the fence of the stacked PR that owns each file, fast-forward pushed, every GitHub write of a round in one step; three rounds, to 5/5 or every comment declined" },
     { title: "Close", detail: "the roll-up's CI and a walk of its own preview; one working-memory record; the PR links" },
@@ -27,12 +27,12 @@ export const meta = {
  * WHY THIS EXISTS
  *   plan-feature ends with an approved decision record: a contract and a PR stack on disjoint fences.
  *   This workflow takes that record (or a ticket or prompt that is already precise) to open, reviewed
- *   pull requests a human can test in one click: each PR has its own preview with its own seeded D1.
+ *   pull requests a human can test in one click: the roll-up (or the single PR) has a preview with its own seeded D1.
  *
  * SHAPE
  *   The feature is built ONCE, on one working tree, against the contract; lanes own disjoint paths and
  *   run in parallel. It is tested and reviewed as a whole, then split into the stacked branches by
- *   fence only at Split (scripts/stack.ts), and each branch is typechecked and tested on its own. Building
+ *   fence only at Split (scripts/stack.ts), and each branch gets the lean gates against the branch below. Building
  *   each layer on its own branch would mean building and verifying the feature n times.
  *
  * REVIEW: LOCAL PER BRANCH, GREPTILE ON THE ROLL-UP ONLY
@@ -76,7 +76,7 @@ export const meta = {
  *   a string: a ticket ref (12, #12, an issue URL) or a prompt
  *   { ticket?, prompt?, record?: path to a decision record, slug?, base?: a branch name (default: the repo's default branch, read at Preflight), root?,
  *     ready?: "override" | "stop", ships?: { "1": { approved, changes? } },
- *     reviewRounds?: number (code-review rounds per stacked branch before push; default 2, 0 skips),
+ *     reviewRounds?: number (code-review rounds per stacked branch before push; default 1, 0 skips),
  *     rollupRounds?: number (Greptile rounds on the roll-up, or the single PR; default 3, 0 skips) }
  */
 // @lib
@@ -101,7 +101,7 @@ if (input.slug !== undefined && !SLUG.test(input.slug)) {
 let BASE = input.base || "";
 // POSIX single-quote: nothing inside is expanded, so ticket or plan text can never run as a command.
 const shq = (v) => `'${String(v).replace(/'/g, `'\\''`)}'`;
-const REVIEW_ROUNDS = Math.max(0, Math.min(3, input.reviewRounds ?? 2));
+const REVIEW_ROUNDS = Math.max(0, Math.min(3, input.reviewRounds ?? 1));
 const ROLLUP_ROUNDS = Math.max(0, Math.min(5, input.rollupRounds ?? 3));
 // A PR title is the commit subject once squashed, and release versions are read from subjects: `type(scope)?!?: subject`
 // (types and scopes live in .commitlintrc.json). The architect writes conventional titles; a title without the shape gets
@@ -890,7 +890,7 @@ phase("Split");
 const split = await sh(
   `The human approved shipping "${slug}". In order, stop at the first failure (ok=false, failed_command, its error):
   1. \`bun run scripts/stack.ts split --plan "${stackPlanFile}"\` -> branches [{ n, branch, sha }].
-  2. For each branch in order: \`git switch <branch>\`, then \`bun run typecheck\` and \`bun run test\`. Record { branch, pass, tail } (tail: last 20 lines of a failure). Go on to the next branch even if one fails, then fail if any failed.
+  2. For each branch in order: \`git switch <branch>\`, then \`${E2E_ENV} ./scripts/verify.sh --changed <the base named here>\` (the lean gates: typecheck, the linter on the changed files, the related unit tests and the e2e specs mapped to them; it falls back to every gate itself when a gate script, config or lockfile changed). Branches and bases, in order: ${prs.map((p, i) => `${p.branch} against ${i === 0 ? pre.base_sha : prs[i - 1].branch}`).join("; ")}. Record { branch, pass, tail } (tail: last 20 lines of a failure). Go on to the next branch even if one fails, then fail if any failed. The full \`./scripts/verify.sh\` already ran on the whole tree at Review and runs again in CI on the roll-up.
   3. \`git branch -D ship/${slug}\` (it is left at the base; the work is on the stacked branches).
 Return ok, failed_command, branches, checks.`,
   {
@@ -979,7 +979,7 @@ ${declined.length ? `You declined these in earlier rounds; a comment that repeat
       const re = await sh(
         `In order, stop at the first failure:
   1. \`bun run scripts/stack.ts restack --from ${pr.n} --plan "${stackPlanFile}"\` (nothing is pushed yet, so a rebase is safe here).
-  2. For each later branch (${later.join(", ")}), in stack order: \`git switch <branch>\`, then \`bun run typecheck\` and \`bun run test\` (a lower branch can break a caller that lives only in a later one with no git conflict). Stop at the first failure, with that command as failed_command.
+  2. For each later branch, in stack order: \`git switch <branch>\`, then \`${E2E_ENV} ./scripts/verify.sh --changed <its base>\` (a lower branch can break a caller that lives only in a later one with no git conflict). Branches and bases: ${stackOrder.filter((x) => x.n > pr.n).map((x) => `${x.branch} against ${stackOrder[stackOrder.indexOf(x) - 1].branch}`).join("; ")}. Stop at the first failure, with that command as failed_command.
 Do not push. Return ok and failed_command.`,
         { label: `local:restack:${source}:${pr.n}:${round}`, phase: "Local review", schema: obj({ ok: BOOL, failed_command: STR }) }
       );
@@ -1014,9 +1014,9 @@ if (!opened || !opened.ok) return { stopped: "Open", reason: opened ? opened.fai
 const openPrs = opened.prs.sort((a, b) => a.n - b.n);
 log(`Opened: ${openPrs.map((p) => p.url).join(" ")}`);
 
-// CI and the preview workflow run on every PR in the stack, whatever its base; the preview deploys each PR with
-// its own seeded D1 and posts the URL as a sticky comment. The walk uses the top PR's preview, the whole feature.
-// Once the stack has merged into review/<slug> their previews close; later walks use the roll-up's own.
+// A stacked PR (base review/<slug> or a branch below) gets CI's lean job and no preview, so preview_url is "" here and
+// the walk waits for the roll-up's own preview at Close. A single PR targets the base: full suite, seeded preview, walked here.
+// docs/ci/pipelines.md#which-checks-run-where lists the checks per base.
 const top = openPrs[openPrs.length - 1];
 let checks = null;
 let previewUrl = "";
@@ -1096,7 +1096,7 @@ ${rows.join("\n")}
 ${verdictLines()}
 
 ## How to test
-${previewUrl ? `This PR's own preview: the "Preview deployment" comment below (the stacked PRs' previews closed when they merged into ${rollupBranch}).` : "No preview deployed."}
+This PR's own preview: the "Preview deployment" comment below, once its deploy finishes (none when previews are not set up). The stacked PRs into ${rollupBranch} ran lean checks and had no preview.
 Fixture logins: copy the fixture logins line from ${outDir()}/pr-1.md (How to test).
 Locally: \`bun run db:seed && bun run dev\`
 
@@ -1252,9 +1252,9 @@ const rollupPassed = rollupReview.status === "passed" || rollupReview.status ===
 // =============================================================================================
 phase("Close");
 
-// The roll-up is the PR that merges, and it runs its own CI: the stacked PRs' checks do not stand in for it.
-// Its preview is the only one left: the stacked PRs' previews closed when they merged into review/<slug>, so
-// walk it here, or the verdict would describe a preview that no longer exists.
+// The roll-up is the PR that merges, and it runs the full suite: the stacked PRs ran lean checks only.
+// Its preview is the only one: a stacked PR gets none (its base is not the default branch), so walk it
+// here, or the verdict would describe no preview at all.
 if (rollup) {
   await checkAndWalk("close", "Close", [target], target);
   if (!checks) redChecks = [`#${rollup.number} checks (could not read them)`];

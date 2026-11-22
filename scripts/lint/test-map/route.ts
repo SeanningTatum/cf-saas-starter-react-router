@@ -53,6 +53,14 @@ export function visitsPath(visited: string, pattern: string): boolean {
 
 const isPattern = (path: string): boolean => segmentsOf(path).some((segment) => PARAMETER.test(segment) || segment === WILDCARD);
 
+export function specsVisiting(repo: Repo, path: string): string[] {
+  const table = repo.source(ROUTES_FILE);
+  const paths = (table ? routePaths(table) : new Map<string, string[]>()).get(path) ?? [];
+  return specFacts(repo)
+    .filter((spec) => spec.visits.some((visited) => paths.some((own) => visitsPath(visited, own))))
+    .map((spec) => spec.path);
+}
+
 export function routeProblems(repo: Repo, path: string): Problem[] {
   const table = repo.source(ROUTES_FILE);
   const served = table ? routePaths(table) : new Map<string, string[]>();

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { ROUTES_FILE } from "../../constants";
 import { memoryRepo } from "../../repo";
-import { routeProblems, visitsPath } from "../route";
+import { routeProblems, specsVisiting, visitsPath } from "../route";
 
 const table = () => 'import { route } from "@react-router/dev/routes";\nexport default [route("/users", "routes/users.tsx")];\n';
 
@@ -60,5 +60,21 @@ describe("routeProblems", () => {
     expect(routeProblems(proven, "app/routes/users.tsx")).toEqual([]);
     expect(routeProblems(unproven, "app/routes/users.tsx")).toHaveLength(1);
     expect(routeProblems(proven, "app/routes/users.tsx")).toEqual([]);
+  });
+});
+
+describe("specsVisiting", () => {
+  it("names every spec that visits the page, tagged or not, so a stacked change runs the specs that open it", () => {
+    const repo = repoWith({
+      "e2e/users.spec.ts": tagged("/users"),
+      "e2e/visit.spec.ts": spec('test("opens", async ({ page }) => { await page.goto("/users?tab=1"); });'),
+      "e2e/other.spec.ts": tagged("/elsewhere"),
+    });
+
+    expect(specsVisiting(repo, "app/routes/users.tsx")).toEqual(["e2e/users.spec.ts", "e2e/visit.spec.ts"]);
+  });
+
+  it("names none for a file the route table does not list", () => {
+    expect(specsVisiting(repoWith({ "e2e/users.spec.ts": tagged("/users") }), "app/routes/missing.tsx")).toEqual([]);
   });
 });

@@ -387,7 +387,7 @@ describe("ship-feature: fix rounds", () => {
     for (const c of committing) expect({ label: c.label, trailers: [...new Set(trailers(c.prompt))] }).toEqual({ label: c.label, trailers: [COAUTHOR] });
   });
 
-  it("local review: a branch's P0/P1 goes to review-responder, later branches are restacked, and code-review stops after reviewRounds", async () => {
+  it("stacked branches get one code-review round and the lean gates against the branch below at split and restack (catches a stacked branch paying for the full suite or a second round)", async () => {
     const finding = { severity: "P0", file: "app/repositories/widget.ts", line: 3, detail: "SQL built from input", fix: "bind it" };
     const run = await dryRun("ship-feature", {
       args: approve(),
@@ -397,8 +397,28 @@ describe("ship-feature: fix rounds", () => {
         [/^local:restack:/, { ok: true, failed_command: "" }],
       ]),
     });
+    expect(labels(run.calls).filter((x) => x.startsWith("local:code-review:1:"))).toEqual(["local:code-review:1:1"]);
+    const split = find(run.calls, "split").prompt;
+    expect(split).toContain("./scripts/verify.sh --changed");
+    expect(split).toContain(`${PR1.branch} against ${BASE_SHA}; ${PR2.branch} against ${PR1.branch}`);
+    expect(split).not.toContain("`bun run test`");
+    const restack = find(run.calls, "local:restack:code-review:1:1").prompt;
+    expect(restack).toContain("./scripts/verify.sh --changed");
+    expect(restack).toContain(`${PR2.branch} against ${PR1.branch}`);
+  });
+
+  it("local review: a branch's P0/P1 goes to review-responder, later branches are restacked, and code-review stops after reviewRounds", async () => {
+    const finding = { severity: "P0", file: "app/repositories/widget.ts", line: 3, detail: "SQL built from input", fix: "bind it" };
+    const run = await dryRun("ship-feature", {
+      args: { ...approve(), reviewRounds: 2 },
+      answers: happy([
+        [/^local:code-review:1:/, { method: "code-review skill", findings: [finding] }],
+        [/^local:respond:code-review:1:/, (c) => ({ comments: [{ id: `cr-1-${c.label.split(":").pop()}-1`, action: "fixed", reply: "bound" }], commits: ["f1"], blocked: [] })],
+        [/^local:restack:/, { ok: true, failed_command: "" }],
+      ]),
+    });
     const l = labels(run.calls);
-    // Catches the cap (reviewRounds, default 2) dropped or off by one.
+    // Catches the cap (reviewRounds) dropped or off by one.
     expect(l.filter((x) => x.startsWith("local:code-review:1:"))).toEqual(["local:code-review:1:1", "local:code-review:1:2"]);
     const resp = find(run.calls, "local:respond:code-review:1:1");
     expect(resp.opts.agentType).toBe("review-responder");

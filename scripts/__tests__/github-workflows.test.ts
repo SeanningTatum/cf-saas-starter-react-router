@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
+import { evaluate, jobsOf, jobsThatRun, type Context } from "./helpers/workflow-jobs";
 
 const ROOT = path.join(__dirname, "..", "..");
 const DIR = path.join(ROOT, ".github", "workflows");
@@ -329,4 +330,53 @@ describe("workflows follow the staging to production flow", () => {
       expect(offenders).toEqual([]);
     },
   );
+});
+
+describe("which jobs run for which base: the full suite into the default branch and production, the lean job on a stacked PR", () => {
+  const event = (name: string, base: string, defaultBranch = "staging"): Context => ({
+    github: { event_name: name, base_ref: base, event: { repository: { default_branch: defaultBranch } } },
+    needs: { readiness: { outputs: { ready: "true" } } },
+  });
+  const ran = (f: string, context: Context) => jobsThatRun(jobsOf(read(f)), context);
+  const full = { "ci.yml": ["baseline", "build", "e2e"], "codeql.yml": ["analyze"], "preview.yml": ["readiness", "deploy-preview"] };
+  const lean = { "ci.yml": ["lean"], "codeql.yml": [], "preview.yml": [] };
+  const required = JSON.parse(fs.readFileSync(path.join(ROOT, ".github", "repo-rules.json"), "utf-8")).rulesets.flatMap(
+    (set: { rules: { type: string; parameters?: { required_status_checks?: { context: string }[] } }[] }) =>
+      set.rules.flatMap((rule) => rule.parameters?.required_status_checks?.map((check) => check.context) ?? []),
+  ) as string[];
+
+  it.each([
+    ["a PR into the default branch", event("pull_request", "staging"), full],
+    ["a PR into production", event("pull_request", "production"), full],
+    ["a PR into a fork's default branch with another name (nothing names staging)", event("pull_request", "trunk", "trunk"), full],
+    ["a PR into a wave branch", event("pull_request", "v3/wave-1"), lean],
+    ["a PR into the branch of the PR below it", event("pull_request", "v3/w1-157-lean-checks"), lean],
+    ["a PR into a retired main", event("pull_request", "main"), lean],
+  ])("%s runs exactly the expected jobs", (_, context, expected) => {
+    for (const [f, jobs] of Object.entries(expected)) expect(ran(f, context), f).toEqual(jobs);
+  });
+
+  it.each(["staging", "production"])("a push to %s runs the full suite and not the lean job", (branch) => {
+    const push = event("push", "");
+    expect(ran("ci.yml", push)).toEqual(full["ci.yml"]);
+    expect(ran("codeql.yml", push), branch).toEqual(["analyze"]);
+    expect(ran("codeql.yml", event("schedule", ""))).toEqual(["analyze"]);
+  });
+
+  it("the required check names are the job names on the full path, unchanged, and the lean job matches none of them", () => {
+    const names = jobsOf(read("ci.yml")).map((job) => job.name);
+    for (const check of required.filter((name) => !/^(PR title|Source branch)/.test(name))) expect(names).toContain(check);
+    const leanJob = jobsOf(read("ci.yml")).find((job) => job.id === "lean");
+    expect(leanJob?.name).toMatch(/^Lean /);
+    for (const check of required) expect(leanJob?.name.startsWith(check.split(" ")[0] ?? "")).toBe(false);
+  });
+
+  it.each(["lean", "baseline"])("ci.yml %s checks out full history: the lint baseline compares with the base branch", (id) => {
+    expect(jobsOf(read("ci.yml")).find((job) => job.id === id)?.body).toMatch(/fetch-depth:\s*0/);
+  });
+
+  it("the evaluator reads && before ||, as GitHub does, so the cases above test the real precedence", () => {
+    expect(evaluate("'a' == 'b' && 'x' == 'x' || 'c' == 'c'", {})).toBe(true);
+    expect(evaluate("'a' == 'b' && ('x' == 'x' || 'c' == 'c')", {})).toBe(false);
+  });
 });

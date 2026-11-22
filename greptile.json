@@ -1,0 +1,3 @@
+{
+  "includeBranches": ["staging", "production"]
+}
