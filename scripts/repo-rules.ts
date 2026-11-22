@@ -5,7 +5,10 @@
  *   bun run scripts/repo-rules.ts --check
  *   bun run scripts/repo-rules.ts --apply [--dry-run]
  *
- * The file declares two rulesets (`default-branch`, `production`) and the `production` environment.
+ * The file declares two rulesets (`default-branch`, `production`), the `production` environment and
+ * an optional `repository` section (the squash commit title).
+ * A required check or the `repository` section may carry `"pending": "<reason>"`: declared, not
+ * applied yet. --check turns a pending item the repo lacks into a notice; --apply writes it anyway.
  * --check reads only. It exits 1 on drift or error. When nothing is applied (no ruleset by either
  * name and every environment bare) that is a notice, so a fresh fork passes. Once any part is
  * applied, every missing part is drift. When GitHub cannot be read (no gh, not logged in, no
@@ -21,7 +24,10 @@
 import { readdirSync, readFileSync } from "node:fs";
 import { Effect, Either, Schema } from "effect";
 import { ghSpawn, type GhResult, type GhRunner } from "./lib/gh";
-import { differ, rulesetDiffs, sorted, stable } from "./lib/repo-rules-diff";
+import { PENDING_APPLIED_NOTICE, CONFIG_PATH } from "./lib/repo-rules-constants";
+import { differ, sorted, stable } from "./lib/repo-rules-diff";
+import { badPendingMarks } from "./lib/repo-rules-pending";
+import { planRepository, planRuleset, type Action, type Plan } from "./lib/repo-rules-plan";
 import { jobNames, requiredContexts } from "./lib/repo-rules-workflow-checks";
 import {
   BranchPolicies,
@@ -79,7 +85,6 @@ export const defaultDeps: Deps = {
   env: process.env,
 };
 
-const CONFIG_PATH = ".github/repo-rules.json";
 const WORKFLOWS_DIR = ".github/workflows";
 const APPLY_CMD = "bun run scripts/repo-rules.ts --apply";
 const USAGE = "usage: bun run scripts/repo-rules.ts --check | --apply [--dry-run]";
@@ -153,6 +158,9 @@ function staticCheck(deps: Deps, out: Out): ConfigT | null {
     return null;
   }
   const config = parsed.right;
+  const badMarks = badPendingMarks(config.rulesets);
+  for (const m of badMarks) out.line("error", m);
+  if (badMarks.length) return null;
   const jobs = workflowJobNames(deps, out);
   if (!jobs) return null;
   const missing = requiredContexts(config.rulesets).filter((c) => !jobs.includes(c));
@@ -192,6 +200,8 @@ interface Repo {
   owner: { login: string; id: number; type: string };
   /** Whether the caller has admin rights. Only an admin is sure to see the protection on an environment. */
   admin: boolean;
+  /** GitHub shows this field only to tokens with enough rights. */
+  squashTitle: string | undefined;
 }
 
 function readRepo(deps: Deps): Read<Repo> {
@@ -210,6 +220,7 @@ function readRepo(deps: Deps): Read<Repo> {
     defaultBranch: info.value.default_branch,
     owner: info.value.owner,
     admin: info.value.permissions?.admin === true,
+    squashTitle: info.value.squash_merge_commit_title,
   });
 }
 
@@ -307,45 +318,6 @@ function gather(config: ConfigT, repo: Repo, deps: Deps): Read<Gathered> {
 const envPath = (repo: Repo, name: string) => `repos/${repo.nwo}/environments/${encodeURIComponent(name)}`;
 
 // ---------------------------------------------------------------- planning (pure)
-
-interface Finding {
-  /** missing is "not applied"; its text names the subject only. */
-  level: "ok" | "notice" | "missing" | "drift";
-  text: string;
-  /** A missing environment counts as drift only for an admin: GitHub may hide it from anyone else. */
-  adminOnly?: boolean;
-}
-interface Action {
-  method: "POST" | "PUT" | "DELETE";
-  path: string;
-  body?: unknown;
-}
-interface Plan {
-  findings: Finding[];
-  actions: Action[];
-  /** True when something of this part is live, even if it differs. */
-  applied: boolean;
-}
-
-function planRuleset(decl: Ruleset, live: LiveRulesetFound["found"], base: string): Plan {
-  const name = decl.name;
-  if (!live)
-    return {
-      findings: [{ level: "missing", text: `ruleset "${name}"` }],
-      actions: [{ method: "POST", path: `${base}/rulesets`, body: decl }],
-      applied: false,
-    };
-  const diffs = rulesetDiffs(decl, live.live);
-  const findings: Finding[] = diffs.map((text) => ({ level: "drift", text }));
-  if (live.live.bypass_actors === undefined)
-    findings.push({ level: "notice", text: `ruleset "${name}" bypass list cannot be read without admin rights; not checked` });
-  else if (!diffs.length) findings.push({ level: "ok", text: `ruleset "${name}" matches ${CONFIG_PATH}` });
-  return {
-    findings,
-    actions: diffs.length ? [{ method: "PUT", path: `${base}/rulesets/${live.id}`, body: decl }] : [],
-    applied: true,
-  };
-}
 
 function branchPolicyActions(decl: ResolvedEnv, policies: Policy[], path: string): Action[] {
   const liveNames = policies.map((p) => p.name);
@@ -474,6 +446,7 @@ export function run(argv: string[], deps: Deps = defaultDeps): Outcome {
   const plans = [
     ...gathered.value.rulesets.map((r) => planRuleset(r.decl, r.found, base)),
     ...gathered.value.envs.map((e) => planEnv(e, envPath(repo.value, e.decl.name))),
+    ...(config.repository ? [planRepository(config.repository, repo.value.squashTitle, repo.value.nwo)] : []),
   ];
 
   if (!mode.apply) {
@@ -481,7 +454,8 @@ export function run(argv: string[], deps: Deps = defaultDeps): Outcome {
     // so weakening one half after an apply fails the gate.
     const anyApplied = plans.some((p) => p.applied);
     for (const f of plans.flatMap((p) => p.findings)) {
-      if (f.level !== "missing") out.line(f.level, f.text);
+      if (f.level === "drift" && f.softWhenFresh && !anyApplied) out.line("notice", `${f.text}; run: ${APPLY_CMD}`);
+      else if (f.level !== "missing") out.line(f.level, f.text);
       else if (anyApplied && f.adminOnly && !repo.value.admin)
         out.line("notice", `${f.text} shows no protection to this token; only an admin can check it`);
       else if (anyApplied) out.line("drift", `${f.text} is not applied but other rules are; run: ${APPLY_CMD}`);
@@ -492,7 +466,7 @@ export function run(argv: string[], deps: Deps = defaultDeps): Outcome {
 
   const actions = plans.flatMap((p) => p.actions);
   if (!actions.length) out.line("ok", `nothing needs to change; the repo matches ${CONFIG_PATH}`);
-  else execute(actions, mode.dryRun, deps, out);
+  else if (execute(actions, mode.dryRun, deps, out) && actions.some((a) => a.pending)) out.line("notice", PENDING_APPLIED_NOTICE);
   return finish(out);
 }
 

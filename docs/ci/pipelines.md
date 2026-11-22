@@ -58,6 +58,31 @@ A new fork has one branch (`staging`) and no rules. CI and CodeQL run on pull re
 
 If your default branch has another name, edit the `branches:` lines under `push:` in `ci.yml` and `codeql.yml`, or rename the branch to `staging`.
 
+## Commit subjects and PR titles
+
+Every commit subject and every PR title is a Conventional Commits line: `type(scope)?!?: subject`, 100 characters at most. Release versions are computed from subjects, so a title that breaks the rule ships as a patch or breaks the version script.
+
+Three checks read the same rule:
+
+- the `commit-msg` hook runs commitlint on each commit you make;
+- the `PR title (Conventional Commits)` job in `pr-title.yml` lints the PR title on open, edit, push and reopen, on every base branch;
+- once the repo ruleset lists that job as required, a PR with a bad title cannot merge.
+
+The types and the scopes live in `.commitlintrc.json` and nowhere else; read that file for the lists. Merge commits (`Merge pull request ...`, `Merge branch ...`) pass. Body and footer lines may be as long as you like.
+
+Four PRs carry a title the version script reads, so word each one on purpose:
+
+| PR | Title | Why |
+|----|-------|-----|
+| A feature PR into `staging` or into a stacked branch | `feat(scope): ...`, `fix(scope): ...` | It is squashed, so this line is the commit the version script reads. |
+| A wave roll-up into `release/v3.0` | `feat: v3.0 wave <n>, <what it brings>` (`feat!:` if it breaks something) | It is squashed into the release branch. |
+| The release PR squashing `release/v3.0` into `staging` | `feat!: v3.0, <summary>` | The `!` makes a major bump. |
+| `staging` into `production` | any title that passes the check | It is merged with a merge commit, so its own title is not read. |
+
+Worked example: the release PR is titled `feat!: v3.0, the new starter`. It lands on `staging` as one commit with that subject. The merge-commit PR into `production` carries it, `release.yml` reads the `!`, and the tag comes out as `v3.0.0` (the last tag is `v2.4.0`). Titled `v3.0 wave 0: guardrails, trim and foundations` instead, the same commit would have read as a patch: `v2.4.1`.
+
+The harness writes its own titles to the same rule. The architect gives each stacked PR a conventional title; `ship-feature` commits with that title and prefixes `feat: ` on one that has no type. The roll-up title takes `feat` when any stacked PR is a `feat`, else the last PR's type.
+
 ## Readiness and skips
 
 Each of the three Cloudflare workflows starts with a `readiness` job that holds no secret value. It runs `scripts/ci/deploy-gate.ts`, which decides whether the repo is set up. When it is not, the later jobs are skipped and the notice says why (`::notice::<Workflow> skipped: <reason>`). The reasons live in that script. The deploy job adds one more skip: no `CLOUDFLARE_API_TOKEN` in the `production` environment.

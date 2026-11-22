@@ -36,7 +36,7 @@ If you're a human, scroll to [Quick Start](#quick-start). If you're an agent, sc
 **Agent harness**
 - GitHub issues and PRs — specs, tickets and verdicts; the project state
 - `scripts/verify.sh` — runs the gates; CI runs the same ones
-- `.githooks/pre-commit` — typecheck + tests block broken commits (no-dep, auto-installs)
+- `.husky/commit-msg`, `.husky/pre-commit` — commitlint checks the message; lint and typecheck block broken code (installed by `prepare`)
 - `CLAUDE.md` → `AGENTS.md` — one file (symlink), the agent entry point
 
 ---
@@ -168,19 +168,21 @@ See [`.claude/agents/README.md`](.claude/agents/README.md) for invocation flow +
 
 These run automatically — you do not need to remember them.
 
-### Pre-commit gate ([`.githooks/pre-commit`](.githooks/pre-commit))
+### Commit hooks ([`.husky/`](.husky))
 
-Triggered on `git commit`. Skips entirely if no `.ts/.tsx/.js/.jsx` files are staged. Otherwise:
+`commit-msg` runs commitlint on the message (types and scopes in [`.commitlintrc.json`](.commitlintrc.json)). `pre-commit` skips entirely if no `.ts/.tsx/.js/.jsx` files are staged. Otherwise:
 
 ```bash
-bun run typecheck     # cf-typegen + react-router typegen + tsc -b
-bun run test          # vitest run (123+ unit tests)
+./scripts/verify.sh --only non-negotiables   # or `bun run lint:staged` when the package has it
+./scripts/verify.sh --only typecheck         # cf-typegen + react-router typegen + tsc -b
 ```
 
-Auto-installed via `postinstall` (sets `core.hooksPath = .githooks`). Re-install manually with `bun run hooks:install`. Bypass for an emergency commit:
+The full test run stays in `./scripts/verify.sh` and in CI.
+
+`bun install` runs `prepare`, which runs `scripts/install-hooks.ts`. It sets `core.hooksPath = .husky/_` for the current worktree only when `extensions.worktreeConfig` is on, so one worktree's install never changes another's hooks. It does nothing in CI, with `HUSKY=0`, outside a git work tree, or without husky installed. Re-run it with `bun scripts/install-hooks.ts`. Bypass for an emergency commit:
 
 ```bash
-SKIP_HOOKS=1 git commit -m "..."
+HUSKY=0 git commit -m "..."
 ```
 
 ### Repo rules ([`.github/repo-rules.json`](.github/repo-rules.json))
@@ -219,7 +221,7 @@ app/
 ├── runtime.ts        ManagedRuntime composition (services + repos)
 ├── root.tsx          Root layout
 └── entry.{client,server}.tsx
-.githooks/            Git hooks (pre-commit gate)
+.husky/               Git hooks (commit-msg, pre-commit)
 .claude/              Claude Code config — settings, hooks, agents/, commands/
 drizzle/              SQL migrations
 e2e/                  Playwright tests
@@ -260,7 +262,7 @@ bun run db:seed:preview       # Seed the preview-env D1 with the same fixtures
 bun run db:studio             # Drizzle Studio (visual DB editor)
 
 bun run cf-typegen            # Regenerate worker-configuration.d.ts
-bun run hooks:install         # Re-install pre-commit gate
+bun scripts/install-hooks.ts  # Re-install the commit hooks (`prepare` runs it)
 bun run setup                 # First-time wizard
 bun run teardown              # Tear down Cloudflare resources
 ```

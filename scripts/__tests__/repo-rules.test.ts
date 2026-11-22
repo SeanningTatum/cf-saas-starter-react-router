@@ -331,7 +331,7 @@ describe("static check", () => {
 
   it("the real repo-rules.json and workflows pass: renaming a CI job breaks this test, not the merge button", () => {
     const real = (p: string) => readFileSync(fileURLToPath(new URL(`../../${p}`, import.meta.url)), "utf8");
-    const workflows = ["ci.yml", "production-guard.yml"].map((f) => `.github/workflows/${f}`);
+    const workflows = ["ci.yml", "production-guard.yml", "pr-title.yml"].map((f) => `.github/workflows/${f}`);
     const h = harness({ override: () => ({ code: 127, stderr: "cannot run gh" }) }, {
       files: Object.fromEntries([".github/repo-rules.json", ...workflows].map((p) => [p, real(p)])),
     });

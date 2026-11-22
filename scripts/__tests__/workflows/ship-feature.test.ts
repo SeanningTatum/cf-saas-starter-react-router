@@ -8,6 +8,7 @@
  * fragments), never on how the script is laid out, so moving its helpers into a library keeps them green.
  */
 import { describe, expect, it } from "vitest";
+import { lintTitle } from "../helpers/lint-title";
 import { dryRun, labels, seq, type AgentCall, type AnswerRule, type DryRunResult } from "../../lib/workflow-dry-run";
 
 const ROOT = "/work/repo";
@@ -499,5 +500,42 @@ describe("ship-feature: a ticket that is not ready", () => {
     const overridden = await dryRun("ship-feature", { args: { ...ARGS, ready: "override" }, answers: happy(notReady), resumeFrom: first });
     expect(labels(overridden.live)).toEqual(["intake:architect", "intake:architect"]);
     expect(overridden.result).toMatchObject({ stopped: "Intake", reason: "architect returned nothing twice" });
+  });
+});
+
+describe("ship-feature: every commit subject and PR title it writes passes the repo's commitlint config", () => {
+  const stackPlanOf = (calls: AgentCall[]) => {
+    const prompt = find(calls, "contract:branch").prompt;
+    const json = prompt.slice(prompt.indexOf("{\n"), prompt.lastIndexOf("}") + 1);
+    return JSON.parse(json) as { prs: { title: string; message: string }[] };
+  };
+  const quotedAfter = (prompt: string, flag: string) => [...prompt.matchAll(new RegExp(`${flag} '([^']*)'`, "g"))].map((m) => m[1] ?? "");
+  const verdictOf = async (titles: string[]) => Promise.all(titles.map(async (t) => [t, (await lintTitle(t)).valid] as const));
+
+  it("lints the stacked commit subjects, the stacked PR titles and the roll-up title, for a plan whose titles are plain words (a bare 'Widget data' would be refused by the PR title job)", async () => {
+    const { shipped } = await runHappy();
+    const plan = stackPlanOf(shipped.calls);
+    const subjects = plan.prs.map((p) => p.message.split("\n")[0] ?? "");
+    const openTitles = find(shipped.calls, "open:prs").prompt.split("\n").flatMap((l) => (l.match(/title='([^']*)'/) ? [l.match(/title='([^']*)'/)?.[1] ?? ""] : []));
+    const rollupTitles = quotedAfter(find(shipped.calls, "rollup:pr").prompt, "--title");
+    const all = [...subjects, ...plan.prs.map((p) => p.title), ...openTitles, ...rollupTitles];
+    expect(all.length).toBeGreaterThanOrEqual(7);
+    expect((await verdictOf(all)).filter(([, valid]) => !valid)).toEqual([]);
+  });
+
+  it("keeps a conforming plan title as written, and a roll-up of fixes is typed fix, not feat (the version script reads the type)", async () => {
+    const fixPlan = { ...PLAN, prs: [{ ...PR1, title: "fix(db): add the widget guard" }, { ...PR2, title: "fix(ui): show the widget error" }] };
+    const stopped = await dryRun("ship-feature", { args: ARGS, answers: happy([["intake:record", fixPlan]]) });
+    const run = await dryRun("ship-feature", { args: approve(), answers: happy([["intake:record", fixPlan]]), resumeFrom: stopped });
+    const plan = stackPlanOf(run.calls);
+    expect(plan.prs.map((p) => p.message.split("\n")[0])).toEqual(["fix(db): add the widget guard", "fix(ui): show the widget error"]);
+    expect(quotedAfter(find(run.calls, "rollup:pr").prompt, "--title")).toEqual(["fix: Demo widget"]);
+  });
+
+  it("types the roll-up feat when any stacked PR is a feat: a feature with one new screen is a minor bump", async () => {
+    const mixed = { ...PLAN, prs: [{ ...PR1, title: "fix(db): add the widget guard" }, { ...PR2, title: "feat(ui): add the widget screen" }] };
+    const stopped = await dryRun("ship-feature", { args: ARGS, answers: happy([["intake:record", mixed]]) });
+    const run = await dryRun("ship-feature", { args: approve(), answers: happy([["intake:record", mixed]]), resumeFrom: stopped });
+    expect(quotedAfter(find(run.calls, "rollup:pr").prompt, "--title")).toEqual(["feat: Demo widget"]);
   });
 });

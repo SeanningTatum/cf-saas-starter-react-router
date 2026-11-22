@@ -1,3 +1,4 @@
+<!-- The PR title must be a Conventional Commits subject, like "feat(auth): add passkeys". Types and scopes: .commitlintrc.json. -->
 Closes #
 
 ## When it applies

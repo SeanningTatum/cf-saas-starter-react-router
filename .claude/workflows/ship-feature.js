@@ -268,6 +268,16 @@ const shq = (v) => `'${String(v).replace(/'/g, `'\\''`)}'`;
 const REVIEW_ROUNDS = Math.max(0, Math.min(3, input.reviewRounds ?? 2));
 const ROLLUP_ROUNDS = Math.max(0, Math.min(5, input.rollupRounds ?? 3));
 const COAUTHOR = "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>";
+// A PR title is the commit subject once squashed, and release versions are read from subjects: `type(scope)?!?: subject`
+// (types and scopes live in .commitlintrc.json; the commit-msg hook and the PR title check enforce them). The plan's
+// architect writes conventional titles; a title without the shape gets "feat: " here so no run opens a PR the check refuses.
+const CONVENTIONAL_TITLE = /^[a-z]+(\([a-z0-9-]+\))?!?: \S/;
+const asConventional = (title) => (CONVENTIONAL_TITLE.test(title) ? title : `feat: ${title}`);
+// The roll-up squashes into the base branch: it is a feat when any stacked PR is one, else it takes the last PR's type.
+const rollupTitle = (title, stacked) => {
+  const types = stacked.map((p) => p.title.match(/^([a-z]+)[(!:]/)[1]);
+  return `${types.includes("feat") ? "feat" : types[types.length - 1]}: ${title}`;
+};
 // The e2e dev server must not collide with another on 5173 (a second checkout, another project's dev server):
 // every gate or e2e run gets a free port. playwright.config.ts reads E2E_PORT.
 const E2E_ENV = `E2E_PORT=$(bun -e 'const s=Bun.listen({hostname:"localhost",port:0,socket:{data(){}}});console.log(s.port);s.stop(true)')`;
@@ -437,7 +447,7 @@ if (pre.record_path) {
 - golden_path / error_path: one sentence each, the main user flow and its most likely failure, from UX and Flow.
 - contract: the Contract section's code block, verbatim.
 - seed_fixtures: from Architecture.
-- prs: the PR stack table rows: n, branch, base, title (a short PR title you write from the fence and the Summary), fence (the backticked paths, without backticks), greptile_focus.
+- prs: the PR stack table rows: n, branch, base, title (a short PR title you write from the fence and the Summary, as a Conventional Commits subject per .commitlintrc.json: \`type(scope): subject\`, 100 characters at most), fence (the backticked paths, without backticks), greptile_focus.
 ${input.slug ? `The caller fixed the slug: ${input.slug}.` : ""}
 ${DATA_FENCE}`,
         { label: "intake:record", phase: "Intake", agentType: "context-scout", schema: PLAN }
@@ -520,7 +530,7 @@ ${fence("audited ticket", JSON.stringify(audit.amended, null, 1))}`,
 
 slug = input.slug || plan.slug || slug;
 if (!SLUG.test(slug)) return { stopped: "Intake", reason: `no usable slug (${JSON.stringify(slug)})` };
-const prs = [...plan.prs].sort((a, b) => a.n - b.n);
+const prs = [...plan.prs].sort((a, b) => a.n - b.n).map((p) => ({ ...p, title: asConventional(p.title) }));
 if (!prs.length) return { stopped: "Intake", reason: "the plan has no PRs" };
 // A stack merges into review/<slug> and reaches the base through the roll-up, so PR 1 targets review/<slug>.
 const rollupBranch = prs.length > 1 ? `review/${slug}` : "";
@@ -604,7 +614,7 @@ const stackPlan = {
     branch: p.branch,
     title: p.title,
     fence: p.fence.map(norm),
-    message: `feat(${slug}): ${p.title}\n\n${issue ? `${p.n === prs.length ? "Closes" : "Part of"} ${issue.url}\n\n` : ""}${COAUTHOR}`,
+    message: `${p.title}\n\n${issue ? `${p.n === prs.length ? "Closes" : "Part of"} ${issue.url}\n\n` : ""}${COAUTHOR}`,
   })),
 };
 
@@ -1222,7 +1232,7 @@ if (!rollupBranch) {
     const advisory = rs.flatMap((r) => r.advisory || []);
     return `| #${p.number} | ${pr.title} | ${rs.length} | ${fixed} | ${declinedN} | ${advisory.length ? advisory.join("<br>").replace(/\|/g, "\\|") : "none"} |`;
   });
-  const body = `# ${plan.title} (roll-up)
+  const body = `# ${rollupTitle(plan.title, prs)}
 
 ## What this is
 One PR with the whole feature, for human review. Each stacked PR below was reviewed on its own diff before the first push (the code-review skill, plus the security, scale, maintainability and Effect reviewers over the whole tree), then merged into ${rollupBranch}. Greptile reviews this roll-up only. Merging this one lands the feature; nothing else to merge or close.
@@ -1255,7 +1265,7 @@ ${fence("rollup.md", body)}
      Record each merged PR's number in merged.
   3. \`git fetch -q origin\`, then \`git diff --quiet origin/${rollupBranch} ${top.branch}\` must exit 0: ${rollupBranch} must hold exactly the top branch's tree.
   4. \`git branch -f ${rollupBranch} origin/${rollupBranch}\`.
-  5. \`gh pr create --base ${shq(BASE)} --head ${rollupBranch} --title ${shq(`${plan.title} (roll-up)`)} --body-file ${outDir()}/rollup.md\` -> number and url.
+  5. \`gh pr create --base ${shq(BASE)} --head ${rollupBranch} --title ${shq(rollupTitle(plan.title, prs))} --body-file ${outDir()}/rollup.md\` -> number and url.
   6. For each of ${openPrs.map((p) => `#${p.number}`).join(", ")}: \`gh pr comment <n> --body ${shq(`Merged into ${rollupBranch}; it lands on ${BASE} with the roll-up #<roll-up number>.`)}\`
 Return ok, failed_command, merged, number, url.`,
     { label: "rollup:pr", phase: "Rollup", schema: obj({ ok: BOOL, failed_command: STR, merged: arr(NUM), number: NUM, url: STR }, ["ok", "failed_command", "merged"]) }

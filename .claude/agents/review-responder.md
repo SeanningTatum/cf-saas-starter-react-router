@@ -35,7 +35,7 @@ For each comment (the prompt gives ids, paths, lines and bodies; in PR mode fetc
 - The five non-negotiables in AGENTS.md still hold. A fix that adds a repository or helper adds its test.
 - After all fixes: `bun run typecheck` and `bun run test` must pass. If a fix cannot pass them, revert that fix, decline or mark blocked, say why.
 - Commit once, only if there were fixes: `git add -- <the files you changed>` then
-  `git commit -m "fix(<scope>): address review"` with the Co-Authored-By line given in the prompt as the final line of the message. `<scope>` is the area the PR touches.
+  `git commit -m "fix(<scope>): address review"` with the Co-Authored-By line given in the prompt as the final line of the message. `<scope>` is one scope from `.commitlintrc.json` that fits the area the PR touches (`ui`, `db`, `trpc`, `auth`, ...); the subject follows Conventional Commits and stays within 100 characters.
 
 ## Reply
 

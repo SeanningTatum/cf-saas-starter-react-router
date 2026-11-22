@@ -33,13 +33,24 @@ const DeclaredEnv = Schema.Struct({
   deployment_branches: Schema.Array(PathSafe),
 });
 
+const PendingReason = Schema.String.pipe(
+  Schema.filter((s) => s.trim().length > 0, { message: () => "pending must be a non-empty string" }),
+);
+
+const DeclaredRepository = Schema.Struct({
+  squash_merge_commit_title: Schema.Literal("PR_TITLE", "COMMIT_OR_PR_TITLE"),
+  pending: Schema.optional(PendingReason),
+});
+
 export const Config = Schema.Struct({
   rulesets: Schema.Array(DeclaredRuleset).pipe(Schema.minItems(1)),
   environments: Schema.Array(DeclaredEnv),
+  repository: Schema.optional(DeclaredRepository),
 });
 
 export type Ruleset = typeof DeclaredRuleset.Type;
 export type DeclaredEnvironment = typeof DeclaredEnv.Type;
+export type DeclaredRepositoryT = typeof DeclaredRepository.Type;
 export type ConfigT = typeof Config.Type;
 
 const OldShape = Schema.Struct({ ruleset: Schema.Unknown, rulesets: Schema.optional(Schema.Unknown) });
@@ -51,6 +62,7 @@ export const hasOldShape = (text: string): boolean => {
 
 export const RepoInfo = Schema.Struct({
   default_branch: Schema.String,
+  squash_merge_commit_title: Schema.optional(Schema.String),
   owner: Schema.Struct({ login: Schema.String, id: Schema.Number, type: Schema.String }),
   permissions: Schema.optional(Schema.Struct({ admin: Schema.optional(Schema.Boolean) })),
 });
