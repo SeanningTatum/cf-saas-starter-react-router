@@ -20,7 +20,7 @@ Harness loaded. Before non-trivial work:
 
 Planning: /grill-me (or /grill-with-docs) → /to-spec → /to-tickets.
 
-Anchor: CLAUDE.md (5 non-negotiables).
+Anchor: CLAUDE.md (5 non-negotiables). bun run lint:house <files> checks them and says the fix.
 EOF
 
 exit 0

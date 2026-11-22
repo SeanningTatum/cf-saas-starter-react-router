@@ -217,9 +217,17 @@ describe("workflows follow the staging to production flow", () => {
     return (match?.[1] ?? "").split(",").map((b) => b.trim());
   };
 
-  it("ci.yml and codeql.yml push to the same branches, staging and production (a drift leaves one scan off a branch)", () => {
-    expect(pushBranches("ci.yml")).toEqual(["staging", "production"]);
-    expect(pushBranches("codeql.yml")).toEqual(["staging", "production"]);
+  const flow = (): { integration: string; release: string } => {
+    const [integration = "", release = ""] = pushBranches("ci.yml");
+    return { integration, release };
+  };
+  const escaped = (name: string): string => name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+  it("ci.yml pushes to two branches, the one pull requests land on and the one that releases, and codeql.yml to the same two (a drift leaves one scan off a branch; a fork may rename both)", () => {
+    const ci = pushBranches("ci.yml");
+    expect(ci).toHaveLength(2);
+    expect(ci[0]).not.toBe(ci[1]);
+    expect(pushBranches("codeql.yml")).toEqual(ci);
   });
 
   it.each(["ci.yml", "codeql.yml"])(
@@ -232,15 +240,16 @@ describe("workflows follow the staging to production flow", () => {
     },
   );
 
-  it("deploy.yml follows CI on production only (a deploy off staging would ship every squash)", () => {
+  it("deploy.yml follows CI on the release branch only (a deploy off the branch pull requests land on would ship every squash)", () => {
     const text = codeLines("deploy.yml").join("\n");
-    expect(text).toMatch(
-      /workflow_run:\s*\n\s+workflows:\s*\[CI\]\s*\n\s+types:\s*\[completed\]\s*\n\s+branches:\s*\[production\]\s*\n/,
+    const match = text.match(
+      /workflow_run:\s*\n\s+workflows:\s*\[CI\]\s*\n\s+types:\s*\[completed\]\s*\n\s+branches:\s*\[([^\]]*)\]\s*\n/,
     );
+    expect(match?.[1]?.trim()).toBe(flow().release);
   });
 
-  it("release.yml triggers on pushes to production only", () => {
-    expect(pushBranches("release.yml")).toEqual(["production"]);
+  it("release.yml triggers on pushes to the release branch only", () => {
+    expect(pushBranches("release.yml")).toEqual([flow().release]);
   });
 
   it("release.yml gives contents: write at job level only, never at the top (the checkout and the version script need no write)", () => {
@@ -265,10 +274,11 @@ describe("workflows follow the staging to production flow", () => {
     expect(codeLines(f).filter((l) => /pull_request_target/.test(l))).toEqual([]);
   });
 
-  it("production-guard.yml runs on pull requests into production and fails a source that is not staging in this repo", () => {
+  it("production-guard.yml runs on pull requests into the release branch and fails a source that is not the other CI branch in this repo", () => {
     const text = codeLines("production-guard.yml").join("\n");
-    expect(text).toMatch(/pull_request:\s*\n\s+branches:\s*\[production\]/);
-    expect(text).toContain('[ "$HEAD_REF" != "staging" ] || [ "$HEAD_REPO" != "$REPO" ]');
+    const { integration, release } = flow();
+    expect(text).toMatch(new RegExp(`pull_request:\\s*\\n\\s+branches:\\s*\\[${escaped(release)}\\]`));
+    expect(text).toContain(`[ "$HEAD_REF" != "${integration}" ] || [ "$HEAD_REPO" != "$REPO" ]`);
   });
 
   it.each(["production-guard.yml", "release.yml"])(

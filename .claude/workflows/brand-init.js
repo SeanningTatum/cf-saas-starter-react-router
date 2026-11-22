@@ -3,7 +3,7 @@ export const meta = {
   description:
     "Give a fork its own brand in one run — preflight, brief, three comps drawn and critiqued in parallel, your pick on a lavish review page, tokens and every primitive rebuilt on disjoint fences, checks, fix rounds, DESIGN.md, one commit and one PR",
   whenToUse:
-    "A fresh fork that still wears the starter's look. Not for one colour or one component, not on a repo with live users whose brand is not changing (it rewrites 48 primitives), not as a throwaway exploration on a branch you care about.",
+    "A fresh fork that still wears the starter's look. Not for one colour or one component, not on a repo with live users whose brand is not changing (it rewrites every primitive), not as a throwaway exploration on a branch you care about.",
   phases: [
     { title: "Preflight", detail: "clean tree, green baseline, no brand yet, branch off the default branch" },
     { title: "Brief", detail: "the impeccable init interview; asks you in chat, then writes PRODUCT.md" },
@@ -25,7 +25,7 @@ export const meta = {
  *   A brand is chosen by looking at it, then applied everywhere at once. This is ONE self-contained
  *   workflow: there is no slash command in front of it. It draws three rival comps in parallel, lets
  *   critics judge them on pixels, asks the user to pick, then turns the winner into the real design
- *   system. The token layer is the one sequential step; after it, 48 primitives and a few shared
+ *   system. The token layer is the one sequential step; after it, the primitives and a few shared
  *   components share no file, so they build in parallel. It ends by writing a verdict file
  *   and opening a PR with the verdict in its body, so everything lives in one place.
  *
@@ -748,7 +748,7 @@ const rejected = rejectedAll;
 
 const ui = (names) => names.map((n) => `app/components/ui/${n}.tsx`);
 
-// Hardcoded fences. The nine primitive lanes cover all 48 files in app/components/ui once.
+// Hardcoded fences. The nine primitive lanes cover every file in app/components/ui once.
 const CONTRACT_FENCE = ["app/app.css", "app/root.tsx"];
 const BUILD_LANES = [
   // harness:primitive-fences:start
@@ -782,7 +782,7 @@ const BUILD_LANES = [
   {
     name: "primitives:feedback",
     motion: true,
-    owns: ui(["alert", "progress", "skeleton", "spinner", "empty"]),
+    owns: ui(["alert", "progress", "skeleton", "spinner", "empty", "sonner"]),
   },
   {
     name: "primitives:disclosure-nav",

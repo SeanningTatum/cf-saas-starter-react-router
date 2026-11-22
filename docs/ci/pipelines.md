@@ -56,7 +56,7 @@ A new fork has one branch (`staging`) and no rules. CI and CodeQL run on pull re
 2. Apply the rules: `bun run scripts/repo-rules.ts --apply`.
 3. Set up the `production` environment ([Turn on production deploys](#turn-on-production-deploys)).
 
-If your default branch has another name, edit the `branches:` lines under `push:` in `ci.yml` and `codeql.yml`, or rename the branch to `staging`.
+If your default branch has another name, the simplest way is to rename it to `staging`. To keep your name instead, change it in three places: the `branches:` lines under `push:` in `ci.yml` and in `codeql.yml`, and the source check in `production-guard.yml` (`"$HEAD_REF" != "staging"`). The workflow tests read the two names from `ci.yml` and hold the other workflows to them, so a missed place fails `bun run test`.
 
 ## Commit subjects and PR titles
 
