@@ -86,6 +86,10 @@ A ban ends the user's sessions when it is written, and the app reads the ban aga
 - **On read**: `activeSession` (`app/auth/ban.ts`) turns a session of a banned user into no session. It runs in `requireSession`, `requireAdmin` and `redirectIfAuthenticated` (`app/lib/session.ts`), in `SessionLive` for tRPC (`app/services/session.ts`), and in the upload route (`app/routes/api/upload-file.ts`). So a ban written by hand in the database still locks the user out of the app.
 - **Expiry**: a ban whose `banExpires` has passed counts as no ban. A ban with no expiry clears an old `banExpires` (`clearExpiryOnOpenBan`, and the same rule in the repository), so an earlier timed ban cannot lift a new permanent one.
 
+### Why the sign-in buttons wait for hydration
+
+The sign-in and sign-up forms submit through JavaScript. Before React hydrates, a submit would fall back to the browser's native form submit. `useHydrated` (`app/hooks/use-hydrated.ts`) is false during the server render and hydration and true after, and the submit buttons stay disabled until it turns true, so an early click does nothing and the password never reaches a URL. Test: "ignores a submit before hydration and keeps the password out of the URL (issue #49)" (`e2e/auth.spec.ts`).
+
 ### Why tRPC resolves the session through `SessionLive`
 
 `createTRPCContext` (`app/trpc/index.ts`) reads the session through the `Session` service and `SessionLive(headers)`, the one place that resolves a session for tRPC, so the ban check above runs there too. `SessionLive` needs the request's headers, so it is provided per call and not added to `AppServices`, which is built before the headers reach it. It wraps Better Auth's `getSession` in `Effect.tryPromise`: a call that throws becomes an `ExternalServiceError` and a logged 500, not a defect. Before, `Effect.promise` turned it into a defect. Test: "fails with ExternalServiceError when getSession throws" (`app/services/__tests__/session.test.ts`).

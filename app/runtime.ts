@@ -33,15 +33,6 @@ export type AppServices =
   | BucketRepository
   | HealthRepository;
 
-/**
- * The request's part of the runtime: `CurrentRequest`, and one server span
- * for the whole request. `Layer.span` provides `Tracer.ParentSpan`, so every
- * `Effect.withSpan` run through the runtime becomes its child: one trace per
- * request, continuing the caller's trace when a valid `traceparent` came in.
- * Effect logs outside any `withSpan` also carry this span's ids.
- * `request.id` is not set here: the tracer stamps it on every span, this one
- * included (see `makeOtlpTracer`), so it has one source.
- */
 const requestLayer = (
   request: RequestContext
 ): Layer.Layer<CurrentRequest | Tracer.ParentSpan> =>
@@ -63,16 +54,6 @@ const requestLayer = (
     })
   );
 
-/**
- * Logger, log level and tracer, with the request part built on top. Order
- * matters twice: the request span is built after `TracingLayer` has set the
- * tracer (or it would go to Effect's default tracer and never be exported),
- * and it ends before `TracingLayer`'s flush finalizer runs on
- * `runtime.dispose()` (or it would end after the flush and be lost).
- * `Layer.provideMerge` gives both: the provider is built first and released
- * last. The tracer gets the request too, to stamp its ids on every span.
- * `fetchFn` is the tracing test seam.
- */
 export const observabilityLayer = (
   env: object,
   request?: RequestContext,
@@ -83,9 +64,6 @@ export const observabilityLayer = (
     MinLogLevelLive,
     TracingLayer(env, fetchFn, request)
   );
-  // Typed as `Layer<never>` on purpose: without `request` the runtime holds
-  // neither service, so its type must not promise them. Code that wants the
-  // request reads it with `Effect.serviceOption(CurrentRequest)`.
   return request ? requestLayer(request).pipe(Layer.provideMerge(base)) : base;
 };
 
