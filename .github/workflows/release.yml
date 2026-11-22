@@ -1,0 +1,65 @@
+# Tag + GitHub Release on every merge into `production`.
+#
+# The next version comes from Conventional Commits since the last vX.Y.Z tag:
+#   - `type!:` or a `BREAKING CHANGE:` footer  -> major
+#   - `feat:`                                  -> minor
+#   - anything else (fix:, chore:, docs:, ...) -> patch
+# Squash-merged PRs into staging use the PR title as the commit subject, so
+# keep PR titles conventional (the repo already does).
+#
+# Release notes are GitHub's auto-generated notes (PRs since the last release).
+name: Release
+
+on:
+  push:
+    branches: [production]
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Tag release
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Compute next version
+        id: version
+        run: ./.github/scripts/next-version.sh >> "$GITHUB_OUTPUT"
+
+      - name: Create tag and GitHub Release
+        if: steps.version.outputs.skip != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          NEXT: ${{ steps.version.outputs.next }}
+        run: |
+          gh release create "$NEXT" \
+            --target "$GITHUB_SHA" \
+            --title "$NEXT" \
+            --generate-notes
+
+      - name: Summary
+        env:
+          NEXT: ${{ steps.version.outputs.next }}
+          LAST: ${{ steps.version.outputs.last }}
+          BUMP: ${{ steps.version.outputs.bump }}
+          SKIP: ${{ steps.version.outputs.skip }}
+        run: |
+          {
+            echo "### Release"
+            echo
+            if [ "$SKIP" = "true" ]; then
+              echo "\`$GITHUB_SHA\` is already tagged; nothing to do."
+            else
+              echo "**$NEXT** ($BUMP bump from $LAST) at \`$GITHUB_SHA\`."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
