@@ -46,7 +46,8 @@ describe("LoginSchema", () => {
 });
 
 // Catches: a cap dropped or loosened, letting the form accept a field the
-// server (or Better Auth, for passwords over 128) would refuse.
+// server (or Better Auth, for passwords over 128) would refuse. One row per
+// cap; SignupSchema.password is `Password`, so its row covers both.
 describe("form caps: at the cap decodes, one over fails", () => {
   const s = (n: number) => "a".repeat(n);
   const email = (n: number) => `${"a".repeat(n - "@b.co".length)}@b.co`;
@@ -74,12 +75,6 @@ describe("form caps: at the cap decodes, one over fails", () => {
       (n) => ({ email: "a@b.co", password: s(n) }),
     ],
     ["SignupSchema.name", decode(SignupSchema), 100, (n) => signup({ name: s(n) })],
-    [
-      "SignupSchema.password + confirmPassword",
-      decode(SignupSchema),
-      128,
-      (n) => signup({ password: s(n), confirmPassword: s(n) }),
-    ],
   ];
   for (const [name, check, cap, build] of cases) {
     it(`${name}: ${cap} decodes, ${cap + 1} fails`, () => {

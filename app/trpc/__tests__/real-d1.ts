@@ -97,7 +97,7 @@ export const startRealApp = async () => {
     await proxy.dispose();
   };
 
-  return { db, auth, runtime, loadContext, signUp, signIn, callerFor, signUpAdmin, dispose };
+  return { db, auth, loadContext, signUp, signIn, callerFor, signUpAdmin, dispose };
 };
 
 export type RealApp = Awaited<ReturnType<typeof startRealApp>>;

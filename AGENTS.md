@@ -84,7 +84,7 @@ Enforced by `scripts/check-non-negotiables.ts`.
 |--------|----|
 | New tagged error | Add it to `tagToTRPC` in `app/lib/effect-trpc.ts` |
 | New helper or repository | Add its unit test in the same diff |
-| New / changed tRPC procedure | List it in `LEVELS` and, if `protected`, in `OWNERSHIP` (`app/trpc/__tests__/router.test.ts`); cap every string and array in its input, or `app/trpc/__tests__/input-bounds.test.ts` fails |
+| New / changed tRPC procedure | Add it to `LEVELS` (and `OWNERSHIP` if `protected`) in `app/trpc/__tests__/router.test.ts`; cap every string and array in its input (`input-bounds.test.ts`) |
 | New / changed DB table or user-visible data | Extend the fixtures in `scripts/seed-preview.ts` |
 | New / changed user-visible flow | `feature-verifier` → `.verify/<slug>/verdict.md`, in the PR |
 | New / changed component driven by a `*.machine.ts` | Unit tests on the machine own the logic: every transition, guard and reachable state. The e2e spec owns the wiring: generated paths that hit each DOM binding and each state's view once, never one per transition (model: `e2e/file-upload.paths.spec.ts`) |

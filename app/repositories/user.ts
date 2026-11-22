@@ -26,19 +26,16 @@ export const isProtectedUser = (
   currentUserId: string
 ): boolean => target.role === "admin" || target.id === currentUserId;
 
-/** Escapes LIKE wildcards so a search term matches literally (`ESCAPE '\'`). */
-export const escapeLike = (term: string): string =>
-  term.replace(/[\\%_]/g, (c) => `\\${c}`);
-
 export const buildUserConditions = (
   input: GetUsersInput
 ): SQL | undefined => {
   const conditions: SQL[] = [];
   if (input.search) {
-    const term = `%${escapeLike(input.search)}%`;
+    // instr, not LIKE: `%` and `_` in the term stay literal, and D1 refuses
+    // any LIKE pattern over 50 bytes.
     const cond = or(
-      sql`${user.name} LIKE ${term} ESCAPE '\\'`,
-      sql`${user.email} LIKE ${term} ESCAPE '\\'`
+      sql`instr(lower(${user.name}), lower(${input.search})) > 0`,
+      sql`instr(lower(${user.email}), lower(${input.search})) > 0`
     );
     if (cond) conditions.push(cond);
   }

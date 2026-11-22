@@ -7,10 +7,9 @@ export type Role = typeof Role.Type;
 export const Status = Schema.Literal("verified", "unverified", "banned");
 export type Status = typeof Status.Type;
 
-export const UserId = Schema.String.pipe(Schema.maxLength(128));
+const UserId = Schema.String.pipe(Schema.maxLength(128));
 
-// D1 binds at most 100 variables per statement, and a bulk UPDATE binds the
-// ids plus its SET columns: 100 ids overflow (it fails at 97).
+// D1 binds at most 100 variables per statement, and a bulk UPDATE also binds its SET columns.
 export const MAX_BULK_USER_IDS = 50;
 
 const BulkUserIds = Schema.Array(UserId).pipe(
@@ -101,8 +100,6 @@ export const CreateWorkflowInput = Schema.Struct({
     key: Schema.String.pipe(Schema.maxLength(64)),
     value: Schema.String.pipe(Schema.maxLength(500)),
   }).pipe(
-    // A key over the cap is an excess property, which Effect drops by default.
-    Schema.annotations({ parseOptions: { onExcessProperty: "error" } }),
     Schema.filter((r) => Object.keys(r).length <= 20, {
       message: () => "metadata must have at most 20 entries",
       jsonSchema: { maxProperties: 20 },

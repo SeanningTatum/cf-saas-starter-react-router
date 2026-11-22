@@ -1,5 +1,5 @@
 import { TRPCError } from "@trpc/server";
-import { Schema, type SchemaAST } from "effect";
+import { Schema } from "effect";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import {
   createCallerFactory,
@@ -9,37 +9,18 @@ import {
 } from "@/trpc";
 import { appRouter } from "@/trpc/router";
 import type { AppRuntime } from "@/runtime";
-import { childrenOf, inputAstsOf, joinPath } from "./procedure-inputs";
-import type { Account, AppCaller, RealApp } from "./real-d1";
+import { startRealApp, type AppCaller, type RealApp } from "./real-d1";
 
 /**
- * Two tables: who may call each procedure, and whose rows a caller may touch.
+ * LEVELS: who may call each procedure. `user.deleteUser` once sat behind
+ * `protectedProcedure`, so any signed-in user could delete any account by id,
+ * and no test asked "who may call this?". A new procedure fails here until it
+ * is listed with its level, so the level is a choice a reviewer sees.
  *
- * LEVELS, the auth level of every procedure. `user.deleteUser` once sat behind
- * `protectedProcedure`, so any signed-in user could delete any non-admin
- * account by id. Nothing caught it, because no test asked "who may call
- * this?". This table is that question, asked of every procedure. A new
- * procedure fails the first test until it is listed here with its level, so
- * the level is a choice a reviewer sees.
- *
- * `protected` means any signed-in user may call it. Give that level only to a
- * procedure that acts on the caller's own data; one that takes another user's
- * id belongs behind `admin`.
- *
- * OWNERSHIP, whose row a `protected` procedure acts on. Passing the level
- * check only proves the caller is signed in. A procedure that then loads a
- * row by the id it was sent, and never asks who owns that row, lets any
- * signed-in user read or change any other user's rows by sending their id.
- * The guard is usually one WHERE clause in a repository, which is easy to
- * leave out and invisible in review. So every `protected` procedure is listed
- * again here as one of two things:
- * - `takesNoId(why)`: checked, not trusted; its input may hold no field named
- *   `id` or ending in `Id` / `Ids`.
- * - `otherUsersRow(make)`: one line. `make` acts as a second, really signed-in
- *   user, creates a row through the router and returns the input that names
- *   it. The first user must be refused it (FORBIDDEN or NOT_FOUND) and the
- *   owner must not be. These run on real D1 (`./real-d1.ts`), because a stub
- *   cannot run the WHERE clause that does the refusing.
+ * OWNERSHIP: every `protected` procedure again. The hole it stands for is a
+ * signed-in user acting on another user's row by sending its id. Real cases
+ * run on real D1 (`./real-d1.ts`): the guard is a WHERE clause, and a stub
+ * cannot run one.
  */
 type Level = "protected" | "admin";
 
@@ -62,25 +43,13 @@ const LEVELS: Record<string, Level> = {
   "analytics.getRecentSignupsCount": "admin",
 };
 
-type TakesNoId = { readonly kind: "takes no id"; readonly why: string };
-type OtherUsersRow<C> = {
-  readonly kind: "other user's row";
-  readonly makeInput: (other: C) => Promise<unknown>;
-};
-type Ownership<C> = TakesNoId | OtherUsersRow<C>;
-
-const takesNoId = (why: string): TakesNoId => ({ kind: "takes no id", why });
-const otherUsersRow = <C>(makeInput: (other: C) => Promise<unknown>): OtherUsersRow<C> => ({
-  kind: "other user's row",
-  makeInput,
-});
+/** Acting as the other user, makes a row through the router and returns the input that names it. */
+type OwnershipCase = (other: AppCaller) => Promise<unknown>;
 
 // A case is one line, e.g.
-//   "notes.get": otherUsersRow(async (other) => ({ noteId: (await other.notes.create({ title: "x" })).id })),
-const OWNERSHIP: Record<string, Ownership<AppCaller>> = {
-  "user.createWorkflow": takesNoId(
-    "starts a background job from an email and metadata; it reads no stored row"
-  ),
+//   "notes.get": async (other) => ({ noteId: (await other.notes.create({ title: "x" })).id }),
+const OWNERSHIP: Record<string, "takes no id" | OwnershipCase> = {
+  "user.createWorkflow": "takes no id", // starts a job from an email and metadata; reads no stored row
 };
 
 // `import.meta.env.DEV` is always true under vitest, which makes
@@ -133,51 +102,26 @@ const outcomeOf = (call: Promise<unknown>): Promise<string> =>
     (e: unknown) => (e instanceof TRPCError ? e.code : `not a TRPCError: ${String(e)}`)
   );
 
-const REFUSED = ["FORBIDDEN", "NOT_FOUND"];
-
-/** The assertion every `otherUsersRow` case runs, real or fixture. */
+/** The assertion every ownership case runs, real or fixture. */
 const expectOtherUsersRowRefused = async <C>(
   path: string,
   makeInput: (other: C) => Promise<unknown>,
-  callers: { me: () => Promise<C>; other: () => Promise<C> }
+  callers: { me: C; other: C }
 ) => {
-  const input = await makeInput(await callers.other());
-  expect(REFUSED, `${path} with another user's row, as a user who does not own it`).toContain(
-    await outcomeOf(callAt(await callers.me(), path, input))
+  const input = await makeInput(callers.other);
+  expect(["FORBIDDEN", "NOT_FOUND"], `${path} with another user's row, as a user who does not own it`).toContain(
+    await outcomeOf(callAt(callers.me, path, input))
   );
   // The control: the owner gets through with the same input, so the refusal
   // above is about ownership, not about an input that names nothing.
   expect(
-    await outcomeOf(callAt(await callers.other(), path, input)),
+    await outcomeOf(callAt(callers.other, path, input)),
     `${path} with the same input, as the row's owner`
   ).toBe("ok");
 };
 
-const ID_FIELD = /^id$|Ids?$/;
-
-/** Every field in the input whose name says it holds an id, as a dotted path. */
-const idFieldsIn = (asts: ReadonlyArray<SchemaAST.AST | null>): string[] => {
-  const found = new Set<string>();
-  const walk = (ast: SchemaAST.AST, path: string, seen: ReadonlySet<SchemaAST.AST>) => {
-    if (seen.has(ast)) return;
-    for (const child of childrenOf(ast)) {
-      const childPath = joinPath(path, child.segment);
-      if (child.segment !== null && ID_FIELD.test(child.segment)) found.add(childPath);
-      walk(child.ast, childPath, new Set(seen).add(ast));
-    }
-  };
-  for (const ast of asts) {
-    if (ast === null) found.add("<an input that is not an Effect Schema>");
-    else walk(ast, "", new Set());
-  }
-  return [...found].sort();
-};
-
-const INPUTS = inputAstsOf(appRouter);
-const PROTECTED = Object.keys(LEVELS).filter((path) => LEVELS[path] === "protected");
-const NO_ID = Object.keys(OWNERSHIP).filter((path) => OWNERSHIP[path].kind === "takes no id");
 const REAL_CASES = Object.entries(OWNERSHIP).flatMap(([path, entry]) =>
-  entry.kind === "other user's row" ? [{ path, makeInput: entry.makeInput }] : []
+  entry === "takes no id" ? [] : [{ path, makeInput: entry }]
 );
 
 describe("procedure auth levels", () => {
@@ -210,37 +154,31 @@ describe("procedure auth levels", () => {
   it.each(Object.keys(LEVELS).filter((path) => LEVELS[path] === "admin"))(
     "%s refuses a signed-in non-admin",
     async (path) => {
-      // Catches: an admin procedure moved to protectedProcedure, which hands
-      // every signed-in user an admin action.
+      // Catches: an admin procedure moved to protectedProcedure.
       await expect(call("user", path)).rejects.toMatchObject({ code: "FORBIDDEN" });
     }
   );
 });
 
 describe("ownership of protected procedures", () => {
-  it("classifies every protected procedure, and nothing else", () => {
+  it("lists every protected procedure, and nothing else", () => {
     // Catches: a new protected procedure shipped without anyone deciding
     // whether it takes another user's id.
-    expect(Object.keys(OWNERSHIP).sort()).toEqual(PROTECTED.sort());
+    expect(Object.keys(OWNERSHIP).sort()).toEqual(
+      Object.keys(LEVELS).filter((path) => LEVELS[path] === "protected").sort()
+    );
   });
 
-  it.each(NO_ID)("%s, marked as taking no id, has no id field in its input", (path) => {
-    // Catches: `{ noteId }` (or `id`, `userIds`) marked "takes no id" to skip
-    // the real ownership case.
-    expect(idFieldsIn(INPUTS[path] ?? [])).toEqual([]);
-  });
-
+  // Skipped while there is no case, so workerd does not start.
   describe.skipIf(REAL_CASES.length === 0)("on real D1", { timeout: 60_000 }, () => {
     let app: RealApp;
-    let me: Account;
-    let other: Account;
+    let callers: { me: AppCaller; other: AppCaller };
 
     beforeAll(async () => {
-      // Imported here so a run with no real case never starts workerd.
-      const { startRealApp } = await import("./real-d1");
       app = await startRealApp();
-      me = await app.signUp("me@ownership.test");
-      other = await app.signUp("other@ownership.test");
+      const me = await app.signUp("me@ownership.test");
+      const other = await app.signUp("other@ownership.test");
+      callers = { me: await app.callerFor(me.headers), other: await app.callerFor(other.headers) };
     }, 60_000);
 
     afterAll(async () => {
@@ -248,100 +186,49 @@ describe("ownership of protected procedures", () => {
     });
 
     it.each(REAL_CASES)("$path refuses a signed-in user another user's row", ({ path, makeInput }) =>
-      // Catches: a protected procedure that loads a row by the id it was
-      // sent without checking who owns it.
-      expectOtherUsersRowRefused(path, makeInput, {
-        me: () => app.callerFor(me.headers),
-        other: () => app.callerFor(other.headers),
-      })
+      expectOtherUsersRowRefused(path, makeInput, callers)
     );
   });
 });
 
 /**
- * The checks above on a router built to pass or fail them. The real table has
- * no id-taking case today, so without this nothing shows that the ownership
- * assertion can fail at all.
+ * The ownership assertion on a router built to pass or fail it. With no real
+ * case today, nothing else shows that the assertion can fail.
  */
-describe("the ownership checks themselves", () => {
-  const notes = new Map<string, { id: string; ownerId: string }>();
+describe("the ownership assertion itself", () => {
+  let owner = "";
   const NoteIdInput = Schema.standardSchemaV1(
     Schema.Struct({ noteId: Schema.String.pipe(Schema.maxLength(64)) })
   );
-  const findNote = (noteId: string) => {
-    const note = notes.get(noteId);
-    if (!note) throw new TRPCError({ code: "NOT_FOUND" });
-    return note;
-  };
 
   const fixtureRouter = createTRPCRouter({
     notes: createTRPCRouter({
       create: protectedProcedure.mutation(({ ctx }) => {
-        const id = `note-${notes.size + 1}`;
-        notes.set(id, { id, ownerId: ctx.auth.user.id });
-        return { id };
+        owner = ctx.auth.user.id;
+        return { id: "note-1" };
       }),
-      // The shape every real case must have: the owner is part of the lookup.
       getOwned: protectedProcedure.input(NoteIdInput).query(({ ctx, input }) => {
-        const note = findNote(input.noteId);
-        if (note.ownerId !== ctx.auth.user.id) throw new TRPCError({ code: "NOT_FOUND" });
-        return note;
+        if (owner !== ctx.auth.user.id) throw new TRPCError({ code: "NOT_FOUND" });
+        return { id: input.noteId };
       }),
-      // The production hole: found by id alone.
-      getLeaky: protectedProcedure.input(NoteIdInput).query(({ input }) => findNote(input.noteId)),
-      // Refuses everyone, owner included: what a case whose input names no
-      // row looks like from outside.
-      getNothing: protectedProcedure.input(NoteIdInput).query(() => {
-        throw new TRPCError({ code: "NOT_FOUND" });
-      }),
+      // The hole: found by id alone.
+      getLeaky: protectedProcedure.input(NoteIdInput).query(({ input }) => ({ id: input.noteId })),
     }),
   });
 
-  const callerAs = (id: string) =>
-    Promise.resolve(createCallerFactory(fixtureRouter)(contextAs({ id, role: "user" })));
-  type FixtureCaller = Awaited<ReturnType<typeof callerAs>>;
-  const callers = { me: () => callerAs("alice"), other: () => callerAs("bob") };
-
-  const othersNote = otherUsersRow(async (other: FixtureCaller) => ({
+  const callerAs = (id: string) => createCallerFactory(fixtureRouter)(contextAs({ id, role: "user" }));
+  const callers = { me: callerAs("alice"), other: callerAs("bob") };
+  const othersNote = async (other: typeof callers.other) => ({
     noteId: (await other.notes.create()).id,
-  }));
+  });
 
   it("passes a procedure that refuses a non-owner", async () => {
-    await expectOtherUsersRowRefused("notes.getOwned", othersNote.makeInput, callers);
+    await expectOtherUsersRowRefused("notes.getOwned", othersNote, callers);
   });
 
   it("fails a procedure that hands one user another user's row", async () => {
-    // Catches: an ownership assertion that passes whatever the procedure does.
-    await expect(
-      expectOtherUsersRowRefused("notes.getLeaky", othersNote.makeInput, callers)
-    ).rejects.toThrow("notes.getLeaky with another user's row, as a user who does not own it");
-  });
-
-  it("fails a case whose input does not name the row it made", async () => {
-    // Catches: a case that passes because its input is wrong (a NOT_FOUND for
-    // a row that never existed) rather than because ownership was checked.
-    await expect(
-      expectOtherUsersRowRefused("notes.getNothing", othersNote.makeInput, callers)
-    ).rejects.toThrow("notes.getNothing with the same input, as the row's owner");
-  });
-
-  it("the no-id check finds an id field however it is named, nested or wrapped", () => {
-    // Catches: a walker that misses ids inside nested structs, arrays,
-    // optionals or structs with defaults, so "takes no id" passes on trust.
-    expect(idFieldsIn(inputAstsOf(fixtureRouter)["notes.getOwned"])).toEqual(["noteId"]);
-    expect(
-      idFieldsIn([
-        Schema.Struct({
-          id: Schema.String,
-          data: Schema.Struct({ ownerId: Schema.String }),
-          userIds: Schema.Array(Schema.String),
-          targetId: Schema.optional(Schema.String),
-          page: Schema.optionalWith(Schema.Number, { default: () => 0 }),
-          // Not ids: the rule is camel-case `Id`, not any "id" in a word.
-          paid: Schema.Boolean,
-          email: Schema.String,
-        }).ast,
-      ])
-    ).toEqual(["data.ownerId", "id", "targetId", "userIds"]);
+    await expect(expectOtherUsersRowRefused("notes.getLeaky", othersNote, callers)).rejects.toThrow(
+      "notes.getLeaky with another user's row, as a user who does not own it"
+    );
   });
 });

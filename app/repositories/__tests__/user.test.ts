@@ -1,12 +1,7 @@
 import { describe, it as itVitest, expect, vi } from "vitest";
 import { it } from "@effect/vitest";
 import { Effect, Layer, Exit, Cause } from "effect";
-import {
-  UserRepository,
-  isProtectedUser,
-  buildUserConditions,
-  escapeLike,
-} from "../user";
+import { UserRepository, isProtectedUser, buildUserConditions } from "../user";
 import { Database } from "@/services/database";
 import {
   chainable,
@@ -59,23 +54,6 @@ describe("isProtectedUser", () => {
   itVitest("returns true when role is null and id matches current", () => {
     expect(isProtectedUser({ role: null, id: "u1" }, "u1")).toBe(true);
   });
-});
-
-describe("escapeLike", () => {
-  // Catches: a search term whose wildcards widen the match (`%` lists every
-  // user, `_` matches any one character), or a lone `\` breaking the escape.
-  const cases: ReadonlyArray<[string, string, string]> = [
-    ["%", "100%", "100\\%"],
-    ["_", "a_b", "a\\_b"],
-    ["\\", "a\\b", "a\\\\b"],
-    ["all three", "\\%_", "\\\\\\%\\_"],
-    ["a plain term (unchanged)", "alice@example.com", "alice@example.com"],
-  ];
-  for (const [name, input, expected] of cases) {
-    itVitest(`escapes ${name}`, () => {
-      expect(escapeLike(input)).toBe(expected);
-    });
-  }
 });
 
 describe("buildUserConditions", () => {

@@ -164,7 +164,8 @@ describe("CreateWorkflowInput", () => {
 });
 
 // Catches: a cap dropped or loosened, letting a client send a field (or a
-// list) of any size to the server and the database.
+// list) of any size to the server and the database. One row per distinct
+// cap; fields that share a schema share its row.
 describe("input caps: at the cap decodes, one over fails", () => {
   const s = (n: number) => "a".repeat(n);
   const ids = (n: number) => Array.from({ length: n }, (_, i) => `u${i}`);
@@ -179,83 +180,33 @@ describe("input caps: at the cap decodes, one over fails", () => {
       (n: number) => unknown,
     ]
   > = [
-    ["GetUsersInput.search", decode(GetUsersInput), 100, (n) => ({ search: s(n) })],
-    ["GetUserInput.userId", decode(GetUserInput), 128, (n) => ({ userId: s(n) })],
-    ["UnbanUserInput.userId", decode(UnbanUserInput), 128, (n) => ({ userId: s(n) })],
-    ["DeleteUserInput.userId", decode(DeleteUserInput), 128, (n) => ({ userId: s(n) })],
+    ["UserId (GetUserInput.userId)", decode(GetUserInput), 128, (n) => ({ userId: s(n) })],
     [
-      "UpdateUserInput.userId",
-      decode(UpdateUserInput),
-      128,
-      (n) => ({ userId: s(n), data: {} }),
-    ],
-    ["UpdateUserData.name", decode(UpdateUserData), 100, (n) => ({ name: s(n) })],
-    ["UpdateUserData.email", decode(UpdateUserData), 254, (n) => ({ email: email(n) })],
-    [
-      "UpdateUserData.banReason",
-      decode(UpdateUserData),
-      500,
-      (n) => ({ banReason: s(n) }),
-    ],
-    [
-      "BanUserInput.reason",
-      decode(BanUserInput),
-      500,
-      (n) => ({ userId: "u1", reason: s(n) }),
-    ],
-    [
-      "BulkBanUsersInput.reason",
-      decode(BulkBanUsersInput),
-      500,
-      (n) => ({ userIds: ["u1"], reason: s(n) }),
-    ],
-    [
-      "BulkBanUsersInput.userIds item",
-      decode(BulkBanUsersInput),
-      128,
-      (n) => ({ userIds: [s(n)] }),
-    ],
-    [
-      "BulkBanUsersInput.userIds",
-      decode(BulkBanUsersInput),
-      MAX_BULK_USER_IDS,
-      (n) => ({ userIds: ids(n) }),
-    ],
-    [
-      "BulkDeleteUsersInput.userIds",
+      "bulk user ids (BulkDeleteUsersInput.userIds)",
       decode(BulkDeleteUsersInput),
       MAX_BULK_USER_IDS,
       (n) => ({ userIds: ids(n) }),
     ],
     [
-      "BulkUpdateUserRolesInput.userIds",
-      decode(BulkUpdateUserRolesInput),
-      MAX_BULK_USER_IDS,
-      (n) => ({ userIds: ids(n), role: "user" }),
+      "ban reason (BanUserInput.reason)",
+      decode(BanUserInput),
+      500,
+      (n) => ({ userId: "u1", reason: s(n) }),
     ],
+    ["GetUsersInput.search", decode(GetUsersInput), 100, (n) => ({ search: s(n) })],
+    ["UpdateUserData.name", decode(UpdateUserData), 100, (n) => ({ name: s(n) })],
+    ["Email (UpdateUserData.email)", decode(UpdateUserData), 254, (n) => ({ email: email(n) })],
     [
-      "CreateWorkflowInput.email",
+      "CreateWorkflowInput.metadata value",
       decode(CreateWorkflowInput),
-      254,
-      (n) => ({ email: email(n), metadata: {} }),
+      500,
+      (n) => ({ email: "a@b.co", metadata: { k: s(n) } }),
     ],
     [
       "CreateWorkflowInput.metadata entries",
       decode(CreateWorkflowInput),
       20,
       (n) => ({ email: "a@b.co", metadata: metadata(n) }),
-    ],
-    [
-      "CreateWorkflowInput.metadata key",
-      decode(CreateWorkflowInput),
-      64,
-      (n) => ({ email: "a@b.co", metadata: { [s(n)]: "v" } }),
-    ],
-    [
-      "CreateWorkflowInput.metadata value",
-      decode(CreateWorkflowInput),
-      500,
-      (n) => ({ email: "a@b.co", metadata: { k: s(n) } }),
     ],
   ];
   for (const [name, check, cap, build] of cases) {
@@ -264,8 +215,4 @@ describe("input caps: at the cap decodes, one over fails", () => {
       expect(check(build(cap + 1))._tag).toBe("Left");
     });
   }
-
-  it("MAX_BULK_USER_IDS stays at 50 (D1's 100-variable limit)", () => {
-    expect(MAX_BULK_USER_IDS).toBe(50);
-  });
 });

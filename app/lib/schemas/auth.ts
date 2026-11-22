@@ -15,22 +15,24 @@ export const NonEmptyString = Schema.String.pipe(
   Schema.minLength(1, { message: () => "Required" })
 );
 
+const PASSWORD_MAX = 128;
+
 const passwordTooLong = {
-  message: () => "Password must be at most 128 characters",
+  message: () => `Password must be at most ${PASSWORD_MAX} characters`,
 };
 
 export const Password = Schema.String.pipe(
   Schema.minLength(8, {
     message: () => "Password must be at least 8 characters",
   }),
-  Schema.maxLength(128, passwordTooLong)
+  Schema.maxLength(PASSWORD_MAX, passwordTooLong)
 );
 
 export const LoginSchema = Schema.Struct({
   email: Email,
   password: Schema.String.pipe(
     Schema.minLength(1, { message: () => "Password is required" }),
-    Schema.maxLength(128, passwordTooLong)
+    Schema.maxLength(PASSWORD_MAX, passwordTooLong)
   ),
 });
 export type LoginInput = typeof LoginSchema.Type;
@@ -44,7 +46,9 @@ export const SignupSchema = Schema.Struct({
   ),
   email: Email,
   password: Password,
-  confirmPassword: Schema.String.pipe(Schema.maxLength(128, passwordTooLong)),
+  confirmPassword: Schema.String.pipe(
+    Schema.maxLength(PASSWORD_MAX, passwordTooLong)
+  ),
 }).pipe(
   Schema.filter((data) =>
     data.password === data.confirmPassword
