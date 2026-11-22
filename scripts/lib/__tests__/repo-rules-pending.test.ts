@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { pendingChecks, splitPending, withoutMarks } from "../lib/repo-rules-pending";
-import type { LiveRulesetT, Ruleset } from "../lib/repo-rules-schemas";
+import { pendingChecks, splitPending, withoutMarks } from "../repo-rules-pending";
+import type { LiveRulesetT, Ruleset } from "../repo-rules-schemas";
 
 const ruleset = (entries: unknown[]): Ruleset => ({
   name: "r",

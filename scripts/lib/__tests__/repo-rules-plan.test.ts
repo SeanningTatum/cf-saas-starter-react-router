@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { planRepository, planRuleset } from "../lib/repo-rules-plan";
-import type { LiveRulesetT, Ruleset } from "../lib/repo-rules-schemas";
+import { planRepository, planRuleset } from "../repo-rules-plan";
+import type { LiveRulesetT, Ruleset } from "../repo-rules-schemas";
 
 const decl: Ruleset = {
   name: "main",
