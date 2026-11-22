@@ -15,7 +15,7 @@ import uploadText from "@/locales/en/upload.json" with { type: "json" };
  *
  * Each test replays its path on /admin/kitchen-sink#upload and checks
  * `data-state` after every step. The upload request is held open by a route
- * mock and released when the path reaches the upload actor's done or error event, so
+ * mock and released when the path reaches the upload actor's done event, so
  * `uploading` is observable and the reply (ok, refused or a dropped connection)
  * comes from the model.
  * The real upload to R2 is walked by feature-verifier, not here.
@@ -138,17 +138,12 @@ test.describe("FileUpload paths", () => {
             const route = held.shift() as Route;
             await Either.match(event.output, {
               onRight: ({ key }) => route.fulfill({ json: { success: true, key } }),
+              // No readable reply: drop the connection.
               onLeft: (e) =>
-                route.fulfill({
-                  status: 400,
-                  json: { success: false, error: "message" in e ? e.message : "error" },
-                }),
+                e._tag === "ExternalServiceError"
+                  ? route.abort("failed")
+                  : route.fulfill({ status: 400, json: { success: false, error: e.message } }),
             });
-            break;
-          }
-          case "xstate.error.actor.upload": {
-            await expect.poll(() => held.length).toBe(1);
-            await (held.shift() as Route).abort("failed");
             break;
           }
         }
@@ -172,7 +167,7 @@ test.describe("FileUpload paths", () => {
         await expect(dropzone).toBeVisible();
       }
       // A path with no upload step must not have sent a request.
-      const uploads = statePath.steps.filter((s) => /^xstate\.(done|error)\.actor\.upload$/.test(s.event.type));
+      const uploads = statePath.steps.filter((s) => s.event.type === "xstate.done.actor.upload");
       if (uploads.length === 0) expect(held).toHaveLength(0);
     });
   }

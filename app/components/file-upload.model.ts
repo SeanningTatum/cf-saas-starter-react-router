@@ -2,6 +2,7 @@ import { Either } from "effect";
 import { transition } from "xstate";
 import { getShortestPaths } from "xstate/graph";
 import { BucketValidationError } from "@/models/errors/bucket";
+import { ExternalServiceError } from "@/models/errors/repository";
 import {
   fileUploadMachine,
   type FileUploadEvent,
@@ -20,14 +21,18 @@ import {
 /** The event xstate sends when the invoked `upload` actor resolves. */
 export type UploadDoneEvent = { readonly type: "xstate.done.actor.upload"; readonly output: UploadResult };
 
-/** The event xstate sends when the invoked `upload` actor rejects. */
-export type UploadErrorEvent = { readonly type: "xstate.error.actor.upload"; readonly error: unknown };
-
-export type ModelEvent = FileUploadEvent | UploadDoneEvent | UploadErrorEvent;
+export type ModelEvent = FileUploadEvent | UploadDoneEvent;
 
 export const UPLOAD_OK: UploadResult = Either.right({ key: "uploads/model-test.txt" });
 export const UPLOAD_REFUSED: UploadResult = Either.left(
   new BucketValidationError({ message: "File content does not match its declared type", field: "file" })
+);
+// What uploadFile returns when the request never gets a readable reply. It is a
+// done event, not an actor error: uploadFile runs under Effect.either, so a
+// dropped connection arrives as data. The machine's onError branch is covered
+// by its unit tests.
+export const UPLOAD_UNREACHABLE: UploadResult = Either.left(
+  new ExternalServiceError({ service: "upload-file", cause: "connection dropped" })
 );
 
 type FileUploadSnapshot = ReturnType<typeof fileUploadMachine.transition>;
@@ -39,8 +44,8 @@ export const fileUploadTraversal = (opts: {
   readonly big: File;
 }) => ({
   input: { maxSize: opts.maxSize },
-  // Actor done and error events are not in the machine's event type; the
-  // traversal needs them to leave `uploading`, so they are cast in here.
+  // Done events are not in the machine's event type; the traversal needs them
+  // to leave `uploading`, so they are cast in here.
   events: [
     { type: "DRAG_ENTER" },
     { type: "DRAG_LEAVE" },
@@ -49,7 +54,7 @@ export const fileUploadTraversal = (opts: {
     { type: "RESET" },
     { type: "xstate.done.actor.upload", output: UPLOAD_OK },
     { type: "xstate.done.actor.upload", output: UPLOAD_REFUSED },
-    { type: "xstate.error.actor.upload", error: new Error("network unreachable") },
+    { type: "xstate.done.actor.upload", output: UPLOAD_UNREACHABLE },
   ] as unknown as FileUploadEvent[],
   // The default key is JSON.stringify, and a File stringifies to {}, which
   // makes every PICK the same edge. Key a pick by the file's name and size.
@@ -89,10 +94,11 @@ export const describePath = (
     e.type === "PICK"
       ? `PICK ${e.file.name}`
       : e.type === "xstate.done.actor.upload"
-        ? `upload ${Either.isRight(e.output) ? "ok" : "refused"}`
-        : e.type === "xstate.error.actor.upload"
-          ? "upload unreachable"
-          : e.type;
+        ? `upload ${Either.match(e.output, {
+            onRight: () => "ok",
+            onLeft: (err) => (err._tag === "ExternalServiceError" ? "unreachable" : "refused"),
+          })}`
+        : e.type;
   const events = steps
     .map((s) => s.event)
     .filter((e) => (e as { type: string }).type !== "xstate.init");
