@@ -28,10 +28,10 @@ export function createAuth(
     secret,
     baseURL,
     ...drizzleConfig,
-    // `/admin/update-user` can set `banned: true` without deleting sessions,
-    // and getSession never reads `banned`; end them here so the ban bites.
-    // This runs after the write, not with it: the repository's batch is atomic,
-    // this is not.
+    // getSession never reads `banned`, so any write that sets it must end the
+    // user's sessions. The admin plugin does that on its own routes; this hook
+    // covers every other write. It runs after the write, not with it: the
+    // repository's batch is atomic, this is not.
     databaseHooks: {
       user: {
         update: {
