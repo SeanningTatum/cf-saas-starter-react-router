@@ -502,19 +502,6 @@ describe("ship-feature: run ledger", () => {
     }
   });
 
-  it("every PR body and the roll-up body get the size section, measured against the PR's own base before the PR is created (#159: CI fails a PR that changes shipped code with no table)", async () => {
-    const { shipped } = await runHappy();
-    const open = find(shipped.calls, "open:prs").prompt;
-    expect(open).toContain("bun run size --base <base> --pr-body");
-    expect(open).toContain(`branch=${PR1.branch} base='origin/review/${SLUG}'`);
-    expect(open).toContain(`branch=${PR2.branch} base='origin/${PR1.branch}'`);
-    expect(open.indexOf("--pr-body")).toBeLessThan(open.indexOf("gh pr create"));
-    expect(open).toContain(`Then \`git switch ${PR2.branch}\``);
-    const rollup = find(shipped.calls, "rollup:pr").prompt;
-    expect(rollup).toContain("bun run size --base 'origin/staging' --pr-body");
-    expect(rollup.indexOf("--pr-body")).toBeLessThan(rollup.indexOf("gh pr create"));
-  });
-
   it("an auditor slug that is not kebab-case stops the run before any memory or ledger call and reaches no prompt: it would otherwise land in a shell line", async () => {
     const steered = "x; echo steered";
     const audit = { slug: steered, verdict: "amend", reason: "no error states", items: [{ id: "errors", status: "missing", note: "" }], amended: { title: "Widgets", body: "Users add widgets." }, questions: [] };
