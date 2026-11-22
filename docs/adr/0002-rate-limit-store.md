@@ -26,13 +26,14 @@ Use the Workers Rate Limiting binding, one binding per rule, behind the `RateLim
 
 Two smaller choices go with it:
 
-- **The check runs at the route, before Better Auth.** `app/routes/api/auth.$.ts` calls the gate and hands the request on only if it passes. A limited request never reaches Better Auth or Turnstile, so it costs no `siteverify` call.- **A limiter fault fails open.** If the binding is missing or throws, the request goes on and the fault is logged. A fault in the limiter must not lock every user out of sign-in. The cost: while the fault lasts, there is no limit. Turnstile still applies.
+- **The check runs at the route, before Better Auth.** `app/routes/api/auth.$.ts` calls the gate and hands the request on only if it passes. A limited request never reaches Better Auth or Turnstile, so it costs no `siteverify` call.
+- **A limiter fault fails open.** If the binding is missing or throws, the request goes on and the fault is logged. A fault in the limiter must not lock every user out of sign-in. The cost: while the fault lasts, there is no limit. Turnstile still applies.
 
 ## Consequences
 
 - A fork gives up exact global counts and windows longer than a minute. There is no hourly cap and no lockout.
-- A limit is a number in config: `wrangler.jsonc`, mirrored in `scripts/lib/wrangler-config.ts` and checked by `scripts/__tests__/wrangler-config.test.ts`. Changing one needs a deploy, not a code path.
-- Many users behind one address share one count.
+- A limit is a number in `RATE_LIMIT_REQUESTS_PER_PERIOD` (`app/lib/constants/rate-limit.ts`). `scripts/lib/wrangler-config.ts` builds from it, and `scripts/__tests__/wrangler-config.test.ts` fails when `wrangler.jsonc` differs. Changing one needs a deploy, not a code path.
+- Many users behind one address share one count. An IPv6 address is keyed on its /64, so one caller cannot get a new count from each address in a prefix.
 - Nothing to create or migrate. The namespace ids are numbers the owner picks.
 - **To move** to exact counts: write a Durable Object layer that provides `RateLimiter` and swap it for `RateLimiterLive` in `app/runtime.ts`. The call sites (`guardAuthRequest`, the upload route) and their tests do not change.
 

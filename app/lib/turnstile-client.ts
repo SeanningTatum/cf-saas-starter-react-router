@@ -19,6 +19,7 @@ export interface TurnstileRenderOptions {
   readonly size: TurnstileSize;
   readonly language: string;
   readonly "refresh-expired": "auto";
+  readonly "refresh-timeout": "never";
   readonly callback: (token: string) => void;
   readonly "error-callback": () => boolean;
   readonly "expired-callback": () => void;
@@ -42,6 +43,7 @@ export interface TurnstileState {
   readonly token: string | null;
   readonly failure: TurnstileFailure | null;
   readonly rendered: boolean;
+  readonly rechecking: boolean;
 }
 
 export type TurnstileEvent =
@@ -49,7 +51,7 @@ export type TurnstileEvent =
   | { readonly type: "rendered" }
   | { readonly type: "reset" }
   | { readonly type: "solved"; readonly token: string }
-  | { readonly type: "expired" }
+  | { readonly type: "timedOut" }
   | { readonly type: "failed"; readonly failure: TurnstileFailure };
 
 export const initialTurnstileState = (): TurnstileState => ({
@@ -57,6 +59,7 @@ export const initialTurnstileState = (): TurnstileState => ({
   token: null,
   failure: null,
   rendered: false,
+  rechecking: false,
 });
 
 export const turnstileReducer = (state: TurnstileState, event: TurnstileEvent): TurnstileState => {
@@ -66,13 +69,13 @@ export const turnstileReducer = (state: TurnstileState, event: TurnstileEvent): 
     case "rendered":
       return { ...state, rendered: true };
     case "reset":
-      return { ...state, status: "loading", token: null, failure: null };
+      return { ...state, status: "loading", token: null, failure: null, rechecking: true };
     case "solved":
-      return { ...state, status: "ready", token: event.token, failure: null };
-    case "expired":
-      return { ...state, status: "expired", token: null, failure: null };
+      return { ...state, status: "ready", token: event.token, failure: null, rechecking: false };
+    case "timedOut":
+      return { ...state, status: "expired", token: null, failure: null, rechecking: false };
     case "failed":
-      return { ...state, status: "error", token: null, failure: event.failure };
+      return { ...state, status: "error", token: null, failure: event.failure, rechecking: false };
   }
 };
 
@@ -139,13 +142,14 @@ export const turnstileRenderOptions = ({
 }: TurnstileMountOptions): TurnstileRenderOptions => ({
   ...widget,
   "refresh-expired": "auto",
+  "refresh-timeout": "never",
   callback: (token) => dispatch({ type: "solved", token }),
   "error-callback": () => {
     dispatch({ type: "failed", failure: "challenge" });
     return true;
   },
-  "expired-callback": () => dispatch({ type: "expired" }),
-  "timeout-callback": () => dispatch({ type: "expired" }),
+  "expired-callback": () => dispatch({ type: "reset" }),
+  "timeout-callback": () => dispatch({ type: "timedOut" }),
 });
 
 export const mountTurnstile = <Container>(

@@ -116,9 +116,15 @@ Four rules, each a Workers Rate Limiting binding. The store and the reasons: [AD
 | `authApi` | `AUTH_API_LIMITER` | 60 | Client IP | Each other `POST` under `/api/auth/` |
 | `upload` | `UPLOAD_LIMITER` | 20 | User id | `POST /api/upload-file`, after the session check |
 
-`GET`, `HEAD` and `OPTIONS` are never limited. A request matches one rule: a sign-in call counts against `signIn` and not also against `authApi`. The client IP is the `cf-connecting-ip` header (`CLIENT_IP_HEADER`). Rule names, paths and messages live in `app/lib/constants/rate-limit.ts`; the limits live in `wrangler.jsonc`.
+The limits are in `RATE_LIMIT_REQUESTS_PER_PERIOD` (`app/lib/constants/rate-limit.ts`).
 
-**Where the check runs.** The `action` of `app/routes/api/auth.$.ts` calls `guardAuthRequest` (`app/auth/request-gate.ts`) and only then hands the request to Better Auth. The upload route calls `RateLimiter.check` itself. The `RateLimiter` service (`app/services/rate-limit.ts`) wraps the binding. Better Auth's own limiter is off (`rateLimit: { enabled: false }` in `app/auth/server.ts`): it counts in memory in each isolate, so two requests that land on two isolates get two separate counts. The gate runs before the Turnstile check, so a limited request costs no call to Cloudflare. Every attempt counts, pass or fail.
+`GET`, `HEAD` and `OPTIONS` are never limited. A request matches one rule: a sign-in call counts against `signIn` and not also against `authApi`. A bare `/api/auth` write, with no path after it, falls under `authApi`. Rule names, paths, messages and limits live in `app/lib/constants/rate-limit.ts`.
+
+**The key.** For the auth rules the key comes from the `cf-connecting-ip` header (`CLIENT_IP_HEADER`) through `addressKey` (`app/auth/request-gate.ts`). An IPv4 address is kept whole. An IPv6 address is cut to its /64 prefix, so a caller who holds a whole /64 does not get a new count for each address in it. An IPv4-mapped IPv6 address counts as the IPv4 address. A value that parses as neither is used as sent. The upload rule keys on the user id.
+
+**The path.** `normalizedPath` cleans the path before a rule is picked: it decodes percent-encoded unreserved characters, lower-cases, collapses repeated slashes and drops a trailing slash. A differently written path gets the same rule as the plain one.
+
+**Where the check runs.** The `action` of `app/routes/api/auth.$.ts` runs `authGate` (`app/auth/request-gate.ts`), which calls `guardAuthRequest`, and only then hands the request to Better Auth. If the gate itself breaks, the route logs the fault, reports it to the error reporter as an `action` error, and still hands the request on (it fails open). In a non-dev build, `authGate` also logs one warning (`TURNSTILE_OFF_WARNING`) when it handles a sign-in or sign-up while Turnstile is off. The upload route calls `RateLimiter.check` itself. The `RateLimiter` service (`app/services/rate-limit.ts`) wraps the binding. Better Auth's own limiter is off (`rateLimit: { enabled: false }` in `app/auth/server.ts`): it counts in memory in each isolate, so two requests that land on two isolates get two separate counts. The gate runs before the Turnstile check, so a limited request costs no call to Cloudflare. Every attempt counts, pass or fail.
 
 **What a limited caller gets.**
 
@@ -131,16 +137,18 @@ Four rules, each a Workers Rate Limiting binding. The store and the reasons: [AD
 
 `Retry-After` is always the period (60), not the time left in the window, so it can overstate the wait.
 
-**Change a limit.** Two files hold each limit, and they must agree: `wrangler.jsonc` is what Cloudflare reads, and `RATE_LIMITS` in `scripts/lib/wrangler-config.ts` is what setup and teardown write into `wrangler.jsonc`. Edit both. `scripts/__tests__/wrangler-config.test.ts` fails when the builder's output differs from the committed `wrangler.jsonc`, so they cannot drift apart unnoticed. The same test checks that both config blocks bind every rule, that the preview namespace ids differ from the top-level ones, and that every period equals `RATE_LIMIT_PERIOD_SECONDS`. Cloudflare takes a period of 10 or 60 seconds. The code sends `RATE_LIMIT_PERIOD_SECONDS` (60) as `Retry-After`, so a move to 10 is a code change too.
+**The upload route.** In order: the session, the limit, a `content-length` check, then the body read. A declared length above `MAX_UPLOAD_REQUEST_BYTES` (the file cap plus a 64 KiB allowance for the form envelope, `app/lib/constants/upload.ts`) gets `413`. A body that is not a form gets `400`. A rate-limited upload is an expected refusal: the route does not log it as an error and does not report it.
+
+**Change a limit.** Edit the number in `RATE_LIMIT_REQUESTS_PER_PERIOD` (`app/lib/constants/rate-limit.ts`). `RATE_LIMITS` in `scripts/lib/wrangler-config.ts` builds from it, so the builder follows. `wrangler.jsonc`, which Cloudflare reads, does not: no command rewrites it for this change alone, so edit `simple.limit` for that rule by hand in both blocks (top level and `env.preview`). Only `first-time-setup.ts` and `teardown.ts` regenerate the file, and each overwrites more than the limits. `scripts/__tests__/wrangler-config.test.ts` fails when the builder's output differs from the committed `wrangler.jsonc`, so a missed edit shows up in `bun run test`. The same test checks that both config blocks bind every rule, that the preview namespace ids differ from the top-level ones, and that every period equals `RATE_LIMIT_PERIOD_SECONDS`. Cloudflare takes a period of 10 or 60 seconds. The code sends `RATE_LIMIT_PERIOD_SECONDS` (60) as `Retry-After`, so a move to 10 is a code change too.
 
 **Add a rule.**
 
-1. Add it to `RATE_LIMIT_BINDINGS` in `app/lib/constants/rate-limit.ts`. For an auth path, add a prefix to `AUTH_RULE_PATH_PREFIXES`.
-2. Add the entry to `RATE_LIMITS` in `scripts/lib/wrangler-config.ts` and to both blocks of `wrangler.jsonc` (top level and `env.preview`), each with its own new `namespace_id`. Run `bun run cf-typegen` so `Env` gains the binding.
-3. Call it: an auth path needs no call beyond the prefix (`authRuleFor`, `app/auth/request-gate.ts`); any other route calls `RateLimiter.check(rule, key)`.
+1. Add it to `RATE_LIMIT_BINDINGS` and `RATE_LIMIT_REQUESTS_PER_PERIOD` in `app/lib/constants/rate-limit.ts`. For an auth path, add a prefix to `AUTH_RULE_PATH_PREFIXES`.
+2. Add the entry to `RATE_LIMITS` in `scripts/lib/wrangler-config.ts` (its `limit` reads from `RATE_LIMIT_REQUESTS_PER_PERIOD`) and to both blocks of `wrangler.jsonc` (top level and `env.preview`), each with its own new `namespace_id`. Run `bun run cf-typegen` so `Env` gains the binding.
+3. Call it: an auth path needs no call beyond the prefix (`authRuleFor`, `app/auth/request-gate.ts`); any other route calls `RateLimiter.check(rule, key)`, and a rule the Turnstile check also guards goes in `TURNSTILE_GUARDED_RULES`.
 4. Test it: the rule in `app/auth/__tests__/request-gate.test.ts` or the route's test, and `app/services/__tests__/rate-limit.test.ts`. The config test already loops over every rule.
 
-**Namespace ids are yours to pick.** A `namespace_id` is a number you choose. The repo ships `1001` to `1004` and, for preview, `2001` to `2004`. Nothing is created in Cloudflare and setup has no step for it. Pick ids no other limiter on your account uses. Preview has its own ids so its traffic never counts against production.
+**Namespace ids are yours to pick.** A `namespace_id` is a number you choose. The repo ships `1001` to `1004` and, for preview, `2001` to `2004`. Nothing is created in Cloudflare and setup has no step for it. Pick ids no other limiter on your account uses: see [Known limits](#known-limits). Preview has its own ids so its traffic never counts against production.
 
 **Locally.** `react-router dev` and the unit harness (`getPlatformProxy` in `app/trpc/__tests__/real-d1.ts`) run Miniflare's simulation of the binding, with the limits from `wrangler.jsonc`. A request with no `cf-connecting-ip` uses the key `no-client-ip`, so every local caller shares one count. Send the header to get a count of your own. The e2e specs do: each spec file sends its own address (`e2e/lib/client-ip.ts`), so one file's attempts never limit another's.
 
@@ -148,8 +156,8 @@ Four rules, each a Workers Rate Limiting binding. The store and the reasons: [AD
 
 - Counts are kept per Cloudflare location and are approximate. A caller who reaches two locations can pass more than the limit in all.
 - The period is 10 or 60 seconds. There is no hourly or daily limit and no lockout.
-- The key is the IP. Many users behind one address share one count; one user who changes address starts a new one.
-- If the binding is missing or throws, the check logs `Rate limiter fault; the request goes on unlimited` and lets the request through (it fails open). If the auth gate itself fails, the route logs `Auth rate-limit gate failed; the request goes on unlimited` and does the same. Watch the logs for both lines.
+- The key is the IP (an IPv6 address by its /64). Many users behind one address share one count; one user who changes address starts a new one.
+- If the binding is missing or throws, the check logs `Rate limiter fault; the request goes on unlimited` and lets the request through (it fails open). If the auth gate itself fails, the route logs `Auth rate-limit gate failed; the request goes on unlimited`, reports the fault as an `action` error and does the same. Watch the logs for both lines.
 
 ## Turnstile
 
@@ -208,3 +216,6 @@ The widget loads its script from `https://challenges.cloudflare.com`, and the se
 - **Turnstile covers two endpoints.** Only `sign-in/email` and `sign-up/email` check a token. Every other auth route has none: a password reset or a password change, if you turn those on. Those sit under the `authApi` limit (60 per minute), and any other path under `/sign-in/` or `/sign-up/` sits under that path's own limit. Email and password is the only sign-in method enabled today. If you add another sign-in method, add its path to `TURNSTILE_PROTECTED_ENDPOINTS`.
 - **Rate limits skip reads.** `GET`, `HEAD` and `OPTIONS` are never counted, `/get-session` included.
 - **The IP is the whole key for the auth rules.** Behind a proxy that does not set `cf-connecting-ip`, every caller shares the key `no-client-ip`, and one caller can use up the limit for all. The `authApi` limit counts per address, not per account, so it does not slow one account tried from many addresses.
+- **The captcha plugin has no `allowedHostnames`.** Cloudflare's test keys answer with a fixed hostname, and preview hosts change with each PR, so a hostname list in the code would break both. The control is the widget's own hostname list in the Cloudflare dashboard ([Owner steps](#owner-steps)).
+- **The limiter runs inside the route.** By then the Worker has built the request's runtime and resolved the session, so a limited request still pays for that. A fork under heavy abuse can move the check to the top of `workers/app.ts`.
+- **Namespace ids are shared across an account.** Every Worker on one Cloudflare account that uses the same `namespace_id` numbers shares one counter. A second project on the account should pick other numbers than `1001` to `1004` and `2001` to `2004`.

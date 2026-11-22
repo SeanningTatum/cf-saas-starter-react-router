@@ -25,7 +25,7 @@ import { SignupSchema, type SignupInput } from "@/lib/schemas/auth"
 import { useState } from "react"
 import { useTranslation } from "react-i18next"
 import { useHydrated } from "@/hooks/use-hydrated"
-import { TurnstileWidget, useTurnstile } from "@/components/turnstile-widget"
+import { ProblemBox, TurnstileWidget, useTurnstile } from "@/components/turnstile-widget"
 import { captchaFetchOptions } from "@/lib/turnstile-client"
 import { authRefusalFor } from "@/lib/auth-errors"
 
@@ -80,11 +80,11 @@ export function SignupForm({ className, turnstileSiteKey = null, ...props }: Sig
   return (
     <div className={cn("flex flex-col gap-6", className)} {...props}>
       <Card data-testid="signup-card" className="border-border/80 shadow-sm">
-        <CardHeader className="gap-2">
+        <CardHeader className="gap-2 px-4 sm:px-6">
           <CardTitle className="text-xl">{t("signup.title")}</CardTitle>
           <CardDescription>{t("signup.description")}</CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="px-4 sm:px-6">
           <Form {...form}>
             <form method="post" onSubmit={form.handleSubmit(onSubmit)} className="space-y-6" data-testid="signup-form">
               <FormField
@@ -167,13 +167,9 @@ export function SignupForm({ className, turnstileSiteKey = null, ...props }: Sig
               />
               {turnstile.enabled && <TurnstileWidget turnstile={turnstile} />}
               {authError && (
-                <div
-                  role="alert"
-                  data-testid="signup-error"
-                  className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive"
-                >
-                  {authError}
-                </div>
+                <ProblemBox role="alert" data-testid="signup-error">
+                  <p>{authError}</p>
+                </ProblemBox>
               )}
               <div className="space-y-4">
                 <Button

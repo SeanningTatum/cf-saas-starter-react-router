@@ -1,7 +1,13 @@
 import { useCallback, useEffect, useId, useReducer, useRef, useState } from "react"
 import { useTheme } from "next-themes"
 import { useTranslation } from "react-i18next"
-import { IconAlertCircle, IconClockExclamation, IconLoader2, IconRefresh } from "@tabler/icons-react"
+import {
+  IconAlertCircle,
+  IconClockExclamation,
+  IconLoader2,
+  IconRefresh,
+  type TablerIcon,
+} from "@tabler/icons-react"
 
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
@@ -96,6 +102,43 @@ export function useTurnstile(siteKey: string | null): TurnstileController {
   return { enabled: siteKey !== null, state, token: state.token, containerRef, reset }
 }
 
+type ProblemTone = "error" | "notice"
+
+interface ProblemBoxProps extends React.ComponentProps<"div"> {
+  tone?: ProblemTone
+  icon?: TablerIcon
+  action?: React.ReactNode
+}
+
+export function ProblemBox({
+  tone = "error",
+  icon: Icon = IconAlertCircle,
+  action,
+  className,
+  children,
+  ...props
+}: ProblemBoxProps) {
+  return (
+    <div
+      className={cn(
+        "flex flex-col items-start gap-2 rounded-md border px-3 py-2.5 text-sm text-foreground",
+        tone === "error" ? "border-destructive/30 bg-destructive/10" : "border-border bg-muted/40",
+        className
+      )}
+      {...props}
+    >
+      <div className="flex items-start gap-2">
+        <Icon
+          aria-hidden="true"
+          className={cn("mt-0.5 size-4 shrink-0", tone === "error" ? "text-destructive" : "text-muted-foreground")}
+        />
+        {children}
+      </div>
+      {action}
+    </div>
+  )
+}
+
 interface TurnstileWidgetProps {
   turnstile: TurnstileController
   className?: string
@@ -104,70 +147,82 @@ interface TurnstileWidgetProps {
 export function TurnstileWidget({ turnstile, className }: TurnstileWidgetProps) {
   const { t } = useTranslation("auth")
   const statusId = useId()
+  const groupRef = useRef<HTMLDivElement>(null)
   const { state, containerRef, reset } = turnstile
   const scriptFailed = state.failure === "script"
-  const showPlaceholder = !state.rendered && !scriptFailed
+  const showProblem = state.status === "error" || state.status === "expired"
+  const showPlaceholder = state.status === "loading" && !state.rendered
 
   const announcement = {
-    loading: t("turnstile.loading"),
+    loading: state.rechecking ? t("turnstile.rechecking") : t("turnstile.loading"),
     ready: t("turnstile.passed"),
     expired: t("turnstile.expired"),
     error: scriptFailed ? t("turnstile.script_failed") : t("turnstile.challenge_failed"),
   }[state.status]
 
+  const retry = () => {
+    reset()
+    groupRef.current?.focus()
+  }
+
   return (
     <div
+      ref={groupRef}
+      tabIndex={-1}
       role="group"
       aria-label={t("turnstile.label")}
       aria-describedby={statusId}
       data-testid="turnstile-widget"
       data-turnstile-state={state.status}
-      className={cn("@container flex flex-col gap-2", className)}
+      className={cn(
+        "@container rounded-md outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
+        className
+      )}
     >
-      <div className={cn("relative min-h-35 @xs:min-h-16.25", scriptFailed && "hidden")}>
-        <div ref={containerRef} className="leading-0" />
+      <div className="grid min-h-35 pointer-coarse:min-h-38 @min-[300px]:min-h-26 @min-[300px]:pointer-coarse:min-h-29">
+        <div
+          ref={containerRef}
+          className={cn(
+            "col-start-1 row-start-1 flex justify-center self-center leading-0 @min-[300px]:block",
+            showProblem && "invisible"
+          )}
+        />
         {showPlaceholder && (
           <div
             aria-hidden="true"
-            className="absolute top-0 left-0 flex h-35 w-37.5 flex-col items-center justify-center gap-2 rounded-md border border-border bg-muted/30 px-3 text-center text-xs text-muted-foreground @xs:h-16.25 @xs:w-full @xs:flex-row @xs:text-sm"
+            className="col-start-1 row-start-1 flex h-35 w-37.5 flex-col items-center justify-center gap-2 self-center justify-self-center rounded-md border border-border bg-muted/30 px-3 text-center text-xs text-muted-foreground @min-[300px]:h-16.25 @min-[300px]:w-full @min-[300px]:flex-row @min-[300px]:text-sm"
           >
             <IconLoader2 className="size-4 shrink-0 animate-spin motion-reduce:animate-none" />
             {t("turnstile.loading")}
           </div>
         )}
+        {showProblem && (
+          <ProblemBox
+            data-testid="turnstile-problem"
+            tone={state.status === "error" ? "error" : "notice"}
+            icon={state.status === "error" ? IconAlertCircle : IconClockExclamation}
+            className="col-start-1 row-start-1 self-stretch"
+            action={
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={retry}
+                data-testid="turnstile-retry"
+                className="pointer-coarse:h-11"
+              >
+                <IconRefresh aria-hidden="true" />
+                {t("turnstile.retry")}
+              </Button>
+            }
+          >
+            <p aria-hidden="true">{announcement}</p>
+          </ProblemBox>
+        )}
       </div>
       <p id={statusId} role="status" className="sr-only">
         {announcement}
       </p>
-      {(state.status === "error" || state.status === "expired") && (
-        <div
-          data-testid="turnstile-problem"
-          className={cn(
-            "flex flex-col items-start gap-3 rounded-md border px-3 py-2.5 text-sm text-foreground",
-            state.status === "error" ? "border-destructive/30 bg-destructive/10" : "border-border bg-muted/40"
-          )}
-        >
-          <div className="flex items-start gap-2">
-            {state.status === "error" ? (
-              <IconAlertCircle aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-destructive" />
-            ) : (
-              <IconClockExclamation aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
-            )}
-            <p>{announcement}</p>
-          </div>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={reset}
-            data-testid="turnstile-retry"
-            className="pointer-coarse:h-11"
-          >
-            <IconRefresh aria-hidden="true" />
-            {t("turnstile.retry")}
-          </Button>
-        </div>
-      )}
     </div>
   )
 }

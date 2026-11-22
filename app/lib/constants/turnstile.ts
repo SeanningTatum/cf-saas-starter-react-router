@@ -32,7 +32,7 @@ export const TURNSTILE_PUBLISHED_TEST_KEYS: ReadonlyArray<string> = [
 ];
 
 export const TURNSTILE_SCRIPT_TIMEOUT_MS = 15_000;
-export const TURNSTILE_FLEXIBLE_MIN_WIDTH_PX = 320;
+export const TURNSTILE_FLEXIBLE_MIN_WIDTH_PX = 300;
 export const TURNSTILE_SCRIPT_SELECTOR = `script[src="${TURNSTILE_SCRIPT_URL}"]`;
 export const TURNSTILE_DEFAULT_LANGUAGE = "auto";
 export const TURNSTILE_LANGUAGES: Readonly<Record<string, string>> = { en: "en", zh: "zh-cn" };

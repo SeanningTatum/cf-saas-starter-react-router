@@ -72,7 +72,13 @@ const fakeHost = (script = fakeScript(), existing: ScriptTag | null = null) => {
 
 describe("turnstileReducer", () => {
   it("starts loading with no token, so submit stays off until the check passes", () => {
-    expect(initialTurnstileState()).toEqual({ status: "loading", token: null, failure: null, rendered: false });
+    expect(initialTurnstileState()).toEqual({
+      status: "loading",
+      token: null,
+      failure: null,
+      rendered: false,
+      rechecking: false,
+    });
   });
 
   it("holds the token once solved and marks the widget ready", () => {
@@ -81,22 +87,27 @@ describe("turnstileReducer", () => {
       token: "t1",
       failure: null,
       rendered: true,
+      rechecking: false,
     });
   });
 
-  it("drops a spent token on reset but keeps the widget on screen", () => {
+  it("drops a spent token on reset, keeps the widget on screen and says the check runs again", () => {
     expect(run([{ type: "rendered" }, { type: "solved", token: "t1" }, { type: "reset" }])).toEqual({
       status: "loading",
       token: null,
       failure: null,
       rendered: true,
+      rechecking: true,
     });
   });
 
-  it("drops the token when it expires, so a stale token is never sent", () => {
-    const state = run([{ type: "solved", token: "t1" }, { type: "expired" }]);
-    expect(state.status).toBe("expired");
-    expect(state.token).toBeNull();
+  it("says loading, not running again, on the first load even after the widget renders", () => {
+    expect(run([{ type: "load" }, { type: "rendered" }])).toMatchObject({ status: "loading", rechecking: false });
+  });
+
+  it("asks the user to act and drops the token when an unsolved check times out", () => {
+    const state = run([{ type: "solved", token: "t1" }, { type: "timedOut" }]);
+    expect(state).toMatchObject({ status: "expired", token: null, rechecking: false });
   });
 
   it("drops the token and records why when the widget fails", () => {
@@ -109,17 +120,19 @@ describe("turnstileReducer", () => {
     expect(state).toEqual(initialTurnstileState());
   });
 
-  it("gets a new token after an expiry without a reload", () => {
-    const state = run([{ type: "solved", token: "t1" }, { type: "expired" }, { type: "solved", token: "t2" }]);
-    expect(state).toMatchObject({ status: "ready", token: "t2" });
+  it("gets a new token after a timeout without a reload", () => {
+    const state = run([{ type: "solved", token: "t1" }, { type: "timedOut" }, { type: "solved", token: "t2" }]);
+    expect(state).toMatchObject({ status: "ready", token: "t2", rechecking: false });
   });
 });
 
 describe("widget options", () => {
   it("uses the flexible widget only where its 300px minimum fits", () => {
+    expect(TURNSTILE_FLEXIBLE_MIN_WIDTH_PX).toBe(300);
     expect(widgetSizeFor(TURNSTILE_FLEXIBLE_MIN_WIDTH_PX)).toBe("flexible");
+    expect(widgetSizeFor(309)).toBe("flexible");
     expect(widgetSizeFor(336)).toBe("flexible");
-    expect(widgetSizeFor(279)).toBe("compact");
+    expect(widgetSizeFor(TURNSTILE_FLEXIBLE_MIN_WIDTH_PX - 1)).toBe("compact");
   });
 
   it("follows the app theme and waits while the theme is still unknown", () => {
@@ -142,10 +155,17 @@ describe("widget options", () => {
     expect(captchaFetchOptions(null)).toBeUndefined();
   });
 
-  it("routes every widget callback into a state event", () => {
+  it("treats an expired token as a check running again and a timed-out check as one the user must rerun", () => {
     const dispatch = vi.fn();
     const options = turnstileRenderOptions({ sitekey: "k", theme: "dark", size: "compact", language: "en", dispatch });
-    expect(options).toMatchObject({ sitekey: "k", theme: "dark", size: "compact", language: "en", "refresh-expired": "auto" });
+    expect(options).toMatchObject({
+      sitekey: "k",
+      theme: "dark",
+      size: "compact",
+      language: "en",
+      "refresh-expired": "auto",
+      "refresh-timeout": "never",
+    });
     expect(options).not.toHaveProperty("dispatch");
     options.callback("t1");
     expect(options["error-callback"]()).toBe(true);
@@ -154,9 +174,27 @@ describe("widget options", () => {
     expect(dispatch.mock.calls.map(([event]) => event)).toEqual([
       { type: "solved", token: "t1" },
       { type: "failed", failure: "challenge" },
-      { type: "expired" },
-      { type: "expired" },
+      { type: "reset" },
+      { type: "timedOut" },
     ]);
+  });
+
+  it("keeps an expired token out of the problem box: the widget is loading again and submit waits", () => {
+    const events: Array<TurnstileEvent> = [];
+    const options = turnstileRenderOptions({
+      sitekey: "k",
+      theme: "light",
+      size: "flexible",
+      language: "en",
+      dispatch: (event) => events.push(event),
+    });
+    options.callback("t1");
+    options["expired-callback"]();
+    expect(run(events, { ...initialTurnstileState(), rendered: true })).toMatchObject({
+      status: "loading",
+      token: null,
+      rechecking: true,
+    });
   });
 });
 
