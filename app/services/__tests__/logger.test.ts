@@ -69,16 +69,11 @@ describe("stringify", () => {
 });
 
 describe("currentSpanAnnotations", () => {
-  it("returns {} when no span is active", () => {
-    // Catches: reading the span off the wrong FiberRef and producing
-    // `{ traceId: undefined }` — every log outside a span would carry a bogus
-    // correlation key.
+  it("returns {} when no span is active, so a log outside a span carries no bogus traceId: undefined key", () => {
     expect(currentSpanAnnotations(Effect.runSync(Effect.getFiberRefs))).toEqual({});
   });
 
-  it("returns the active span's traceId and spanId inside Effect.withSpan", () => {
-    // Catches: dropping either field — logs and traces stop joining in the
-    // observability backend, which is the whole point of the feature.
+  it("returns the active span's traceId and spanId inside Effect.withSpan, so logs and traces keep joining in the observability backend", () => {
     const { refs, span } = Effect.runSync(
       Effect.gen(function* () {
         return {
@@ -96,10 +91,7 @@ describe("currentSpanAnnotations", () => {
 });
 
 describe("LoggerLive", () => {
-  it("stamps the active span's traceId onto a log emitted inside that span", () => {
-    // The regression: a log line written inside a tRPC procedure span must be
-    // findable by that trace's id. Catches removing the
-    // `currentSpanAnnotations(context)` seed from customLogger's annotations.
+  it("stamps the active span's traceId onto a log emitted inside that span, so a log in a tRPC procedure span is findable by its trace id", () => {
     const spy = vi.spyOn(console, "info").mockImplementation(() => {});
     try {
       const traceId = Effect.runSync(
@@ -117,10 +109,7 @@ describe("LoggerLive", () => {
     }
   });
 
-  it("keeps explicit log annotations alongside the span ones", () => {
-    // The span seed must be a seed, not a replacement: catches a refactor that
-    // passes only `currentSpanAnnotations(context)` to emitLog and drops the
-    // event's own annotations (`layer: "trpc"`, requestId, ...).
+  it("keeps explicit log annotations alongside the span ones, so the span seed adds to the event's own annotations and does not replace them", () => {
     const spy = vi.spyOn(console, "info").mockImplementation(() => {});
     try {
       Effect.runSync(
@@ -143,9 +132,7 @@ describe("LoggerLive", () => {
 describe("currentRequestAnnotations", () => {
   const request: RequestContext = { requestId: "req-fiber", method: "GET", path: "/", userId: "u1" };
 
-  it("returns the request and user ids when CurrentRequest is in the fiber context", () => {
-    // Catches reading the wrong tag or FiberRef: every Effect log line would
-    // lose its request id.
+  it("returns the request and user ids when CurrentRequest is in the fiber context, so every Effect log line keeps its request id", () => {
     const refs = Effect.runSync(
       Effect.getFiberRefs.pipe(Effect.provide(Layer.succeed(CurrentRequest, request)))
     );
@@ -160,11 +147,8 @@ describe("currentRequestAnnotations", () => {
   });
 });
 
-describe("LoggerLive with a request", () => {
-  it("stamps the runtime's request id on a log, over the async-local store's", async () => {
-    // The regression the design guards against: Effect's scheduler is shared
-    // across requests, so a fiber can resume inside another request's async
-    // context. The fiber's own CurrentRequest must win over the store.
+describe("LoggerLive with a request (Effect's scheduler is shared across requests, so a fiber can resume inside another request's async context, and the fiber's own CurrentRequest must win over the store)", () => {
+  it("stamps the runtime's request id on a log, over the async-local store's (the dev line shows the first 8 characters of the id)", async () => {
     const spy = vi.spyOn(console, "info").mockImplementation(() => {});
     const runtime = ManagedRuntime.make(
       Layer.merge(
@@ -184,7 +168,6 @@ describe("LoggerLive with a request", () => {
 
       const output = spy.mock.calls.map((args) => String(args[0])).join("\n");
       expect(output).toContain("through runtime");
-      // the dev line shows the first 8 characters of the request id
       expect(output).toContain("(fiber-re)");
       expect(output).not.toContain("(other-re)");
     } finally {

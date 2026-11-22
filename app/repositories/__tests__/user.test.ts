@@ -20,7 +20,6 @@ import {
 const provideStub = (stub: unknown) =>
   UserRepository.Default.pipe(Layer.provide(makeTestDatabase(stub)));
 
-/** A mutable plain user, with spies on every write a ban road can make. */
 const banStub = (
   batch = vi.fn((_statements: ReadonlyArray<unknown>) => Promise.resolve([]))
 ) => ({
@@ -30,7 +29,6 @@ const banStub = (
   batch,
 });
 
-/** The ban's user UPDATE and the session DELETE went to D1 as one batch. */
 const expectBanBatchedWithSessionDelete = (stub: ReturnType<typeof banStub>) => {
   expect(stub.update).toHaveBeenCalledWith(user);
   expect(stub.delete).toHaveBeenCalledTimes(1);
@@ -142,9 +140,7 @@ describe("UserRepository.bulkBanUsers", () => {
     }).pipe(Effect.provide(provideStub({})))
   );
 
-  it.effect("bans the given users, ends their sessions in the same batch, returns the count", () => {
-    // Catches: a bulk ban that sets the flag but leaves live sessions, or
-    // deletes them in a separate statement that can land without the ban.
+  it.effect("bans the given users, ends their sessions in the same batch, returns the count, so no live session survives the ban and none ends without it", () => {
     const stub = banStub();
     return Effect.gen(function* () {
       const repo = yield* UserRepository;
@@ -374,9 +370,7 @@ describe("UserRepository.updateUser", () => {
   });
 
   for (const data of [{ name: "New Name" }, { banned: false }]) {
-    it.effect(`updates ${JSON.stringify(data)} without touching sessions`, () => {
-      // Catches: ending sessions on every update, or on any update that
-      // mentions `banned` (an unban-by-update would sign the user out).
+    it.effect(`updates ${JSON.stringify(data)} without touching sessions, so an unban by update or a rename signs nobody out`, () => {
       const stub = banStub();
       return Effect.gen(function* () {
         const repo = yield* UserRepository;
@@ -393,8 +387,7 @@ describe("UserRepository.updateUser", () => {
     });
   }
 
-  it.effect("with banned: true, ends the user's sessions in the same batch", () => {
-    // Catches: the update road setting the flag but leaving the live session.
+  it.effect("with banned: true, ends the user's sessions in the same batch, so the update road cannot set the flag and leave the live session", () => {
     const stub = banStub();
     return Effect.gen(function* () {
       const repo = yield* UserRepository;
@@ -501,8 +494,7 @@ describe("UserRepository.banUser", () => {
     }).pipe(Effect.provide(provideStub(stub)));
   });
 
-  it.effect("bans a valid target, ends its sessions in the same batch, returns success", () => {
-    // Catches: a ban that sets the flag but leaves the live session working.
+  it.effect("bans a valid target, ends its sessions in the same batch, returns success, so a ban cannot leave the live session working", () => {
     const stub = banStub();
     return Effect.gen(function* () {
       const repo = yield* UserRepository;
@@ -516,9 +508,7 @@ describe("UserRepository.banUser", () => {
     }).pipe(Effect.provide(provideStub(stub)));
   });
 
-  it.effect("fails with UpdateError when the batch rejects", () => {
-    // Catches: a failed ban batch escaping as a defect (a 500 with no tag)
-    // instead of the repository's UpdateError.
+  it.effect("fails with UpdateError when the batch rejects, so a failed ban batch is not a defect (a 500 with no tag)", () => {
     const stub = banStub(vi.fn(() => Promise.reject(new Error("batch boom"))));
     return Effect.gen(function* () {
       const repo = yield* UserRepository;

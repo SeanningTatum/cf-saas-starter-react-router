@@ -45,10 +45,7 @@ describe("HealthRepository.pingDatabase", () => {
     }).pipe(Effect.provide(provideStub({ run })));
   });
 
-  it.effect("measures the query's own duration, in milliseconds", () => {
-    // Catches: timing outside the query (always ~0), reporting seconds or
-    // nanoseconds instead of ms. The clock's monotonic time moves only while
-    // the stub query runs, so the expected latency is exact.
+  it.effect("measures the query's own duration in ms, not time outside it or in seconds or nanoseconds (the stub clock moves only inside the query)", () => {
     let nanos = 0n;
     const clock = Clock.make();
     clock.unsafeCurrentTimeNanos = () => nanos;
