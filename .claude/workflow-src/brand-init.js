@@ -77,7 +77,7 @@ export const meta = {
  *     accept?: object }      { <tag>: true|false } from a needs-accept stop
  */
 // @lib
-const { twice, atAttempt, checkArgs, asker, preflightFault, tracked } = workflowLib({ agent, log, name: "brand-init" });
+const { twice, atAttempt, checkArgs, asker, preflightFault, loadConfig, tracked } = workflowLib({ agent, log, name: "brand-init" });
 
 const input = args && typeof args === "object" ? args : {};
 const badArg = checkArgs("brand-init", [["brief", "string"], ["sector", "string"], ["root", "string"], ["redo", "boolean"], ["rebuildHome", "boolean"], ["answers", "object"], ["why", "object"], ["accept", "object"]], input, true);
@@ -113,18 +113,29 @@ const FINDINGS = arr(
 // =============================================================================================
 phase("Preflight");
 
+// The config comes first, in a step of its own: Preflight below names the configured design doc, and no file name from the tree shares the step.
+const conf = await loadConfig("brand-init", rootClause(input.root), [
+  "paths.appRoot", "paths.tokens", "paths.rootLayout", "paths.components", "paths.primitives", "paths.routes", "paths.home", "paths.locales",
+  "brandInit.contractFence", "brandInit.primitiveLanes", "brandInit.sharedLanes", "brandInit.homeLane",
+  ]);
+if (conf.error) return { error: conf.error };
+const cfg = conf.config;
+// The loader gives folders with no trailing slash; prompts and prefix tests add it.
+const APP_DIR = `${cfg.paths.appRoot}/`;
+if (!cfg.brandInit.contractFence.length) return { error: "harness-config: brandInit.contractFence must name at least one file in harness.config.json" };
+
 const pre = await tracked(
   `Pre-flight for /brand-init. Run these numbered steps in order and stop at the first failure. Fix nothing
 except where a step says to.
 
-  0. Root. ${rootClause(input.root)} ROOT must be an absolute path. Then \`cd\` to ROOT: items 1 to 6 run there, and so does every later step of
+  0. Root. ${rootClause(input.root)} ROOT must be an absolute path. Then \`cd\` to ROOT: items 1 to 5 run there, and so does every later step of
      this run. Return ROOT in \`root\`.
-  1. Brand check. If DESIGN.md exists at ROOT and redo is ${redo}: when redo is false, fail with
+  1. Brand check. If ${cfg.docs.design} exists at ROOT and redo is ${redo}: when redo is false, fail with
      exactly: A brand exists. Run Workflow({ name: "brand-init", args: { redo: true } }) to replace it.
-     (When redo is true, leave DESIGN.md in place; it is the brand to move away from.)
+     (When redo is true, leave ${cfg.docs.design} in place; it is the brand to move away from.)
   2. Plugins. This run needs two plugin installs that a fresh fork may lack. Run
      \`find ~/.claude/plugins -path '*impeccable*' -name impeccable-documenter.md | head -1\` (the agent
-     that writes DESIGN.md at Close) and \`find ~/.claude/plugins -path '*taste-skill*' -name draw.mjs | head -1\`
+     that writes ${cfg.docs.design} at Close) and \`find ~/.claude/plugins -path '*taste-skill*' -name draw.mjs | head -1\`
      (the comp renderer). If either prints nothing, fail with exactly: Missing plugin. Run
      claude plugin install impeccable@impeccable and claude plugin install taste-skill@taste-skill, then restart.
   3. Clean tree. \`git status --short\`. Ignore anything under .verify/. If
@@ -132,27 +143,17 @@ except where a step says to.
      the diff unreadable.
   4. Baseline. \`./scripts/verify.sh --baseline\`. If red, fail and name the failing gate.
   5. Branch. If the current branch is the repo's default branch (\`bun scripts/default-branch.ts\` prints it), \`git switch -c feat/brand-init\`. Otherwise stay.
-  6. Config. Run \`bun scripts/harness-config.ts show\` from ROOT and return its one line of output exactly as \`config_json\`: copy it character for character, change nothing.
 Return ok=false with a one-line reason for the first failure, else ok=true. Always return root when you found it.`,
   {
     label: "preflight",
     phase: "Preflight",
     agentType: "runner",
     effort: "low",
-    schema: obj({ ok: BOOL, reason: STR, branch: STR, root: STR, config_json: STR }),
+    schema: obj({ ok: BOOL, reason: STR, branch: STR, root: STR }),
   }
 );
 const fault = preflightFault(pre, input.root);
 if (fault) return { error: fault };
-const conf = readConfig(pre.config_json, [
-  "paths.appRoot", "paths.tokens", "paths.rootLayout", "paths.components", "paths.primitives", "paths.routes", "paths.home", "paths.locales",
-  "brandInit.contractFence", "brandInit.primitiveLanes", "brandInit.sharedLanes", "brandInit.homeLane",
-]);
-if (conf.error) {
-  log(`Pre-flight: ${conf.error}. Nothing ran.`);
-  return { error: conf.error };
-}
-const cfg = conf.config;
 const REPO_RULES = repoRules();
 ROOT = pre.root.replace(/\/+$/, "");
 outDir = `${ROOT}/.verify/brand-init`;
@@ -597,11 +598,14 @@ const ui = (names) => names.map((n) => `${cfg.paths.primitives}/${n}.tsx`);
 
 // The fences come from harness.config.json (brandInit). The nine primitive lanes cover every file in the primitives folder once.
 const CONTRACT_FENCE = [...cfg.brandInit.contractFence];
-const laneOf = (l) => ({ name: l.name, motion: l.motion, owns: [...l.owns] });
+// A lane's role says what it does; its name is only a label. The sequential shared lane (sequential: true in the config) runs alone after
+// the parallel ones; the first other shared lane writes the wordmark it imports; with no sequential lane that step is skipped.
+const laneOf = (role) => (l) => ({ name: l.name, motion: l.motion, owns: [...l.owns], role });
+const firstShared = cfg.brandInit.sharedLanes.find((l) => !l.sequential);
 const BUILD_LANES = [
-  ...cfg.brandInit.primitiveLanes.map((l) => ({ name: l.name, motion: l.motion, owns: ui(l.files) })),
-  ...cfg.brandInit.sharedLanes.map(laneOf),
-  ...(rebuildHome ? [laneOf(cfg.brandInit.homeLane)] : []),
+  ...cfg.brandInit.primitiveLanes.map((l) => ({ name: l.name, motion: l.motion, owns: ui(l.files), role: "primitive" })),
+  ...cfg.brandInit.sharedLanes.map((l) => laneOf(l.sequential ? "sequential" : l === firstShared ? "wordmark" : "shared")(l)),
+  ...(rebuildHome ? [laneOf("home")(cfg.brandInit.homeLane)] : []),
 ];
 const ALL_FENCES = [...CONTRACT_FENCE, ...BUILD_LANES.flatMap((l) => l.owns)];
 
@@ -610,7 +614,7 @@ const IGNORED_PREFIXES = [".verify/", "plans/", ".react-router/", "node_modules/
 
 // Paths the sequential fix:orphans lane may edit: app code that no lane owns. Never tests or config.
 const orphanMayEdit = (path) =>
-  path.startsWith(cfg.paths.appRoot) && !inFence(path, ALL_FENCES) && !/(^|\/)__tests__\/|\.(test|spec)\.[jt]sx?$|\.config\.[jt]s$/.test(path);
+  path.startsWith(APP_DIR) && !inFence(path, ALL_FENCES) && !/(^|\/)__tests__\/|\.(test|spec)\.[jt]sx?$|\.config\.[jt]s$/.test(path);
 const orphanTouched = new Set(); // paths fix:orphans edited legitimately; the fence diff must not flag them
 const inFence = (path, fence) =>
   fence.some((f) => (f.endsWith("/**") ? path.startsWith(f.slice(0, -2)) : path === f));
@@ -715,7 +719,9 @@ if (!contract) {
 // ---------------------------------------------------------------------------------------------
 phase("Build");
 
-log(`Build: ${BUILD_LANES.length} lanes — ${BUILD_LANES.filter((l) => l.name !== "shell").length} in parallel, then shell`);
+const sequentialLanes = BUILD_LANES.filter((l) => l.role === "sequential");
+const parallelLanes = BUILD_LANES.filter((l) => l.role !== "sequential");
+log(`Build: ${BUILD_LANES.length} lanes — ${parallelLanes.length} in parallel${sequentialLanes.length ? `, then ${sequentialLanes.map((l) => l.name).join(", ")}` : ""}`);
 
 const PRIMITIVE_RULE = `PRIMITIVE RULE: edit the files in place through their cva variants and the semantic tokens. Keep every
 export, prop and variant name, so no call site changes. No raw hex, no arbitrary Tailwind values.
@@ -725,13 +731,15 @@ demands the change. List each default or behaviour change you do make in \`chang
 ('file: prop or behaviour, old -> new, why'). If you changed none, return an empty list.`;
 
 const laneTask = (lane) =>
-  lane.name.startsWith("primitives")
+  lane.role === "primitive"
     ? PRIMITIVE_RULE
-    : lane.name === "shell"
+    : lane.role === "sequential"
       ? `You own the app shells and the brand copy, and nothing else. Do: (1) the wordmark on EVERY shell: the admin sidebar header (app-sidebar.tsx still shows "Acme Inc."), the auth shell, and any other header or footer that carries the product name, using the wordmark component under ${cfg.paths.components}/brand/ (the shared lane has written it; read it, do not edit it); (2) the brand name, page titles (meta.title) and voice lines in BOTH ${cfg.paths.locales}/en and ${cfg.paths.locales}/zh, from tokens.voice and ${ROOT}/${cfg.docs.product}, keeping every key. Keep every export and prop. Do NOT touch page layouts (dashboard, admin pages, login and sign-up forms, home); if one needs a change, list it in \`needs\`.`
-    : lane.name === "shared"
+    : lane.role === "wordmark"
       ? `Also add a typeset wordmark under ${cfg.paths.components}/brand/ from tokens.wordmark (text, family, weight, tracking, case). Keep every export and prop of the existing components.`
-      : "Rebuild the home page in the chosen brand, using tokens.voice for copy tone. Keep its i18n keys and routes working.";
+      : lane.role === "shared"
+        ? "Rebuild the files you own in the chosen brand, using tokens.voice for any copy. Keep every export, prop, i18n key and route working."
+        : "Rebuild the home page in the chosen brand, using tokens.voice for copy tone. Keep its i18n keys and routes working.";
 
 const lanePrompt = (lane, extra) => `Lane: ${lane.name}. You are one of ${BUILD_LANES.length} lanes building the chosen brand in parallel.
 
@@ -750,7 +758,7 @@ No dev server and no browser in this lane: the Check phase drives the browser, a
 share one Vite cache and corrupt each other. Verify with \`bun run typecheck\` only. If you need a file
 you do not own, do not edit it: return it in \`needs\`. Return your cwd (\`git rev-parse --show-toplevel\`).
 
-Skills: load ${lane.name === "home" ? "`design-taste-frontend` as lead (public page)" : "`impeccable` as lead"}.${
+Skills: load ${lane.role === "home" ? "`design-taste-frontend` as lead (public page)" : "`impeccable` as lead"}.${
   lane.motion
     ? " This lane owns something that moves: also load `animate` and `emil-design-eng`. Motion uses the --ease-* and --duration-* tokens."
     : " This lane owns nothing that moves: do NOT load `animate` or `emil-design-eng`."
@@ -761,11 +769,11 @@ Return the files you changed and a one-line-per-file report.`;
 
 const buildLane = (lane) =>
   ask(lanePrompt(lane), { label: `build:${lane.name}`, phase: "Build", agentType: "ui-builder", schema: FILES_SCHEMA });
-const parallelLanes = BUILD_LANES.filter((l) => l.name !== "shell");
 const builtParallel = await parallel(parallelLanes.map((lane) => () => buildLane(lane)));
-// The shell lane imports the wordmark `shared` writes, so it runs once the wave is done.
-const builtShell = await buildLane(BUILD_LANES.find((l) => l.name === "shell"));
-const builtByName = new Map([...parallelLanes.map((l, i) => [l.name, builtParallel[i]]), ["shell", builtShell]]);
+// The sequential lane imports the wordmark a parallel lane writes, so it runs once the wave is done. Each runs alone, in config order.
+const builtSequential = [];
+for (const lane of sequentialLanes) builtSequential.push(await buildLane(lane));
+const builtByName = new Map([...parallelLanes.map((l, i) => [l.name, builtParallel[i]]), ...sequentialLanes.map((l, i) => [l.name, builtSequential[i]])]);
 // A lane that returns nothing gets one retry, alone. If it is still empty its work is missing, and
 // that blocks Ship until the user accepts it (see `missingBuild` in openBlocking).
 const missingBuild = [];
@@ -1118,7 +1126,7 @@ const failedLane = (name, items) =>
       findingKey: f.source.startsWith("needs:") ? undefined : findingKey(f),
     })
   );
-const outsideApp = (f) => !!f.file && !f.file.startsWith(cfg.paths.appRoot) && !f.source.startsWith("fence:");
+const outsideApp = (f) => !!f.file && !f.file.startsWith(APP_DIR) && !f.source.startsWith("fence:");
 const offenderOf = laneByName;
 
 const contractFixPrompt = (fs, tag) => `Lane: contract:tokens, FIX PASS ${tag}. You are the CONTRACT lane; it already built. You own ${CONTRACT_FENCE.join(" and ")} and nothing else.
@@ -1143,7 +1151,7 @@ ${owns.map((p) => `  · ${p}`).join("\n")}
 Undo ONLY your own edit to each path. If the path sits outside every lane's fence, restore it with
 \`git checkout HEAD -- <path>\`. If it sits inside another lane's fence, reverse just the lines you
 changed by hand: never git checkout a file another lane owns, it holds their work. Never delete an
-untracked file outside ${cfg.paths.appRoot}. Never touch these paths, which were dirty before the build:
+untracked file outside ${APP_DIR}. Never touch these paths, which were dirty before the build:
 ${[...preDirty].join(", ") || "(none)"}.
 Change nothing else. Return the files you changed, the paths you actually reverted in \`reverted\`, your cwd, and a report.`;
 
@@ -1171,7 +1179,7 @@ async function fixLanes(items, tag) {
     for (const f of list) {
       const owner = f.file ? ownerOf(f.file) : null;
       if (owner) by.set(owner.name, [...(by.get(owner.name) || []), f]);
-      else if (outsideApp(f)) log(`Finding outside ${cfg.paths.appRoot}, no lane may fix it, escalating: ${f.file}`); // tagged at escalation
+      else if (outsideApp(f)) log(`Finding outside ${APP_DIR}, no lane may fix it, escalating: ${f.file}`); // tagged at escalation
       else orphanQ.push(f);
     }
     return by;
@@ -1204,8 +1212,8 @@ ${fs.map((f) => `  · [${f.severity}] ${f.source}: ${f.issue}${f.file ? ` (${f.f
     const next = [];
     for (const r of rs.filter(Boolean)) {
       for (const n of r.needs || []) {
-        const owner = n.file.startsWith(cfg.paths.appRoot) ? ownerOf(n.file) : null;
-        if (!n.file.startsWith(cfg.paths.appRoot)) noteUnresolved({ file: n.file, why: n.why, from: r.name });
+        const owner = n.file.startsWith(APP_DIR) ? ownerOf(n.file) : null;
+        if (!n.file.startsWith(APP_DIR)) noteUnresolved({ file: n.file, why: n.why, from: r.name });
         else if (owner && owner.name === r.name) continue;
         else {
           const item = { severity: "P1", source: `needs:${r.name}`, issue: n.why, file: n.file };
@@ -1233,7 +1241,7 @@ ${orphanQ.map((f) => `  · [${f.severity}] ${f.source}: ${f.issue}${f.file ? ` (
 
 ${DESIGN_BRIEF}
 
-FILE FENCE — you may edit any file under ${cfg.paths.appRoot} EXCEPT these, which other lanes own:
+FILE FENCE — you may edit any file under ${APP_DIR} EXCEPT these, which other lanes own:
 ${ALL_FENCES.map((p) => `  · ${p}`).join("\n")}
 You may NEVER edit anything under scripts/, any test (__tests__, *.test.*, *.spec.*), or any config file. A finding that
 needs anything outside that fence: do not edit; return it in \`needs\`. Keep every export, prop and variant name, and every
@@ -1258,7 +1266,7 @@ const affectedChecks = (files) => {
       ["impeccable critique", "taste critique (home)", "feature-verifier walk", "review-animations"].forEach((n) => names.add(n));
     } else if (f === cfg.paths.home) names.add("taste critique (home)");
     else if (f.startsWith(`${cfg.paths.locales}/`)) ["impeccable critique", "feature-verifier walk", "taste critique (home)"].forEach((n) => names.add(n));
-    else if (f.startsWith(cfg.paths.appRoot)) ["impeccable critique", "feature-verifier walk"].forEach((n) => names.add(n)); // shells, auth shell, other routes
+    else if (f.startsWith(APP_DIR)) ["impeccable critique", "feature-verifier walk"].forEach((n) => names.add(n)); // shells, auth shell, other routes
   }
   return names;
 };
@@ -1331,7 +1339,7 @@ ${strays.map((v) => `  · ${v.path} (touched by ${v.lane})`).join("\n")}
   1. If the path is in this list, skip it (dirty before the build): ${[...preDirty].join(", ") || "(none)"}.
   2. If the path sits inside a lane's fence, skip it and say so: it holds that lane's work.
   3. If it is tracked: \`git checkout HEAD -- <path>\`.
-  4. If it is untracked: delete it ONLY if it is under ${cfg.paths.appRoot}; anywhere else leave it and say so.
+  4. If it is untracked: delete it ONLY if it is under ${APP_DIR}; anywhere else leave it and say so.
   5. Touch nothing else.
 Return \`files\` and \`reverted\` (the paths you restored or deleted), \`cwd\` (\`git rev-parse --show-toplevel\`), and a one-line \`report\`.`,
       { label: `fix:${round}:revert-strays`, phase: "Fix", agentType: "runner", effort: "low", schema: FILES_SCHEMA }
@@ -1359,7 +1367,7 @@ Return \`files\` and \`reverted\` (the paths you restored or deleted), \`cwd\` (
   }
 }
 const stillOpen = openBlocking().map((f) =>
-  outsideApp(f) ? { ...f, issue: `needs a human or a separate task (outside ${cfg.paths.appRoot}): ${f.issue}` } : f
+  outsideApp(f) ? { ...f, issue: `needs a human or a separate task (outside ${APP_DIR}): ${f.issue}` } : f
 );
 for (const u of unresolved) {
   stillOpen.push({ severity: "P1", source: `unresolved:${u.from}`, issue: `needs a human or a separate task: ${u.why}`, file: u.file });
@@ -1508,7 +1516,7 @@ ${lastCritique}
        critique), then the comps that lost and why:
 ${rejected.length ? rejected.map((r) => `       · comp ${r.id}: ${r.why}`).join("\n") : "       · (none)"}
   4. Extend scripts/seed-preview.ts only if the run changed seeded data (it should not); stage it only then.
-  5. ONE commit, one PR. Stage EXPLICIT paths with \`git add -- <paths>\`, never a wholesale \`git add ${cfg.paths.appRoot}\` or \`-A\`:
+  5. ONE commit, one PR. Stage EXPLICIT paths with \`git add -- <paths>\`, never a wholesale \`git add ${APP_DIR}\` or \`-A\`:
 ${STAGE.map((p) => `       · ${p}`).join("\n")}
      After \`git add\`, run \`git status --porcelain\`. These files were reported changed by a lane:
 ${reportedFiles.map((p) => `       · ${p}`).join("\n") || "       · (none)"}

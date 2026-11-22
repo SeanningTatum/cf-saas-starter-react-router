@@ -11,11 +11,13 @@ import {
   NESTED_KEYS,
   configChecksum,
   loadHarnessConfig,
+  shownConfig,
   stableJson,
   type HarnessConfig,
 } from "../lib/harness-config";
 import { CONFIG_FILE_NAME } from "../lib/harness-config-constants";
 import { ledgerChecksum } from "../lib/run-telemetry";
+import { readConfig } from "../../.claude/workflow-src/lib.js";
 
 const ROOT = "/repo";
 
@@ -190,13 +192,22 @@ describe("harness-config CLI", () => {
     expect(out.stdout).toHaveLength(1);
     const parsed = JSON.parse(out.stdout[0] ?? "");
     expect(parsed.check).toBe(ledgerChecksum(stableJson(parsed.config)));
-    expect(parsed.check).toBe(configChecksum(realConfig));
+    expect(parsed.check).toBe(configChecksum(shownConfig(realConfig)));
     expect(parsed.check).toMatch(/^[0-9a-f]{8}$/);
   });
 
   it("show of a missing file prints the defaults, so a bare project still runs", () => {
     const parsed = JSON.parse(run(["show"], depsWith(null)).stdout[0] ?? "");
-    expect(parsed.config).toEqual(HARNESS_DEFAULTS);
+    expect(parsed.config).toEqual(shownConfig(HARNESS_DEFAULTS));
+  });
+
+  it("regression: show leaves seedLogins out and still verifies through readConfig, while get and the loader keep them: a run's journal must not hold the seeded passwords", () => {
+    const line = run(["show"], withReal).stdout[0] ?? "";
+    expect(line).not.toContain("seedLogins");
+    expect(line).not.toContain(realConfig.seedLogins.admin?.password ?? "no-password");
+    expect(readConfig(line).config).toEqual(shownConfig(realConfig));
+    expect(Object.keys(realConfig.seedLogins).length).toBeGreaterThan(0);
+    expect(run(["get", "seedLogins.admin.email"], withReal).stdout).toEqual([realConfig.seedLogins.admin?.email]);
   });
 
   it("get prints a string as is and a number as is", () => {
@@ -205,7 +216,7 @@ describe("harness-config CLI", () => {
   });
 
   it("get prints a list of strings one per line: bash loops over it", () => {
-    expect(run(["get", "paths.sourceRoots"], withReal).stdout).toEqual(["app/", "workers/"]);
+    expect(run(["get", "paths.sourceRoots"], withReal).stdout).toEqual(["app", "workers"]);
   });
 
   it("get prints null and objects as compact JSON", () => {

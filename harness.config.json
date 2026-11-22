@@ -128,6 +128,7 @@
       {
         "name": "shell",
         "motion": false,
+        "sequential": true,
         "owns": [
           "app/routes/admin/layout/**",
           "app/routes/authentication/components/auth-shell.tsx",

@@ -134,7 +134,7 @@ export async function run(argv: string[], deps: Deps = defaultDeps): Promise<Out
   const sha = h.stdout.trim();
   if (h.code !== 0 || !sha) return ghFailure(h.code !== 0 ? h : { ...h, stderr: "no head sha" }, `gh pr view ${pr}`);
 
-  const isBot = (login: unknown) => typeof login === "string" && login.toLowerCase().startsWith(deps.reviewBot.login);
+  const isBot = (login: unknown) => typeof login === "string" && login.toLowerCase().startsWith(deps.reviewBot.login.toLowerCase());
   const readSummary = (): string | Outcome => {
     const ir = deps.gh(["api", "--paginate", `repos/${repo}/issues/${pr}/comments`]);
     if (ir.code !== 0) return ghFailure(ir, "gh api issue comments");

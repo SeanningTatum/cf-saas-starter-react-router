@@ -171,26 +171,33 @@ fi
 # I2. brand-init's primitive lanes live in harness.config.json (brandInit.primitiveLanes). Every
 #     file in the primitives folder (paths.primitives) must appear exactly once in a lane (0 = a
 #     primitive escapes the redesign, 2+ = two lanes fight over it), and every lane file must exist.
-#     A project whose config has no primitive lanes has nothing to check.
-if LANES_JSON=$(bun scripts/harness-config.ts get brandInit.primitiveLanes 2>/dev/null) && [ -n "$LANES_JSON" ] && PRIM_DIR=$(bun scripts/harness-config.ts get paths.primitives 2>/dev/null) && [ -d "$PRIM_DIR" ]; then
-  LANE_FILES=$(printf '%s\n' "$LANES_JSON" | grep -oE '"files":\[[^]]*\]' | grep -oE '"[A-Za-z0-9._-]+"' | grep -vx '"files"' | tr -d '"')
-  FENCE_BAD=""
-  for u in "$PRIM_DIR"/*.tsx; do
-    n=$(basename "$u" .tsx)
-    c=$(printf '%s\n' "$LANE_FILES" | grep -cx "$n")
-    [ "$c" = "1" ] || FENCE_BAD="$FENCE_BAD ${n}(x${c})"
-  done
-  # The reverse: a lane must not name a primitive that is gone, or it is told to edit a missing file.
-  while IFS= read -r n; do
-    [ -z "$n" ] && continue
-    [ -f "$PRIM_DIR/${n}.tsx" ] || FENCE_BAD="$FENCE_BAD ${n}(no-file)"
-  done < <(printf '%s\n' "$LANE_FILES" | sort -u)
-  if [ -z "$FENCE_BAD" ]; then
-    ok "brand-init fences cover every $PRIM_DIR primitive exactly once and name no missing one"
+#     A project whose config has no primitive lanes has nothing to check; a project that has lanes
+#     and no such folder fails.
+if LANES_JSON=$(bun scripts/harness-config.ts get brandInit.primitiveLanes 2>/dev/null) && [ -n "$LANES_JSON" ]; then
+  PRIM_DIR=$(bun scripts/harness-config.ts get paths.primitives 2>/dev/null)
+  if [ -z "$PRIM_DIR" ] || [ ! -d "$PRIM_DIR" ]; then
+    fail "brand-init has primitive lanes, but paths.primitives (${PRIM_DIR:-not set}) is not a folder"
   else
-    fail "brand-init fence mismatch:$FENCE_BAD"
+    LANE_FILES=$(printf '%s\n' "$LANES_JSON" | grep -oE '"files":\[[^]]*\]' | grep -oE '"[A-Za-z0-9._-]+"' | grep -vx '"files"' | tr -d '"')
+    FENCE_BAD=""
+    for u in "$PRIM_DIR"/*.tsx; do
+      n=$(basename "$u" .tsx)
+      c=$(printf '%s\n' "$LANE_FILES" | grep -cx "$n")
+      [ "$c" = "1" ] || FENCE_BAD="$FENCE_BAD ${n}(x${c})"
+    done
+    # The reverse: a lane must not name a primitive that is gone, or it is told to edit a missing file.
+    while IFS= read -r n; do
+      [ -z "$n" ] && continue
+      [ -f "$PRIM_DIR/${n}.tsx" ] || FENCE_BAD="$FENCE_BAD ${n}(no-file)"
+    done < <(printf '%s\n' "$LANE_FILES" | sort -u)
+    if [ -z "$FENCE_BAD" ]; then
+      ok "brand-init fences cover every $PRIM_DIR primitive exactly once and name no missing one"
+    else
+      fail "brand-init fence mismatch:$FENCE_BAD"
+    fi
   fi
 fi
+# end I2
 
 # J. .claude/workflows/*.js are built: each is its source in .claude/workflow-src/ with the shared
 #    library pasted in. A script edited by hand, or a source edited without a rebuild, drifts.
@@ -251,7 +258,10 @@ N_CANDIDATES=(.claude/workflow-src/*.js .claude/workflows/*.js scripts/verify.sh
 N_FILES=()
 for f in "${N_CANDIDATES[@]}"; do [ -f "$f" ] && N_FILES+=("$f"); done
 N_HITS=$(grep -HnE "$N_PATTERN" "${N_FILES[@]}" 2>/dev/null)
-if [ -n "$N_HITS" ]; then
+N_CODE=$?
+if [ "$N_CODE" -gt 1 ]; then
+  fail "the grep gate could not read its files (grep exited $N_CODE), so it checked nothing"
+elif [ -n "$N_HITS" ]; then
   fail "harness code holds a literal path under the app folder; read it from harness.config.json:"
   printf '%s\n' "$N_HITS" | cut -c1-160 | sed 's/^/      /'
 else

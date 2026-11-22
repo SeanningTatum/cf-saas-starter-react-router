@@ -82,6 +82,7 @@ describe("plan-feature: happy path", () => {
     expect(done.calls.filter((c) => "model" in c.opts).map((c) => c.label)).toEqual([]);
     // Only the shell steps and the memory records run on the runner (haiku): catches a judgment step moved onto it.
     expect(done.calls.filter((c) => c.opts.agentType === "runner").map((c) => c.label)).toEqual([
+      "config",
       "preflight",
       "writeback",
       "publish",
@@ -174,7 +175,7 @@ describe("plan-feature: happy path", () => {
   it("nothing is written to the tracker before the brief is approved, and the write-back guards against a concurrent edit", async () => {
     const { atBrief, done } = await happyPath();
     // At the brief stop the only runner call is preflight (read-only): no writer, no tracker call.
-    expect(labels(atBrief.calls)).toEqual(["preflight", "context", "judge:context", "audit", "judge:audit", "run:record:needs-input:brief", "memory:record:needs-input:brief"]);
+    expect(labels(atBrief.calls)).toEqual(["config", "preflight", "context", "judge:context", "audit", "judge:audit", "run:record:needs-input:brief", "memory:record:needs-input:brief"]);
     const writeback = find(done.calls, "writeback");
     // Catches the stale check dropped: the edit must carry the updatedAt read at Intake, on the full URL.
     expect(writeback.prompt).toContain(`edit "${ISSUE_URL}" --body-file "${ROOT}/.verify/${SLUG}/issue-body.md" --title "<final title>" --if-updated-at "${UPDATED_AT}"`);
@@ -203,7 +204,7 @@ describe("plan-feature: happy path", () => {
     }
     // Catches a new agent() call that skips the preamble (it would run in whatever checkout it starts in).
     // A mode producer (fit, stack) opens with its mode line, then the preamble.
-    for (const c of done.calls.slice(1)) {
+    for (const c of done.calls.slice(2)) {
       expect({ label: c.label, head: c.prompt.replace(/^Mode: (fit|stack)\.\n/, "").slice(0, 40) }).toEqual({ label: c.label, head: `ROOT = ${ROOT}\nWork only inside ${ROOT}. cd there`.slice(0, 40) });
     }
   });
@@ -234,7 +235,7 @@ describe("plan-feature: happy path", () => {
     for (const bad of [{ ok: false, reason: "gh auth status: not logged in" }, { root: "repo" }, { issue: null }, { base_branch: "" }]) {
       const r = await plan({}, rules([["preflight", { ...PREFLIGHT, ...bad }]]));
       expect(r.result).toMatchObject({ stopped: "Preflight" });
-      expect(labels(r.calls)).toEqual(["preflight"]);
+      expect(labels(r.calls)).toEqual(["config", "preflight"]);
     }
   });
 });
@@ -291,7 +292,7 @@ describe("plan-feature: judge gate", () => {
     const r = await plan({}, auditFailsTwice);
     expect(r.result).toMatchObject({ status: "needs-input", stage: "escalation", label: "audit", fixes: ["item metric is still a guess"] });
     // One revise, one more judge, then the stop record: catches a second silent revise or a fall-through to Brief.
-    expect(labels(r.calls).slice(3)).toEqual(["audit", "judge:audit", "audit:revise", "judge:audit:2", "run:record:needs-input:escalation:audit", "memory:record:needs-input:escalation:audit"]);
+    expect(labels(r.calls).slice(4)).toEqual(["audit", "judge:audit", "audit:revise", "judge:audit:2", "run:record:needs-input:escalation:audit", "memory:record:needs-input:escalation:audit"]);
     expect(r.phases).not.toContain("Brief");
     const revise = find(r.calls, "audit:revise");
     expect(revise.opts.agentType).toBe("ticket-auditor");

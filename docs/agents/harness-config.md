@@ -8,7 +8,8 @@ The one file of values that belong to a project, not to the harness. Scripts and
 
 - A project with no file gets the defaults below. They name no path under `app/` and nothing about this starter's product.
 - An unknown key anywhere in the file is an error, so a typo cannot pass in silence.
-- A workflow script cannot read a file. Its Preflight step runs `bun scripts/harness-config.ts show` from the checkout and returns the one line it prints as `config_json`, a string. The script calls `readConfig` (in `.claude/workflow-src/lib.js`): it parses the line, recomputes the checksum over the stable JSON of `config` and compares it with `check`. A line the runner garbled stops the run at Preflight with "the config copy did not verify; run the workflow again". The script then reads every project value as `cfg.<key>`; a key the workflow needs and the file lacks stops it with `harness-config: set <key> in harness.config.json`. `ship-feature` reads the config in a step of its own before its Preflight, because the base branch it fetches comes from the config. The build never pastes config values into `.claude/workflows/*.js`.
+- A workflow script cannot read a file. Its first agent call, labelled `config`, runs `bun scripts/harness-config.ts show` from the checkout and returns the one line it prints as `config_json`, a string. That call is a step of its own: no ticket text or file name from the tree shares it, and the Preflight step that follows names the configured files (the product and design docs, the base branch). All three workflows make the call through `loadConfig` in `.claude/workflow-src/lib.js`. It calls `readConfig`: it parses the line, recomputes the checksum over the stable JSON of `config` and compares it with `check`. A line the runner garbled stops the run at Preflight with "the config copy did not verify; run the workflow again". The script then reads every project value as `cfg.<key>`; a key the workflow needs and the file lacks (undefined, null or an empty string) stops it with `harness-config: set <key> in harness.config.json`. An empty list is a value, not a missing key; a workflow that cannot run on one says so itself. `show` leaves `seedLogins` out, because no workflow reads it and the line lands in a run's journal; its checksum covers what it prints. The build never pastes config values into `.claude/workflows/*.js`.
+- Folders are held in one form. The loader strips a leading `./`, repeated slashes and any trailing slash from every setting that names a folder, so `src/pages/` and `src/pages` load alike. A reader that compares a path adds the `/` itself and compares whole path segments, so `appRoot: "src"` does not take `src-tools/x.ts`. The folder settings are `paths.sourceRoots` (each entry), `components`, `primitives`, `routes`, `locales`, `schemas`, `hooks`, `trpc`, `repositories`, `appRoot`, and `docs.adr` and `docs.features`. A folder setting that is empty or `.` is an error. Every other path (`tokens`, `rootLayout`, `home`, `analytics`, `analyticsEvents`, `routeTable`, `docs.product`, `docs.design`, `docs.glossary`) names a file and is kept as typed. `scratchDirs`, `ship.sharedFiles[].path` and `brandInit` fences keep the spelling you give them, because `scripts/stack.ts` and the fence tests read a trailing `/` as "this is a folder".
 - A grep gate keeps the harness code free of project paths: check N in `scripts/harness-check.sh` fails when a harness code file holds a literal path that starts with `app/`. It does not cover this file, tests and fixtures, the agent briefs in `.claude/agents/`, or the app's own scripts (seeding, first-time setup, teardown, CI helpers, the linters).
 - The file is JSON and has no comments. The notes that once sat beside the gate list are here: the e2e gate starts with `CI=1` because, without it, the dev server opens a remote-bindings session that needs a Cloudflare login, so the gate is red on any machine that is not logged in (`vite.config.ts`, `remoteBindings`).
 
@@ -21,7 +22,7 @@ A key with no default is empty. A consumer that needs it fails with a line that 
 | `version` | `1` | `1` | the loader |
 | `baseBranch` | string or null | `null` (the repo's default branch) | the workflows: `input.base`, then this, then the branch's own fallback |
 | `coauthor` | string | `Co-Authored-By: Claude Fable 5.2 <noreply@anthropic.com>` | the workflows, on each commit trailer |
-| `scratchDirs` | list of strings | `[".verify/", "tmp/"]` | `scripts/stack.ts`: the `exclude` of a plan that has none |
+| `scratchDirs` | list of strings (a trailing `/` marks a folder) | `[".verify/", "tmp/"]` | `scripts/stack.ts`: the `exclude` of a plan that has none |
 | `gates` | list of gate objects | none | `scripts/verify.sh` |
 | `tracker` | object | see below | `scripts/tracker.ts` |
 | `reviewBot` | object | see below | `scripts/pr-review-wait.ts` |
@@ -53,7 +54,7 @@ One object per gate, in run order. `scripts/verify.sh` runs them; `bun scripts/h
 
 | Key | Type | Default | Meaning |
 |---|---|---|---|
-| `login` | string | `greptile-apps` | A review counts when its author's login starts with this |
+| `login` | string | `greptile-apps` | A review counts when its author's login starts with this; case does not matter |
 | `summaryMarker` | string | `<!-- greptile_summary -->` | Marks the bot's summary comment |
 | `trigger` | string | `@greptileai review` | The comment that asks for a review |
 
@@ -80,7 +81,7 @@ One object per gate, in run order. `scripts/verify.sh` runs them; `bun scripts/h
 
 ### `paths`
 
-All optional. Each is a path from the repo root.
+All optional. Each is a path from the repo root. Folder settings load without a trailing slash (see above).
 
 | Key | Type | Meaning |
 |---|---|---|
@@ -115,7 +116,7 @@ All optional. Each is a path from the repo root.
 |---|---|---|
 | `contractFence` | list of strings | The files the contract lane writes (tokens file, root layout) |
 | `primitiveLanes` | list of `{ name, motion, files }` | The primitive lanes. `files` are names under `paths.primitives` without `.tsx`; `motion` is true when the lane owns something that moves. Every primitive file is in exactly one lane (`harness-check.sh`, check I2) |
-| `sharedLanes` | list of `{ name, motion, owns }` | Lanes that own named files or `folder/**` globs, in run order |
+| `sharedLanes` | list of `{ name, motion, owns, sequential? }` | Lanes that own named files or `folder/**` globs, in run order. A lane with `sequential` set to true runs alone after the parallel lanes, because it imports what they write (the wordmark); with none, that step is skipped. The first lane without the flag also writes the typeset wordmark. A lane's name is only a label: nothing looks a lane up by name |
 | `homeLane` | `{ name, motion, owns }` | The lane that runs only when the home page is rebuilt |
 
 `owns` is a list of repo paths; a path ending in `/**` owns the folder.
@@ -124,7 +125,7 @@ All optional. Each is a path from the repo root.
 
 | Command | Does |
 |---|---|
-| `bun scripts/harness-config.ts show` | Prints `{"config": ..., "check": "<8 hex>"}` on one line. `check` is the FNV-1a checksum of the config as stable JSON (keys sorted at every depth, no spaces) |
+| `bun scripts/harness-config.ts show` | Prints `{"config": ..., "check": "<8 hex>"}` on one line, without `seedLogins` (`get` and the loader keep it). `check` is the FNV-1a checksum of the config as stable JSON (keys sorted at every depth, no spaces) |
 | `bun scripts/harness-config.ts get <dotted.key>` | A string or number as is, a list of strings one per line, anything else as compact JSON; an unknown key exits 1 |
 | `bun scripts/harness-config.ts gates` | The gate lines `verify.sh` loops over; exits 1 when there are none |
 | `bun scripts/harness-config.ts check` | Validates the file; the `harness` gate runs it (check M) |

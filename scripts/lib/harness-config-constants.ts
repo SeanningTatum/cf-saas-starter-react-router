@@ -48,3 +48,7 @@ export const DEFAULT_LOGIN_FORM = {
 export const MISSING_GATES_LINE = "set gates in harness.config.json";
 export const BAD_JSON_LINE = `${CONFIG_FILE_NAME} is not valid JSON`;
 export const BAD_GATE_FIELD_LINE = "must not hold a | or a line break";
+export const BAD_DIRECTORY_LINE = "must name a folder under the repo root";
+export const LEADING_CURRENT_DIRECTORY = /^(\.\/)+/;
+export const REPEATED_SLASHES = /\/{2,}/g;
+export const TRAILING_SLASHES = /\/+$/;

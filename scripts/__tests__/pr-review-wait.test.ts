@@ -85,6 +85,15 @@ describe("pr-review-wait", () => {
     expect(retriggers(calls)).toEqual([["pr", "comment", "5", "--body", "/acme review"]]);
   });
 
+  it("regression: a configured login in mixed case still matches the bot's lower-case login: GitHub logins are not case-sensitive", async () => {
+    const reviewBot: ReviewBot = { ...HARNESS_DEFAULTS.reviewBot, login: "Acme-Reviewer" };
+    const acme = { login: "acme-reviewer[bot]" };
+    const { deps } = harness({ reviews: [[review({ id: 4, user: acme })]], issueComments: [{ user: acme, body: summaryBody(5) }] }, { reviewBot });
+    const o = await run(["5"], deps);
+    expect(o.code).toBe(0);
+    expect((o.out as any).review.id).toBe(4);
+  });
+
   it("matches on the head sha: a bot review of an older commit is ignored and the wait continues", async () => {
     const { deps } = harness({ reviews: [[review({ id: 1, commit_id: "old000" })], [review({ id: 1, commit_id: "old000" }), review({ id: 2 })]] });
     const o = await run(["5"], deps);

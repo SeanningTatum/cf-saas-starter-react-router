@@ -31,7 +31,7 @@ describe("brand-init: happy path, Preflight to Ship", () => {
     expect(res(r1).questions).toHaveLength(1);
     expect(labels(r1.calls).at(-1)).toBe("memory:record:needs-input");
     // The resume replays preflight, recall and the interview from cache, and does not record the brief stop again.
-    expect(labels(r2.calls.filter((c) => c.cached))).toEqual(["preflight", "memory:recall", "brief:interview"]);
+    expect(labels(r2.calls.filter((c) => c.cached))).toEqual(["config", "preflight", "memory:recall", "brief:interview"]);
     expect(r2.live[0].label).toBe("brief:write");
     expect(byLabel(r2, "memory:record:needs-input")).toEqual([]);
     expect(r3.live[0].label).toBe("contract:snapshot");
@@ -107,11 +107,12 @@ describe("brand-init: happy path, Preflight to Ship", () => {
     for (const c of [...r1.calls, ...r2.calls, ...r3.calls]) expect(declared).toContain(c.phase);
 
     // An agent that starts in the launcher's checkout must be told where to work. Catches a call that skips the preamble.
-    for (const c of r3.calls.filter((c) => c.label !== "preflight")) {
+    for (const c of r3.calls.filter((c) => c.label !== "preflight" && c.label !== "config")) {
       expect(c.prompt.startsWith(`ROOT = ${ROOT}\nWork only inside ${ROOT}.`), c.label).toBe(true);
     }
 
     const typeOf = (label: string) => one(r3, label).opts.agentType;
+    expect(typeOf("config")).toBe("runner");
     expect(typeOf("preflight")).toBe("runner");
     expect(typeOf("contract:snapshot")).toBe("runner");
     expect(typeOf("contract:tokens")).toBe("ui-builder");
@@ -220,8 +221,8 @@ describe("brand-init: happy path, Preflight to Ship", () => {
 
 describe("brand-init: the branch to leave", () => {
   it("preflight asks for a new branch off the repo's default branch, read from scripts/default-branch.ts, not off a literal main (catches a repo whose default is staging getting brand work committed on it)", async () => {
-    const r = await run({}, rules([["preflight", { ok: false, reason: "stop here", branch: "staging", root: ROOT, config_json: configLine() }]]));
-    const prompt = r.calls[0].prompt;
+    const r = await run({}, rules([["preflight", { ok: false, reason: "stop here", branch: "staging", root: ROOT }]]));
+    const prompt = one(r, "preflight").prompt;
     expect(prompt).toContain("bun scripts/default-branch.ts");
     expect(prompt).not.toMatch(/If on main\b/);
   });
@@ -229,18 +230,18 @@ describe("brand-init: the branch to leave", () => {
 
 describe("brand-init: a failing gate stops the run", () => {
   it("a red preflight, a relative root or a bad arg stops before any other agent", async () => {
-    const red = await run({}, rules([["preflight", { ok: false, reason: "baseline red: typecheck", branch: "staging", root: ROOT, config_json: configLine() }]]));
-    expect(labels(red.calls)).toEqual(["preflight"]);
+    const red = await run({}, rules([["preflight", { ok: false, reason: "baseline red: typecheck", branch: "staging", root: ROOT }]]));
+    expect(labels(red.calls)).toEqual(["config", "preflight"]);
     expect(res(red)).toEqual({ error: "baseline red: typecheck" });
     // The DESIGN.md guard lives in the preflight agent; the script must hand it the redo flag.
-    expect(red.calls[0].prompt).toContain("redo is false");
-    const redo = await run({ redo: true }, rules([["preflight", { ok: false, reason: "dirty tree: app/root.tsx", branch: "staging", root: ROOT, config_json: configLine() }]]));
-    expect(redo.calls[0].prompt).toContain("redo is true");
-    expect(labels(redo.calls)).toEqual(["preflight"]);
+    expect(one(red, "preflight").prompt).toContain("redo is false");
+    const redo = await run({ redo: true }, rules([["preflight", { ok: false, reason: "dirty tree: app/root.tsx", branch: "staging", root: ROOT }]]));
+    expect(one(redo, "preflight").prompt).toContain("redo is true");
+    expect(labels(redo.calls)).toEqual(["config", "preflight"]);
 
     // Every later agent is fenced to ROOT; a relative one would fence them to wherever they start.
-    const relative = await run({}, rules([["preflight", { ok: true, reason: "", branch: "feat/brand-init", root: "work/acme", config_json: configLine() }]]));
-    expect(labels(relative.calls)).toEqual(["preflight"]);
+    const relative = await run({}, rules([["preflight", { ok: true, reason: "", branch: "feat/brand-init", root: "work/acme" }]]));
+    expect(labels(relative.calls)).toEqual(["config", "preflight"]);
     expect(res(relative)).toEqual({ error: "preflight did not resolve an absolute repo root" });
 
     // A pick typed as a string would never match a comp id: rejected before any agent runs.

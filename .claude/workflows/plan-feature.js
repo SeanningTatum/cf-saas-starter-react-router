@@ -225,7 +225,9 @@ const CONFIG_COPY_FAULT = "the config copy did not verify; run the workflow agai
 /**
  * Parses the one line `bun scripts/harness-config.ts show` prints ({ config, check }) and verifies it: the
  * checksum is recomputed over the stable JSON of `config`, so a runner that garbled the copy is caught.
- * `need` lists dotted keys the workflow cannot run without. Returns { config } or { error }.
+ * `need` lists dotted keys the workflow cannot run without: a key is missing when it is undefined, null or
+ * an empty string. An empty list is a value; a workflow that cannot run on one checks that itself.
+ * Returns { config } or { error }.
  */
 function readConfig(configJson, need) {
   let parsed;
@@ -240,7 +242,7 @@ function readConfig(configJson, need) {
   if (ledgerChecksum(stableJson(parsed.config)) !== parsed.check) return { error: `${CONFIG_COPY_FAULT} (checksum differs)` };
   for (const key of need || []) {
     const value = key.split(".").reduce((o, k) => (o && typeof o === "object" ? o[k] : undefined), parsed.config);
-    if (value === undefined || value === null || value === "" || (Array.isArray(value) && value.length === 0)) {
+    if (value === undefined || value === null || value === "") {
       return { error: `harness-config: set ${key} in harness.config.json` };
     }
   }
@@ -351,6 +353,26 @@ function workflowLib({ agent, log, name }) {
   }
 
   /**
+   * The first call of a run: a runner prints the config on its own, so no ticket text or file name from the
+   * tree shares a step with it. `rootText` is the sentence that names ROOT, ending where `cd there` follows.
+   * Returns { config } or { error }; the error is a reason the run stops with.
+   */
+  async function loadConfig(who, rootText, need) {
+    const run = await tracked(
+      `Pre-flight for ${who}, config step. Change nothing.
+
+  0. Root. ${rootText} cd there.
+  1. Config. Run \`bun scripts/harness-config.ts show\` and return its one line of output exactly as \`config_json\`: copy it character for character, change nothing.
+Return ok=false with a one-line reason at the first failure.`,
+      { label: "config", phase: "Preflight", agentType: "runner", effort: "low", schema: obj({ ok: BOOL, reason: STR, config_json: STR }) }
+    );
+    if (!run || !run.ok) return { error: (run && run.reason) || "config step returned nothing" };
+    const conf = readConfig(run.config_json, need);
+    if (conf.error) log(`Pre-flight: ${conf.error}. Nothing ran.`);
+    return conf;
+  }
+
+  /**
    * The ways a run talks to an agent once the checkout is known. Workflow agents start in the
    * launching session's cwd, which can be another checkout, so every prompt after Preflight opens
    * with `preamble`. `sh` is a shell-only step for the runner. `remember` and `recall` are the
@@ -397,10 +419,10 @@ function workflowLib({ agent, log, name }) {
     return null;
   }
 
-  return { twice, atAttempt, checkArgs, asker, preflightFault, tracked, ledger, recordRun };
+  return { twice, atAttempt, checkArgs, asker, preflightFault, loadConfig, tracked, ledger, recordRun };
 }
 // ---- end of .claude/workflow-src/lib.js ----
-const { twice, checkArgs, asker, preflightFault, tracked } = workflowLib({ agent, log, name: "plan-feature" });
+const { twice, checkArgs, asker, preflightFault, loadConfig, tracked } = workflowLib({ agent, log, name: "plan-feature" });
 
 const ARG_TYPES = [["ticket", "string"], ["idea", "string"], ["slug", "string"], ["root", "string"], ["research", "boolean"], ["fit", "string"], ["product", "object"], ["brief", "object"], ["escalations", "object"], ["plans", "object"], ["accept", "object"]];
 const input = parseArgs(args, "idea");
@@ -542,6 +564,11 @@ const PRODUCERS = {
 // =============================================================================================
 phase("Preflight");
 
+// The config comes first, in a step of its own: Preflight below names the configured docs, and no ticket text shares the step.
+const conf = await loadConfig("plan-feature", rootClause(input.root), ["paths.tokens", "paths.home"]);
+if (conf.error) return { stopped: "Preflight", reason: conf.error };
+const cfg = conf.config;
+
 const trackerLine = input.ticket
   ? `  6. Ticket. Run \`bun run scripts/tracker.ts view ${JSON.stringify(input.ticket)}\` and return its JSON object as \`issue\`, unchanged (ref, number, url, title, body, state, labels, updatedAt, comments). If it fails, fail with the error text.`
   : "  6. No ticket was given (an idea). Return issue as null.";
@@ -550,18 +577,17 @@ const trackerLine = input.ticket
 const pre = await tracked(
   `Pre-flight for plan-feature. Check each item in order and stop at the first failure. Change nothing.
 
-  0. Root. ${rootClause(input.root)} ROOT must be absolute. \`cd\` to ROOT: items 1 to 7 run there. Return it in \`root\`.
+  0. Root. ${rootClause(input.root)} ROOT must be absolute. \`cd\` to ROOT: items 1 to 6 run there. Return it in \`root\`.
   1. Date. \`date +%F\` -> \`date\`.
   2. GitHub. \`gh auth status\` must succeed, else fail with its message.
   3. Tracker backend. Default is gh (docs/agents/issue-tracker.md). If that file, AGENTS.md or scripts/tracker.ts
      configure Linear instead, fail with exactly:
      Linear backend is task t1: the run asks the user which CLI to use
      Otherwise return backend "gh".
-  4. PRODUCT.md. Does ROOT/PRODUCT.md exist? -> has_product.
-  5. DESIGN.md. Does ROOT/DESIGN.md exist? -> has_design. Does ROOT/.claude/skills/to-spec/SKILL.md exist? -> has_to_spec.
+  4. ${cfg.docs.product}. Does ROOT/${cfg.docs.product} exist? -> has_product.
+  5. ${cfg.docs.design}. Does ROOT/${cfg.docs.design} exist? -> has_design. Does ROOT/.claude/skills/to-spec/SKILL.md exist? -> has_to_spec.
   5b. Base branch. Run \`bun scripts/default-branch.ts\` -> base_branch, a bare branch name. If it fails, fail with its message.
 ${trackerLine}
-  7. Config. Run \`bun scripts/harness-config.ts show\` from ROOT and return its one line of output exactly as \`config_json\`: copy it character for character, change nothing.
 Return ok=false with a one-line reason for the first failure, else ok=true. Always return root when you found it.`,
   {
     label: "preflight",
@@ -569,19 +595,13 @@ Return ok=false with a one-line reason for the first failure, else ok=true. Alwa
     agentType: "runner",
     effort: "low",
     schema: obj(
-      { ok: BOOL, reason: STR, root: STR, date: STR, backend: STR, base_branch: STR, has_product: BOOL, has_design: BOOL, has_to_spec: BOOL, config_json: STR, issue: { type: ["object", "null"], additionalProperties: true } },
-      ["ok", "reason", "root", "date", "backend", "base_branch", "has_product", "has_design", "has_to_spec", "config_json"]
+      { ok: BOOL, reason: STR, root: STR, date: STR, backend: STR, base_branch: STR, has_product: BOOL, has_design: BOOL, has_to_spec: BOOL, issue: { type: ["object", "null"], additionalProperties: true } },
+      ["ok", "reason", "root", "date", "backend", "base_branch", "has_product", "has_design", "has_to_spec"]
     ),
   }
 );
 const fault = preflightFault(pre);
 if (fault) return { stopped: "Preflight", reason: fault };
-const conf = readConfig(pre.config_json, ["paths.tokens", "paths.home"]);
-if (conf.error) {
-  log(`Pre-flight: ${conf.error}. Nothing ran.`);
-  return { stopped: "Preflight", reason: conf.error };
-}
-const cfg = conf.config;
 if (!/^\d{4}-\d{2}-\d{2}$/.test(pre.date)) {
   log(`Pre-flight returned a bad date (${JSON.stringify(pre.date)}). Nothing ran.`);
   return { stopped: "Preflight", reason: "preflight did not return an ISO date" };

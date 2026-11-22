@@ -43,6 +43,8 @@ export const tokensFor = (id: number, stage: "drawn" | "tasted") => ({
   voice: [`Voice of comp ${id}`],
 });
 
+export const CONFIG_OK = { ok: true, reason: "", config_json: configLine() };
+export const PREFLIGHT = { ok: true, reason: "", branch: "feat/brand-init", root: ROOT };
 export const QUESTIONS = [
   { id: "users", question: "Who uses it?", draft: "Small teams", confident: false },
   { id: "tone", question: "What tone?", draft: "Calm and exact", confident: true },
@@ -53,7 +55,8 @@ export const SHIPPED = { shipped: true, gatesGreen: true, verdictWritten: true, 
 export function rules(overrides: AnswerRule[] = []): AnswerRule[] {
   return [
     ...overrides,
-    ["preflight", { ok: true, reason: "", branch: "feat/brand-init", root: ROOT, config_json: configLine() }],
+    ["config", CONFIG_OK],
+    ["preflight", PREFLIGHT],
     [/^run:record/, RUN_OK],
     ["memory:recall", "nothing recorded"],
     [/^memory:record:/, (c: AnswerInput) => `recorded ${c.label}`],

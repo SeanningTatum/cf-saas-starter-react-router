@@ -20,6 +20,7 @@ import {
   HARNESS_ROOT,
   loadHarnessConfig,
   readDiskFile,
+  shownConfig,
   type HarnessConfig,
   type LoadDeps,
 } from "./lib/harness-config";
@@ -57,7 +58,8 @@ function printValue(value: unknown): string[] {
 }
 
 function show(config: HarnessConfig): Outcome {
-  return done([JSON.stringify({ config, check: configChecksum(config) })]);
+  const shown = shownConfig(config);
+  return done([JSON.stringify({ config: shown, check: configChecksum(shown) })]);
 }
 
 function get(config: HarnessConfig, positional: string[]): Outcome {

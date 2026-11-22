@@ -3,6 +3,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { Either, ParseResult, Schema } from "effect";
 import {
+  BAD_DIRECTORY_LINE,
   BAD_GATE_FIELD_LINE,
   BAD_JSON_LINE,
   CONFIG_FILE_NAME,
@@ -15,11 +16,23 @@ import {
   DEFAULT_SCRATCH_DIRS,
   GATE_FORBIDDEN_CHARACTERS,
   KEY_SEPARATOR,
+  LEADING_CURRENT_DIRECTORY,
   MESSAGE_PREFIX,
   NOT_FOUND_CODE,
+  REPEATED_SLASHES,
   SAFE_BRANCH_PATTERN,
+  TRAILING_SLASHES,
 } from "./harness-config-constants";
 import { ledgerChecksum } from "./run-telemetry";
+
+export const normalizeDirectory = (text: string): string =>
+  text.trim().replace(REPEATED_SLASHES, "/").replace(LEADING_CURRENT_DIRECTORY, "").replace(TRAILING_SLASHES, "");
+
+const DirectoryPath = Schema.transform(
+  Schema.String,
+  Schema.String.pipe(Schema.filter((text) => text !== "" && text !== ".", { message: () => BAD_DIRECTORY_LINE })),
+  { strict: true, decode: normalizeDirectory, encode: (text) => text },
+);
 
 const GateField = Schema.String.pipe(
   Schema.minLength(1),
@@ -45,8 +58,8 @@ const DocsSchema = Schema.Struct({
   product: Schema.String,
   design: Schema.String,
   glossary: Schema.String,
-  adr: Schema.String,
-  features: Schema.String,
+  adr: DirectoryPath,
+  features: DirectoryPath,
 });
 
 const LoginFormSchema = Schema.Struct({
@@ -59,22 +72,22 @@ const LoginFormSchema = Schema.Struct({
 const SeedLoginSchema = Schema.Struct({ email: Schema.String, password: Schema.String });
 
 const PathsSchema = Schema.Struct({
-  sourceRoots: Schema.Array(Schema.String),
+  sourceRoots: Schema.Array(DirectoryPath),
   tokens: Schema.String,
   rootLayout: Schema.String,
-  components: Schema.String,
-  primitives: Schema.String,
-  routes: Schema.String,
+  components: DirectoryPath,
+  primitives: DirectoryPath,
+  routes: DirectoryPath,
   home: Schema.String,
-  locales: Schema.String,
-  schemas: Schema.String,
+  locales: DirectoryPath,
+  schemas: DirectoryPath,
   analytics: Schema.String,
   analyticsEvents: Schema.String,
-  appRoot: Schema.String,
-  hooks: Schema.String,
+  appRoot: DirectoryPath,
+  hooks: DirectoryPath,
   routeTable: Schema.String,
-  trpc: Schema.String,
-  repositories: Schema.String,
+  trpc: DirectoryPath,
+  repositories: DirectoryPath,
 });
 
 const SharedFileSchema = Schema.Struct({ path: Schema.String, owner: Schema.String });
@@ -93,10 +106,17 @@ const LaneSchema = Schema.Struct({
   owns: Schema.Array(Schema.String),
 });
 
+const SharedLaneSchema = Schema.Struct({
+  name: Schema.String,
+  motion: Schema.Boolean,
+  owns: Schema.Array(Schema.String),
+  sequential: Schema.optional(Schema.Boolean),
+});
+
 const BrandInitSchema = Schema.Struct({
   contractFence: Schema.Array(Schema.String),
   primitiveLanes: Schema.Array(PrimitiveLaneSchema),
-  sharedLanes: Schema.Array(LaneSchema),
+  sharedLanes: Schema.Array(SharedLaneSchema),
   homeLane: LaneSchema,
 });
 
@@ -150,6 +170,7 @@ export const NESTED_KEYS = {
   brandInit: Object.keys(BrandInitSchema.fields),
   primitiveLane: Object.keys(PrimitiveLaneSchema.fields),
   lane: Object.keys(LaneSchema.fields),
+  sharedLane: Object.keys(SharedLaneSchema.fields),
   gates: Object.keys(GateSchema.fields),
 };
 
@@ -195,7 +216,9 @@ export function stableJson(value: unknown): string {
   return JSON.stringify(value) ?? "null";
 }
 
-export const configChecksum = (config: HarnessConfig): string => ledgerChecksum(stableJson(config));
+export const shownConfig = ({ seedLogins, ...shown }: HarnessConfig): Omit<HarnessConfig, "seedLogins"> => shown;
+
+export const configChecksum = (config: object): string => ledgerChecksum(stableJson(config));
 
 function fillDefaults(file: typeof ConfigFileSchema.Type): HarnessConfig {
   return {

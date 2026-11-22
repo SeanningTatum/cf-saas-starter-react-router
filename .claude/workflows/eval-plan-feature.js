@@ -164,7 +164,9 @@ const CONFIG_COPY_FAULT = "the config copy did not verify; run the workflow agai
 /**
  * Parses the one line `bun scripts/harness-config.ts show` prints ({ config, check }) and verifies it: the
  * checksum is recomputed over the stable JSON of `config`, so a runner that garbled the copy is caught.
- * `need` lists dotted keys the workflow cannot run without. Returns { config } or { error }.
+ * `need` lists dotted keys the workflow cannot run without: a key is missing when it is undefined, null or
+ * an empty string. An empty list is a value; a workflow that cannot run on one checks that itself.
+ * Returns { config } or { error }.
  */
 function readConfig(configJson, need) {
   let parsed;
@@ -179,7 +181,7 @@ function readConfig(configJson, need) {
   if (ledgerChecksum(stableJson(parsed.config)) !== parsed.check) return { error: `${CONFIG_COPY_FAULT} (checksum differs)` };
   for (const key of need || []) {
     const value = key.split(".").reduce((o, k) => (o && typeof o === "object" ? o[k] : undefined), parsed.config);
-    if (value === undefined || value === null || value === "" || (Array.isArray(value) && value.length === 0)) {
+    if (value === undefined || value === null || value === "") {
       return { error: `harness-config: set ${key} in harness.config.json` };
     }
   }
@@ -290,6 +292,26 @@ function workflowLib({ agent, log, name }) {
   }
 
   /**
+   * The first call of a run: a runner prints the config on its own, so no ticket text or file name from the
+   * tree shares a step with it. `rootText` is the sentence that names ROOT, ending where `cd there` follows.
+   * Returns { config } or { error }; the error is a reason the run stops with.
+   */
+  async function loadConfig(who, rootText, need) {
+    const run = await tracked(
+      `Pre-flight for ${who}, config step. Change nothing.
+
+  0. Root. ${rootText} cd there.
+  1. Config. Run \`bun scripts/harness-config.ts show\` and return its one line of output exactly as \`config_json\`: copy it character for character, change nothing.
+Return ok=false with a one-line reason at the first failure.`,
+      { label: "config", phase: "Preflight", agentType: "runner", effort: "low", schema: obj({ ok: BOOL, reason: STR, config_json: STR }) }
+    );
+    if (!run || !run.ok) return { error: (run && run.reason) || "config step returned nothing" };
+    const conf = readConfig(run.config_json, need);
+    if (conf.error) log(`Pre-flight: ${conf.error}. Nothing ran.`);
+    return conf;
+  }
+
+  /**
    * The ways a run talks to an agent once the checkout is known. Workflow agents start in the
    * launching session's cwd, which can be another checkout, so every prompt after Preflight opens
    * with `preamble`. `sh` is a shell-only step for the runner. `remember` and `recall` are the
@@ -336,7 +358,7 @@ function workflowLib({ agent, log, name }) {
     return null;
   }
 
-  return { twice, atAttempt, checkArgs, asker, preflightFault, tracked, ledger, recordRun };
+  return { twice, atAttempt, checkArgs, asker, preflightFault, loadConfig, tracked, ledger, recordRun };
 }
 // ---- end of .claude/workflow-src/lib.js ----
 const { tracked, recordRun } = workflowLib({ agent, log, name: 'eval-plan-feature' })

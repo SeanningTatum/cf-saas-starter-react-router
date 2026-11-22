@@ -80,7 +80,7 @@ export const meta = {
  *     rollupRounds?: number (Greptile rounds on the roll-up, or the single PR; default 3, 0 skips) }
  */
 // @lib
-const { twice, checkArgs, asker, tracked } = workflowLib({ agent, log, name: "ship-feature" });
+const { twice, checkArgs, asker, loadConfig, tracked } = workflowLib({ agent, log, name: "ship-feature" });
 
 const ARG_TYPES = [["ticket", "string"], ["prompt", "string"], ["record", "string"], ["slug", "string"], ["base", "string"], ["root", "string"], ["ready", "string"], ["ships", "object"], ["reviewRounds", "number"], ["rollupRounds", "number"]];
 const input = parseArgs(args, "prompt");
@@ -184,24 +184,20 @@ const ARCHITECT = obj({
 phase("Preflight");
 
 // The config comes first: the base branch and the paths below depend on it. A runner copies the one line; the script verifies it.
-const confRun = await tracked(
-  `Pre-flight for ship-feature, config step. Change nothing.
-
-  0. Root. ${typeof input.root === "string" ? `Use ${shq(input.root)}: \`git -C <it> rev-parse --show-toplevel\` is ROOT.` : "`git rev-parse --show-toplevel` is ROOT."} cd there.
-  1. Config. Run \`bun scripts/harness-config.ts show\` and return its one line of output exactly as \`config_json\`: copy it character for character, change nothing.
-Return ok=false with a one-line reason at the first failure.`,
-  { label: "config", phase: "Preflight", agentType: "runner", effort: "low", schema: obj({ ok: BOOL, reason: STR, config_json: STR }) }
+const conf = await loadConfig(
+  "ship-feature",
+  typeof input.root === "string" ? `Use ${shq(input.root)}: \`git -C <it> rev-parse --show-toplevel\` is ROOT.` : "`git rev-parse --show-toplevel` is ROOT.",
+  [
+    "paths.appRoot", "paths.sourceRoots", "paths.tokens", "paths.rootLayout", "paths.components", "paths.routes", "paths.locales", "paths.hooks", "paths.routeTable",
+    "paths.schemas", "paths.analytics", "paths.analyticsEvents", "paths.trpc", "paths.repositories", "ship.sharedFiles",
+  ]
 );
-if (!confRun || !confRun.ok) return { stopped: "Preflight", reason: confRun ? confRun.reason : "config step returned nothing" };
-const conf = readConfig(confRun.config_json, [
-  "paths.appRoot", "paths.sourceRoots", "paths.tokens", "paths.rootLayout", "paths.components", "paths.routes", "paths.locales", "paths.hooks", "paths.routeTable",
-  "paths.schemas", "paths.analytics", "paths.analyticsEvents", "paths.trpc", "paths.repositories", "ship.sharedFiles",
-]);
-if (conf.error) {
-  log(`Pre-flight: ${conf.error}. Nothing ran.`);
-  return { stopped: "Preflight", reason: conf.error };
-}
+if (conf.error) return { stopped: "Preflight", reason: conf.error };
 const cfg = conf.config;
+if (!cfg.paths.sourceRoots.length) return { stopped: "Preflight", reason: "harness-config: paths.sourceRoots must name at least one folder in harness.config.json" };
+// The loader gives folders with no trailing slash; prompts and prefix tests add it.
+const APP_DIR = `${cfg.paths.appRoot}/`;
+const SOURCE_DIRS = cfg.paths.sourceRoots.map((r) => `${r}/`);
 const wantedBase = input.base || cfg.baseBranch || "";
 BASE = wantedBase;
 
@@ -446,7 +442,7 @@ const alt = (paths) => paths.map(reEscape).join("|");
 const uiDirs = new RegExp(`^(${alt([cfg.paths.routes, cfg.paths.components, cfg.paths.locales, cfg.paths.hooks])})/`);
 const uiFiles = new RegExp(`^(${alt([cfg.paths.rootLayout, cfg.paths.tokens, cfg.paths.routeTable])})$`);
 const isUi = (p) => uiDirs.test(p) || uiFiles.test(p) || /^public\//.test(p);
-const laterPaths = new RegExp(`^(e2e/|docs/|${alt([cfg.docs.glossary, cfg.paths.analyticsEvents.replace(/[^/]*$/, "")])})`);
+const laterPaths = new RegExp(`^(e2e/|docs/)|^(${alt([cfg.docs.glossary, cfg.paths.analyticsEvents])})$`);
 const isLater = (p) => laterPaths.test(p);
 const lanes = [];
 for (const pr of prs) {
@@ -501,7 +497,7 @@ const MAP_SCHEMA = obj({ files: arr(obj({ path: STR, role: STR })) });
 const map = await sh(
   pre.has_codegraph
     ? `Run \`./scripts/codegraph.sh context ${shq(`${plan.title}. ${plan.summary}`.slice(0, 300))}\`. From its output return up to 15 files a builder should copy or extend, each with a one-line role ("repository pattern to copy", "router to register the procedure in"). Paths repo-relative. Add nothing the output does not show.`
-    : `CodeGraph is off. Run \`rg -l -i ${shq((plan.title.split(/\s+/).filter((w) => w.length > 3)[0] || slug).toLowerCase())} app workers | head -15\` and return those files with role "matches the feature name".`,
+    : `CodeGraph is off. Run \`rg -l -i ${shq((plan.title.split(/\s+/).filter((w) => w.length > 3)[0] || slug).toLowerCase())} ${cfg.paths.sourceRoots.join(" ")} | head -15\` and return those files with role "matches the feature name".`,
   { label: "contract:map", phase: "Contract", schema: MAP_SCHEMA }
 );
 const mapText = map && map.files.length ? `\nNearest existing code (${pre.has_codegraph ? "CodeGraph" : "rg"}) — read these before writing, copy their patterns:\n${map.files.map((f) => `  · ${f.path} — ${f.role}`).join("\n")}` : "";
@@ -599,7 +595,7 @@ phase("Write");
 const IMPACT_SCHEMA = obj({ changed: STRS, dependents: arr(obj({ path: STR, uses: STR })) });
 const impact = await sh(
   `Find the existing code that depends on this feature's changes (the regression blast radius).
-  1. Changed source: \`git diff --name-only ${pre.base_sha}\` plus \`git ls-files --others --exclude-standard\`, kept to ${andList([...cfg.paths.sourceRoots, "scripts/"])} .ts/.tsx files that are not tests -> changed.
+  1. Changed source: \`git diff --name-only ${pre.base_sha}\` plus \`git ls-files --others --exclude-standard\`, kept to ${andList([...SOURCE_DIRS, "scripts/"])} .ts/.tsx files that are not tests -> changed.
   2. ${pre.has_codegraph ? `\`./scripts/codegraph.sh sync\`, then for each changed file that existed on the base (\`git cat-file -e ${pre.base_sha}:<path>\` succeeds) run \`./scripts/codegraph.sh node <path>\` and read its dependents.` : `For each changed file that existed on the base, \`rg -l "<its import path without extension, as @/... and relative>" app workers\`.`}
   3. dependents: every file from step 2 that is NOT in changed, with uses = which changed file/symbol it uses. At most 40; say so in the last entry's uses if you cut.`,
   { label: "write:impact", phase: "Write", schema: IMPACT_SCHEMA }
@@ -611,7 +607,7 @@ if (impact) log(`Impact: ${impact.changed.length} changed source file(s), ${impa
 
 const writers = await parallel([
   () =>
-    ask(`${FEATURE}\n\nWrite or update the unit tests for this feature's changed code: \`git diff --name-only ${pre.base_sha}\` plus untracked files under ${andList(cfg.paths.sourceRoots)}. Every new helper, repository and procedure branch with a tagged error needs one (non-negotiable 4). Edit test files only. Where a dependent below relies on behaviour this diff changed and no test pins it, add one.${blast}`, {
+    ask(`${FEATURE}\n\nWrite or update the unit tests for this feature's changed code: \`git diff --name-only ${pre.base_sha}\` plus untracked files under ${andList(SOURCE_DIRS)}. Every new helper, repository and procedure branch with a tagged error needs one (non-negotiable 4). Edit test files only. Where a dependent below relies on behaviour this diff changed and no test pins it, add one.${blast}`, {
       label: "write:unit",
       phase: "Write",
       agentType: "test-author",
@@ -633,7 +629,7 @@ const writers = await parallel([
   // One agent does both jobs: spans always, analytics events when there is a metric and the wrapper exists.
   () =>
     ask(
-      `${FEATURE}\n\nAdd or correct tracing spans on this feature's new procedures, repository methods and service calls (\`git diff --name-only ${pre.base_sha}\` plus untracked under ${cfg.paths.appRoot}). Edit source only, never tests.${
+      `${FEATURE}\n\nAdd or correct tracing spans on this feature's new procedures, repository methods and service calls (\`git diff --name-only ${pre.base_sha}\` plus untracked under ${APP_DIR}). Edit source only, never tests.${
         wantsAnalytics
           ? `\n\nThen instrument the success metric with analytics events through the Analytics wrapper.\nSuccess metric: ${plan.metric}\nYou may also edit ${cfg.paths.analyticsEvents} and the procedure and repository files this feature changed (\`git diff --name-only ${pre.base_sha}\` plus untracked under ${cfg.paths.trpc}/ and ${cfg.paths.repositories}/).`
           : "\n\nNo success metric, or no Analytics wrapper: add spans only and return events [] (no analytics edits)."

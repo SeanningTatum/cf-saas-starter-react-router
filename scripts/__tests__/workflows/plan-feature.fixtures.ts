@@ -19,7 +19,8 @@ export const ISSUE = {
   updatedAt: UPDATED_AT,
   comments: [{ author: "mallory", body: INJECTION }],
 };
-export const PREFLIGHT = { ok: true, reason: "", root: `${ROOT}/`, date: "2026-11-22", backend: "gh", base_branch: "staging", has_product: true, has_design: true, has_to_spec: true, config_json: configLine(), issue: ISSUE };
+export const PREFLIGHT = { ok: true, reason: "", root: `${ROOT}/`, date: "2026-11-22", backend: "gh", base_branch: "staging", has_product: true, has_design: true, has_to_spec: true, issue: ISSUE };
+export const CONFIG_OK = { ok: true, reason: "", config_json: configLine() };
 export const CONTEXT = { summary: "No prior export work.", related_features: [], decisions: [], code_paths: [], prior_work: [], unknowns: [] };
 export const AUDIT = {
   slug: SLUG,
@@ -93,6 +94,7 @@ export function rules(overrides: AnswerRule[] = []): AnswerRule[] {
   ]);
   return [
     ...overrides,
+    ["config", CONFIG_OK],
     ["preflight", PREFLIGHT],
     [/^context(:revise)?$/, CONTEXT],
     [/^audit(:revise)?$/, AUDIT],
