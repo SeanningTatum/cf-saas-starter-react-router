@@ -9,7 +9,7 @@ Dev differs in three ways: `connect-src` adds `ws:` for Vite's reload socket, th
 
 ## The nonce
 
-`workers/app.ts` makes a fresh nonce for each request and puts it in `script-src`. An inline `<script>` runs only if it carries that nonce: take it from `useNonce()` (`app/lib/csp-nonce.ts`), as `app/root.tsx` does. Styles need no nonce, and must not get one: a nonce in `style-src` would switch `'unsafe-inline'` off.
+`workers/app.ts` makes a fresh nonce for each request and puts it in `script-src`. An inline `<script>` runs only if it carries that nonce: take it from `useNonce()` (`app/lib/csp-nonce.ts`), as `app/root.tsx` does. Styles need no nonce, and must not get one: a nonce in `style-src` would switch `'unsafe-inline'` off. In the browser `useNonce()` returns `undefined`: the browser hides nonce attributes once it has parsed them, and the context has no made-up default (`app/lib/__tests__/csp-nonce.test.ts`).
 
 ## Hosts outside the app's own origin
 

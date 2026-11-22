@@ -4,12 +4,6 @@ import { activeSession } from "@/auth/ban";
 import { hasAdminRole } from "@/auth/protected-user";
 import { ROUTES } from "@/lib/constants/routes";
 
-/**
- * The non-null shape returned by `context.auth.api.getSession(...)` once a
- * session exists. `AppLoadContext["auth"]` is Better Auth's `Auth` instance
- * (see `workers/app.ts`), so this type tracks whatever `createAuth` returns
- * without redeclaring it.
- */
 export type Session = NonNullable<
   Awaited<ReturnType<AppLoadContext["auth"]["api"]["getSession"]>>
 >;

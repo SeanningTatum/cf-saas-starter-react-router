@@ -54,6 +54,15 @@ A rate-limited request is an expected refusal (a `RateLimitError`, mapped to `TO
 
 tRPC never sends a 5xx `cause` to the client, and `app/trpc/index.ts` shows `schemaError` for `BAD_REQUEST` only, so the detail in a report does not reach a user.
 
+### Why the tRPC mapping is shaped this way
+
+`app/lib/effect-trpc.ts` turns every failure of a procedure into a `TRPCError`.
+
+- **Only listed tags count as an `AppError`.** `APP_ERROR_TAGS` (`app/lib/constants/errors.ts`) is the set of tags the `AppError` union can carry. An object with any other `_tag` merely looks like one and falls through to the generic 500. Test: "An object that duck-types a tagged error but isn't a known AppError tag falls through to the generic 500 branch" (`app/lib/__tests__/effect-trpc.test.ts`).
+- **A missed mapping degrades, it does not crash.** `assertNever` makes a missing `case` a compile error. If a tag in `APP_ERROR_TAGS` still reaches it at run time, it logs the tag and answers a plain 500. `AnalyticsDeliveryError` has a case for that reason only: `Analytics` swallows it.
+- **The client sees "Internal Server Error", the reporter sees the cause.** A 5xx carries the original error (or, for a defect, the squashed `Cause`) on `cause`, which tRPC never serializes. Test: `app/trpc/__tests__/production-error-payload.test.ts`.
+- **A runtime that cannot be built still answers a clean 500.** A missing D1 or R2 binding, or a broken Better Auth config, fails while the per-request `ManagedRuntime` builds its services, outside the procedure's own error channel, so `catchAll` on the effect cannot see it. `runProcedure` runs with `runPromiseExit` and maps both kinds of failure through the same `toTRPC`. Test: "maps a layer-construction failure (e.g. missing DB binding) to a TRPCError instead of a raw rejection" (same file as above).
+
 ## The browser endpoint
 
 `POST /api/browser-report` (`app/routes/api/browser-report.ts` and `app/lib/error-reporting/browser-report.ts`). The page sends to it from `app/lib/error-reporting/browser.ts`, and the CSP header points at it (`report-uri` and `Reporting-Endpoints` in `workers/security-headers.ts`).

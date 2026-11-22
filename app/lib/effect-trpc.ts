@@ -7,10 +7,6 @@ import { RATE_LIMITED_MESSAGE } from "@/lib/constants/rate-limit";
 import { TRPC_SERVER_FAILURE_CODES } from "@/lib/constants/error-reporting";
 import { APP_ERROR_TAGS } from "@/lib/constants/errors";
 
-// Compile-time exhaustiveness guard for `appErrorToTRPC`'s switch. Reachable
-// only if a future AppError variant's tag is added to APP_ERROR_TAGS without
-// a matching switch case — never throws; logs and degrades to a generic 500
-// so a missed mapping is a defect in observability, not an unhandled crash.
 const assertNever = (x: never): TRPCError => {
   const tag =
     typeof x === "object" && x !== null && "_tag" in x
@@ -122,7 +118,6 @@ const appErrorToTRPC = (e: AppError): TRPCError => {
         message: e.message,
       });
     case "AnalyticsDeliveryError":
-      // Analytics swallows this error; the case exists for exhaustiveness.
       return new TRPCError({
         code: "INTERNAL_SERVER_ERROR",
         message: "Internal Server Error",
@@ -138,10 +133,6 @@ const appErrorToTRPC = (e: AppError): TRPCError => {
   }
 };
 
-// Generic fallback for anything that isn't a pre-existing TRPCError or a
-// known AppError. The original error rides on the TRPCError as `cause` for
-// the error reporter (docs/agents/error-reporting.md); tRPC never sends
-// `cause` to the client, which only ever sees "Internal Server Error".
 const withOrigin = (mapped: TRPCError, origin: AppError): TRPCError =>
   TRPC_SERVER_FAILURE_CODES.includes(mapped.code)
     ? new TRPCError({ code: mapped.code, message: mapped.message, cause: origin })
@@ -162,17 +153,6 @@ export const tagToTRPC = <A, E, R>(
 ): Effect.Effect<A, TRPCError, R> =>
   Effect.catchAll(effect, (err) => Effect.fail(toTRPC(err)));
 
-// The runtime's own layer construction can fail — a missing D1/R2
-// binding or a broken Better Auth config surfaces as ConfigurationError |
-// ExternalServiceError | BucketBindingError when the request-scoped
-// ManagedRuntime resolves its services. That failure is NOT part of
-// `effect`'s own error channel (E) — it's injected by the runtime when it
-// builds AppServices — so it can only be observed via `runPromiseExit`,
-// never by wrapping `effect` itself in `catchAll` beforehand. We run the
-// already-mapped (tagToTRPC) effect via `runPromiseExit` and translate BOTH
-// the effect's own (now-TRPCError) failures and any layer-construction
-// failure through the same `toTRPC` mapping, so a missing binding produces a
-// clean, logged 500 instead of a raw rejection.
 export const runProcedure = <A, E, R extends AppServices = AppServices>(
   runtime: ManagedRuntime.ManagedRuntime<AppServices, AppError>,
   effect: Effect.Effect<A, E, R>,
@@ -182,8 +162,6 @@ export const runProcedure = <A, E, R extends AppServices = AppServices>(
     .runPromiseExit(
       tagToTRPC(effect).pipe(
         Effect.annotateLogs({ layer: "trpc" }),
-        // Root span per procedure — every db.* child span and every log's
-        // traceId hang off this. Name convention: `trpc.<router>.<procedure>`.
         options?.span
           ? Effect.withSpan(options.span, { kind: "server" })
           : (self) => self
@@ -197,8 +175,6 @@ export const runProcedure = <A, E, R extends AppServices = AppServices>(
           if (failure._tag === "Some") {
             throw toTRPC(failure.value);
           }
-          // Unrecoverable defect (interruption, die, etc): the cause rides on
-          // the TRPCError for the error reporter and never reaches the client.
           throw new TRPCError({
             code: "INTERNAL_SERVER_ERROR",
             message: "Internal Server Error",
