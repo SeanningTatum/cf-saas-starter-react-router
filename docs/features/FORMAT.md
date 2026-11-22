@@ -14,7 +14,7 @@ Frontmatter, then these H2 sections in this order:
 3. `Architecture`, `Decisions`, `Flow`, `PR stack`, `Contract`, `Open questions`
 
 Frontmatter keys: `slug` (kebab-case), `title`, `ticket` (an http(s) URL or `none`), `date`, `ui`
-(`false` skips UX), `base` (the branch PR 1 targets; default `main`).
+(`false` skips UX), `base` (the branch PR 1 targets; default: the repo's default branch, `bun scripts/default-branch.ts`).
 
 Each Context bullet ends with ` — source: <ref>`. Each decision is a `### D<n> — <question>` block with
 `Area` (product, ux, backend), `Chosen`, one or more `Rejected` lines (`option — why`), `Why`, and

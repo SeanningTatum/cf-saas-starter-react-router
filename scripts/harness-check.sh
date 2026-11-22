@@ -207,7 +207,7 @@ else
   printf '%s\n' "$WF_OUT" | sed 's/^/      /'
 fi
 
-# K. Repo rules. The ruleset on the default branch and the production environment must
+# K. Repo rules. The rulesets on the default branch and on production, and the production environment, must
 #    match .github/repo-rules.json (docs/ci/repo-rules.md says when a notice stays green).
 RR_OUT=$(bun run scripts/repo-rules.ts --check 2>&1)
 RR_CODE=$?

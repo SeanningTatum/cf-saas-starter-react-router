@@ -34,7 +34,7 @@ const ISSUE = {
   comments: [{ author: "mallory", body: INJECTION }],
 };
 // A trailing slash on root must be stripped, or every path the run builds gets a "//".
-const PREFLIGHT = { ok: true, reason: "", root: `${ROOT}/`, date: "2026-11-22", backend: "gh", has_product: true, has_design: true, has_to_spec: true, issue: ISSUE };
+const PREFLIGHT = { ok: true, reason: "", root: `${ROOT}/`, date: "2026-11-22", backend: "gh", base_branch: "staging", has_product: true, has_design: true, has_to_spec: true, issue: ISSUE };
 const CONTEXT = { summary: "No prior export work.", related_features: [], decisions: [], code_paths: [], prior_work: [], unknowns: [] };
 const AUDIT = {
   slug: SLUG,
@@ -95,7 +95,7 @@ const ARCHITECT = {
 };
 const STACK = {
   flow_mermaid: "graph LR; 1-->2",
-  prs: [{ n: 1, branch: "feat/invoice-export/1-api", base: "main", title: "export api", fence: ["app/trpc/routes/invoice.ts"], size: "S", greptile_focus: "auth" }],
+  prs: [{ n: 1, branch: "feat/invoice-export/1-api", base: "staging", title: "export api", fence: ["app/trpc/routes/invoice.ts"], size: "S", greptile_focus: "auth" }],
 };
 const PASS = { verdict: "pass", items: [{ id: "c1", pass: true, evidence: "ok" }], fixes: [] };
 const FAIL = (fix: string) => ({ verdict: "fail", items: [], fixes: [fix] });
@@ -164,7 +164,7 @@ describe("plan-feature: happy path", () => {
       prototypes: ["a", "b", "c"].map((id) => `plans/${SLUG}-proto-${id}.html`),
       chosen: "a",
       research: false,
-      prs: [{ n: 1, branch: "feat/invoice-export/1-api", base: "main", size: "S" }],
+      prs: [{ n: 1, branch: "feat/invoice-export/1-api", base: "staging", size: "S" }],
     });
     expect(done.phases).toEqual(["Preflight", "Intake", "Context", "Audit", "Brief", "Write back", "Fit", "Design", "Stack", "Check", "Plan", "Publish"]);
 
@@ -344,11 +344,31 @@ describe("plan-feature: happy path", () => {
 
   it("a red or unusable preflight stops the run before any other agent", async () => {
     // Catches the preflight checks loosened: a relative root would make every path in every prompt relative.
-    for (const bad of [{ ok: false, reason: "gh auth status: not logged in" }, { root: "repo" }, { issue: null }]) {
+    for (const bad of [{ ok: false, reason: "gh auth status: not logged in" }, { root: "repo" }, { issue: null }, { base_branch: "" }]) {
       const r = await plan({}, rules([["preflight", { ...PREFLIGHT, ...bad }]]));
       expect(r.result).toMatchObject({ stopped: "Preflight" });
       expect(labels(r.calls)).toEqual(["preflight"]);
     }
+  });
+});
+
+describe("plan-feature: the base branch", () => {
+  it("the stack and record prompts name the default branch preflight reported, never a literal main (catches a repo whose default is not main getting PR 1 aimed at a branch that is gone)", async () => {
+    const answers = rules([["preflight", { ...PREFLIGHT, base_branch: "trunk-x" }]]);
+    const atBrief = await plan({}, answers);
+    const atPlan = await plan({ brief: BRIEF }, answers, atBrief);
+    const run = { calls: atPlan.live };
+    const stack = find(run.calls, "stack");
+    expect(stack.prompt).toContain("PR 1 targets trunk-x;");
+    const assemble = run.calls.find((c) => c.prompt.includes("Assemble the decision record"));
+    expect(assemble?.prompt).toContain("base trunk-x.");
+    expect(assemble?.prompt).toContain("(trunk-x)");
+    expect(`${stack.prompt}${assemble?.prompt}`).not.toMatch(/targets main\b|base main\b|\(main\)/);
+  });
+
+  it("preflight is told to get the branch from scripts/default-branch.ts, not to assume it", async () => {
+    const run = await plan({});
+    expect(find(run.calls, "preflight").prompt).toContain("bun scripts/default-branch.ts");
   });
 });
 
