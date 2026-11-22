@@ -87,4 +87,4 @@ Local development keeps `Password123!` (`bun run db:seed`). The seed refuses to 
 
 ## One Bun version
 
-`.bun-version` holds the single Bun version. Every `oven-sh/setup-bun` step reads it, and `scripts/__tests__/workflows.test.ts` fails if a workflow sets `bun-version` itself. To upgrade Bun, edit that one file.
+`.bun-version` holds the single Bun version. Every `oven-sh/setup-bun` step reads it, and `scripts/__tests__/github-workflows.test.ts` fails if a workflow sets `bun-version` itself. To upgrade Bun, edit that one file.
