@@ -88,9 +88,9 @@ function rules(overrides: AnswerRule[] = []): AnswerRule[] {
         return { html: `${dir}/comp.html`, tokens: tokensFor(id, "drawn"), screenshots: [`${dir}/shots/mobile-light.png`, `${dir}/shots/desktop-light.png`] };
       },
     ],
-    [/^critique:\d+:taste$/, (c: AnswerInput) => ({ score: 8, notes: "hero type tightened", tokens: tokensFor(idOf(c.label), "tasted") })],
-    [/^critique:\d+:impeccable$/, { findings: [], contrastAA: { light: true, dark: true } }],
-    [/^critique:\d+:motion$/, { verdict: "PASS", notes: "eases out, reduced motion collapses" }],
+    [/^critique:\d+:taste(:redraw)?$/, (c: AnswerInput) => ({ score: 8, notes: "hero type tightened", tokens: tokensFor(idOf(c.label), "tasted") })],
+    [/^critique:\d+:impeccable(:redraw)?$/, { findings: [], contrastAA: { light: true, dark: true } }],
+    [/^critique:\d+:motion(:redraw)?$/, { verdict: "PASS", notes: "eases out, reduced motion collapses" }],
     ["critique:sameness", { pairs: [] }],
     ["contract:snapshot", { paths: ["PRODUCT.md"] }],
     ["contract:tokens", { files: ["app/app.css", "app/root.tsx"], report: "contrast: muted-foreground L 0.55 -> 0.50", cwd: ROOT }],
@@ -314,14 +314,23 @@ describe("brand-init: happy path, Preflight to Ship", () => {
   });
 });
 
+describe("brand-init: the branch to leave", () => {
+  it("preflight asks for a new branch off the repo's default branch, read from scripts/default-branch.ts, not off a literal main (catches a repo whose default is staging getting brand work committed on it)", async () => {
+    const r = await run({}, rules([["preflight", { ok: false, reason: "stop here", branch: "staging", root: ROOT }]]));
+    const prompt = r.calls[0].prompt;
+    expect(prompt).toContain("bun scripts/default-branch.ts");
+    expect(prompt).not.toMatch(/If on main\b/);
+  });
+});
+
 describe("brand-init: a failing gate stops the run", () => {
   it("a red preflight, a relative root or a bad arg stops before any other agent", async () => {
-    const red = await run({}, rules([["preflight", { ok: false, reason: "baseline red: typecheck", branch: "main", root: ROOT }]]));
+    const red = await run({}, rules([["preflight", { ok: false, reason: "baseline red: typecheck", branch: "staging", root: ROOT }]]));
     expect(labels(red.calls)).toEqual(["preflight"]);
     expect(res(red)).toEqual({ error: "baseline red: typecheck" });
     // The DESIGN.md guard lives in the preflight agent; the script must hand it the redo flag.
     expect(red.calls[0].prompt).toContain("redo is false");
-    const redo = await run({ redo: true }, rules([["preflight", { ok: false, reason: "dirty tree: app/root.tsx", branch: "main", root: ROOT }]]));
+    const redo = await run({ redo: true }, rules([["preflight", { ok: false, reason: "dirty tree: app/root.tsx", branch: "staging", root: ROOT }]]));
     expect(redo.calls[0].prompt).toContain("redo is true");
     expect(labels(redo.calls)).toEqual(["preflight"]);
 
@@ -415,13 +424,27 @@ describe("brand-init: stop at the pick and resume", () => {
   it("look-alike comps get exactly one redraw, into its own directory, which replaces the original in the pick", async () => {
     const r = await run({ answers: ANSWERS }, rules([["critique:sameness", { pairs: [[1, 2], [2, 3]] }]]));
     // Catches redrawing every flagged pair, or redrawing in place (a failed redraw would corrupt the original).
-    expect(labels(r.calls).filter((l) => l.endsWith(":redraw"))).toEqual(["draw:2:redraw"]);
+    expect(labels(r.calls).filter((l) => l.startsWith("draw:") && l.endsWith(":redraw"))).toEqual(["draw:2:redraw"]);
     expect(one(r, "draw:2:redraw").prompt).toContain(`write only under ${OUT}/2-r/ and nowhere else`);
     expect(res(r).comps.map((c: Obj) => [c.id, c.html, c.redrawn])).toEqual([
       [1, `${OUT}/1/comp.html`, false],
       [2, `${OUT}/2-r/comp.html`, true],
       [3, `${OUT}/3/comp.html`, false],
     ]);
+  });
+
+  it("a redrawn comp's critics carry their own labels (catches two critic calls sharing one label, the first comp's and the redraw's)", async () => {
+    const r = await run({ answers: ANSWERS }, rules([["critique:sameness", { pairs: [[1, 2]] }]]));
+    const critics = labels(r.calls).filter((l) => l.startsWith("critique:2:"));
+    expect(critics.sort()).toEqual([
+      "critique:2:impeccable",
+      "critique:2:impeccable:redraw",
+      "critique:2:motion",
+      "critique:2:motion:redraw",
+      "critique:2:taste",
+      "critique:2:taste:redraw",
+    ]);
+    expect(one(r, "critique:2:taste:redraw").prompt).toContain(`${OUT}/2-r/comp.html`);
   });
 });
 

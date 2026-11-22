@@ -129,6 +129,14 @@ export function stripJsonc(text: string): string {
   return text.replace(/^\s*\/\/.*$/gm, "");
 }
 
+export function parseJsonc<T>(text: string): T | null {
+  try {
+    return JSON.parse(stripJsonc(text)) as T;
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Writes the given config object to the repo-root wrangler.jsonc, prefixed
  * with a header comment explaining that the file is generated/restored by

@@ -5,7 +5,7 @@ export const meta = {
   whenToUse:
     "A fresh fork that still wears the starter's look. Not for one colour or one component, not on a repo with live users whose brand is not changing (it rewrites every primitive), not as a throwaway exploration on a branch you care about.",
   phases: [
-    { title: "Preflight", detail: "clean tree, green baseline, no brand yet, branch off main" },
+    { title: "Preflight", detail: "clean tree, green baseline, no brand yet, branch off the default branch" },
     { title: "Brief", detail: "the impeccable init interview; asks you in chat, then writes PRODUCT.md" },
     { title: "Draw", detail: "taste draws the directions, then one comp lane per direction in parallel" },
     { title: "Critique", detail: "taste loop, impeccable critique, motion review per comp; sameness check; one redraw" },
@@ -132,7 +132,7 @@ except where a step says to.
      anything else is dirty, fail and name the files: parallel lanes writing over uncommitted work make
      the diff unreadable.
   4. Baseline. \`./scripts/verify.sh --baseline\`. If red, fail and name the failing gate.
-  5. Branch. If on main, \`git switch -c feat/brand-init\`. Otherwise stay.
+  5. Branch. If the current branch is the repo's default branch (\`bun scripts/default-branch.ts\` prints it), \`git switch -c feat/brand-init\`. Otherwise stay.
 Return ok=false with a one-line reason for the first failure, else ok=true. Always return root when you found it.`,
   {
     label: "preflight",
@@ -297,6 +297,7 @@ Return the ABSOLUTE comp.html path, the tokens object you wrote, and the ABSOLUT
 
 async function critique(comp) {
   const dir = comp.dir;
+  const pass = comp.redrawn ? ":redraw" : "";
   // The taste loop edits comp.html (look, fix, look), so it runs alone first. The two critics
   // after it only read the finished pixels, so they run together.
   const taste = await ask(
@@ -312,7 +313,7 @@ At 1920 the content must sit in a max-width page container; edge to edge is a de
 Return the final score (a number), short notes on what changed and what still bites, and \`tokens\`: the exact
 contents of ${dir}/tokens.json after your last edit (read the file back).`,
     {
-      label: `critique:${comp.id}:taste`,
+      label: `critique:${comp.id}:taste${pass}`,
       phase: "Critique",
       agentType: "ui-builder",
       schema: obj({ score: NUM, notes: STR, tokens: { type: "object" } }),
@@ -332,7 +333,7 @@ Also check WCAG AA contrast for body text, muted text, primary-on-primary-foregr
 against ${dir}/tokens.json, in the light theme and the dark theme separately. Report contrastAA.light
 and contrastAA.dark as booleans (true only if every pair passes AA).`,
         {
-          label: `critique:${comp.id}:impeccable`,
+          label: `critique:${comp.id}:impeccable${pass}`,
           phase: "Critique",
           // general-purpose: read-only critique that loads `impeccable` (Skill) and computes contrast; proto-critic
           // retakes its own shots and returns a fixed shape.
@@ -349,7 +350,7 @@ Load the \`emil-design-eng\` skill and judge the motion by its rules (\`review-a
 user-only: the Skill tool refuses it). Check easing, duration, purpose, and that
 prefers-reduced-motion collapses the motion. Return verdict PASS or FAIL with notes.`,
         {
-          label: `critique:${comp.id}:motion`,
+          label: `critique:${comp.id}:motion${pass}`,
           phase: "Critique",
           // general-purpose: read-only motion review that loads `emil-design-eng` (Skill); no project agent reviews motion.
           agentType: "general-purpose",

@@ -1,0 +1,121 @@
+import { Either, Schema } from "effect";
+
+const Params = Schema.Record({ key: Schema.String, value: Schema.Unknown });
+const Rule = Schema.Struct({ type: Schema.String, parameters: Schema.optional(Params) });
+
+const DeclaredRuleset = Schema.Struct({
+  name: Schema.String,
+  target: Schema.String,
+  enforcement: Schema.String,
+  bypass_actors: Schema.Array(Schema.Unknown),
+  conditions: Schema.Struct({
+    ref_name: Schema.Struct({ include: Schema.Array(Schema.String), exclude: Schema.Array(Schema.String) }),
+  }),
+  rules: Schema.Array(Rule),
+});
+
+const PathSafe = Schema.String.pipe(
+  Schema.filter((s) => s.length > 0 && !/\.\.|[?#{\s]/.test(s), {
+    message: () => "must not be empty or contain '..', '?', '#', '{' or whitespace",
+  }),
+);
+
+const ReviewerName = Schema.String.pipe(
+  Schema.filter((s) => s === "@owner" || /^[A-Za-z0-9-]+$/.test(s) || (/^[A-Za-z0-9-]+\/[\w-][\w.-]*$/.test(s) && !s.includes("..")), {
+    message: () => "a reviewer is @owner, a GitHub login, or org/team-slug",
+  }),
+);
+
+const DeclaredEnv = Schema.Struct({
+  name: PathSafe,
+  reviewers: Schema.Array(ReviewerName),
+  prevent_self_review: Schema.Boolean,
+  deployment_branches: Schema.Array(PathSafe),
+});
+
+export const Config = Schema.Struct({
+  rulesets: Schema.Array(DeclaredRuleset).pipe(Schema.minItems(1)),
+  environments: Schema.Array(DeclaredEnv),
+});
+
+export type Ruleset = typeof DeclaredRuleset.Type;
+export type DeclaredEnvironment = typeof DeclaredEnv.Type;
+export type ConfigT = typeof Config.Type;
+
+const OldShape = Schema.Struct({ ruleset: Schema.Unknown, rulesets: Schema.optional(Schema.Unknown) });
+
+export const hasOldShape = (text: string): boolean => {
+  const decoded = Schema.decodeUnknownEither(Schema.parseJson(OldShape))(text);
+  return Either.isRight(decoded) && decoded.right.rulesets === undefined;
+};
+
+export const RepoInfo = Schema.Struct({
+  default_branch: Schema.String,
+  owner: Schema.Struct({ login: Schema.String, id: Schema.Number, type: Schema.String }),
+  permissions: Schema.optional(Schema.Struct({ admin: Schema.optional(Schema.Boolean) })),
+});
+
+export const RulesetList = Schema.Array(Schema.Struct({ id: Schema.Number, name: Schema.String }));
+
+export const LiveRuleset = Schema.Struct({
+  target: Schema.String,
+  enforcement: Schema.String,
+  bypass_actors: Schema.optional(Schema.Array(Schema.Unknown)),
+  conditions: Schema.optional(
+    Schema.NullOr(
+      Schema.Struct({
+        ref_name: Schema.optional(
+          Schema.Struct({
+            include: Schema.optional(Schema.Array(Schema.String)),
+            exclude: Schema.optional(Schema.Array(Schema.String)),
+          }),
+        ),
+      }),
+    ),
+  ),
+  rules: Schema.Array(Rule),
+});
+
+export const LiveEnv = Schema.Struct({
+  protection_rules: Schema.optional(
+    Schema.Array(
+      Schema.Struct({
+        type: Schema.String,
+        prevent_self_review: Schema.optional(Schema.Boolean),
+        reviewers: Schema.optional(
+          Schema.Array(
+            Schema.Struct({
+              type: Schema.String,
+              reviewer: Schema.Struct({
+                id: Schema.Number,
+                login: Schema.optional(Schema.String),
+                slug: Schema.optional(Schema.String),
+              }),
+            }),
+          ),
+        ),
+      }),
+    ),
+  ),
+  deployment_branch_policy: Schema.optional(
+    Schema.NullOr(Schema.Struct({ protected_branches: Schema.Boolean, custom_branch_policies: Schema.Boolean })),
+  ),
+});
+
+export const BranchPolicies = Schema.Struct({
+  branch_policies: Schema.Array(Schema.Struct({ id: Schema.Number, name: Schema.String })),
+});
+
+export const IdOnly = Schema.Struct({ id: Schema.Number });
+
+const CheckEntries = Schema.Array(
+  Schema.Struct({ context: Schema.String, integration_id: Schema.optional(Schema.Number) }),
+);
+
+export const checkEntriesOf = (v: unknown) => {
+  const d = Schema.decodeUnknownEither(CheckEntries)(v);
+  return Either.isRight(d) ? d.right : [];
+};
+
+export type LiveRulesetT = typeof LiveRuleset.Type;
+export type LiveEnvT = typeof LiveEnv.Type;

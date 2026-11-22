@@ -237,6 +237,7 @@ const pre = await agent(
      Otherwise return backend "gh".
   4. PRODUCT.md. Does ROOT/PRODUCT.md exist? -> has_product.
   5. DESIGN.md. Does ROOT/DESIGN.md exist? -> has_design. Does ROOT/.claude/skills/to-spec/SKILL.md exist? -> has_to_spec.
+  5b. Base branch. Run \`bun scripts/default-branch.ts\` -> base_branch, a bare branch name. If it fails, fail with its message.
 ${trackerLine}
 Return ok=false with a one-line reason for the first failure, else ok=true. Always return root when you found it.`,
   {
@@ -245,8 +246,8 @@ Return ok=false with a one-line reason for the first failure, else ok=true. Alwa
     agentType: "runner",
     effort: "low",
     schema: obj(
-      { ok: BOOL, reason: STR, root: STR, date: STR, backend: STR, has_product: BOOL, has_design: BOOL, has_to_spec: BOOL, issue: { type: ["object", "null"], additionalProperties: true } },
-      ["ok", "reason", "root", "date", "backend", "has_product", "has_design", "has_to_spec"]
+      { ok: BOOL, reason: STR, root: STR, date: STR, backend: STR, base_branch: STR, has_product: BOOL, has_design: BOOL, has_to_spec: BOOL, issue: { type: ["object", "null"], additionalProperties: true } },
+      ["ok", "reason", "root", "date", "backend", "base_branch", "has_product", "has_design", "has_to_spec"]
     ),
   }
 );
@@ -256,6 +257,11 @@ if (!/^\d{4}-\d{2}-\d{2}$/.test(pre.date)) {
   log(`Pre-flight returned a bad date (${JSON.stringify(pre.date)}). Nothing ran.`);
   return { stopped: "Preflight", reason: "preflight did not return an ISO date" };
 }
+if (!pre.base_branch) {
+  log("Pre-flight did not return the default branch. Nothing ran.");
+  return { stopped: "Preflight", reason: "preflight did not return the default branch" };
+}
+const BASE = pre.base_branch;
 if (input.ticket && !pre.issue) {
   log("Pre-flight did not return the ticket. Nothing ran.");
   return { stopped: "Preflight", reason: "ticket could not be read" };
@@ -424,7 +430,7 @@ ${fence("fit", JSON.stringify(rec.fit, null, 1))}
 ${fence("context", JSON.stringify(rec.context, null, 1))}
 Return the object your schema asks for.`;
     case "stack":
-      return `Plan the PR stack for feature "${slug}". PR 1 targets main; each later PR's base is the previous PR's branch. Fences must not overlap.
+      return `Plan the PR stack for feature "${slug}". PR 1 targets ${BASE}; each later PR's base is the previous PR's branch. Fences must not overlap.
 ${DATA_FENCE}
 
 ${fence("architect", JSON.stringify(rec.architect, null, 1))}
@@ -710,16 +716,17 @@ if (!written || !written.body_file) {
 const writeback = await sh(
   `Write the approved brief to the tracker with \`bun run scripts/tracker.ts\`. This is the first write of the run. QUOTE every ref, URL, title and path in every shell command (a bare #12 starts a shell comment). Do not read or edit the files; pass them as given.
 Final title: ${JSON.stringify(written.title || finalTicket.title)}
-Body file: ${written.body_file}${source.kind === "ticket" ? `\nComment file: ${written.comment_file}` : ""}
+Body file: ${bodyFile}${source.kind === "ticket" ? `\nComment file: ${commentFile}` : ""}
 
 ${
   source.kind === "idea"
-    ? `This is an IDEA: run \`bun run scripts/tracker.ts create --title "<final title>" --body-file "${written.body_file}"\`. Its url is the issue_url. Set stale_skipped=false and overwrote_concurrent_edit=false.`
-    : `This is TICKET ${source.url} (intake updatedAt ${source.updatedAt}). Run \`bun run scripts/tracker.ts edit "${source.url}" --body-file "${written.body_file}" --title "<final title>" --if-updated-at "${source.updatedAt}"\`.
+    ? `This is an IDEA: run \`bun run scripts/tracker.ts create --title "<final title>" --body-file "${bodyFile}"\`. Its url is the issue_url. Set stale_skipped=false and overwrote_concurrent_edit=false.`
+    : `This is TICKET ${source.url} (intake updatedAt ${source.updatedAt}). Run \`bun run scripts/tracker.ts edit "${source.url}" --body-file "${bodyFile}" --title "<final title>" --if-updated-at "${source.updatedAt}"\`.
   - If it exits 3 with code STALE_AFTER_WRITE (the write landed over a newer edit): do NOT retry and do NOT comment. The write LANDED over a concurrent edit and the error JSON returns that other edit as a DIFF (not a full body; if it carries none, say so). Set ok=true, overwrote_concurrent_edit=true, stale_skipped=false, and put the diff text in conflict.
   - If it exits 3 with code STALE: the issue changed while we planned. Do NOT write, do NOT comment, do NOT retry. Set stale_skipped=true, overwrote_concurrent_edit=false and describe in conflict what changed (run \`bun run scripts/tracker.ts view "${source.url}"\` and compare with the intake body below). issue_url is ${source.url}.
-  - Otherwise stale_skipped=false and overwrote_concurrent_edit=false. Then post ONE comment with \`bun run scripts/tracker.ts comment "${source.url}" --body-file "${written.comment_file}"\`.
+  - Otherwise stale_skipped=false and overwrote_concurrent_edit=false. Then post ONE comment with \`bun run scripts/tracker.ts comment "${source.url}" --body-file "${commentFile}"\`.
 Intake body, for the STALE comparison:
+${DATA_FENCE}
 ${fence("intake body", source.body)}`
 }
 
@@ -836,7 +843,7 @@ Return id, file (absolute path) and summary.${extra || ""}`;
 const runProto = (d, mode, extra) =>
   ask(protoPrompt(d, mode, extra), { label: `proto:${d.id}:${mode}${extra ? ":revise" : ""}`, phase: "Design", agentType: "ui-prototyper", schema: SCHEMAS.proto });
 const critique = { a: [], b: [], c: [] }; // open findings per prototype, shown on the plan page
-const runCritic = (d, n) =>
+const runCritic = (d, mode, n) =>
   ask(
     `Critique the prototype of direction ${d.id} for feature "${slug}": ${protoPath(d.id)}. Read-only on the prototype: never edit it.
 Surface: ${rec.ux.surface}. Motion: ${!!d.motion}. Slug: ${slug}. Write screenshots to ${outDir()}/shots/ (mkdir -p it). Take the four shots in one script run; do not iterate.
@@ -844,7 +851,7 @@ ${DATA_FENCE}
 
 ${fence("direction", JSON.stringify(d, null, 1))}
 Return id, findings (P0 to P3, each with a fix), audit_hard_fail and the screenshot paths.`,
-    { label: `critic:${d.id}:${n}`, phase: "Design", agentType: "proto-critic", schema: SCHEMAS.critic }
+    { label: `critic:${d.id}:${mode}:${n}`, phase: "Design", agentType: "proto-critic", schema: SCHEMAS.critic }
   );
 const isBlocking = (c) => c.audit_hard_fail || c.findings.some(isP0P1);
 const openOf = (c) => [...c.findings.map((f) => `${f.severity}: ${f.issue}`), ...(c.audit_hard_fail ? ["design:audit hard fail"] : [])];
@@ -852,7 +859,7 @@ const openOf = (c) => [...c.findings.map((f) => `${f.severity}: ${f.issue}`), ..
 // Returns { out, open }. No escalation: what stays open goes on the plan page as Known issues.
 async function critiqueRound(d, mode, first) {
   let out = first;
-  let c = await twice(() => runCritic(d, 1), `proto-critic ${d.id}`);
+  let c = await twice(() => runCritic(d, mode, 1), `proto-critic ${d.id}`);
   if (!c) {
     log(`Prototype ${d.id} (${mode}): proto-critic returned nothing twice — shown with a known issue`);
     return { out, open: ["proto-critic could not review this prototype"] };
@@ -862,7 +869,7 @@ async function critiqueRound(d, mode, first) {
     const revised = await runProto(d, mode, reviseNote(out, c.findings.map((f) => `${f.severity} ${f.issue} — fix: ${f.fix}`).concat(c.audit_hard_fail ? ["design:audit reports a hard fail; fix it"] : [])));
     if (revised) {
       out = revised;
-      const c2 = await runCritic(d, 2);
+      const c2 = await runCritic(d, mode, 2);
       if (c2) c = c2;
       else log(`Prototype ${d.id} (${mode}): second critique returned nothing — showing the first findings`);
     } else log(`Prototype ${d.id} (${mode}): revise returned nothing — showing the findings`);
@@ -939,13 +946,13 @@ const protoBlock = () =>
 
 const draft = `${outDir()}/record.md`;
 const FORMAT = `FORMAT (see ${ROOT}/docs/features/FORMAT.md if it exists; the checker is the authority):
-  --- frontmatter: slug, title, ticket (the issue URL or none), date, ui (true|false), base (main) ---
+  --- frontmatter: slug, title, ticket (the issue URL or none), date, ui (true|false), base (${BASE}) ---
   # <title>, then H2 sections IN THIS ORDER: Summary, Context, User and job, Fit, Success metric, Non-goals,
   ${hasUi ? "UX (a ```mermaid block, then a table with columns Screen | Empty | Loading | Error | Success), " : "(no UX section: the feature has no UI, set ui: false), "}Architecture, Decisions, Flow (a \`\`\`mermaid block), PR stack, Contract (a \`\`\`ts block), Open questions.
   Context: one bullet per finding, each ending " — source: <ref>".
   Non-goals: "- <item> — <why>".
   Decisions: "### D1 — <question>" then bullets **Area:** product|ux|backend, **Chosen:**, **Rejected:** <option> — <why> (at least one), **Why:**, **Decided by:** user|agent. Collect the decisions from fit, ux and architect, renumber D1.. in order, and add one decision per brief answer the human gave (Decided by: user).
-  PR stack: table | # | Branch | Base | Fence | Size | Greptile focus |, fence paths in backticks; PR 1 base is main; later bases are the previous branch.
+  PR stack: table | # | Branch | Base | Fence | Size | Greptile focus |, fence paths in backticks; PR 1 base is ${BASE}; later bases are the previous branch.
   Open questions: every unknown from the context, and${writebackNote ? ` THIS TRACKER CONFLICT (first item; say whether the write was skipped or landed, and label any text as a diff): ${writebackNote}` : " anything the agents flagged"}.`;
 
 const assemble = async (extra) => {
@@ -956,7 +963,7 @@ const assemble = async (extra) => {
 const assembleOnce = (extra) =>
   ask(
     `Assemble the decision record for feature "${slug}" at ${draft} (mkdir -p its directory), then run \`bun run scripts/check-feature-doc.ts "${draft}"\` and report the result.
-Use only the agent outputs below; invent nothing. Frontmatter: slug ${slug}; title ${JSON.stringify(finalTicket.title)}; ticket ${source.kind === "ticket" || writeback.issue_url ? writeback.issue_url : "none"}; date ${DATE}; ui ${hasUi}; base main.
+Use only the agent outputs below; invent nothing. Frontmatter: slug ${slug}; title ${JSON.stringify(finalTicket.title)}; ticket ${source.kind === "ticket" || writeback.issue_url ? writeback.issue_url : "none"}; date ${DATE}; ui ${hasUi}; base ${BASE}.
 ${FORMAT}
 ${DATA_FENCE}
 

@@ -3,8 +3,8 @@ import { Either } from "effect";
 import { describePath, fileUploadEdgePaths, type ModelEvent } from "@/components/file-upload.model";
 import uploadText from "@/locales/en/upload.json" with { type: "json" };
 import { useAdminSessionSignedInOncePerFile } from "./lib/admin-session";
-import { loadHydratedReloadingWhileViteReoptimizesDeps } from "./lib/hydration";
-import { KITCHEN_SINK_UPLOAD_PATH, TIMEOUTS_MS } from "./lib/values";
+import { allowForAColdFirstLoad, reloadWhileViteReoptimizesDeps } from "./lib/hydration";
+import { TIMEOUTS_MS } from "./lib/values";
 
 /**
  * FileUpload wiring, on paths generated from app/components/file-upload.machine.ts
@@ -75,7 +75,8 @@ test.describe("FileUpload paths", () => {
 
       const root = page.getByTestId("file-upload");
       const dropzone = page.getByTestId("file-upload-dropzone");
-      await loadHydratedReloadingWhileViteReoptimizesDeps(page, KITCHEN_SINK_UPLOAD_PATH, () => dropzone);
+      allowForAColdFirstLoad();
+      await reloadWhileViteReoptimizesDeps(page, await page.goto("/admin/kitchen-sink#upload"), () => dropzone);
       await expect(root).toHaveAttribute("data-state", "idle");
       await expect(async () => {
         await dropzone.dispatchEvent("dragover");

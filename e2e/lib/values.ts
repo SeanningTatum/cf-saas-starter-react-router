@@ -13,8 +13,6 @@ export const PAGE_PATHS = {
   dashboard: "/dashboard",
 } as const;
 
-export const KITCHEN_SINK_UPLOAD_PATH = "/admin/kitchen-sink#upload";
-
 export const API_PATHS = {
   prefix: "/api/",
   signIn: "/api/auth/sign-in/email",

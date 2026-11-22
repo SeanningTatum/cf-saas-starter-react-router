@@ -25,24 +25,35 @@ const expectDocumentResponse: (response: Response | null, url: string) => assert
   expect(response, `${url}: no document response`).not.toBeNull();
 };
 
+const coldNavigationAllowance = 15_000;
+const firstLoadWait = 15_000;
+const afterReloadWait = 30_000;
+const reloadsBeforeGivingUp = 2;
+
+export const allowForAColdFirstLoad = () => extendTheTestTimeoutBy(coldNavigationAllowance + firstLoadWait);
+
+export const reloadWhileViteReoptimizesDeps = async (
+  page: Page,
+  firstResponse: Response | null,
+  ready: (page: Page) => Locator,
+): Promise<Response> => {
+  let response = firstResponse;
+  let wait = firstLoadWait;
+  for (let reloadsLeft = reloadsBeforeGivingUp; !(await hydrated(ready(page), wait)); reloadsLeft -= 1) {
+    expect(reloadsLeft, `${page.url()} never hydrated`).toBeGreaterThan(0);
+    extendTheTestTimeoutBy(coldNavigationAllowance + afterReloadWait);
+    response = await page.reload();
+    wait = afterReloadWait;
+  }
+  expectDocumentResponse(response, page.url());
+  return response;
+};
+
 export const loadHydratedReloadingWhileViteReoptimizesDeps = async (
   page: Page,
   url: string,
   ready: (page: Page) => Locator,
 ): Promise<Response> => {
-  const coldNavigationAllowance = 15_000;
-  const firstLoadWait = 15_000;
-  const afterReloadWait = 30_000;
-  const reloadsBeforeGivingUp = 2;
-  extendTheTestTimeoutBy(coldNavigationAllowance + firstLoadWait);
-  let response = await page.goto(url);
-  let wait = firstLoadWait;
-  for (let reloadsLeft = reloadsBeforeGivingUp; !(await hydrated(ready(page), wait)); reloadsLeft -= 1) {
-    expect(reloadsLeft, `${url} never hydrated`).toBeGreaterThan(0);
-    extendTheTestTimeoutBy(coldNavigationAllowance + afterReloadWait);
-    response = await page.reload();
-    wait = afterReloadWait;
-  }
-  expectDocumentResponse(response, url);
-  return response;
+  allowForAColdFirstLoad();
+  return reloadWhileViteReoptimizesDeps(page, await page.goto(url), ready);
 };

@@ -9,13 +9,14 @@
  */
 import { describe, expect, it } from "vitest";
 import { dryRun, labels, seq, type AgentCall, type AnswerRule, type DryRunResult } from "../../lib/workflow-dry-run";
+import { COAUTHOR } from "../../../.claude/workflow-src/lib.js";
 
 const ROOT = "/work/repo";
 const SLUG = "demo-widget";
 const BASE_SHA = "a".repeat(40);
 const REVIEWED_SHA = "c".repeat(40);
 const ISSUE_URL = "https://github.com/o/r/issues/76";
-const PR1 = { n: 1, branch: `feat/${SLUG}/1-data`, base: "main", title: "Widget data", fence: ["app/repositories/widget.ts", "app/repositories/__tests__/widget.test.ts"], greptile_focus: "authorization" };
+const PR1 = { n: 1, branch: `feat/${SLUG}/1-data`, base: "staging", title: "Widget data", fence: ["app/repositories/widget.ts", "app/repositories/__tests__/widget.test.ts"], greptile_focus: "authorization" };
 const PR2 = { n: 2, branch: `feat/${SLUG}/2-ui`, base: PR1.branch, title: "Widget screen", fence: ["app/routes/widget.tsx"], greptile_focus: "empty and error states" };
 const CONTRACT = "export type Widget = { id: string; name: string }";
 const ARGS = { ticket: "76" };
@@ -37,6 +38,7 @@ const preflight = (over: Record<string, unknown> = {}) => ({
   root: ROOT,
   date: "2026-11-22",
   untracked: [],
+  base_branch: "staging",
   base_sha: BASE_SHA,
   issue: { ref: "#76", url: ISSUE_URL, title: "Demo widget", body: "Let users add widgets." },
   record_path: `${ROOT}/.verify/_intake/record-76.md`,
@@ -143,7 +145,7 @@ describe("ship-feature: happy path, a ticket with a decision record, two stacked
     expect(firstWrite).toBeGreaterThan(indexOf(shipped.calls, "local:code-review:2:1"));
   });
 
-  it("the ship page offers a stack whose PR 1 targets review/<slug>, not main (catches baseOf dropped: PR 1 would merge straight into main)", async () => {
+  it("the ship page offers a stack whose PR 1 targets review/<slug>, not the base (catches baseOf dropped: PR 1 would merge straight into the base)", async () => {
     const { stopped } = await runHappy();
     const r = stopped.result as { prs: { n: number; base: string }[]; open_findings: unknown[]; review: string };
     expect(r.prs.map((p) => [p.n, p.base])).toEqual([[1, `review/${SLUG}`], [2, PR1.branch]]);
@@ -223,11 +225,50 @@ describe("ship-feature: happy path, a ticket with a decision record, two stacked
   });
 });
 
+describe("ship-feature: the base branch", () => {
+  const shipWith = async (args: Record<string, unknown>, reported: string) => {
+    const answers = happy([["preflight", preflight({ base_branch: reported })]]);
+    const stopped = await dryRun("ship-feature", { args, answers });
+    const shipped = await dryRun("ship-feature", { args: { ...args, ships: { "1": { approved: true } } }, answers, resumeFrom: stopped });
+    return { stopped, shipped };
+  };
+
+  it("with no base arg the roll-up targets the default branch preflight reported, and preflight is told to ask the repo (catches a literal main creeping back)", async () => {
+    const { stopped, shipped } = await shipWith(ARGS, "trunk-x");
+    expect(find(stopped.calls, "preflight").prompt).toContain("bun scripts/default-branch.ts");
+    expect(find(shipped.live, "rollup:pr").prompt).toContain("gh pr create --base 'trunk-x' --head review/");
+    expect(find(shipped.live, "rollup:pr").prompt).not.toMatch(/--base main\b/);
+  });
+
+  it("an explicit base arg wins over what preflight reports, and preflight is not sent to ask the repo (catches the arg ignored)", async () => {
+    const { stopped, shipped } = await shipWith({ ...ARGS, base: "release/v3" }, "trunk-x");
+    expect(find(stopped.calls, "preflight").prompt).toContain("'release/v3'");
+    expect(find(stopped.calls, "preflight").prompt).not.toContain("bun scripts/default-branch.ts");
+    expect(find(shipped.live, "rollup:pr").prompt).toContain("gh pr create --base 'release/v3' --head review/");
+  });
+
+  it("a reported base with a shell-active character reaches the roll-up prompt only quoted (catches an unquoted BASE in gh pr create and gh pr comment)", async () => {
+    const hostile = "x$(touch pwned)`id`";
+    const { shipped } = await shipWith(ARGS, hostile);
+    const prompt = find(shipped.live, "rollup:pr").prompt;
+    expect(prompt).toContain(`--base '${hostile}' --head review/`);
+    expect(prompt).toContain("--body 'Merged into ");
+    expect(prompt).not.toContain(`--base ${hostile}`);
+    expect(prompt).not.toContain('--body "Merged into');
+  });
+
+  it("a preflight that reports no default branch stops the run when no base arg was given", async () => {
+    const run = await dryRun("ship-feature", { args: ARGS, answers: happy([["preflight", preflight({ base_branch: "" })]]) });
+    expect(run.result).toMatchObject({ stopped: "Preflight", reason: "no default branch reported" });
+    expect(labels(run.calls)).toEqual(["preflight"]);
+  });
+});
+
 describe("ship-feature: a failing gate", () => {
   it("a red baseline stops the run in Preflight, before any other agent (catches a run that builds on a red base and hides its own regressions)", async () => {
     const red = GATES.map((g) => (g.name === "unit" ? { ...g, pass: false, tail: "1 failed" } : g));
     const run = await dryRun("ship-feature", { args: ARGS, answers: happy([["preflight", preflight({ baseline: red })]]) });
-    expect(run.result).toMatchObject({ stopped: "Preflight", reason: "baseline red on main: unit" });
+    expect(run.result).toMatchObject({ stopped: "Preflight", reason: "baseline red on staging: unit" });
     expect(labels(run.calls)).toEqual(["preflight"]);
   });
 
@@ -323,13 +364,25 @@ describe("ship-feature: fix rounds", () => {
     expect(r.open_findings).toEqual([expect.objectContaining({ source: "security", severity: "P1", file: SEC.file })]);
   });
 
-  // KNOWN DEFECT, pinned with it.fails: ship-feature.js builds `open` from one allFindings() call and filters
-  // `other_findings` with `!open.includes(f)` over a second call, whose objects are new, so the filter keeps
-  // everything: each open P0/P1 also shows under "other findings" on the ship page. When the workflow is
-  // fixed this test goes red; drop `.fails` then.
-  it.fails("the ship page's other_findings holds only what is not open (catches an open P0/P1 listed twice)", async () => {
+  it("the ship page's other_findings holds only what is not open (catches an open P0/P1 listed twice)", async () => {
     const r = (await runFix()).result as { other_findings: { source: string; severity: string }[] };
     expect(r.other_findings).toEqual([expect.objectContaining({ source: "effect", severity: "P2" })]);
+  });
+
+  it("every commit the run asks for ends with the library's co-author line (catches a trailer that names a model no longer in use)", async () => {
+    const finding = { severity: "P0", file: "app/repositories/widget.ts", line: 3, detail: "SQL built from input", fix: "bind it" };
+    const run = await dryRun("ship-feature", {
+      args: approve(),
+      answers: happy([
+        [/^local:code-review:1:/, { method: "code-review skill", findings: [finding] }],
+        [/^local:respond:code-review:1:/, (c) => ({ comments: [{ id: `cr-1-${c.label.split(":").pop()}-1`, action: "fixed", reply: "bound" }], commits: ["f1"], blocked: [] })],
+        [/^local:restack:/, { ok: true, failed_command: "" }],
+      ]),
+    });
+    const trailers = (prompt: string) => prompt.match(/Co-Authored-By: [^\n"\\]+/g) ?? [];
+    const committing = run.calls.filter((c) => trailers(c.prompt).length > 0);
+    expect(labels(committing)).toEqual(expect.arrayContaining(["contract:branch", expect.stringMatching(/^local:respond:code-review:1:/)]));
+    for (const c of committing) expect({ label: c.label, trailers: [...new Set(trailers(c.prompt))] }).toEqual({ label: c.label, trailers: [COAUTHOR] });
   });
 
   it("local review: a branch's P0/P1 goes to review-responder, later branches are restacked, and code-review stops after reviewRounds", async () => {

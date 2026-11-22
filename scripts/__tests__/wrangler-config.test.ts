@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildWranglerConfig,
   DUMMY_INPUT,
+  parseJsonc,
   RATE_LIMITS,
   stripJsonc,
 } from "../lib/wrangler-config";
@@ -58,5 +59,16 @@ describe("buildWranglerConfig", () => {
     expect(withoutR2).not.toHaveProperty("r2_buckets");
     expect(withoutR2.env.preview).not.toHaveProperty("r2_buckets");
     expect(withoutR2).toHaveProperty("ratelimits");
+  });
+});
+
+describe("parseJsonc", () => {
+  it("whole-line comments are dropped: teardown read a commented wrangler.jsonc as invalid", () => {
+    const text = '// header\n{\n  // the worker\n  "name": "w",\n  "d1_databases": []\n}\n';
+    expect(parseJsonc<{ name: string }>(text)).toEqual({ name: "w", d1_databases: [] });
+  });
+
+  it("text that is not JSON gives null, never a throw: teardown reports and goes on", () => {
+    expect(parseJsonc("{ not json")).toBeNull();
   });
 });

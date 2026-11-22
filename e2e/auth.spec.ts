@@ -44,7 +44,7 @@ test.describe("Authentication", () => {
       const email = `e2e-${runId}@test.local`;
       const password = `E2E-${runId}`;
 
-      await page.goto(PAGE_PATHS.signUp);
+      await page.goto("/sign-up");
       await waitForAuthFormReady(page, "signup");
       await page.getByTestId("signup-name").fill("E2E User");
       await page.getByTestId("signup-email").fill(email);
@@ -59,7 +59,7 @@ test.describe("Authentication", () => {
       await expect(page.getByTestId("dashboard-account")).toBeVisible();
 
       expect(await signOutFromThePage(page)).toBe(HTTP_STATUS.ok);
-      await page.goto(PAGE_PATHS.dashboard);
+      await page.goto("/dashboard");
       await page.waitForURL(PAGE_PATHS.login);
 
       await waitForAuthFormReady(page, "login");
@@ -75,7 +75,7 @@ test.describe("Authentication", () => {
   );
 
   test("login form shows an error and stays on /login for bad credentials", { tag: "@error" }, async ({ page }) => {
-    await page.goto(PAGE_PATHS.login);
+    await page.goto("/login");
     await waitForAuthFormReady(page, "login");
     await fillLogin(page, `nobody-${crypto.randomUUID()}@test.local`, "WrongPass123!");
     await page.getByTestId("login-submit").click();
@@ -91,7 +91,7 @@ test.describe("Banned account", () => {
     "banned account is refused at login with the ban message and gets no session (issue #69)",
     { tag: "@error" },
     async ({ page }) => {
-      await page.goto(PAGE_PATHS.login);
+      await page.goto("/login");
       await waitForAuthFormReady(page, "login");
       await fillLogin(page, SEEDED_LOGINS.banned, SEEDED_PASSWORD);
       await page.getByTestId("login-submit").click();
@@ -99,7 +99,7 @@ test.describe("Banned account", () => {
       await expect(page.getByRole("alert")).toContainText(/banned/i);
       await expect(page).toHaveURL(/\/login$/);
 
-      await page.goto(PAGE_PATHS.dashboard);
+      await page.goto("/dashboard");
       await expect(page).toHaveURL(/\/login$/);
     },
   );

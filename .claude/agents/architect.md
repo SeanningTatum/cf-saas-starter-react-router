@@ -66,7 +66,7 @@ You run in this mode only when the first line of the task is `Mode: stack.`. Ign
 
 ### Stack input
 
-The slug, the architect's output (fences, contract, procedures), the UX plan, and the `base` branch (default `main`).
+The slug, the architect's output (fences, contract, procedures), the UX plan, and the `base` branch (default: the repo's default branch, `bun scripts/default-branch.ts`).
 
 ### Stack output
 
