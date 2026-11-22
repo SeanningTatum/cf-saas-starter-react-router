@@ -10,6 +10,7 @@
 #        H. The SessionStart skill restore and the context-memory store resolver pass their own tests
 #        I. Workflows: every command that launches one has its script, every script
 #           parses and names itself by filename, brand-init fences cover app/components/ui once
+#        J. The workflow scripts are what their sources build (.claude/workflow-src + the shared library)
 
 set -uo pipefail
 
@@ -167,6 +168,15 @@ if [ -f .claude/workflows/brand-init.js ]; then
       fail "brand-init fence mismatch:$FENCE_BAD"
     fi
   fi
+fi
+
+# J. .claude/workflows/*.js are built: each is its source in .claude/workflow-src/ with the shared
+#    library pasted in. A script edited by hand, or a source edited without a rebuild, drifts.
+if WF_OUT=$(bun scripts/workflows.ts check 2>&1); then
+  ok "$WF_OUT"
+else
+  fail "workflow scripts differ from their sources:"
+  printf '%s\n' "$WF_OUT" | sed 's/^/      /'
 fi
 
 echo ""
