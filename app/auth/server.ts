@@ -2,6 +2,7 @@ import { betterAuth, type BetterAuthOptions } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import type { D1Database } from "@cloudflare/workers-types";
 import { admin } from "better-auth/plugins";
+import { eq } from "drizzle-orm";
 import { getDb } from "@/db";
 import * as schema from "@/db/schema";
 
@@ -27,6 +28,20 @@ export function createAuth(
     secret,
     baseURL,
     ...drizzleConfig,
+    // `/admin/update-user` can set `banned: true` without deleting sessions,
+    // and getSession never reads `banned`; end them here so the ban bites.
+    // This runs after the write, not with it: the repository's batch is atomic,
+    // this is not.
+    databaseHooks: {
+      user: {
+        update: {
+          after: async (user) => {
+            if (user?.banned !== true) return;
+            await db.delete(schema.session).where(eq(schema.session.userId, user.id));
+          },
+        },
+      },
+    },
   });
 }
 
