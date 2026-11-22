@@ -35,7 +35,7 @@ Attributes: only queryable ones (`userId`, `entity`, counts). Never PII, emails,
 
 ### Steps
 
-1. Scope: the files or procedures named, or `git diff --name-only $(git merge-base HEAD main)..HEAD`.
+1. Scope: the files or procedures named, or `git diff --name-only $(git merge-base HEAD "origin/$(bun scripts/default-branch.ts)")..HEAD`.
 2. Each procedure: `runProcedure` gets `{ span: "trpc.<router>.<proc>" }` that matches its registration. Add or fix.
 3. Each external call outside the effect-utils helpers: wrap in a client span.
 4. Multi-step logic: one internal span per stage, not per line. A procedure that makes one repo call is complete with the procedure span and the db span.
