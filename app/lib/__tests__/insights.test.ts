@@ -7,7 +7,6 @@ import {
 } from "../insights";
 import type { UserStats, UserGrowthPoint } from "@/lib/schemas/analytics";
 
-// Stub translator — returns the key so assertions can pin down which copy fired.
 const t = (key: string) => key;
 
 const baseStats: UserStats = {
@@ -64,7 +63,6 @@ describe("buildUserInsights", () => {
   });
 
   it("reports banned users as neutral at/below the high threshold", () => {
-    // 5/100 = 5% == BANNED_PERCENT_HIGH_THRESHOLD, not > threshold
     const insights = buildUserInsights(
       { ...baseStats, bannedUsers: BANNED_PERCENT_HIGH_THRESHOLD },
       [],
@@ -77,7 +75,6 @@ describe("buildUserInsights", () => {
   });
 
   it("reports banned users as negative above the high threshold", () => {
-    // 10/100 = 10% > BANNED_PERCENT_HIGH_THRESHOLD
     const insights = buildUserInsights(
       { ...baseStats, bannedUsers: 10 },
       [],

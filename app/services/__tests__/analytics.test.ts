@@ -25,10 +25,8 @@ describe("Analytics service", () => {
     return { batches, adapter };
   };
 
-  it.effect("buffers captures and flushes them as one batch when the scope closes, with the injected clock", () =>
+  it.effect("buffers captures and flushes them as one batch when the scope closes, with the injected clock: never one request per event, never before dispose, never Date.now()", () =>
     Effect.gen(function* () {
-      // Catches: one request per event, flushing before dispose (adds
-      // latency), never flushing, and Date.now() instead of the Clock.
       const { batches, adapter } = recording();
       yield* TestClock.setTime(Date.parse("2026-03-04T05:06:07.000Z"));
       yield* Effect.scoped(
@@ -46,9 +44,8 @@ describe("Analytics service", () => {
     })
   );
 
-  it.effect("sends nothing when no event was captured", () =>
+  it.effect("sends nothing when no event was captured, so a request never makes an empty POST to the provider", () =>
     Effect.gen(function* () {
-      // Catches: an empty POST per request to the provider.
       const { batches, adapter } = recording();
       yield* Effect.scoped(
         Analytics.pipe(Effect.provide(AnalyticsFrom(adapter)))
@@ -57,9 +54,8 @@ describe("Analytics service", () => {
     })
   );
 
-  it.effect("swallows a delivery failure or an adapter defect: the scope still closes cleanly", () =>
+  it.effect("swallows a delivery failure or an adapter defect: the scope still closes cleanly, so a provider outage fails neither the request nor the dispose", () =>
     Effect.gen(function* () {
-      // Catches: a provider outage failing the request or the dispose.
       for (const send of [
         () => Effect.fail(new AnalyticsDeliveryError({ provider: "bad", status: 500 })),
         () => Effect.die("boom"),
@@ -78,9 +74,7 @@ describe("Analytics service", () => {
 });
 
 describe("selectAdapter", () => {
-  it("picks the adapter named by ANALYTICS_PROVIDER; unset, or posthog without a key, is a no-op", () => {
-    // Catches: a missing provider breaking requests, or posthog posting with
-    // an undefined api_key.
+  it("picks the adapter named by ANALYTICS_PROVIDER; unset, or posthog without a key, is a no-op, so a missing provider never breaks requests or posts an undefined api_key", () => {
     expect(selectAdapter({})).toBe(noopAdapter);
     expect(selectAdapter({ ANALYTICS_PROVIDER: "posthog" })).toBe(noopAdapter);
     expect(selectAdapter({ ANALYTICS_PROVIDER: "console" })).toBe(consoleAdapter);

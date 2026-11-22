@@ -11,24 +11,6 @@ import { loadHydratedReloadingWhileViteReoptimizesDeps } from "./lib/hydration";
 import { expectTurnstileState } from "./lib/auth-form";
 import { useClientIpPerFile } from "./lib/client-ip";
 
-/**
- * Security headers and the nonce CSP (issue #72), on the pages a user sees.
- *
- * workers/app.ts wraps every Worker response with the header set from
- * workers/security-headers.ts and puts a fresh nonce in `script-src`; the
- * server renders that nonce on each inline `<script>`. The unit tests pin the
- * header text; this spec checks the wiring in a real browser:
- *
- * - each page's document carries the whole set, compared against the module
- *   itself so the spec cannot drift from it;
- * - the nonce in the header is the nonce on every `<script>` in the raw HTML;
- * - the page loads and hydrates with no CSP violation.
- *
- * The e2e server is Vite dev, so the Worker runs with `dev: true` (no HSTS,
- * `ws:` in connect-src). Static files skip the Worker in dev; `public/_headers`
- * is pinned by workers/__tests__/security-headers.test.ts instead.
- */
-
 const DOC = "docs/security-headers.md";
 
 type Violation = { directive: string; blocked: string; sample: string };
@@ -45,13 +27,11 @@ const nonceOf = (csp: string | undefined): string => {
   return match![1];
 };
 
-/** The set the Worker must send, as Playwright reports it (lower-case names). */
 const expectedHeaders = (nonce: string) =>
   Object.fromEntries(
     Object.entries(securityHeaders({ nonce, dev: true })).map(([k, v]) => [k.toLowerCase(), v]),
   );
 
-/** Every header in the set is present with the module's value. Returns the nonce. */
 const expectSecurityHeaders = (headers: Record<string, string>, where: string): string => {
   const csp = headers["content-security-policy"];
   expect(csp, `${where}: no Content-Security-Policy header`).toBeTruthy();
@@ -63,7 +43,6 @@ const expectSecurityHeaders = (headers: Record<string, string>, where: string): 
   return nonce;
 };
 
-/** Every `<script>` tag in the raw HTML carries the header's nonce. */
 const expectScriptsCarryNonce = (html: string, nonce: string, where: string) => {
   const tags = html.match(/<script\b[^>]*>/gi) ?? [];
   expect(tags.length, `${where}: the page rendered no <script> at all`).toBeGreaterThan(0);
@@ -74,14 +53,6 @@ const expectScriptsCarryNonce = (html: string, nonce: string, where: string) => 
   ).toEqual([]);
 };
 
-/**
- * Records CSP violations two ways: a `securitypolicyviolation` listener (added
- * by Playwright before any page script, so the page CSP does not apply to it)
- * and Chrome's console report. The listener does not depend on Chrome's
- * wording, which has changed between versions; the console is what a
- * developer sees. Both report to the test process, so a reload does not lose them. Install
- * once per page; `checkPage` clears the lists before each load.
- */
 const watchViolations = async (page: Page) => {
   const events: Violation[] = [];
   const consoleReports: string[] = [];
@@ -144,7 +115,7 @@ const turnstileReadyUnderTheCsp = (page: Page) =>
     `/login: the Turnstile widget never became ready; check script-src and frame-src allow it per ${DOC}`,
   );
 
-test.describe("Security headers, signed out", () => {
+test.describe("Security headers, signed out (nonce CSP, issue #72; see docs/features/security-headers-e2e.md)", () => {
   useClientIpPerFile("security-headers");
 
   test(
@@ -156,16 +127,13 @@ test.describe("Security headers, signed out", () => {
     },
   );
 
-  // Catches: a nonce made once per isolate (or hard-coded) instead of per
-  // request, which an attacker could read once and reuse.
-  test("each request gets a fresh nonce", async ({ request }) => {
+  test("each request gets a fresh nonce, so a nonce made once per isolate or hard-coded cannot be read once by an attacker and reused", async ({ request }) => {
     const first = nonceOf((await request.get("/login")).headers()["content-security-policy"]);
     const second = nonceOf((await request.get("/login")).headers()["content-security-policy"]);
     expect(first).not.toBe(second);
   });
 
-  // Catches: headers applied only in the page renderer, leaving API routes bare.
-  test("an API response carries the headers too", async ({ request }) => {
+  test("an API response carries the headers too, so they are not applied only in the page renderer, leaving API routes bare", async ({ request }) => {
     const res: APIResponse = await request.get("/api/auth/get-session");
     expect(res.status()).toBe(200);
     expectSecurityHeaders(res.headers(), "/api/auth/get-session");
@@ -177,19 +145,15 @@ test.describe("Security headers, signed in as admin", () => {
 
   const sidebarToggle = (p: Page) => p.getByRole("button", { name: "Toggle Sidebar" }).first();
 
-  // Catches: the dashboard's scripts or theme script blocked by the CSP.
-  test("dashboard sends the headers and loads with no CSP violation", async ({ page }) => {
+  test("dashboard sends the headers and loads with no CSP violation, so the CSP blocks neither its scripts nor the theme script", async ({ page }) => {
     await checkPage(page, "/dashboard", (p) => p.getByTestId("dashboard-go-admin"));
   });
 
-  // Catches: the admin charts or sidebar blocked by the CSP.
-  test("admin sends the headers and loads with no CSP violation", async ({ page }) => {
+  test("admin sends the headers and loads with no CSP violation, so the CSP blocks neither the admin charts nor the sidebar", async ({ page }) => {
     await checkPage(page, "/admin", sidebarToggle);
   });
 
-  // Catches: a component in the gallery (Radix, charts, toasts, upload) that
-  // needs an inline script or an outside host the CSP does not allow.
-  test("kitchen sink sends the headers and loads with no CSP violation", async ({ page }) => {
+  test("kitchen sink sends the headers and loads with no CSP violation, so no gallery component (Radix, charts, toasts, upload) needs an inline script or an outside host the CSP does not allow", async ({ page }) => {
     await checkPage(page, "/admin/kitchen-sink", (p) => p.getByTestId("file-upload-dropzone"));
   });
 });

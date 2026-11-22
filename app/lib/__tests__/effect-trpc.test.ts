@@ -252,11 +252,7 @@ describe("runProcedure", () => {
     await runtime.dispose();
   });
 
-  it("maps a layer-construction failure (e.g. missing DB binding) to a TRPCError instead of a raw rejection", async () => {
-    // DatabaseLive fails fast with ConfigurationError when env.DATABASE is
-    // missing. Previously `runProcedure` cast the runtime's error channel to
-    // `never`, so this failure surfaced as a raw, unmapped rejection instead
-    // of going through `toTRPC` like every other error.
+  it("maps a layer-construction failure (DatabaseLive fails fast with ConfigurationError when env.DATABASE is missing) to a TRPCError, not a raw rejection", async () => {
     const brokenLayer = DatabaseLive.pipe(
       Layer.provide(Layer.succeed(CloudflareEnv, {} as Env))
     );
@@ -280,8 +276,6 @@ describe("runProcedure", () => {
 });
 
 describe("runProcedure span option", () => {
-  // A runtime whose tracer records every ended span, so the root-span wiring is
-  // observable without a collector.
   const tracingRuntime = () => {
     const buffer = makeSpanBuffer();
     const runtime = ManagedRuntime.make(
@@ -290,9 +284,7 @@ describe("runProcedure span option", () => {
     return { buffer, runtime };
   };
 
-  it("runs the effect inside a server-kind span named by options.span", async () => {
-    // Catches: dropping the withSpan wiring or emitting the wrong kind — every
-    // trace would lose its root and the db.* spans would be orphaned.
+  it("runs the effect inside a server-kind span named by options.span, so every trace keeps its root and the db.* spans are not orphaned", async () => {
     const { buffer, runtime } = tracingRuntime();
 
     const result = await runProcedure(runtime, Effect.succeed(42), {
@@ -305,9 +297,7 @@ describe("runProcedure span option", () => {
     await runtime.dispose();
   });
 
-  it("creates no span when options is omitted", async () => {
-    // Catches: unconditionally wrapping in a span (e.g. a hardcoded default
-    // name), which would bury every procedure under one bogus span name.
+  it("creates no span when options is omitted, so no procedure sits under one bogus default span name", async () => {
     const { buffer, runtime } = tracingRuntime();
 
     await runProcedure(runtime, Effect.succeed(42));
@@ -316,10 +306,7 @@ describe("runProcedure span option", () => {
     await runtime.dispose();
   });
 
-  it("makes db spans children of the procedure span, sharing its traceId", async () => {
-    // Catches: wrapping the span outside runPromiseExit / around the wrong
-    // effect, which would put the db call in its own trace and break the
-    // log↔trace correlation the feature exists for.
+  it("makes db spans children of the procedure span, sharing its traceId, so the db call stays in the same trace and logs correlate with it", async () => {
     const { buffer, runtime } = tracingRuntime();
 
     await runProcedure(
@@ -339,8 +326,7 @@ describe("runProcedure span option", () => {
     await runtime.dispose();
   });
 
-  it("still maps a tagged-error failure to a TRPCError when a span is given", async () => {
-    // Catches: the span pipe short-circuiting the Exit.match error mapping.
+  it("still maps a tagged-error failure to a TRPCError when a span is given, so the span pipe does not short-circuit the Exit.match mapping", async () => {
     const { buffer, runtime } = tracingRuntime();
 
     await expect(

@@ -1,14 +1,6 @@
 import { test, expect } from "@playwright/test";
 
-/**
- * Landing-page harness section.
- *
- * Pins the current copy: three pillars (Specs & tickets / Skills / Verification
- * gates) with their path labels, a commands block that names the planning
- * skills and `./scripts/verify.sh` and no `brain` commands, and no raw i18n keys in either
- * locale — a renamed key renders as `harness.pillars.…` text.
- */
-test.describe("Home — harness section", () => {
+test.describe("Home — harness section (pins the current copy: three pillars with their path labels, a commands block that names the planning skills and ./scripts/verify.sh and no brain commands, and no raw i18n keys in either locale, since a renamed key renders as harness.pillars.… text)", () => {
   test("en: pillars and commands reflect specs, skills and gates", async ({ page }) => {
     await page.goto("/");
     const section = page

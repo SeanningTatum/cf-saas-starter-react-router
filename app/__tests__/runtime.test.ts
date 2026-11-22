@@ -13,10 +13,6 @@ import { currentSpanAnnotations } from "@/services/logger";
 import type { RequestContext } from "@/lib/request-context";
 import { ErrorReporter, type ErrorReporterShape } from "@/services/error-reporter";
 
-// The wiring under test is `observabilityLayer`, the exact layer
-// `makeAppRuntime` puts under the app services. Building the whole app runtime
-// would need D1, R2 and Better Auth for no extra coverage.
-
 interface ExportedSpan {
   readonly name: string;
   readonly traceId: string;
@@ -32,7 +28,6 @@ const exportedSpans = (bodies: string[]): ExportedSpan[] =>
     (body) => JSON.parse(body).resourceSpans[0].scopeSpans[0].spans as ExportedSpan[]
   );
 
-/** Builds the runtime, runs one child span, disposes, and returns what was exported. */
 const runOneRequest = async (request: RequestContext) => {
   const bodies: string[] = [];
   const fetchFn: FetchLike = async (_url, init) => {
@@ -58,7 +53,7 @@ const request = (over: Partial<RequestContext> = {}): RequestContext => ({
   ...over,
 });
 
-describe("observabilityLayer with a request", () => {
+describe("observabilityLayer, the exact layer makeAppRuntime puts under the app services (the whole runtime would need D1, R2 and Better Auth for no extra coverage), with a request; continuing an incoming trace and user.id after sign-in are pinned on the real stack in workers/__tests__/request-flow.test.ts", () => {
   beforeEach(() => {
     vi.spyOn(console, "info").mockImplementation(() => {});
     vi.spyOn(console, "warn").mockImplementation(() => {});
@@ -67,13 +62,7 @@ describe("observabilityLayer with a request", () => {
     vi.restoreAllMocks();
   });
 
-  it("exports the request span and its child as one trace on dispose", async () => {
-    // Catches two ordering bugs: building the request span before the OTLP
-    // tracer is set (it goes to Effect's default tracer and is never
-    // exported), and ending it after TracingLayer's flush (it misses the one
-    // export). Also catches dropping `Layer.span`, which leaves `child` a
-    // root span in a trace of its own, and `observabilityLayer` not handing
-    // the request to the tracer (no span would carry `request.id`).
+  it("exports the request span and its child as one trace on dispose, so the span is built after the tracer is set and ends before the flush", async () => {
     const { spans, root, child } = await runOneRequest(request());
 
     expect(spans.map((s) => s.name).sort()).toEqual(["child", "http.request"]);
@@ -92,16 +81,10 @@ describe("observabilityLayer with a request", () => {
     );
   });
 
-  // Continuing an incoming trace and `user.id` after sign-in are pinned on the
-  // real stack in workers/__tests__/request-flow.test.ts.
 });
 
 describe("observabilityLayer, logs outside any span", () => {
-  it("carry the request span's ids, so they join the request's trace", async () => {
-    // `Layer.span` puts the request span in the runtime's context as the
-    // parent span; the logger reads it from there. Catches providing the
-    // request span per-effect instead (a log outside `withSpan` would carry
-    // no traceId).
+  it("carry the request span's ids, so they join the request's trace even when the request span is provided by Layer.span and not per effect", async () => {
     const parent = {
       traceId: "4bf92f3577b34da6a3ce929d0e0e4736",
       spanId: "00f067aa0ba902b7",

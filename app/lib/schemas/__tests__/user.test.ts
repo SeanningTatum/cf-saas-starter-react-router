@@ -173,10 +173,7 @@ describe("DeleteUserInput", () => {
   });
 });
 
-// Catches: a cap dropped or loosened, letting a client send a field (or a
-// list) of any size to the server and the database. One row per distinct
-// cap; fields that share a schema share its row.
-describe("input caps: at the cap decodes, one over fails", () => {
+describe("input caps, so a dropped or loosened cap cannot let a client send a field or list of any size to the server and database (one row per distinct cap; fields that share a schema share its row): at the cap decodes, one over fails", () => {
   const s = (n: number) => "a".repeat(n);
   const ids = (n: number) => Array.from({ length: n }, (_, i) => `u${i}`);
   const email = (n: number) => `${"a".repeat(n - "@b.co".length)}@b.co`;
