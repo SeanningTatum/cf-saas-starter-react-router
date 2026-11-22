@@ -24,13 +24,13 @@
 import { readdirSync, readFileSync } from "node:fs";
 import { Effect, Either, Schema } from "effect";
 import { ghSpawn, type GhResult, type GhRunner } from "./lib/gh";
-import { PENDING_APPLIED_NOTICE, CONFIG_PATH } from "./lib/repo-rules-constants";
+import { PENDING_APPLIED_NOTICE, PENDING_DRY_RUN_NOTICE, CONFIG_PATH } from "./lib/repo-rules-constants";
 import { differ, sorted, stable } from "./lib/repo-rules-diff";
-import { badPendingMarks } from "./lib/repo-rules-pending";
 import { planRepository, planRuleset, type Action, type Plan } from "./lib/repo-rules-plan";
 import { jobNames, requiredContexts } from "./lib/repo-rules-workflow-checks";
 import {
   BranchPolicies,
+  checkProblems,
   Config,
   hasOldShape,
   IdOnly,
@@ -158,9 +158,9 @@ function staticCheck(deps: Deps, out: Out): ConfigT | null {
     return null;
   }
   const config = parsed.right;
-  const badMarks = badPendingMarks(config.rulesets);
-  for (const m of badMarks) out.line("error", m);
-  if (badMarks.length) return null;
+  const problems = checkProblems(config.rulesets);
+  for (const m of problems) out.line("error", m);
+  if (problems.length) return null;
   const jobs = workflowJobNames(deps, out);
   if (!jobs) return null;
   const missing = requiredContexts(config.rulesets).filter((c) => !jobs.includes(c));
@@ -466,7 +466,8 @@ export function run(argv: string[], deps: Deps = defaultDeps): Outcome {
 
   const actions = plans.flatMap((p) => p.actions);
   if (!actions.length) out.line("ok", `nothing needs to change; the repo matches ${CONFIG_PATH}`);
-  else if (execute(actions, mode.dryRun, deps, out) && actions.some((a) => a.pending)) out.line("notice", PENDING_APPLIED_NOTICE);
+  else if (execute(actions, mode.dryRun, deps, out) && actions.some((a) => a.pending))
+    out.line("notice", mode.dryRun ? PENDING_DRY_RUN_NOTICE : PENDING_APPLIED_NOTICE);
   return finish(out);
 }
 

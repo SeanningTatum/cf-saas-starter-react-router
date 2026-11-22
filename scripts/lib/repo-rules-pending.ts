@@ -1,5 +1,4 @@
-import { PENDING_KEY } from "./repo-rules-constants";
-import { checkEntriesOf, type LiveRulesetT, type Ruleset } from "./repo-rules-schemas";
+import { checkEntriesOf, type CheckEntryT, type LiveRulesetT, type Ruleset } from "./repo-rules-schemas";
 
 export interface PendingCheck {
   context: string;
@@ -12,71 +11,32 @@ export interface PendingSplit {
   present: PendingCheck[];
 }
 
-const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
+const checksOf = (ruleset: { rules: Ruleset["rules"] }): readonly CheckEntryT[] =>
+  ruleset.rules.flatMap((r) => (r.type === "required_status_checks" ? checkEntriesOf(r.parameters?.required_status_checks) : []));
 
-const asEntries = (v: unknown): readonly unknown[] => (Array.isArray(v) ? v : []);
-
-const reasonOf = (entry: unknown): string | undefined => {
-  if (!isRecord(entry)) return undefined;
-  const value = entry[PENDING_KEY];
-  return typeof value === "string" && value.trim().length > 0 ? value : undefined;
-};
-
-const contextOf = (entry: unknown): string | undefined => {
-  if (!isRecord(entry)) return undefined;
-  const value = entry.context;
-  return typeof value === "string" ? value : undefined;
-};
-
-const checkEntriesIn = (ruleset: Ruleset): readonly unknown[] =>
-  ruleset.rules.flatMap((r) => (r.type === "required_status_checks" ? asEntries(r.parameters?.required_status_checks) : []));
-
-const rewriteEntries = (ruleset: Ruleset, f: (entries: readonly unknown[]) => unknown[]): Ruleset => ({
+const rewriteChecks = (ruleset: Ruleset, f: (entries: readonly CheckEntryT[]) => CheckEntryT[]): Ruleset => ({
   ...ruleset,
-  rules: ruleset.rules.map((r) => {
-    const entries = r.type === "required_status_checks" ? r.parameters?.required_status_checks : undefined;
-    if (!Array.isArray(entries)) return r;
-    return { ...r, parameters: { ...r.parameters, required_status_checks: f(entries) } };
-  }),
+  rules: ruleset.rules.map((r) =>
+    r.type === "required_status_checks" && r.parameters?.required_status_checks !== undefined
+      ? { ...r, parameters: { ...r.parameters, required_status_checks: f(checkEntriesOf(r.parameters.required_status_checks)) } }
+      : r,
+  ),
 });
 
 export function pendingChecks(ruleset: Ruleset): PendingCheck[] {
-  return checkEntriesIn(ruleset).flatMap((e) => {
-    const reason = reasonOf(e);
-    const context = contextOf(e);
-    return reason !== undefined && context !== undefined ? [{ context, reason }] : [];
-  });
+  return checksOf(ruleset).flatMap((c) => (c.pending === undefined ? [] : [{ context: c.context, reason: c.pending }]));
 }
 
-export function badPendingMarks(rulesets: readonly Ruleset[]): string[] {
-  return rulesets.flatMap((rs) =>
-    checkEntriesIn(rs)
-      .filter((e) => isRecord(e) && PENDING_KEY in e && reasonOf(e) === undefined)
-      .map((e) => `ruleset "${rs.name}" check "${contextOf(e) ?? "?"}": "${PENDING_KEY}" must be a non-empty string`),
-  );
-}
-
-export function withoutMarks(ruleset: Ruleset): Ruleset {
-  return rewriteEntries(ruleset, (entries) =>
-    entries.map((e) => (isRecord(e) ? Object.fromEntries(Object.entries(e).filter(([k]) => k !== PENDING_KEY)) : e)),
-  );
-}
-
-const liveContexts = (live: LiveRulesetT): Set<string> =>
-  new Set(
-    live.rules.flatMap((r) =>
-      r.type === "required_status_checks" ? checkEntriesOf(r.parameters?.required_status_checks).map((c) => c.context) : [],
-    ),
+export const withoutMarks = (ruleset: Ruleset): Ruleset =>
+  rewriteChecks(ruleset, (entries) =>
+    entries.map((c) => ({ context: c.context, ...(c.integration_id === undefined ? {} : { integration_id: c.integration_id }) })),
   );
 
 export function splitPending(decl: Ruleset, live: LiveRulesetT): PendingSplit {
-  const onLive = liveContexts(live);
+  const onLive = new Set(checksOf(live).map((c) => c.context));
   const all = pendingChecks(decl);
   const absent = all.filter((p) => !onLive.has(p.context));
-  const present = all.filter((p) => onLive.has(p.context));
   const dropped = new Set(absent.map((p) => p.context));
-  const kept = rewriteEntries(decl, (entries) =>
-    entries.filter((e) => !(reasonOf(e) !== undefined && dropped.has(contextOf(e) ?? ""))),
-  );
-  return { effective: withoutMarks(kept), absent, present };
+  const kept = rewriteChecks(decl, (entries) => entries.filter((c) => !(c.pending !== undefined && dropped.has(c.context))));
+  return { effective: withoutMarks(kept), absent, present: all.filter((p) => onLive.has(p.context)) };
 }

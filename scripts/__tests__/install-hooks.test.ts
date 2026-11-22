@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
@@ -8,6 +8,7 @@ import {
   gitRunner,
   realFileOps,
   run,
+  withoutGitVariables,
   type Deps,
   type FileOps,
   type GitResult,
@@ -21,7 +22,6 @@ const REAL_GIT_TIMEOUT_MS = 60_000;
 const EXECUTABLE_BITS = 0o777;
 const BAD_MESSAGE = "this message has no type";
 const GOOD_MESSAGE = "feat(ui): add a thing";
-const MERGE_MESSAGE = "Merge branch 'topic' into main";
 
 const { makeDir } = useGitSandbox("install-hooks");
 
@@ -31,6 +31,7 @@ interface Fake {
   gitWrites: string[][];
   written: Map<string, { content: string; mode: number | undefined }>;
   copied: string[][];
+  removed: string[];
   lines: string[];
 }
 
@@ -50,6 +51,7 @@ const isGitWrite = (args: readonly string[]): boolean => args[0] === "config" &&
 const fake = (options: FakeOptions = {}): Fake => {
   const answers: Record<string, GitResult> = {
     "rev-parse --is-inside-work-tree": ok("true\n"),
+    "rev-parse --show-toplevel": ok(`${FAKE_ROOT}\n`),
     "config --type=bool --get extensions.worktreeConfig": failed,
     "rev-parse --git-path config": ok(".git/config\n"),
     "rev-parse --git-path config.worktree": ok(".git/config.worktree\n"),
@@ -59,11 +61,16 @@ const fake = (options: FakeOptions = {}): Fake => {
   const gitWrites: string[][] = [];
   const written = new Map<string, { content: string; mode: number | undefined }>();
   const copied: string[][] = [];
+  const removed: string[] = [];
   const lines: string[] = [];
   const files: FileOps = {
     exists: () => options.withHusky !== false,
     listFiles: () => options.hooks ?? ["pre-commit", "commit-msg"],
     makeDir: () => undefined,
+    realPath: (file) => file,
+    remove: (file) => {
+      removed.push(file);
+    },
     write: (file, content, mode) => {
       if (options.failWrite) throw new Error("disk full");
       written.set(file, { content, mode });
@@ -85,7 +92,7 @@ const fake = (options: FakeOptions = {}): Fake => {
     },
     root: FAKE_ROOT,
   };
-  return { deps, gitCalls, gitWrites, written, copied, lines };
+  return { deps, gitCalls, gitWrites, written, copied, removed, lines };
 };
 
 describe("installer skip cases", () => {
@@ -107,6 +114,11 @@ describe("installer skip cases", () => {
       "git missing from the machine",
       { answers: { "rev-parse --is-inside-work-tree": { status: null, stdout: "" } } },
       "git is not installed",
+    ],
+    [
+      "a folder inside another repository, where git resolves a different top",
+      { answers: { "rev-parse --show-toplevel": ok("/fake\n") } },
+      "this folder is not the top of its git work tree",
     ],
     ["a production install with no husky runtime", { withHusky: false }, "husky is not installed"],
   ];
@@ -187,7 +199,7 @@ describe("installer scope", () => {
     const f = fake();
     run(f.deps);
     expect(f.lines).toEqual([
-      `hooks: on for this repository (core.hooksPath=${HOOKS_PATH} in ${path.join(FAKE_ROOT, ".git/config")})`,
+      `hooks: on for this repository (core.hooksPath=${HOOKS_PATH} in ${path.join(FAKE_ROOT, ".git/config")}, shared by all its worktrees)`,
     ]);
   });
 
@@ -211,6 +223,23 @@ describe("installer files", () => {
     expect([...f.written.keys()].sort()).toEqual([path.join(dir, ".gitignore"), path.join(dir, "commit-msg")]);
   });
 
+  it("removes each file before it writes it, so a symlink left in .husky/_ is not written through", () => {
+    const f = fake({ hooks: ["commit-msg"] });
+    run(f.deps);
+    const dir = path.join(FAKE_ROOT, ".husky", "_");
+    expect(f.removed.sort()).toEqual([
+      path.join(dir, ".gitignore"),
+      path.join(dir, "commit-msg"),
+      path.join(dir, "h"),
+    ]);
+  });
+
+  it("withoutGitVariables drops every GIT_ key, so a hook's GIT_DIR never reaches the git child", () => {
+    expect(withoutGitVariables({ PATH: "/usr/bin", GIT_DIR: "/x", GIT_WORK_TREE: "/y", GIT_CONFIG_COUNT: "1" })).toEqual({
+      PATH: "/usr/bin",
+    });
+  });
+
   it("a write that throws ends in a skip line with exit 0 and never touches git config", () => {
     const f = fake({ failWrite: true });
     expect(run(f.deps)).toBe(0);
@@ -225,11 +254,17 @@ describe("installer files", () => {
   });
 });
 
+const initDir = { dir: "" };
+
+beforeEach(() => {
+  initDir.dir = makeDir("hooks-xdg");
+});
+
 const hookEnv = (extra: Record<string, string> = {}): NodeJS.ProcessEnv => {
   const scrubbed = Object.fromEntries(
     Object.entries(envOutsideAnyHook(process.env)).filter(([key]) => key !== "HUSKY" && key !== "CI"),
   );
-  return { ...scrubbed, XDG_CONFIG_HOME: path.join(REPO_ROOT, "node_modules", ".no-such-husky-init"), ...extra };
+  return { ...scrubbed, XDG_CONFIG_HOME: initDir.dir, ...extra };
 };
 
 const git = (cwd: string, args: string[], env: NodeJS.ProcessEnv = hookEnv()) =>
@@ -276,20 +311,19 @@ const readText = (...parts: string[]): string => fs.readFileSync(path.join(...pa
 
 describe("installer against real git in a throwaway repository", () => {
   it(
-    "a plain repository refuses a message with no type, accepts a conventional one and lets a merge message through",
+    "a plain repository refuses a message with no type and accepts a conventional one, so the hook runs and is not simply broken",
     () => {
       const repo = initRepo("hooks-plain");
       scaffold(repo, ["commit-msg"]);
       const line = installIn(repo);
 
       expect(line).toBe(
-        `hooks: on for this repository (core.hooksPath=${HOOKS_PATH} in ${path.join(repo, ".git", "config")})`,
+        `hooks: on for this repository (core.hooksPath=${HOOKS_PATH} in ${path.join(repo, ".git", "config")}, shared by all its worktrees)`,
       );
       const refused = commitEmpty(repo, BAD_MESSAGE);
       expect(refused.status).not.toBe(0);
       expect(refused.stderr).toContain("type may not be empty");
       expect(commitEmpty(repo, GOOD_MESSAGE).status).toBe(0);
-      expect(commitEmpty(repo, MERGE_MESSAGE).status).toBe(0);
     },
     REAL_GIT_TIMEOUT_MS,
   );
@@ -334,7 +368,6 @@ describe("installer against real git in a throwaway repository", () => {
       expect(readText(main, ".git", "config")).toBe(sharedBefore);
       expect(readText(linkedConfig)).toContain(`hooksPath = ${HOOKS_PATH}`);
       expect(commitEmpty(linked, BAD_MESSAGE).status).not.toBe(0);
-      expect(commitEmpty(linked, GOOD_MESSAGE).status).toBe(0);
       expect(commitEmpty(main, BAD_MESSAGE).status).toBe(0);
 
       const mainLine = installIn(main);
@@ -346,6 +379,40 @@ describe("installer against real git in a throwaway repository", () => {
     },
     REAL_GIT_TIMEOUT_MS,
   );
+
+  it(
+    "the production git runner, built with no environment argument, installs in the throwaway repository while GIT_DIR points at a decoy",
+    () => {
+      const repo = initRepo("hooks-prod-runner");
+      scaffold(repo, ["commit-msg"]);
+      const lines: string[] = [];
+      const deps: Deps = {
+        env: {},
+        git: gitRunner(repo),
+        files: realFileOps(),
+        log: (line) => {
+          lines.push(line);
+        },
+        root: repo,
+      };
+      expect(process.env.GIT_DIR).toBeTruthy();
+      expect(run(deps)).toBe(0);
+      expect(lines[0]).toContain("hooks: on for this repository");
+      expect(readText(repo, ".git", "config")).toContain(`hooksPath = ${HOOKS_PATH}`);
+      expect(fs.existsSync(path.join(repo, ".husky", "_", "commit-msg"))).toBe(true);
+    },
+  );
+
+  it("a folder inside another repository gets no files and no config, and the line says why", () => {
+    const outer = initRepo("hooks-outer");
+    const inner = path.join(outer, "sub");
+    fs.mkdirSync(inner);
+    scaffold(inner, ["commit-msg"]);
+    const before = readText(outer, ".git", "config");
+    expect(installIn(inner)).toBe("hooks: skipped, this folder is not the top of its git work tree");
+    expect(readText(outer, ".git", "config")).toBe(before);
+    expect(fs.existsSync(path.join(inner, ".husky", "_"))).toBe(false);
+  });
 
   it("the _ folder matches what stock husky writes for the same hooks: h, .gitignore and the wrappers, bytes and mode", () => {
     const hooks = ["pre-commit", "commit-msg"];

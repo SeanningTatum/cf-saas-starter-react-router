@@ -120,14 +120,41 @@ export const BranchPolicies = Schema.Struct({
 
 export const IdOnly = Schema.Struct({ id: Schema.Number });
 
-const CheckEntries = Schema.Array(
-  Schema.Struct({ context: Schema.String, integration_id: Schema.optional(Schema.Number) }),
-);
+const CheckEntry = Schema.Struct({
+  context: Schema.String,
+  integration_id: Schema.optional(Schema.Number),
+  pending: Schema.optional(PendingReason),
+});
+const CheckEntries = Schema.Array(CheckEntry);
 
-export const checkEntriesOf = (v: unknown) => {
+export type CheckEntryT = typeof CheckEntry.Type;
+
+export const checkEntriesOf = (v: unknown): readonly CheckEntryT[] => {
   const d = Schema.decodeUnknownEither(CheckEntries)(v);
   return Either.isRight(d) ? d.right : [];
 };
+
+const ContextOnly = Schema.Struct({ context: Schema.String });
+
+export function checkProblems(rulesets: readonly Ruleset[]): string[] {
+  const rawEntries = (v: unknown): readonly unknown[] => {
+    const d = Schema.decodeUnknownEither(Schema.Array(Schema.Unknown))(v);
+    return Either.isRight(d) ? d.right : [];
+  };
+  return rulesets.flatMap((rs) =>
+    rs.rules.flatMap((r) =>
+      r.type !== "required_status_checks"
+        ? []
+        : rawEntries(r.parameters?.required_status_checks).flatMap((e) => {
+            const bad = Schema.decodeUnknownEither(CheckEntry)(e);
+            if (Either.isRight(bad)) return [];
+            const name = Schema.decodeUnknownEither(ContextOnly)(e);
+            const label = Either.isRight(name) ? name.right.context : "?";
+            return [`ruleset "${rs.name}" check "${label}" is not valid: ${bad.left.message.replace(/\s+/g, " ").trim()}`];
+          }),
+    ),
+  );
+}
 
 export type LiveRulesetT = typeof LiveRuleset.Type;
 export type LiveEnvT = typeof LiveEnv.Type;

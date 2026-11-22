@@ -179,7 +179,7 @@ These run automatically — you do not need to remember them.
 
 The full test run stays in `./scripts/verify.sh` and in CI.
 
-`bun install` runs `prepare`, which runs `scripts/install-hooks.ts`. It sets `core.hooksPath = .husky/_` for the current worktree only when `extensions.worktreeConfig` is on, so one worktree's install never changes another's hooks. It does nothing in CI, with `HUSKY=0`, outside a git work tree, or without husky installed. Re-run it with `bun scripts/install-hooks.ts`. Bypass for an emergency commit:
+`bun install` runs `prepare`, which runs `scripts/install-hooks.ts`. It sets `core.hooksPath = .husky/_` for the current worktree only when `extensions.worktreeConfig` is on, so one worktree's install never changes another's hooks. With the extension off it writes `.git/config`, which every linked worktree shares, so the hooks turn on in all of them (the printed line says so). It skips when the folder is not the top of its own git work tree, and it ignores any `GIT_*` variable it inherits. It does nothing in CI, with `HUSKY=0`, outside a git work tree, or without husky installed. Re-run it with `bun scripts/install-hooks.ts`. Bypass for an emergency commit:
 
 ```bash
 HUSKY=0 git commit -m "..."

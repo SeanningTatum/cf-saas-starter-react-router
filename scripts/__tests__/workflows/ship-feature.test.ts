@@ -538,4 +538,32 @@ describe("ship-feature: every commit subject and PR title it writes passes the r
     const run = await dryRun("ship-feature", { args: approve(), answers: happy([["intake:record", mixed]]), resumeFrom: stopped });
     expect(quotedAfter(find(run.calls, "rollup:pr").prompt, "--title")).toEqual(["feat: Demo widget"]);
   });
+
+  const shipWith = async (plan: typeof PLAN, over: AnswerRule[] = []) => {
+    const answers = happy([["intake:record", plan], ...over]);
+    const stopped = await dryRun("ship-feature", { args: ARGS, answers });
+    return dryRun("ship-feature", { args: approve(), answers, resumeFrom: stopped });
+  };
+
+  it("gives a roll-up with a breaking stacked PR a feat! title that lints clean: a lost ! would ship a breaking stack as a minor", async () => {
+    const breaking = { ...PLAN, prs: [{ ...PR1, title: "feat(db)!: drop the old widget column" }, { ...PR2, title: "fix(ui): show the widget error" }] };
+    const run = await shipWith(breaking);
+    const [title] = quotedAfter(find(run.calls, "rollup:pr").prompt, "--title");
+    expect(title).toBe("feat!: Demo widget");
+    expect((await lintTitle(title ?? "")).problems).toEqual([]);
+    const fixOnly = { ...PLAN, prs: [{ ...PR1, title: "fix(db)!: drop the old column" }, { ...PR2, title: "fix(ui): show the error" }] };
+    expect(quotedAfter(find((await shipWith(fixOnly)).calls, "rollup:pr").prompt, "--title")).toEqual(["fix!: Demo widget"]);
+  });
+
+  it("does not double-prefix a plan title that is already conventional", async () => {
+    const run = await shipWith({ ...PLAN, title: "feat(db): Demo widget" });
+    expect(quotedAfter(find(run.calls, "rollup:pr").prompt, "--title")).toEqual(["feat: Demo widget"]);
+  });
+
+  it("names the same roll-up title in the retry hint as in the command, when the merge step stops half way", async () => {
+    const run = await shipWith(PLAN, [["rollup:pr", { ok: false, failed_command: "gh pr merge 102", merged: [101] }]]);
+    const [title] = quotedAfter(find(run.calls, "rollup:pr").prompt, "--title");
+    expect(title).toBe("feat: Demo widget");
+    expect(JSON.stringify(run.result)).toContain(`--title '${title}'`);
+  });
 });

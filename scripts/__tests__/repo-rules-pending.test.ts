@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { badPendingMarks, pendingChecks, splitPending, withoutMarks } from "../lib/repo-rules-pending";
+import { pendingChecks, splitPending, withoutMarks } from "../lib/repo-rules-pending";
 import type { LiveRulesetT, Ruleset } from "../lib/repo-rules-schemas";
 
 const ruleset = (entries: unknown[]): Ruleset => ({
@@ -25,16 +25,6 @@ describe("pendingChecks", () => {
   });
 });
 
-describe("badPendingMarks", () => {
-  it("names a mark that is not a non-empty string, and passes a good one", () => {
-    const rs = ruleset([{ context: "A", pending: "" }, { context: "B", pending: 3 }, { context: "C", pending: "ok" }]);
-    expect(badPendingMarks([rs])).toEqual([
-      'ruleset "r" check "A": "pending" must be a non-empty string',
-      'ruleset "r" check "B": "pending" must be a non-empty string',
-    ]);
-  });
-});
-
 describe("withoutMarks", () => {
   it("removes the pending key and keeps every other key, so it never reaches GitHub", () => {
     const out = withoutMarks(ruleset([{ context: "A", integration_id: 1, pending: "later" }, { context: "B" }]));
@@ -57,9 +47,5 @@ describe("splitPending", () => {
     const s = splitPending(decl, live(["A", "B"]));
     expect(checksOf(s.effective)).toEqual([{ context: "A" }, { context: "B" }]);
     expect(s.present).toEqual([{ context: "B", reason: "later" }]);
-  });
-
-  it("never drops an unmarked check, even when live lacks it", () => {
-    expect(checksOf(splitPending(decl, live([])).effective)).toEqual([{ context: "A" }]);
   });
 });

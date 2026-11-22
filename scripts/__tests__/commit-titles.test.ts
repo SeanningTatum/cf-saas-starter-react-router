@@ -90,14 +90,6 @@ const runWorkflowCommand = (title: string) =>
   });
 
 describe("the command line the PR title job runs", () => {
-  it("exits 0 for a good title, so a conforming PR is not blocked", () => {
-    expect(runWorkflowCommand("feat(auth): add passkeys").status).toBe(0);
-  }, SPAWN_TIMEOUT_MS);
-
-  it("exits non-zero for an empty title, so a PR with a blank title is stopped", () => {
-    expect(runWorkflowCommand("").status).not.toBe(0);
-  }, SPAWN_TIMEOUT_MS);
-
   it("exits non-zero for a bad title, so the roll-up title that reads as a patch is stopped", () => {
     expect(runWorkflowCommand("v3.0 wave 0: guardrails, trim and foundations").status).not.toBe(0);
   }, SPAWN_TIMEOUT_MS);

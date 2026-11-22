@@ -33,37 +33,29 @@ The repo ships a two-branch flow. `staging` is the default branch and takes feat
 
 ## Pending items
 
-A pending item is declared in the file but cannot be live yet. It carries `"pending": "<reason>"`. A required check may carry it, and so may the `repository` section.
+A required check or the `repository` section may carry `"pending": "<reason>"`: declared, not live yet. Without the mark, `--check` would turn the gate red for every branch until the owner acts. Here the check `PR title (Conventional Commits)` cannot be required until v3.0 is on the default branch: pull requests into it do not carry `pr-title.yml` before then, so the check would never report and every pull request would hang.
 
-Why it exists: `--check` fails the `harness` gate, on every machine and in CI, when the file and the live repo differ. Some settings cannot go live on the day the file changes. A `pull_request` workflow is read from the pull request's own merge commit, so until v3.0 is on the default branch, pull requests into it do not carry `pr-title.yml`. If the owner made that check required now, it would never report, and every pull request into the default branch would hang. And no agent may change repo settings. Without a mark, the gate would stay red until the owner acts at the right moment.
+- `--check`, item missing live: one `notice:` naming the item and the reason, exit code unchanged. Item already live: `ok:` plus a `notice:` that the mark can go.
+- Everything unmarked is compared as always: a ruleset whose only difference is its pending checks is `ok:`, any other difference is `drift:`.
+- The offline check still demands that every required check, marked or not, is a job name in a workflow. A `pending` that is not a non-empty string is an `error:`.
+- `--apply` writes pending items like any other and never sends the `pending` key to GitHub. It then says to delete the marks. `--apply --dry-run` lists the writes.
+- GitHub shows `squash_merge_commit_title` only to tokens with enough rights. When it is hidden, `--check` gives a notice, never drift.
+- Without a mark, a `repository` difference is drift, except on a fork where nothing is applied yet: there it is a notice, so a fork stays green after the marks are deleted.
 
-What `--check` does with a mark:
-
-- A pending item the repo lacks: one `notice:` line that names the item and the reason. The exit code is unchanged.
-- A pending item the repo already has: `ok:` and a `notice:` that says the mark can go.
-- Everything not marked is compared as always. A ruleset whose only difference from the file is its pending checks is `ok:`. Any other difference is `drift:`.
-- The offline check still demands that every required check, marked or not, is a job name in a workflow under `.github/workflows/`.
-- A `pending` value that is not a non-empty string is an `error:`.
-
-`--apply` writes pending items like any other and never sends the `pending` key to GitHub. It then tells you to delete the marks. `--apply --dry-run` lists the writes.
-
-The two pending items today:
-
-| Item | Declared | Live today |
-|------|----------|------------|
+| Pending item | Declared | Live today |
+|--------------|----------|------------|
 | Required check `PR title (Conventional Commits)` on `default-branch` | required | not required |
 | `repository.squash_merge_commit_title` | `PR_TITLE` | `COMMIT_OR_PR_TITLE` |
 
-GitHub shows `squash_merge_commit_title` only to tokens with enough rights. When it is hidden, `--check` prints a notice and never drift.
+Limit: while a check is marked, the gate cannot tell "not applied yet" from "applied, then removed by an admin". Delete the marks in a follow-up pull request right after the apply; from then on a removed check is drift again.
 
-The owner step, in this order:
+The owner step, in order:
 
-1. Open the v3.0 release pull request into the default branch and wait until it is green.
-2. Run `bun run scripts/repo-rules.ts --apply`. It sets the required check and the squash title in one go.
-3. Run `bun run scripts/repo-rules.ts --check`. Expect `ok:` for both rulesets and the environment, and a notice for each item that says its mark can go.
-4. Delete the two `pending` marks from `.github/repo-rules.json` in a follow-up pull request.
+1. When the v3.0 release pull request into the default branch is open and green, run `bun run scripts/repo-rules.ts --apply`.
+2. Run `bun run scripts/repo-rules.ts --check`. Expect `ok:` for both rulesets and the environment.
+3. Delete the two `pending` marks in a follow-up pull request.
 
-Pull requests that are open against the default branch at step 2 need the new workflow before the check can report on them: merge the default branch into each.
+Other pull requests open against the default branch at step 1 need the new workflow before the check can report: merge the default branch into them.
 
 ## What the guard does not stop
 

@@ -105,14 +105,16 @@ const REVIEW_ROUNDS = Math.max(0, Math.min(3, input.reviewRounds ?? 2));
 const ROLLUP_ROUNDS = Math.max(0, Math.min(5, input.rollupRounds ?? 3));
 const COAUTHOR = "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>";
 // A PR title is the commit subject once squashed, and release versions are read from subjects: `type(scope)?!?: subject`
-// (types and scopes live in .commitlintrc.json; the commit-msg hook and the PR title check enforce them). The plan's
-// architect writes conventional titles; a title without the shape gets "feat: " here so no run opens a PR the check refuses.
-const CONVENTIONAL_TITLE = /^[a-z]+(\([a-z0-9-]+\))?!?: \S/;
-const asConventional = (title) => (CONVENTIONAL_TITLE.test(title) ? title : `feat: ${title}`);
-// The roll-up squashes into the base branch: it is a feat when any stacked PR is one, else it takes the last PR's type.
+// (types and scopes live in .commitlintrc.json). The architect writes conventional titles; a title without the shape gets
+// "feat: " here. This checks the shape only, not the scope list: an unlisted scope is caught by the commit-msg hook and the PR title job.
+const TITLE_PARTS = /^([a-z]+)(?:\([a-z0-9-]+\))?(!)?: (\S.*)$/;
+const asConventional = (title) => (TITLE_PARTS.test(title) ? title : `feat: ${title}`);
+// The roll-up squashes into the base branch: a feat when any stacked PR is one, else the last PR's type, with "!" when any PR is breaking.
 const rollupTitle = (title, stacked) => {
-  const types = stacked.map((p) => p.title.match(/^([a-z]+)[(!:]/)[1]);
-  return `${types.includes("feat") ? "feat" : types[types.length - 1]}: ${title}`;
+  const parts = stacked.map((p) => TITLE_PARTS.exec(p.title) || ["", "feat", "", ""]);
+  const type = parts.some((m) => m[1] === "feat") ? "feat" : parts[parts.length - 1][1];
+  const subject = (TITLE_PARTS.exec(title) || [])[3] || title;
+  return `${type}${parts.some((m) => m[2]) ? "!" : ""}: ${subject}`;
 };
 // The e2e dev server must not collide with another on 5173 (a second checkout, another project's dev server):
 // every gate or e2e run gets a free port. playwright.config.ts reads E2E_PORT.
@@ -1068,7 +1070,7 @@ if (!rollupBranch) {
     const advisory = rs.flatMap((r) => r.advisory || []);
     return `| #${p.number} | ${pr.title} | ${rs.length} | ${fixed} | ${declinedN} | ${advisory.length ? advisory.join("<br>").replace(/\|/g, "\\|") : "none"} |`;
   });
-  const body = `# ${rollupTitle(plan.title, prs)}
+  const body = `# ${plan.title} (roll-up)
 
 ## What this is
 One PR with the whole feature, for human review. Each stacked PR below was reviewed on its own diff before the first push (the code-review skill, plus the security, scale, maintainability and Effect reviewers over the whole tree), then merged into ${rollupBranch}. Greptile reviews this roll-up only. Merging this one lands the feature; nothing else to merge or close.
@@ -1118,7 +1120,7 @@ Return ok, failed_command, merged, number, url.`,
       prs: openPrs,
       merged_into_rollup: merged,
       rollup: opened ? opened.url : null,
-      next: `${merged.length ? `Merged into ${rollupBranch}: ${merged.map((n) => `#${n}`).join(", ")}. ` : ""}${rest.length ? `Merge the rest in order: for each of ${rest.map((p) => `#${p.number}`).join(", ")}, \`gh pr edit <n> --base ${rollupBranch}\` then \`gh pr merge <n> --merge\`. ` : ""}${opened ? `The roll-up is open: ${opened.url}; do not create another.` : `Then open the roll-up: \`gh pr create --base ${shq(BASE)} --head ${rollupBranch} --title ${shq(`${plan.title} (roll-up)`)} --body-file ${outDir()}/rollup.md\`.`} On each stacked PR that lacks it, ${comment}. Then post "@greptileai review" on the roll-up.`,
+      next: `${merged.length ? `Merged into ${rollupBranch}: ${merged.map((n) => `#${n}`).join(", ")}. ` : ""}${rest.length ? `Merge the rest in order: for each of ${rest.map((p) => `#${p.number}`).join(", ")}, \`gh pr edit <n> --base ${rollupBranch}\` then \`gh pr merge <n> --merge\`. ` : ""}${opened ? `The roll-up is open: ${opened.url}; do not create another.` : `Then open the roll-up: \`gh pr create --base ${shq(BASE)} --head ${rollupBranch} --title ${shq(rollupTitle(plan.title, prs))} --body-file ${outDir()}/rollup.md\`.`} On each stacked PR that lacks it, ${comment}. Then post "@greptileai review" on the roll-up.`,
     };
   }
   log(`Rollup: ${openPrs.length} stacked PRs merged into ${rollupBranch}; ${rollup.url}`);

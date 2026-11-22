@@ -2,6 +2,7 @@ import { afterEach, beforeEach, expect, vi } from "vitest";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { withoutGitVariables } from "../../install-hooks";
 
 export const GIT_IDENTITY = [
   "-c",
@@ -14,11 +15,10 @@ export const GIT_IDENTITY = [
   "tag.gpgsign=false",
 ];
 
-const GIT_ENV_PREFIX = "GIT_";
 export const NO_GLOBAL_CONFIG = { GIT_CONFIG_GLOBAL: "/dev/null", GIT_CONFIG_NOSYSTEM: "1" };
 
 export const envOutsideAnyHook = (source: NodeJS.ProcessEnv): NodeJS.ProcessEnv => ({
-  ...Object.fromEntries(Object.entries(source).filter(([key]) => !key.startsWith(GIT_ENV_PREFIX))),
+  ...withoutGitVariables(source),
   ...NO_GLOBAL_CONFIG,
 });
 

@@ -219,6 +219,7 @@ describe("--apply with pending items", () => {
     expect(would).toHaveLength(2);
     expect(would[0]).toContain(`PUT ${BASE}/rulesets/7`);
     expect(would[1]).toBe(`would: PATCH ${BASE} {"squash_merge_commit_title":"PR_TITLE"}`);
+    expect(lines(o.stdout, "notice")).toEqual(["notice: the writes listed above include pending items; nothing was written"]);
   });
 });
 
