@@ -17,9 +17,7 @@ describe("UploadOptions", () => {
   });
 });
 
-// Catches: a cap dropped or loosened, passing R2 a key it refuses or a
-// content type of any size. `key` and `prefix` share R2Key, so one row.
-describe("caps: at the cap decodes, one over fails", () => {
+describe("caps, so a dropped or loosened cap cannot pass R2 a key it refuses or a content type of any size (key and prefix share R2Key, so one row): at the cap decodes, one over fails", () => {
   const s = (n: number) => "a".repeat(n);
   const cases: ReadonlyArray<
     [

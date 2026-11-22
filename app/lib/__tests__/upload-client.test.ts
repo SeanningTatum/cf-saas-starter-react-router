@@ -20,8 +20,7 @@ afterEach(() => {
 });
 
 describe("uploadFile", () => {
-  // Catches: the helper posting to the wrong place or dropping the file part.
-  it.effect("POSTs the file as multipart form data to the upload route", () =>
+  it.effect("POSTs the file as multipart form data to the upload route, not to another place and with the file part kept", () =>
     Effect.gen(function* () {
       const fetchMock = replyWith(JSON.stringify({ success: true, key: "k1" }));
       const picked = file();
@@ -35,17 +34,14 @@ describe("uploadFile", () => {
     })
   );
 
-  // Catches: losing the key the success panel shows.
-  it.effect("returns the stored key on success", () =>
+  it.effect("returns the stored key on success, so the success panel can show it", () =>
     Effect.gen(function* () {
       replyWith(JSON.stringify({ success: true, key: "uploads/abc.png" }));
       expect(yield* uploadFile(file())).toEqual({ key: "uploads/abc.png" });
     })
   );
 
-  // Catches: a 400 from the route turning into a generic error and hiding the
-  // route's reason (e.g. "File content does not match its declared type").
-  it.effect("fails with the route's message when the route refuses the file", () =>
+  it.effect("fails with the route's message when the route refuses the file, so a 400 does not become a generic error that hides the reason", () =>
     Effect.gen(function* () {
       replyWith(JSON.stringify({ success: false, error: "Too big" }), 400);
       const result = yield* Effect.either(uploadFile(file()));
@@ -70,8 +66,7 @@ describe("uploadFile", () => {
     })
   );
 
-  // Catches: a network failure escaping as a rejected promise instead of a value.
-  it.effect("fails with ExternalServiceError when fetch rejects", () =>
+  it.effect("fails with ExternalServiceError when fetch rejects, so a network failure is a value and not a rejected promise", () =>
     Effect.gen(function* () {
       vi.stubGlobal("fetch", vi.fn(async () => Promise.reject(new TypeError("offline"))));
       const result = yield* Effect.either(uploadFile(file()));
@@ -79,8 +74,7 @@ describe("uploadFile", () => {
     })
   );
 
-  // Catches: an HTML error page (e.g. a proxy 502) crashing the JSON parse.
-  it.effect("fails with ExternalServiceError when the body is not JSON", () =>
+  it.effect("fails with ExternalServiceError when the body is not JSON, so an HTML error page such as a proxy 502 cannot crash the JSON parse", () =>
     Effect.gen(function* () {
       replyWith("<html>Bad gateway</html>", 502);
       const result = yield* Effect.either(uploadFile(file()));
@@ -88,8 +82,7 @@ describe("uploadFile", () => {
     })
   );
 
-  // Catches: trusting a reply that is JSON but not the route's shape.
-  it.effect("fails with ExternalServiceError when the JSON has the wrong shape", () =>
+  it.effect("fails with ExternalServiceError when the JSON has the wrong shape, so a reply that is JSON but not the route shape is not trusted", () =>
     Effect.gen(function* () {
       replyWith(JSON.stringify({ ok: true }));
       const result = yield* Effect.either(uploadFile(file()));

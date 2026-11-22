@@ -15,19 +15,7 @@ import {
   type Context,
 } from "..";
 
-/**
- * These cover the two symptoms of one bug: tRPC derives `isDev` from
- * `process.env.NODE_ENV`, which does not exist on Workers, so it resolved to
- * `true` in production — leaking stacks in error payloads and sleeping
- * 100-499ms on every procedure call.
- *
- * Both helpers take `dev` as an argument rather than reading the module-level
- * `isDev`, because `import.meta.env.DEV` is always `true` under vitest and the
- * production branch would otherwise be unreachable (same pattern as
- * `isLevelEnabled` in `lib/log-format.ts`).
- */
-
-describe("stripStackOutsideDev", () => {
+describe("stripStackOutsideDev (takes dev as an argument, since import.meta.env.DEV is always true under vitest; see docs/features/trpc-dev-flag.md)", () => {
   const shape = () => ({
     message: "UNAUTHORIZED",
     code: -32001,
@@ -68,11 +56,7 @@ describe("stripStackOutsideDev", () => {
     expect(original.data.stack).toContain("TRPCError: UNAUTHORIZED");
   });
 
-  it("preserves every data key except stack", () => {
-    // The `as S` cast in `stripStackOutsideDev` means TypeScript cannot verify
-    // that required `data` fields survive the spread — this test is that
-    // guarantee, so an edit that drops an extra key fails here rather than
-    // compiling silently.
+  it("preserves every data key except stack, so the as S cast cannot silently drop an extra key that TypeScript cannot check", () => {
     const kept = {
       code: "BAD_REQUEST",
       httpStatus: 400,
@@ -164,16 +148,14 @@ describe("errorFormatter schemaError", () => {
   });
 });
 
-describe("devDelayMs", () => {
-  it("is zero outside dev", () => {
-    // The production bug: any non-zero value here is latency real users pay.
+describe("devDelayMs (isDev once came from process.env.NODE_ENV, absent on Workers, so every procedure slept 100-499ms in production)", () => {
+  it("is zero outside dev, so real users pay no latency (the production bug)", () => {
     expect(devDelayMs(false)).toBe(0);
     expect(devDelayMs(false, 0)).toBe(0);
     expect(devDelayMs(false, 0.999)).toBe(0);
   });
 
-  it("stays within 100-499ms in dev", () => {
-    // Upper bound is 499, not 500: Math.random() is exclusive of 1.
+  it("stays within 100-499ms in dev (the upper bound is 499 because Math.random() is exclusive of 1)", () => {
     expect(devDelayMs(true, 0)).toBe(100);
     expect(devDelayMs(true, 0.5)).toBe(300);
     expect(devDelayMs(true, 0.9999)).toBe(499);

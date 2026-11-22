@@ -11,9 +11,7 @@ import { TURNSTILE_ORIGIN } from "@/lib/constants/turnstile";
 const NONCE = "dGVzdC1ub25jZS0xMjM0NQ==";
 
 describe("securityHeaders", () => {
-  // `-u` rewrites this snapshot and public/_headers together, so allowing a
-  // host is one edit in the module plus one command; the diff shows the change.
-  it("sets the exact production header set (catches any silent loosening of the policy)", () => {
+  it("sets the exact production header set, so no silent loosening of the policy passes (update it with -u, see docs/security-headers.md)", () => {
     expect(securityHeaders({ nonce: NONCE })).toMatchInlineSnapshot(`
       {
         "Content-Security-Policy": "default-src 'self'; script-src 'self' https://challenges.cloudflare.com 'nonce-dGVzdC1ub25jZS0xMjM0NQ=='; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob: https://github.com https://avatars.githubusercontent.com; connect-src 'self'; frame-src 'self' https://challenges.cloudflare.com; frame-ancestors 'none'; object-src 'none'; base-uri 'self'; form-action 'self'; upgrade-insecure-requests; report-uri /api/browser-report; report-to csp",

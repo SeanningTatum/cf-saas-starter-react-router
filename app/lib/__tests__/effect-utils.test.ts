@@ -100,19 +100,14 @@ describe("tryDelete", () => {
 });
 
 describe("db spans", () => {
-  // The tracer from `@/services/tracing` doubles as the capture tracer here:
-  // it records every ended span in a plain buffer.
   const captureTracer = () => {
     const buffer = makeSpanBuffer();
     return { buffer, layer: Layer.setTracer(makeOtlpTracer(buffer)) };
   };
 
   it.effect(
-    "each helper wraps its query in one client span named `db.<op> <entity>`",
+    "each helper wraps its query in one client span named `db.<op> <entity>`, so trace UIs keep showing D1 calls as outbound dependency edges of the procedure span",
     () => {
-      // Catches: renaming/typo'ing an operation, forgetting to wrap one of the
-      // four helpers, or losing `kind: "client"` — trace UIs would stop showing
-      // D1 calls as outbound dependency edges of the procedure span.
       const { buffer, layer } = captureTracer();
       return Effect.gen(function* () {
         yield* tryQuery("widget", async () => 1);
@@ -139,10 +134,8 @@ describe("db spans", () => {
   );
 
   it.effect(
-    "a rejected query still fails with its tagged error and ends the span as failed",
+    "a rejected query still fails with its tagged error and ends the span as failed, so errors stay visible in traces",
     () => {
-      // Catches: the withSpan wrapper swallowing/reshaping the failure, or the
-      // span closing as OK on a failed query (errors invisible in traces).
       const { buffer, layer } = captureTracer();
       return Effect.gen(function* () {
         const exit = yield* Effect.exit(
