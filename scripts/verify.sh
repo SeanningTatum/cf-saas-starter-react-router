@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Run the repo's gates. Deterministic, no LLM. Exit non-zero if any gate fails.
 #
-# This file is the one list of gates: CI, init.sh, the workflows and AGENTS.md all
-# run it, so adding a gate is one line in GATES below.
+# This file is the one runner of the gates: CI, init.sh, the workflows and AGENTS.md all
+# run it. The list lives in harness.config.json (gates); to add a gate, add an object there.
 #
 # Usage:
 #   ./scripts/verify.sh               # every gate
@@ -14,19 +14,13 @@ set -uo pipefail
 
 cd "$(dirname "$0")/.."
 
-# name|command|in baseline (y/n)|time limit (s)
-# e2e runs with CI=1: without it the dev server opens a remote-bindings session that needs a Cloudflare
-# login, so the gate is red on any machine that is not logged in (vite.config.ts, remoteBindings).
-GATES='typecheck|bun run typecheck|y|600
-test|bun run test|y|600
-non-negotiables-selftest|bun run scripts/check-non-negotiables.ts --selftest|y|300
-non-negotiables|bun run scripts/check-non-negotiables.ts|y|300
-migrations|bun run scripts/migration-check.ts|y|120
-harness|./scripts/harness-check.sh|y|300
-secrets|bun run scripts/secret-scan.ts|y|120
-audit|bun run scripts/package-audit.ts|y|120
-build|bun run build|n|900
-e2e|CI=1 bun run test:e2e|n|900'
+# One line per gate: name|command|in baseline (y/n)|time limit (s), read from harness.config.json.
+# The e2e command starts with CI=1: without it the dev server opens a remote-bindings session that needs a
+# Cloudflare login, so the gate is red on any machine that is not logged in (vite.config.ts, remoteBindings).
+GATES=$(bun scripts/harness-config.ts gates) || {
+  echo "verify: cannot read the gates from harness.config.json" >&2
+  exit 1
+}
 
 MODE="all"
 ONLY=""

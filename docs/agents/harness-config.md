@@ -1,0 +1,109 @@
+# harness.config.json
+
+The one file of values that belong to a project, not to the harness. Scripts and workflows read it where they once held a literal.
+
+## Why it sits at the repo root
+
+[ADR 0001](../adr/0001-harness-delivery.md): the shared harness reaches a project as committed files that `sync` copies. `harness.config.json` is on the list of what stays in every project, so `sync` never writes it. Nothing the harness copies may hold a value that is one project's: it reads this file.
+
+- A project with no file gets the defaults below. They name no path under `app/` and nothing about this starter's product.
+- An unknown key anywhere in the file is an error, so a typo cannot pass in silence.
+- A workflow script cannot read a file. Its Preflight step runs `bun scripts/harness-config.ts show` and checks the checksum that command prints. The build never pastes config values into `.claude/workflows/*.js`.
+- The file is JSON and has no comments. The notes that once sat beside the gate list are here: the e2e gate starts with `CI=1` because, without it, the dev server opens a remote-bindings session that needs a Cloudflare login, so the gate is red on any machine that is not logged in (`vite.config.ts`, `remoteBindings`).
+
+## Keys
+
+A key with no default is empty. A consumer that needs it fails with a line that names the key: `harness-config: set gates in harness.config.json`.
+
+| Key | Type | Default | Read by |
+|---|---|---|---|
+| `version` | `1` | `1` | the loader |
+| `baseBranch` | string or null | `null` (the repo's default branch) | the workflows: `input.base`, then this, then the branch's own fallback |
+| `coauthor` | string | `Co-Authored-By: Claude Fable 5.2 <noreply@anthropic.com>` | the workflows, on each commit trailer |
+| `scratchDirs` | list of strings | `[".verify/", "tmp/"]` | `scripts/stack.ts`: the `exclude` of a plan that has none |
+| `gates` | list of gate objects | none | `scripts/verify.sh` |
+| `tracker` | object | see below | `scripts/tracker.ts` |
+| `reviewBot` | object | see below | `scripts/pr-review-wait.ts` |
+| `docs` | object | see below | the workflows |
+| `loginForm` | object | see below | `scripts/design-audit.ts` |
+| `seedLogins` | map of name to `{ email, password }` | none | `scripts/design-audit.ts` |
+| `paths` | object | none | the workflows, `scripts/harness-check.sh` |
+| `ship` | open object | none | `ship-feature` (the workflow lane fills it) |
+| `brandInit` | open object | none | `brand-init` (the workflow lane fills it) |
+
+`ship` and `brandInit` are open objects for now: the schema accepts any keys inside them. The workflow lane names their keys and tightens the schema.
+
+### `gates`
+
+One object per gate, in run order. `scripts/verify.sh` runs them; `bun scripts/harness-config.ts gates` prints one `name|run|y or n|limitSeconds` line each. `name` and `run` must not hold a `|` or a line break, because that line is how bash reads them.
+
+| Key | Type | Meaning |
+|---|---|---|
+| `name` | string | What `--only` takes |
+| `run` | string | The shell command |
+| `baseline` | boolean | In the quick `--baseline` set |
+| `limitSeconds` | positive integer | Time limit; the gate is killed past it |
+
+### `tracker`
+
+| Key | Type | Default | Meaning |
+|---|---|---|---|
+| `readyLabel` | string | `ready-for-agent` | The label on issues an agent may pick up; `bun scripts/tracker.ts ready` lists them |
+
+### `reviewBot`
+
+| Key | Type | Default | Meaning |
+|---|---|---|---|
+| `login` | string | `greptile-apps` | A review counts when its author's login starts with this |
+| `summaryMarker` | string | `<!-- greptile_summary -->` | Marks the bot's summary comment |
+| `trigger` | string | `@greptileai review` | The comment that asks for a review |
+
+### `docs`
+
+| Key | Type | Default |
+|---|---|---|
+| `product` | string | `PRODUCT.md` |
+| `design` | string | `DESIGN.md` |
+| `glossary` | string | `GLOSSARY.md` |
+| `adr` | string | `docs/adr` |
+| `features` | string | `docs/features` |
+
+### `loginForm`
+
+| Key | Type | Default |
+|---|---|---|
+| `path` | string | `/login` |
+| `emailTestId` | string | `login-email` |
+| `passwordTestId` | string | `login-password` |
+| `submitTestId` | string | `login-submit` |
+
+`bun run design:audit -- --login <name>` signs in as `seedLogins.<name>`; `--login <email:password>` still works. An unknown name fails with a line that lists the names.
+
+### `paths`
+
+All optional. Each is a path from the repo root.
+
+| Key | Type | Meaning |
+|---|---|---|
+| `sourceRoots` | list of strings | Folders that hold the project's source |
+| `tokens` | string | The design tokens file |
+| `rootLayout` | string | The root layout |
+| `components` | string | Shared components |
+| `primitives` | string | The primitive components folder |
+| `routes` | string | Route files |
+| `home` | string | The home route |
+| `locales` | string | Translation files |
+| `schemas` | string | Effect Schema files |
+| `analytics` | string | The analytics service |
+| `analyticsEvents` | string | The analytics event list |
+
+## Commands
+
+| Command | Does |
+|---|---|
+| `bun scripts/harness-config.ts show` | Prints `{"config": ..., "check": "<8 hex>"}` on one line. `check` is the FNV-1a checksum of the config as stable JSON (keys sorted at every depth, no spaces) |
+| `bun scripts/harness-config.ts get <dotted.key>` | A string or number as is, a list of strings one per line, anything else as compact JSON; an unknown key exits 1 |
+| `bun scripts/harness-config.ts gates` | The gate lines `verify.sh` loops over; exits 1 when there are none |
+| `bun scripts/harness-config.ts check` | Validates the file; the `harness` gate runs it (check M) |
+
+Exit codes: 0 ok, 1 bad config or a missing required key, 2 usage.

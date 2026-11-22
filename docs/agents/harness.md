@@ -35,6 +35,10 @@ Videos a reviewer can watch instead of reading steps. They stay on this machine,
 
 `ship-feature` records the smoke videos on the final tree before the ship stop and shows them, with any `demo-*`, on the review page.
 
+## Project settings
+
+[`harness-config.md`](harness-config.md): `harness.config.json`, the one file of values that belong to a project (the gate list, the review bot, the ready label, the seeded logins, the paths). It stays in the project when the harness is synced.
+
 ## Analytics
 
 [`analytics.md`](analytics.md) — the provider-agnostic `Analytics` service: add an event, add a provider, env vars.
@@ -133,11 +137,11 @@ After the first push no branch is rewritten: `.claude/settings.json` denies `git
 
 | Command | Purpose |
 |---------|---------|
-| [`/harness-check`](../../.claude/commands/harness-check.md) | [`scripts/harness-check.sh`](../../scripts/harness-check.sh) — CLAUDE↔AGENTS symlink, sub-agent frontmatter, Kimi roster symlink, hook wiring + hook tests, workflow scripts (they parse, and match their sources), and the live repo rules against `.github/repo-rules.json` ([`docs/ci/repo-rules.md`](../ci/repo-rules.md); a notice when GitHub cannot be read). No LLM, exits non-zero on drift. |
+| [`/harness-check`](../../.claude/commands/harness-check.md) | [`scripts/harness-check.sh`](../../scripts/harness-check.sh) — CLAUDE↔AGENTS symlink, sub-agent frontmatter, Kimi roster symlink, hook wiring + hook tests, `harness.config.json` (check M), workflow scripts (they parse, and match their sources), and the live repo rules against `.github/repo-rules.json` ([`docs/ci/repo-rules.md`](../ci/repo-rules.md); a notice when GitHub cannot be read). No LLM, exits non-zero on drift. |
 
 ## Gates
 
-Listed in [`scripts/verify.sh`](../../scripts/verify.sh), the one runner for CI, `init.sh` and agents:
+Listed in `gates` in [`harness.config.json`](../../harness.config.json) and run by [`scripts/verify.sh`](../../scripts/verify.sh), the one runner for CI, `init.sh` and agents:
 
 | Gate | Command | Runs in |
 |------|---------|---------|
@@ -152,12 +156,12 @@ Listed in [`scripts/verify.sh`](../../scripts/verify.sh), the one runner for CI,
 | build | `bun run build` | full |
 | e2e | `bun run test:e2e` | full |
 
-`./scripts/verify.sh` runs the full set, `--baseline` the quick set, `--only <gate>` one gate, `--list` prints them. To add a gate, add a line to `GATES` in `scripts/verify.sh` — CI picks it up.
+`./scripts/verify.sh` runs the full set, `--baseline` the quick set, `--only <gate>` one gate, `--list` prints them. To add a gate, add an object to `gates` in `harness.config.json` (see [`harness-config.md`](harness-config.md)) — CI picks it up.
 
 ## Commands (README.md has the same list)
 
 ```bash
-gh issue list --label ready-for-agent  # Work an agent can pick up
+gh issue list --label ready-for-agent  # Work an agent can pick up (the label is tracker.readyLabel; bun scripts/tracker.ts ready lists them)
 ./scripts/verify.sh       # Run every gate (--baseline for the quick set, --list to see them)
 ./scripts/harness-check.sh # Harness invariants (symlinks, sub-agent frontmatter, hooks, workflows)
 ./init.sh                 # Harness bootstrap — install + skills + migrate + typecheck + test (run start of session)

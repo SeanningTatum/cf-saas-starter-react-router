@@ -1,0 +1,55 @@
+{
+  "version": 1,
+  "baseBranch": null,
+  "coauthor": "Co-Authored-By: Claude Fable 5.2 <noreply@anthropic.com>",
+  "scratchDirs": [".verify/", "tmp/"],
+  "gates": [
+    { "name": "typecheck", "run": "bun run typecheck", "baseline": true, "limitSeconds": 600 },
+    { "name": "test", "run": "bun run test", "baseline": true, "limitSeconds": 600 },
+    { "name": "non-negotiables-selftest", "run": "bun run scripts/check-non-negotiables.ts --selftest", "baseline": true, "limitSeconds": 300 },
+    { "name": "non-negotiables", "run": "bun run scripts/check-non-negotiables.ts", "baseline": true, "limitSeconds": 300 },
+    { "name": "migrations", "run": "bun run scripts/migration-check.ts", "baseline": true, "limitSeconds": 120 },
+    { "name": "harness", "run": "./scripts/harness-check.sh", "baseline": true, "limitSeconds": 300 },
+    { "name": "secrets", "run": "bun run scripts/secret-scan.ts", "baseline": true, "limitSeconds": 120 },
+    { "name": "audit", "run": "bun run scripts/package-audit.ts", "baseline": true, "limitSeconds": 120 },
+    { "name": "build", "run": "bun run build", "baseline": false, "limitSeconds": 900 },
+    { "name": "e2e", "run": "CI=1 bun run test:e2e", "baseline": false, "limitSeconds": 900 }
+  ],
+  "tracker": { "readyLabel": "ready-for-agent" },
+  "reviewBot": {
+    "login": "greptile-apps",
+    "summaryMarker": "<!-- greptile_summary -->",
+    "trigger": "@greptileai review"
+  },
+  "docs": {
+    "product": "PRODUCT.md",
+    "design": "DESIGN.md",
+    "glossary": "GLOSSARY.md",
+    "adr": "docs/adr",
+    "features": "docs/features"
+  },
+  "loginForm": {
+    "path": "/login",
+    "emailTestId": "login-email",
+    "passwordTestId": "login-password",
+    "submitTestId": "login-submit"
+  },
+  "seedLogins": {
+    "admin": { "email": "admin@preview.local", "password": "Password123!" },
+    "user": { "email": "user@preview.local", "password": "Password123!" },
+    "banned": { "email": "banned@preview.local", "password": "Password123!" }
+  },
+  "paths": {
+    "sourceRoots": ["app/", "workers/"],
+    "tokens": "app/app.css",
+    "rootLayout": "app/root.tsx",
+    "components": "app/components",
+    "primitives": "app/components/ui",
+    "routes": "app/routes",
+    "home": "app/routes/home.tsx",
+    "locales": "app/locales",
+    "schemas": "app/lib/schemas",
+    "analytics": "app/services/analytics.ts",
+    "analyticsEvents": "app/lib/analytics/events.ts"
+  }
+}

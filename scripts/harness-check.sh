@@ -13,6 +13,7 @@
 #           parses and names itself by filename, brand-init fences cover app/components/ui once
 #        J. The workflow scripts are what their sources build (.claude/workflow-src + the shared library)
 #        K. The repo's ruleset and production environment match .github/repo-rules.json
+#        M. harness.config.json is valid (bun scripts/harness-config.ts check)
 
 set -uo pipefail
 
@@ -220,6 +221,17 @@ elif grep -q '^notice:' <<<"$RR_OUT"; then
   grep '^::notice::' <<<"$RR_OUT" || true
 else
   ok "repo rules match .github/repo-rules.json"
+fi
+
+# M. harness.config.json. The one file of project values the harness reads (docs/agents/harness-config.md):
+#    a typo in a key or a wrong type fails here, not in the middle of a workflow.
+HC_OUT=$(bun scripts/harness-config.ts check 2>&1)
+HC_CODE=$?
+if [ "$HC_CODE" -ne 0 ]; then
+  fail "harness.config.json is invalid:"
+  printf '%s\n' "$HC_OUT" | sed 's/^/      /'
+else
+  ok "$HC_OUT"
 fi
 
 echo ""
