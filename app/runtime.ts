@@ -6,6 +6,7 @@ import { AuthApiLive, type AuthApi as AuthApiTag } from "@/services/auth";
 import type { AuthRuntimeOptions } from "@/auth/config";
 import { LoggerLive, MinLogLevelLive } from "@/services/logger";
 import { AnalyticsLive, type Analytics } from "@/services/analytics";
+import { RateLimiterLive, type RateLimiter } from "@/services/rate-limit";
 import {
   ErrorReporterFrom,
   requestErrorReporter,
@@ -25,6 +26,7 @@ export type AppServices =
   | Bucket
   | AuthApiTag
   | Analytics
+  | RateLimiter
   | ErrorReporter
   | UserRepository
   | AnalyticsRepository
@@ -98,6 +100,7 @@ export const makeAppRuntime = (
     BucketLive,
     AuthApiLive(auth),
     AnalyticsLive,
+    RateLimiterLive,
     ErrorReporterFrom(errorReporter)
   );
   const reposLayer = Layer.mergeAll(

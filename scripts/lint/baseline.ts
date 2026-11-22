@@ -1,5 +1,5 @@
 import { Either, Schema } from "effect";
-import { BASELINE_PATH } from "./constants";
+import { BASELINE_PATH, LOWER_BASELINE_COMMAND } from "./constants";
 import type { Finding, RunResult } from "./types";
 
 const PerRule = <A>(value: Schema.Schema<A>) =>
@@ -24,7 +24,7 @@ export const BASELINE_CHECKS = {
   stale: {
     id: "baseline-stale",
     matches: "A baseline entry excuses more than the code now holds: the file is clean, gone, or has fewer findings than the count.",
-    fix: "lower the count to what the linter finds, or delete the entry when it finds nothing",
+    fix: `run \`${LOWER_BASELINE_COMMAND}\`, which lowers each count to what the linter finds and deletes an entry when it finds nothing`,
   },
   shape: {
     id: "baseline-shape",
@@ -61,6 +61,15 @@ const entries = <A>(perRule: Record<string, Record<string, A>>): Array<[rule: st
 
 const key = (rule: string, file: string): string => `${rule}\n${file}`;
 
+function weighByRuleAndFile(run: RunResult): Map<string, number> {
+  const counts = new Map<string, number>();
+  for (const found of run.findings) {
+    const place = key(found.rule, found.file);
+    counts.set(place, (counts.get(place) ?? 0) + Math.max(1, Math.ceil(found.weight ?? 1)));
+  }
+  return counts;
+}
+
 function ruleKeyFindings(baseline: Baseline, ruleIds: readonly string[]): Finding[] {
   const known = new Set(ruleIds);
   const listed = new Set([...Object.keys(baseline.debt), ...Object.keys(baseline.boundaries)]);
@@ -83,8 +92,7 @@ export function applyBaseline(
   ruleIds: readonly string[],
   only?: ReadonlySet<string>
 ): Finding[] {
-  const counts = new Map<string, number>();
-  for (const found of run.findings) counts.set(key(found.rule, found.file), (counts.get(key(found.rule, found.file)) ?? 0) + 1);
+  const counts = weighByRuleAndFile(run);
   const inScope = (file: string): boolean => !only || only.has(file);
 
   const kept = run.findings.flatMap((found): Finding[] => {
@@ -92,7 +100,7 @@ export function applyBaseline(
     const allowed = baseline.debt[found.rule]?.[found.file] ?? 0;
     const count = counts.get(key(found.rule, found.file)) ?? 0;
     if (count <= allowed) return [];
-    return allowed === 0 ? [found] : [{ ...found, message: `${found.message} (${count} in this file, the baseline allows ${allowed})` }];
+    return allowed === 0 ? [found] : [{ ...found, message: `${found.message} (this file counts ${count}, the baseline allows ${allowed})` }];
   });
 
   const staleDebt = entries(baseline.debt)
@@ -100,7 +108,8 @@ export function applyBaseline(
     .flatMap(([rule, file, allowed]) => {
       const count = counts.get(key(rule, file)) ?? 0;
       if (count >= allowed) return [];
-      const fix = count === 0 ? `delete "${file}" from \`debt["${rule}"]\`` : `set \`debt["${rule}"]["${file}"]\` to ${count}`;
+      const byHand = count === 0 ? `delete "${file}" from \`debt["${rule}"]\`` : `set \`debt["${rule}"]["${file}"]\` to ${count}`;
+      const fix = `run \`${LOWER_BASELINE_COMMAND}\`, or by hand ${byHand}`;
       return [baselineFinding(BASELINE_CHECKS.stale, `debt["${rule}"]["${file}"] is ${allowed}, and the linter finds ${count}`, fix)];
     });
 
@@ -110,7 +119,7 @@ export function applyBaseline(
       baselineFinding(
         BASELINE_CHECKS.stale,
         `boundaries["${rule}"]["${file}"] excuses a file where the rule finds nothing`,
-        `delete "${file}" from \`boundaries["${rule}"]\``
+        `run \`${LOWER_BASELINE_COMMAND}\`, or by hand delete "${file}" from \`boundaries["${rule}"]\``
       )
     );
 
@@ -135,7 +144,13 @@ function suppressionFindings(allowed: number, held: number): Finding[] {
     ];
   }
   if (held < allowed) {
-    return [baselineFinding(BASELINE_CHECKS.stale, `\`suppressions\` is ${allowed}, and the code holds ${held}`, `set \`suppressions\` to ${held}`)];
+    return [
+      baselineFinding(
+        BASELINE_CHECKS.stale,
+        `\`suppressions\` is ${allowed}, and the code holds ${held}`,
+        `run \`${LOWER_BASELINE_COMMAND}\`, or by hand set \`suppressions\` to ${held}`
+      ),
+    ];
   }
   return [];
 }
@@ -173,7 +188,30 @@ export function compareWithBase(base: Baseline, head: Baseline): Finding[] {
   return [...grewDebt, ...grewBoundaries, ...grewSuppressions];
 }
 
-export const baselineSize = (baseline: Baseline): { debt: number; boundaries: number } => ({
+export function lowerBaseline(baseline: Baseline, run: RunResult): Baseline {
+  const counts = weighByRuleAndFile(run);
+  const debt = Object.fromEntries(
+    Object.entries(baseline.debt).map(([rule, files]) => [
+      rule,
+      Object.fromEntries(
+        Object.entries(files).flatMap(([file, allowed]): Array<[string, number]> => {
+          const count = Math.min(allowed, counts.get(key(rule, file)) ?? 0);
+          return count > 0 ? [[file, count]] : [];
+        })
+      ),
+    ])
+  );
+  const boundaries = Object.fromEntries(
+    Object.entries(baseline.boundaries).map(([rule, files]) => [
+      rule,
+      Object.fromEntries(Object.entries(files).filter(([file]) => counts.has(key(rule, file)))),
+    ])
+  );
+  return { suppressions: Math.min(baseline.suppressions, run.suppressions), boundaries, debt };
+}
+
+export const baselineSize = (baseline: Baseline): { entries: number; debt: number; boundaries: number } => ({
+  entries: entries(baseline.debt).length,
   debt: entries(baseline.debt).reduce((total, [, , count]) => total + count, 0),
   boundaries: entries(baseline.boundaries).length,
 });

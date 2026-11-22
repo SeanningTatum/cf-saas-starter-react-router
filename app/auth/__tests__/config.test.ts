@@ -7,6 +7,14 @@ import {
   DEV_ONLY_AUTH_SECRET,
 } from "@/lib/constants/auth";
 import { ConfigurationError } from "@/models/errors/repository";
+import {
+  TURNSTILE_ALWAYS_PASS_TEST_KEYS,
+  TURNSTILE_PUBLISHED_TEST_KEYS,
+  TURNSTILE_TEST_ALWAYS_FAIL_SECRET_KEY,
+  TURNSTILE_TEST_ALWAYS_FAIL_SITE_KEY,
+  TURNSTILE_TEST_SECRET_KEY,
+  TURNSTILE_TEST_SITE_KEY,
+} from "@/lib/constants/turnstile";
 
 const SECRET = "test-secret-not-real-0000000000000000";
 const APP_URL = "https://app.example.test";
@@ -221,5 +229,83 @@ describe("resolveAuthConfig secure cookies", () => {
       false
     );
     expect(config({}, dev).secureCookies).toBe(false);
+  });
+});
+
+describe("resolveAuthConfig Turnstile keys", () => {
+  const SITE_KEY = "0x4AAAAAAA-fake-site-key";
+  const SECRET_KEY = "0x4AAAAAAA-fake-secret-key";
+  const keys = { TURNSTILE_SITE_KEY: SITE_KEY, TURNSTILE_SECRET_KEY: SECRET_KEY };
+
+  it.each([
+    ["outside dev", prod],
+    ["in dev", dev],
+  ])("turns Turnstile on with both keys set %s", (_label, options) => {
+    expect(config({ ...prodEnv, ...keys }, options).turnstile).toEqual({
+      siteKey: SITE_KEY,
+      secretKey: SECRET_KEY,
+    });
+  });
+
+  it("trims the keys, so a stray space from a pasted secret does not fail every sign-in", () => {
+    expect(
+      config({ ...prodEnv, TURNSTILE_SITE_KEY: ` ${SITE_KEY} `, TURNSTILE_SECRET_KEY: `${SECRET_KEY}\n` }, prod)
+        .turnstile
+    ).toEqual({ siteKey: SITE_KEY, secretKey: SECRET_KEY });
+  });
+
+  it("uses Cloudflare's always-pass test pair in dev when neither key is set, so local sign-in works offline of a real widget", () => {
+    expect(config(prodEnv, dev).turnstile).toEqual(TURNSTILE_ALWAYS_PASS_TEST_KEYS);
+    expect(config({ ...prodEnv, TURNSTILE_SITE_KEY: "", TURNSTILE_SECRET_KEY: " " }, dev).turnstile).toEqual(
+      TURNSTILE_ALWAYS_PASS_TEST_KEYS
+    );
+  });
+
+  it("leaves Turnstile off outside dev when neither key is set, so a fresh deploy still lets people sign in", () => {
+    expect(config(prodEnv, prod).turnstile).toBeNull();
+  });
+
+  it.each([
+    ["outside dev", prod],
+    ["in dev", dev],
+  ])("fails naming the secret key when only the site key is set %s", (_label, options) => {
+    expect(failedField({ ...prodEnv, TURNSTILE_SITE_KEY: SITE_KEY }, options)).toBe("TURNSTILE_SECRET_KEY");
+  });
+
+  it.each([
+    ["outside dev", prod],
+    ["in dev", dev],
+  ])("fails naming the site key when only the secret key is set %s", (_label, options) => {
+    expect(failedField({ ...prodEnv, TURNSTILE_SECRET_KEY: SECRET_KEY }, options)).toBe("TURNSTILE_SITE_KEY");
+  });
+
+  it.each(TURNSTILE_PUBLISHED_TEST_KEYS.filter((key) => key.length === TURNSTILE_TEST_SITE_KEY.length))(
+    "refuses the published test site key %s outside dev, since it lets every bot through",
+    (testKey) => {
+      expect(failedField({ ...prodEnv, ...keys, TURNSTILE_SITE_KEY: testKey }, prod)).toBe("TURNSTILE_SITE_KEY");
+    }
+  );
+
+  it.each(TURNSTILE_PUBLISHED_TEST_KEYS.filter((key) => key.length === TURNSTILE_TEST_SECRET_KEY.length))(
+    "refuses the published test secret %s outside dev, since it passes any dummy token",
+    (testKey) => {
+      expect(failedField({ ...prodEnv, ...keys, TURNSTILE_SECRET_KEY: testKey }, prod)).toBe("TURNSTILE_SECRET_KEY");
+    }
+  );
+
+  it("accepts the always-fail test pair in dev, so a developer can see the refusal locally", () => {
+    expect(
+      config(
+        {
+          ...prodEnv,
+          TURNSTILE_SITE_KEY: TURNSTILE_TEST_ALWAYS_FAIL_SITE_KEY,
+          TURNSTILE_SECRET_KEY: TURNSTILE_TEST_ALWAYS_FAIL_SECRET_KEY,
+        },
+        dev
+      ).turnstile
+    ).toEqual({
+      siteKey: TURNSTILE_TEST_ALWAYS_FAIL_SITE_KEY,
+      secretKey: TURNSTILE_TEST_ALWAYS_FAIL_SECRET_KEY,
+    });
   });
 });

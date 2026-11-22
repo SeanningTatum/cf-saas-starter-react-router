@@ -4,6 +4,7 @@ import type { AppLoadContext } from "react-router";
 import type { ErrorCapture } from "@/lib/error-reporting/report";
 import { BucketRepository } from "@/repositories/bucket";
 import { ErrorReporterFrom } from "@/services/error-reporter";
+import { RateLimiter } from "@/services/rate-limit";
 import { action } from "../upload-file";
 
 type ActionArgs = Parameters<typeof action>[0];
@@ -21,6 +22,7 @@ const upload = async (getSession: () => Promise<unknown>) => {
       ErrorReporterFrom({
         capture: (capture) => Effect.sync(() => void captures.push(capture)),
       }),
+      Layer.succeed(RateLimiter, { check: () => Effect.void }),
       Layer.succeed(BucketRepository, {
         upload: () => Effect.succeed("uploads/fake"),
       } as unknown as BucketRepository)

@@ -29,13 +29,14 @@ describe("runRules", () => {
     expect(places(result.findings)).toEqual(["app/a.ts:1 no-bad", "app/a.ts:2 repo-hits"]);
   });
 
-  it("with only set, ignores a path that is not .ts or .tsx and a path that does not exist", () => {
-    const repo = memoryRepo({ "app/a.ts": "BAD", "app/notes.md": "BAD" });
+  it("with only set, leaves the choice of file type to each rule and ignores a path that does not exist", () => {
+    const repo = memoryRepo({ "app/a.ts": "BAD", "app/notes.md": "BAD", "app/flow.js": "BAD" });
+    const scriptsToo = badWordRule({ applies: (path) => path.endsWith(".ts") || path.endsWith(".js") });
 
-    const result = runRules([badWordRule()], repo, roots(), new Set(["app/notes.md", "app/missing.ts", "app/a.ts"]));
+    const result = runRules([scriptsToo], repo, roots(), new Set(["app/notes.md", "app/missing.ts", "app/a.ts", "app/flow.js"]));
 
-    expect(places(result.findings)).toEqual(["app/a.ts:1 no-bad"]);
-    expect(result.filesChecked).toBe(1);
+    expect(places(result.findings)).toEqual(["app/a.ts:1 no-bad", "app/flow.js:1 no-bad"]);
+    expect(result.filesChecked).toBe(2);
   });
 
   it("sorts findings by file, then line, then rule, whatever order the rules report them in", () => {
@@ -126,8 +127,8 @@ describe("runRules in file mode with a rule that compares files", () => {
 
 describe("applySuppression", () => {
   const suppressible = () => badWordRule({ suppressionMarker: "bad-ok:" });
-  const hitsIn = (text: string): FileHit[] => suppressible().check(sourceOf(text), memoryRepo({}));
-  const suppress = (text: string) => applySuppression(suppressible(), sourceOf(text), hitsIn(text));
+  const hitsIn = (text: string, path?: string): FileHit[] => suppressible().check(sourceOf(text, path), memoryRepo({}));
+  const suppress = (text: string, path?: string) => applySuppression(suppressible(), sourceOf(text, path), hitsIn(text, path));
 
   it("excuses a hit on the marker's own line and on the next line, and no further", () => {
     const result = suppress("BAD // bad-ok: generated\nok\n// bad-ok: cannot reject\nBAD\nBAD");
@@ -137,11 +138,11 @@ describe("applySuppression", () => {
   });
 
   it.each([
-    ["a line comment", "// bad-ok:\nBAD"],
-    ["a block comment, whose closing */ is not a reason", "/* bad-ok: */\nBAD"],
-    ["a JSX comment, whose closing */} is not a reason", "{/* bad-ok: */}\nBAD"],
-  ])("a marker with no reason in %s excuses nothing and is itself a finding", (_name, text) => {
-    const result = suppress(text);
+    ["a line comment", "// bad-ok:\nBAD", "app/a.ts"],
+    ["a block comment, whose closing */ is not a reason", "/* bad-ok: */\nBAD", "app/a.ts"],
+    ["a JSX comment, whose closing */} is not a reason", "export const a = <p>{/* bad-ok: */}\nBAD</p>;", "app/a.tsx"],
+  ])("a marker with no reason in %s excuses nothing and is itself a finding", (_name, text, path) => {
+    const result = suppress(text, path);
 
     expect(result.hits.map((hit) => [hit.line, hit.message])).toEqual([
       [2, "BAD found"],
@@ -180,6 +181,13 @@ describe("applySuppression", () => {
 
     expect(result.hits.map((hit) => hit.line)).toEqual([4]);
     expect(result.count).toBe(1);
+  });
+
+  it("a marker inside a string on the line of a hit excuses nothing and is not counted, since only a comment can hold one", () => {
+    const result = suppress('export const note = "// bad-ok: not a comment", BAD = 1;');
+
+    expect(result.hits.map((hit) => [hit.line, hit.message])).toEqual([[1, "BAD found"]]);
+    expect(result.count).toBe(0);
   });
 
   it("passes every hit through when the rule has no suppression, even next to marker text", () => {

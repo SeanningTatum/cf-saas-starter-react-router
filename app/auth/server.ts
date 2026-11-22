@@ -1,7 +1,7 @@
 import { betterAuth, type BetterAuthOptions } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import type { D1Database } from "@cloudflare/workers-types";
-import { admin } from "better-auth/plugins";
+import { admin, captcha } from "better-auth/plugins";
 import { getDb } from "@/db";
 import * as schema from "@/db/schema";
 import {
@@ -12,7 +12,8 @@ import {
   SESSION_EXPIRES_IN_SECONDS,
   SESSION_UPDATE_AGE_SECONDS,
 } from "@/lib/constants/auth";
-import type { AuthConfig } from "./config";
+import { TURNSTILE_PROTECTED_ENDPOINTS, TURNSTILE_PROVIDER } from "@/lib/constants/turnstile";
+import type { AuthConfig, TurnstileKeys } from "./config";
 import { adminGuard } from "./admin-guard";
 import { clearExpiryOnOpenBan, endSessionsOnBan } from "./ban-hooks";
 
@@ -27,8 +28,20 @@ const authOptions = {
     updateAge: SESSION_UPDATE_AGE_SECONDS,
     cookieCache: { enabled: false },
   },
+  rateLimit: { enabled: false },
   plugins: [admin()],
 } satisfies BetterAuthOptions;
+
+const turnstilePlugins = (keys: TurnstileKeys | null) =>
+  keys === null
+    ? []
+    : [
+        captcha({
+          provider: TURNSTILE_PROVIDER,
+          secretKey: keys.secretKey,
+          endpoints: [...TURNSTILE_PROTECTED_ENDPOINTS],
+        }),
+      ];
 
 export function createAuth(database: D1Database, config: AuthConfig) {
   const db = getDb(database);
@@ -42,6 +55,7 @@ export function createAuth(database: D1Database, config: AuthConfig) {
     baseURL: config.baseURL,
     trustedOrigins: [...config.trustedOrigins],
     ...authOptions,
+    plugins: [...authOptions.plugins, ...turnstilePlugins(config.turnstile)],
     advanced: {
       disableOriginCheck: false,
       useSecureCookies: config.secureCookies,

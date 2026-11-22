@@ -11,6 +11,12 @@
       "reason": "Test support for the upload machine: it generates the paths the unit test checks and the paths spec replays. No app code imports it."
     },
     { "match": "app/**/index.ts", "kind": "unit" },
+    {
+      "match": "app/components/turnstile-widget.tsx",
+      "kind": "covered-by",
+      "test": "e2e/auth-turnstile.spec.ts",
+      "reason": "The Turnstile widget on the sign-in and sign-up forms. The spec drives it through ready, a refused token, a blocked script and the retry; its logic lives in app/lib/turnstile-client.ts, which has a unit test."
+    },
     { "match": "app/components/**", "kind": "component" },
     { "match": "app/routes/**/components/**", "kind": "component" },
     { "match": "app/routes/**/layout/**", "kind": "component" },

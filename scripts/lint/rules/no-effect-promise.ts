@@ -1,10 +1,11 @@
 import ts from "typescript";
 import { isEffectReceiver } from "../effect-ast";
 import { inApp } from "../cases";
+import { EFFECT_PROMISE_MARKER } from "../constants";
 import { isShippedSource, lineOf, walkNodes } from "../source";
 import type { FileHit, FileRule } from "../types";
 
-const MARKER = "effect-promise-ok:";
+const MARKER = EFFECT_PROMISE_MARKER;
 
 export const rule: FileRule = {
   id: "no-effect-promise",

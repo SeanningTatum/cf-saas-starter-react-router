@@ -24,14 +24,21 @@ import { LoginSchema, type LoginInput } from "@/lib/schemas/auth"
 import { useState } from "react"
 import { useTranslation } from "react-i18next"
 import { useHydrated } from "@/hooks/use-hydrated"
+import { ProblemBox, TurnstileWidget, useTurnstile } from "@/components/turnstile-widget"
+import { captchaFetchOptions } from "@/lib/turnstile-client"
+import { authRefusalFor } from "@/lib/auth-errors"
 
-interface LoginFormProps extends React.ComponentProps<"div"> { }
+interface LoginFormProps extends React.ComponentProps<"div"> {
+  turnstileSiteKey?: string | null
+}
 
-export function LoginForm({ className, ...props }: LoginFormProps) {
+export function LoginForm({ className, turnstileSiteKey = null, ...props }: LoginFormProps) {
   const navigate = useNavigate()
   const [authError, setAuthError] = useState<string>()
   const { t } = useTranslation("auth")
   const hydrated = useHydrated()
+  const turnstile = useTurnstile(turnstileSiteKey)
+  const awaitingCheck = turnstile.enabled && turnstile.token === null
 
   const form = useForm<LoginInput>({
     resolver: effectResolver(LoginSchema),
@@ -43,20 +50,25 @@ export function LoginForm({ className, ...props }: LoginFormProps) {
 
   async function onSubmit(data: LoginInput) {
     setAuthError(undefined)
+    if (awaitingCheck) return
 
     try {
       const result = await authClient.signIn.email({
         email: data.email,
         password: data.password,
+        fetchOptions: captchaFetchOptions(turnstile.token),
       })
 
       if (result.error) {
-        setAuthError(result.error.message || t("login.error_invalid"))
+        turnstile.reset()
+        const refusal = authRefusalFor(result.error, turnstile.enabled)
+        setAuthError(refusal ? t(`refusal.${refusal}`) : result.error.message || t("login.error_invalid"))
         return
       }
 
       navigate("/dashboard")
     } catch (err) {
+      turnstile.reset()
       setAuthError(err instanceof Error ? err.message : t("login.error_failed"))
     }
   }
@@ -64,11 +76,11 @@ export function LoginForm({ className, ...props }: LoginFormProps) {
   return (
     <div className={cn("flex flex-col gap-6", className)} {...props}>
       <Card data-testid="login-card" className="border-border/80 shadow-sm">
-        <CardHeader className="gap-2">
+        <CardHeader className="gap-2 px-4 sm:px-6">
           <CardTitle className="text-xl">{t("login.title")}</CardTitle>
           <CardDescription>{t("login.description")}</CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="px-4 sm:px-6">
           <Form {...form}>
             <form method="post" onSubmit={form.handleSubmit(onSubmit)} className="space-y-6" data-testid="login-form">
               <FormField
@@ -118,21 +130,18 @@ export function LoginForm({ className, ...props }: LoginFormProps) {
                   </FormItem>
                 )}
               />
+              {turnstile.enabled && <TurnstileWidget turnstile={turnstile} />}
               {authError && (
-                <div
-                  role="alert"
-                  data-testid="login-error"
-                  className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive"
-                >
-                  {authError}
-                </div>
+                <ProblemBox role="alert" data-testid="login-error">
+                  <p>{authError}</p>
+                </ProblemBox>
               )}
               <div className="space-y-4">
                 <Button
                   type="submit"
                   className="w-full"
                   data-testid="login-submit"
-                  disabled={!hydrated || form.formState.isSubmitting}
+                  disabled={!hydrated || form.formState.isSubmitting || awaitingCheck}
                 >
                   {form.formState.isSubmitting ? t("login.submitting") : t("login.submit")}
                 </Button>

@@ -10,6 +10,19 @@ const HEAD = 'import { type RouteConfig, index, layout, prefix, route } from "@r
 const pathsOf = (table: string): Record<string, string[]> =>
   Object.fromEntries(routePaths(sourceOf(`${HEAD}export default ${table};\n`, ROUTES_FILE)));
 
+describe("routePaths with a path it cannot read", () => {
+  it("leaves out a route whose path is a constant, not a string, so it is never filed under its parent's path", () => {
+    const table =
+      'import { index, route } from "@react-router/dev/routes";\nimport { REPORT_PATH } from "./lib/constants/reports";\n' +
+      'export default [index("routes/home.tsx"), route(REPORT_PATH, "routes/api/report.ts")];\n';
+
+    const paths = routePaths(sourceOf(table, "app/routes.ts"));
+
+    expect(paths.get("app/routes/home.tsx")).toEqual(["/"]);
+    expect(paths.has("app/routes/api/report.ts")).toBe(false);
+  });
+});
+
 describe("routePaths", () => {
   it("a top-level index is / and a top-level route keeps its own path", () => {
     expect(pathsOf('[index("routes/home.tsx"), route("/login", "routes/login.tsx")]')).toEqual({
