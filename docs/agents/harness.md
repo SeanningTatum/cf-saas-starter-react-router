@@ -137,7 +137,7 @@ After the first push no branch is rewritten: `.claude/settings.json` denies `git
 
 | Command | Purpose |
 |---------|---------|
-| [`/harness-check`](../../.claude/commands/harness-check.md) | [`scripts/harness-check.sh`](../../scripts/harness-check.sh) — CLAUDE↔AGENTS symlink, sub-agent frontmatter, Kimi roster symlink, hook wiring + hook tests, `harness.config.json` (check M), workflow scripts (they parse, and match their sources), and the live repo rules against `.github/repo-rules.json` ([`docs/ci/repo-rules.md`](../ci/repo-rules.md); a notice when GitHub cannot be read). No LLM, exits non-zero on drift. |
+| [`/harness-check`](../../.claude/commands/harness-check.md) | [`scripts/harness-check.sh`](../../scripts/harness-check.sh) — CLAUDE↔AGENTS symlink, sub-agent frontmatter, Kimi roster symlink, hook wiring + hook tests, `harness.config.json` (check M), workflow scripts (they parse, and match their sources), the generated lint rules page, and the live repo rules against `.github/repo-rules.json` ([`docs/ci/repo-rules.md`](../ci/repo-rules.md); a notice when GitHub cannot be read). No LLM, exits non-zero on drift. |
 
 ## Gates
 
@@ -158,6 +158,8 @@ Listed in `gates` in [`harness.config.json`](../../harness.config.json) and run 
 
 `./scripts/verify.sh` runs the full set, `--baseline` the quick set, `--only <gate>` one gate, `--list` prints them. To add a gate, add an object to `gates` in `harness.config.json` (see [`harness-config.md`](harness-config.md)) — CI picks it up.
 
+The two `non-negotiables` gates run the house linter (`bun run lint:house`): one file per rule in `scripts/lint/rules/`, findings that say the fix, and a baseline that only shrinks. The rules, the baseline and how to add a rule: [`lint-rules.md`](lint-rules.md).
+
 ## Commands (README.md has the same list)
 
 ```bash
@@ -173,6 +175,7 @@ bun run deploy:preview    # Build with CLOUDFLARE_ENV=preview + deploy the -prev
 bun run typecheck         # Full typecheck (cf-typegen + react-router typegen + tsc)
 bun run test              # Vitest unit tests (one-shot)
 bun run test:watch        # Vitest watch mode
+bun run lint:house [files] # House lint rules: the named files, or the whole repo (--rules lists them)
 bun run test:e2e          # Playwright e2e tests
 bun run test:e2e:videos --out <dir>  # Record the @golden/@error specs as PR videos
 bun run db:generate       # Generate Drizzle migration
