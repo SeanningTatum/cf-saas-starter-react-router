@@ -31,6 +31,11 @@ import {
   declaresOversizedUpload,
   matchesMagicBytes,
 } from "@/lib/constants/upload";
+import {
+  UPLOAD_READ_HEAD_SPAN,
+  UPLOAD_STORE_FILE_SPAN,
+} from "@/lib/constants/spans";
+import { getSession } from "@/services/session";
 import { ErrorReporter } from "@/services/error-reporter";
 import type { Route } from "./+types/upload-file";
 
@@ -46,10 +51,7 @@ const fileField = (message: string) => new ValidationError({ entity: "file", fie
 
 export async function action({ request, context }: Route.ActionArgs) {
   const program = Effect.gen(function* () {
-    const session = yield* Effect.tryPromise({
-      try: () => context.auth.api.getSession({ headers: request.headers }),
-      catch: (cause) => new ExternalServiceError({ service: "BetterAuth", cause }),
-    });
+    const session = yield* getSession(context.auth.api, request.headers);
     const signedIn = activeSession(session, new Date(yield* Clock.currentTimeMillis));
     if (!signedIn) {
       return refusal(UPLOAD_UNAUTHORIZED_MESSAGE, HTTP_UNAUTHORIZED);
@@ -83,7 +85,7 @@ export async function action({ request, context }: Route.ActionArgs) {
     const head = yield* Effect.tryPromise({
       try: () => file.slice(0, MAGIC_BYTES_SNIFF_LENGTH).arrayBuffer(),
       catch: (cause) => new ExternalServiceError({ service: "FileRead", cause }),
-    });
+    }).pipe(Effect.withSpan(UPLOAD_READ_HEAD_SPAN));
     if (!matchesMagicBytes(meta.type, new Uint8Array(head))) {
       return yield* Effect.fail(
         new BucketValidationError({ message: UPLOAD_CONTENT_MISMATCH_MESSAGE, field: "file" })
@@ -102,6 +104,7 @@ export async function action({ request, context }: Route.ActionArgs) {
       )
     ),
     Effect.tapErrorCause((cause) => Effect.logError(UPLOAD_FAILED_LOG, cause)),
+    Effect.withSpan(UPLOAD_STORE_FILE_SPAN),
     Effect.catchTags({
       ValidationError: (e) => Effect.succeed(refusal(e.message, HTTP_BAD_REQUEST)),
       BucketValidationError: (e) => Effect.succeed(refusal(e.message, HTTP_BAD_REQUEST)),

@@ -3,6 +3,8 @@
 # the steps that call Cloudflare see it. `readiness` holds no secret value.
 # Each preview gets its own D1 database and a seeded password derived from PREVIEW_SEED_SECRET.
 # Setup and token scopes: see docs/ci/pipelines.md
+# Only a PR into the default branch or production deploys; a stacked PR (any other base) skips,
+# and its roll-up gets the one preview of the whole feature.
 name: Preview Deploy
 
 on:
@@ -19,6 +21,7 @@ permissions:
 jobs:
   readiness:
     name: Check preview setup
+    if: github.base_ref == github.event.repository.default_branch || github.base_ref == 'production'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
@@ -99,8 +102,9 @@ jobs:
         id: upload
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_PREVIEW_API_TOKEN }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
-          OUT=$(bunx wrangler versions upload --preview-alias "pr-$PR_NUMBER" 2>&1)
+          OUT=$(bunx wrangler versions upload --preview-alias "pr-$PR_NUMBER" --var "RELEASE_VERSION:$HEAD_SHA" --var ENVIRONMENT:preview 2>&1)
           echo "$OUT"
           ALIAS_URL=$(printf '%s' "$OUT" | grep -oE 'Version Preview Alias URL: https://\S+' | awk '{print $NF}')
           VERSION_URL=$(printf '%s' "$OUT" | grep -oE 'Version Preview URL: https://\S+' | awk '{print $NF}')

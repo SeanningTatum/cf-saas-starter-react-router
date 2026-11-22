@@ -6,7 +6,7 @@
  * This workflow has no fix round (it audits and scores once), so there is nothing to test there.
  */
 import { describe, expect, it } from "vitest";
-import { dryRun, labels, type AnswerRule, type DryRunResult } from "../../lib/workflow-dry-run";
+import { dryRun, labels, ledgerOf, callShape, rowShape, RUN_OK, type AnswerRule, type DryRunResult } from "../../lib/workflow-dry-run";
 
 const IDS = ["problem", "user", "fit", "duplicate", "acceptance", "non_goals", "metric", "ui_states", "data", "roles", "i18n_analytics", "errors", "non_negotiables"];
 const BANDS = ["typical", "edge", "adversarial", "refuse"];
@@ -80,6 +80,7 @@ function answers(cases: Case[] = CASES, override: Record<string, (good: Audit) =
   return [
     ["load metadata", { cases, sources: SOURCES }],
     ["verify loaded copy", { identical: true, diff: "" }],
+    [/^run:record/, RUN_OK],
     [
       /^audit /,
       ({ label }: { label: string }) => {
@@ -253,5 +254,35 @@ describe("eval-plan-feature: degrade", () => {
       expect(call.prompt).toContain("quick ticket reviewer");
     }
     expect(resultOf(r)).toMatchObject({ degrade: true, total: 20 });
+  });
+});
+
+describe("eval-plan-feature: run ledger", () => {
+  it("the last call is a run:record on the runner that lists the loader, the verifier and every audit, in order, and its check line verifies: an audit that dodges the ledger is missing from the cost report", async () => {
+    const r = await dryRun("eval-plan-feature", { args: {}, answers: answers() });
+    const record = r.calls.at(-1);
+    if (!record) throw new Error("no calls");
+    expect(record.opts).toEqual({ effort: "low", label: "run:record", phase: "Score", agentType: "runner" });
+    const lg = ledgerOf(record.prompt);
+    expect(lg.verifies).toBe(true);
+    expect([lg.workflow, lg.slug]).toEqual(["eval-plan-feature", "eval-plan-feature"]);
+    expect(rowShape(lg.rows)).toEqual(r.calls.slice(0, -1).map(callShape));
+    expect(lg.rows.map((row) => row.label)).toEqual(["load metadata", "verify loaded copy", ...CASES.map((c) => `audit ${c.id}`)]);
+    expect(record.prompt).toContain("Run this command from the repository root exactly as written");
+  });
+
+  it("a run that stops at Load makes no run:record call: there is nothing worth a file yet", async () => {
+    const dead = await dryRun("eval-plan-feature", { args: {}, answers: [["load metadata", null]] });
+    const differs = await dryRun("eval-plan-feature", { args: {}, answers: [["load metadata", { cases: CASES, sources: SOURCES }], ["verify loaded copy", { identical: false, diff: "x" }]] });
+    const none = await dryRun("eval-plan-feature", { args: { only: ["no-such-case"] }, answers: answers() });
+    for (const r of [dead, differs, none]) expect(labels(r.calls).filter((l) => l.startsWith("run:record"))).toEqual([]);
+  });
+
+  it("a ledger write that fails only logs: the score, the gate and the cases come back as they would have", async () => {
+    const ok = await dryRun("eval-plan-feature", { args: {}, answers: answers() });
+    const failed = await dryRun("eval-plan-feature", { args: {}, answers: [[/^run:record/, "bun: command not found"], ...answers()] });
+    expect(failed.result).toEqual(ok.result);
+    expect(failed.logs.filter((l) => l.startsWith("Run telemetry: not recorded"))).toEqual(["Run telemetry: not recorded (bun: command not found)"]);
+    expect(ok.logs.filter((l) => l.startsWith("Run telemetry"))).toEqual([]);
   });
 });

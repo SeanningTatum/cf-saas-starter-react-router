@@ -61,6 +61,26 @@ describe("classifyError, tagged errors and causes", () => {
     });
   });
 
+  it("classifies the FiberFailure that runPromise rejects with by its cause, so a failed lookup in a loader keeps its tag and a die stays a defect", async () => {
+    const failed = await Effect.runPromise(Effect.fail(queryError())).catch(
+      (error: unknown) => error
+    );
+    const died = await Effect.runPromise(Effect.die(new Error("x"))).catch(
+      (error: unknown) => error
+    );
+
+    expect(classifyError(failed)).toMatchObject({
+      kind: "expected",
+      tag: "QueryError",
+      name: "QueryError",
+    });
+    expect(classifyError(died)).toMatchObject({
+      kind: "defect",
+      name: "Error",
+      message: "x",
+    });
+  });
+
   it("treats an interrupt-only cause as a defect, so a cut-off request is still seen", () => {
     expect(classifyError(Cause.interrupt(FiberId.none))).toMatchObject({
       kind: "defect",

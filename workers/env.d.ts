@@ -15,4 +15,6 @@ interface Env {
   SENTRY_DSN?: string;
   RELEASE_VERSION?: string;
   ENVIRONMENT?: string;
+  LOG_SAMPLE_RATE?: string;
+  TRACE_SAMPLE_RATE?: string;
 }

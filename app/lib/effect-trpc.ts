@@ -162,9 +162,8 @@ const appErrorToTRPC = (e: AppError): TRPCError => {
 };
 
 // Generic fallback for anything that isn't a pre-existing TRPCError or a
-// known AppError (a raw thrown Error, a rejected promise's reason, etc).
-// The original error rides on the TRPCError as `cause`, where the error
-// reporter reads it (docs/agents/error-reporting.md). tRPC never sends
+// known AppError. The original error rides on the TRPCError as `cause` for
+// the error reporter (docs/agents/error-reporting.md); tRPC never sends
 // `cause` to the client, which only ever sees "Internal Server Error".
 const withOrigin = (mapped: TRPCError, origin: AppError): TRPCError =>
   TRPC_SERVER_FAILURE_CODES.includes(mapped.code)

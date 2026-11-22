@@ -9,7 +9,7 @@
  */
 import { describe, expect, it } from "vitest";
 import { lintTitle } from "../helpers/lint-title";
-import { dryRun, labels, seq, type AgentCall, type AnswerRule, type DryRunResult } from "../../lib/workflow-dry-run";
+import { dryRun, labels, ledgerAt, callShape, rowShape, RUN_OK, seq, type AgentCall, type AnswerRule, type DryRunResult } from "../../lib/workflow-dry-run";
 import { COAUTHOR } from "../../../.claude/workflow-src/lib.js";
 
 const ROOT = "/work/repo";
@@ -90,6 +90,7 @@ function happy(over: AnswerRule[] = []): AnswerRule[] {
     ["docs", { files: ["GLOSSARY.md"], pr_bodies: [{ n: 1, path: "pr-1.md" }, { n: 2, path: "pr-2.md" }], adr: null }],
     [/^ship:assign:/, { assignments: [{ n: 1, branch: PR1.branch, paths: PR1.fence }, { n: 2, branch: PR2.branch, paths: PR2.fence }], unassigned: [], overlaps: [], excluded: [] }],
     [/^ship:videos:/, { passed: true, videos: [{ kind: "golden", title: "adds a widget", path: "video/golden-1.webm", status: "passed" }], unrecorded: [] }],
+    [/^run:record/, RUN_OK],
     [/^memory:/, "recorded"],
     ["split", { ok: true, failed_command: "", branches: [{ n: 1, branch: PR1.branch, sha: "b1" }, { n: 2, branch: PR2.branch, sha: "b2" }], checks: [] }],
     [/^local:code-review:/, { method: "code-review skill", findings: [] }],
@@ -218,7 +219,7 @@ describe("ship-feature: happy path, a ticket with a decision record, two stacked
     // Catches a merge command without --match-head-commit, or pinned to some other sha.
     expect((shipped.result as { next: string }).next).toContain(`gh pr merge 103 --squash --match-head-commit ${REVIEWED_SHA}`);
     // The roll-up gets its own CI watch and a working-memory record at the very end.
-    expect(labels(shipped.calls).slice(-2)).toEqual(["close:checks", "memory:record"]);
+    expect(labels(shipped.calls).slice(-3)).toEqual(["close:checks", "run:record", "memory:record"]);
     // Catches a phase() title renamed without meta, a phase out of order, or a call tagged with a phase that does not exist.
     const titles = (shipped.meta.phases ?? []).map((p) => p.title);
     expect(shipped.phases).toEqual(titles);
@@ -295,7 +296,7 @@ describe("ship-feature: a failing gate", () => {
 describe("ship-feature: stop and resume at the ship review", () => {
   it("an approved resume replays every call before the stop from cache, never records twice, and goes on to Split", async () => {
     const { stopped, shipped } = await runHappy();
-    const before = stopped.calls.length - 1; // every call but the stop's own memory record
+    const before = stopped.calls.length - 2; // every call but the stop's own ledger write and memory record
     expect(shipped.calls.slice(0, before).every((c) => c.cached)).toBe(true);
     // Catches a prompt that changes with args.ships: every agent before the stop would run again.
     expect(shipped.live.filter((c) => labels(stopped.calls).includes(c.label)).map((c) => c.label)).toEqual([]);
@@ -386,7 +387,7 @@ describe("ship-feature: fix rounds", () => {
     for (const c of committing) expect({ label: c.label, trailers: [...new Set(trailers(c.prompt))] }).toEqual({ label: c.label, trailers: [COAUTHOR] });
   });
 
-  it("local review: a branch's P0/P1 goes to review-responder, later branches are restacked, and code-review stops after reviewRounds", async () => {
+  it("stacked branches get one code-review round and the lean gates against the branch below at split and restack (catches a stacked branch paying for the full suite or a second round)", async () => {
     const finding = { severity: "P0", file: "app/repositories/widget.ts", line: 3, detail: "SQL built from input", fix: "bind it" };
     const run = await dryRun("ship-feature", {
       args: approve(),
@@ -396,8 +397,28 @@ describe("ship-feature: fix rounds", () => {
         [/^local:restack:/, { ok: true, failed_command: "" }],
       ]),
     });
+    expect(labels(run.calls).filter((x) => x.startsWith("local:code-review:1:"))).toEqual(["local:code-review:1:1"]);
+    const split = find(run.calls, "split").prompt;
+    expect(split).toContain("./scripts/verify.sh --changed");
+    expect(split).toContain(`${PR1.branch} against ${BASE_SHA}; ${PR2.branch} against ${PR1.branch}`);
+    expect(split).not.toContain("`bun run test`");
+    const restack = find(run.calls, "local:restack:code-review:1:1").prompt;
+    expect(restack).toContain("./scripts/verify.sh --changed");
+    expect(restack).toContain(`${PR2.branch} against ${PR1.branch}`);
+  });
+
+  it("local review: a branch's P0/P1 goes to review-responder, later branches are restacked, and code-review stops after reviewRounds", async () => {
+    const finding = { severity: "P0", file: "app/repositories/widget.ts", line: 3, detail: "SQL built from input", fix: "bind it" };
+    const run = await dryRun("ship-feature", {
+      args: { ...approve(), reviewRounds: 2 },
+      answers: happy([
+        [/^local:code-review:1:/, { method: "code-review skill", findings: [finding] }],
+        [/^local:respond:code-review:1:/, (c) => ({ comments: [{ id: `cr-1-${c.label.split(":").pop()}-1`, action: "fixed", reply: "bound" }], commits: ["f1"], blocked: [] })],
+        [/^local:restack:/, { ok: true, failed_command: "" }],
+      ]),
+    });
     const l = labels(run.calls);
-    // Catches the cap (reviewRounds, default 2) dropped or off by one.
+    // Catches the cap (reviewRounds) dropped or off by one.
     expect(l.filter((x) => x.startsWith("local:code-review:1:"))).toEqual(["local:code-review:1:1", "local:code-review:1:2"]);
     const resp = find(run.calls, "local:respond:code-review:1:1");
     expect(resp.opts.agentType).toBe("review-responder");
@@ -502,7 +523,7 @@ describe("ship-feature: a ticket that is not ready", () => {
     ];
     const first = await dryRun("ship-feature", { args: ARGS, answers: happy(notReady) });
     expect(first.result).toMatchObject({ status: "needs-input", stage: "ready", verdict: "amend", gaps: [{ id: "errors", status: "missing" }] });
-    expect(labels(first.calls)).toEqual(["preflight", "intake:audit", "memory:needs-input:ready"]);
+    expect(labels(first.calls)).toEqual(["preflight", "intake:audit", "run:record:needs-input:ready", "memory:needs-input:ready"]);
     // Catches the ticket body pasted outside the DATA fence, where it reads as an instruction.
     expect(fenced(find(first.calls, "intake:audit").prompt, "ticket")).toBe(`${ISSUE_URL}\n# Widgets\n\n${injected}`);
 
@@ -513,6 +534,81 @@ describe("ship-feature: a ticket that is not ready", () => {
     const overridden = await dryRun("ship-feature", { args: { ...ARGS, ready: "override" }, answers: happy(notReady), resumeFrom: first });
     expect(labels(overridden.live)).toEqual(["intake:architect", "intake:architect"]);
     expect(overridden.result).toMatchObject({ stopped: "Intake", reason: "architect returned nothing twice" });
+  });
+});
+
+describe("ship-feature: run ledger", () => {
+  const STOP = "run:record:needs-ship:1";
+
+  it("at the ship stop and at Close the run:record ledger lists exactly the calls made before it, in order, and its check line verifies: a call that dodges the ledger gives a false cost report", async () => {
+    const { stopped, shipped } = await runHappy();
+    for (const [r, label] of [
+      [stopped, STOP],
+      [shipped, "run:record"],
+    ] as const) {
+      const lg = ledgerAt(r, label);
+      expect(lg.verifies).toBe(true);
+      expect([lg.workflow, lg.slug]).toEqual(["ship-feature", SLUG]);
+      expect(rowShape(lg.rows)).toEqual(r.calls.slice(0, lg.at).map(callShape));
+    }
+  });
+
+  it("a re-run with the same args replays the stop's run:record call from cache with the same prompt: the ledger holds no clock and no random value", async () => {
+    const { stopped } = await runHappy();
+    const again = await dryRun("ship-feature", { args: ARGS, answers: happy(), resumeFrom: stopped });
+    const after = find(again.calls, STOP);
+    expect(after.cached).toBe(true);
+    expect(after.prompt).toBe(find(stopped.calls, STOP).prompt);
+    expect(again.live).toEqual([]);
+  });
+
+  it.each([
+    ["a dead agent", null, "empty"],
+    [
+      "a thrown error",
+      () => {
+        throw new Error("rate limited");
+      },
+      "threw",
+    ],
+  ] as const)("%s on the first try shows outcome %s with attempt 1, then the retry shows attempt 2: the ledger must tell a retry from a first try", async (_who, first, outcome) => {
+    const run = await dryRun("ship-feature", { args: ARGS, answers: happy([["intake:record", seq(first, PLAN)]]) });
+    const lg = ledgerAt(run, STOP);
+    expect(lg.rows.filter((row) => row.label === "intake:record").map((row) => [row.attempt, row.outcome])).toEqual([
+      [1, outcome],
+      [2, "ok"],
+    ]);
+    expect(lg.rows.filter((row) => row.attempt === 2)).toHaveLength(1);
+  });
+
+  it("the PR bodies and the roll-up body get the run summary: a PR that opens without its telemetry table breaks the ticket's second criterion", async () => {
+    const { shipped } = await runHappy();
+    for (const label of ["open:prs", "rollup:pr"]) {
+      const prompt = find(shipped.calls, label).prompt;
+      expect(prompt).toContain(`bun scripts/run-telemetry.ts summary ${SLUG} --markdown`);
+      expect(prompt).toContain("## Run");
+    }
+  });
+
+  it("an auditor slug that is not kebab-case stops the run before any memory or ledger call and reaches no prompt: it would otherwise land in a shell line", async () => {
+    const steered = "x; echo steered";
+    const audit = { slug: steered, verdict: "amend", reason: "no error states", items: [{ id: "errors", status: "missing", note: "" }], amended: { title: "Widgets", body: "Users add widgets." }, questions: [] };
+    const run = await dryRun("ship-feature", {
+      args: ARGS,
+      answers: happy([
+        ["preflight", preflight({ record_path: "", issue: { ref: "#76", url: ISSUE_URL, title: "Widgets", body: "Add widgets." } })],
+        ["intake:audit", audit],
+      ]),
+    });
+    expect(run.result).toMatchObject({ stopped: "Intake" });
+    expect(labels(run.calls)).toEqual(["preflight", "intake:audit"]);
+    expect(run.calls.filter((c) => c.prompt.includes(steered))).toEqual([]);
+  });
+
+  it("the ship stop tells the main thread to show the run summary on its review page", async () => {
+    const { stopped } = await runHappy();
+    expect((stopped.result as { next: string }).next).toContain(`bun scripts/run-telemetry.ts summary ${SLUG}\``);
+    expect((stopped.result as { next: string }).next).toContain(`ingest ${SLUG} ship-feature`);
   });
 });
 

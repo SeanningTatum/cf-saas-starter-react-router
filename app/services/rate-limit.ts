@@ -5,6 +5,7 @@ import {
   RATE_LIMITER_FAULT_MESSAGE,
   RATE_LIMITER_SERVICE,
 } from "@/lib/constants/rate-limit";
+import { RATE_LIMIT_CHECK_SPAN } from "@/lib/constants/spans";
 import { RateLimitError } from "@/models/errors/rate-limit";
 import { ConfigurationError, ExternalServiceError } from "@/models/errors/repository";
 import { CloudflareEnv } from "./cloudflare";
@@ -31,7 +32,7 @@ const allowed = (env: Env, rule: RateLimitRule, key: string) =>
     const outcome = yield* Effect.tryPromise({
       try: () => binding.limit({ key }),
       catch: (cause) => new ExternalServiceError({ service: RATE_LIMITER_SERVICE, cause }),
-    });
+    }).pipe(Effect.withSpan(RATE_LIMIT_CHECK_SPAN, { kind: "client", attributes: { "rate_limit.rule": rule } }));
     return outcome.success;
   });
 
