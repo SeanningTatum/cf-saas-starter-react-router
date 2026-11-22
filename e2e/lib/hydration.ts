@@ -2,7 +2,7 @@ import { expect, test, type Locator, type Page, type Response } from "@playwrigh
 
 const reactHasClaimedNode = (node: object) => Object.keys(node).some((key) => key.startsWith("__reactProps$"));
 
-const hydrated = (ready: Locator, timeout: number) => {
+export const hydrated = (ready: Locator, timeout: number): Promise<boolean> => {
   const oneLookTimeout = 1_000;
   return expect
     .poll(() => ready.evaluate(reactHasClaimedNode, undefined, { timeout: oneLookTimeout }).catch(() => false), {

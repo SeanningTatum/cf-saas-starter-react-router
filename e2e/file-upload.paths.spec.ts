@@ -3,6 +3,8 @@ import { Either } from "effect";
 import { describePath, fileUploadEdgePaths, type ModelEvent } from "@/components/file-upload.model";
 import uploadText from "@/locales/en/upload.json" with { type: "json" };
 import { useAdminSessionSignedInOncePerFile } from "./lib/admin-session";
+import { loadHydratedReloadingWhileViteReoptimizesDeps } from "./lib/hydration";
+import { KITCHEN_SINK_UPLOAD_PATH, TIMEOUTS_MS } from "./lib/values";
 
 /**
  * FileUpload wiring, on paths generated from app/components/file-upload.machine.ts
@@ -71,23 +73,16 @@ test.describe("FileUpload paths", () => {
         held.push(route);
       });
 
-      await page.goto("/admin/kitchen-sink#upload");
       const root = page.getByTestId("file-upload");
       const dropzone = page.getByTestId("file-upload-dropzone");
+      await loadHydratedReloadingWhileViteReoptimizesDeps(page, KITCHEN_SINK_UPLOAD_PATH, () => dropzone);
       await expect(root).toHaveAttribute("data-state", "idle");
-
-      // The server renders data-state="idle" too, so "loaded" does not mean
-      // React has hydrated, and networkidle can hang on the dev server. On a
-      // cold dev server the first load can also die on Vite's "Outdated
-      // Optimize Dep" 504s. Prove the machine is live with a drag in and out,
-      // reloading until a handler answers.
       await expect(async () => {
         await dropzone.dispatchEvent("dragover");
-        if ((await root.getAttribute("data-state")) !== "dragging") {
-          await page.reload();
-          throw new Error("FileUpload has not hydrated yet");
-        }
-      }).toPass({ timeout: 60_000 });
+        await expect(root, "the hydrated dropzone did not reach the machine").toHaveAttribute("data-state", "dragging", {
+          timeout: TIMEOUTS_MS.oneLook,
+        });
+      }).toPass();
       await dropzone.dispatchEvent("dragleave");
       await expect(root).toHaveAttribute("data-state", "idle");
 

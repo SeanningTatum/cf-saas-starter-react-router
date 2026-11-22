@@ -4,6 +4,9 @@ import { Schema } from "effect";
 import adminText from "@/locales/en/admin.json" with { type: "json" };
 import commonText from "@/locales/en/common.json" with { type: "json" };
 import { useAdminSessionSignedInOncePerFile } from "./lib/admin-session";
+import { postAppApi, postSignUp } from "./lib/auth-api";
+import { appOrigin } from "./lib/client-ip";
+import { API_PATHS, CLIENT_IPS } from "./lib/values";
 import { loadHydratedReloadingWhileViteReoptimizesDeps } from "./lib/hydration";
 
 type Member = { id: string; name: string; email: string };
@@ -18,21 +21,16 @@ const test = base.extend<{ member: Member }>({
   member: async ({ browser, context, baseURL }, use) => {
     const runId = crypto.randomUUID();
     const member = { name: `Toast O'Neil & Co ${runId}`, email: `toast-${runId}@test.local` };
+    const caller = { origin: appOrigin(baseURL), clientIp: CLIENT_IPS["admin-user-toasts"] };
     const signUpContext = await browser.newContext({ storageState: undefined, baseURL });
-    const res = await signUpContext.request.post("/api/auth/sign-up/email", {
-      headers: { Origin: baseURL ?? "" },
-      data: { ...member, password: crypto.randomUUID() },
-    });
-    expect(res.ok(), `sign-up returned ${res.status()}`).toBe(true);
+    const res = await postSignUp(signUpContext.request, caller, { ...member, password: crypto.randomUUID() });
+    expect(res.ok(), `sign-up returned ${res.status()}: ${await res.text()}`).toBe(true);
     const { user } = Schema.decodeUnknownSync(SignUpResponse)(await res.json());
     await signUpContext.close();
 
     await use({ ...member, id: user.id });
 
-    const removed = await context.request.post("/api/auth/admin/remove-user", {
-      headers: { Origin: baseURL ?? "" },
-      data: { userId: user.id },
-    });
+    const removed = await postAppApi(context.request, caller, API_PATHS.removeUser, { userId: user.id });
     expect(removed.ok(), `remove-user returned ${removed.status()}`).toBe(true);
   },
 });
