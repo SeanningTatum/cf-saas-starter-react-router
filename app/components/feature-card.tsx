@@ -20,16 +20,10 @@ export interface FeatureCardProps {
   to: string;
   cta: string;
   testId: string;
-  /** Renders a non-interactive card showing `disabledHint` instead of the CTA/link. */
   disabled?: boolean;
   disabledHint?: string;
 }
 
-/**
- * Shared "feature/explore" card used on the marketing home page and the
- * dashboard's educational grid. Wraps a `Card` in a `Link` unless `disabled`,
- * in which case it renders inert with `disabledHint` in place of the CTA.
- */
 export function FeatureCard({
   icon,
   title,

@@ -4,18 +4,6 @@ import { uploadFile, type UploadClientError } from "@/lib/upload-client";
 import { ExternalServiceError } from "@/models/errors/repository";
 import { UPLOAD_FAILURE_TOO_BIG, UPLOAD_FAILURE_UNREACHABLE } from "@/lib/constants/upload";
 
-/**
- * The FileUpload component's behaviour, and its spec.
- *
- *   idle ──DRAG_ENTER──▶ dragging ──DRAG_LEAVE──▶ idle
- *   idle | dragging | failed ──PICK [fits]──▶ uploading ──done──▶ success | failed
- *   idle | dragging | failed ──PICK [too big]──▶ failed
- *   success | failed ──RESET──▶ idle (clears file, key and error)
- *
- * The component renders from `state.value` and puts it on `data-state`.
- * Unit tests drive this file directly; the e2e paths are generated from it.
- */
-
 export type UploadFailure =
   | { readonly reason: "too_big" }
   | { readonly reason: "rejected"; readonly message: string }
@@ -53,10 +41,6 @@ export const fileUploadMachine = setup({
     input: { readonly maxSize: number };
   },
   actors: {
-    // Effect.either keeps tagged errors as data: the promise only rejects if the
-    // actor is stopped mid-flight (signal aborted), and onError covers that.
-    // keepFile always sets a file before `uploading`; the null branch only keeps
-    // the types honest instead of casting.
     upload: fromPromise<UploadResult, { readonly file: File | null }>(({ input, signal }) =>
       Effect.runPromise(
         Effect.either(
@@ -83,7 +67,6 @@ export const fileUploadMachine = setup({
       key: null,
       error: UPLOAD_FAILURE_TOO_BIG,
     })),
-    // Emits read context, which the assign before them has already updated.
     emitUploaded: emit(({ context }) => ({ type: "uploaded" as const, key: context.key ?? "" })),
     emitFailed: emit(({ context }) => ({
       type: "failed" as const,

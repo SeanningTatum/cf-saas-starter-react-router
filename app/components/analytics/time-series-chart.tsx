@@ -36,29 +36,17 @@ export interface TimeSeriesDataPoint {
 }
 
 export interface TimeSeriesChartProps {
-  /** Chart title */
   title: string;
-  /** Chart description */
   description?: string;
-  /** Data points with date and numeric values */
   data: TimeSeriesDataPoint[];
-  /** Key in data to use for the primary value */
   dataKey: string;
-  /** Label for the data series */
   dataLabel?: string;
-  /** Chart type: area, line, or bar */
   type?: "area" | "line" | "bar";
-  /** Color for the chart (CSS variable or hex) */
   color?: string;
-  /** Show time range selector */
   showTimeRangeSelector?: boolean;
-  /** Available time ranges */
   timeRanges?: { value: string; label: string; days: number }[];
-  /** Height of the chart */
   height?: number;
-  /** Show Y axis */
   showYAxis?: boolean;
-  /** Format function for tooltip values */
   valueFormatter?: (value: number) => string;
 }
 
@@ -176,7 +164,6 @@ export function TimeSeriesChart({
       );
     }
 
-    // Default: area chart
     return (
       <AreaChart {...commonProps}>
         <defs>

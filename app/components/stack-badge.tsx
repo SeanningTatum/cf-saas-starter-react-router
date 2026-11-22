@@ -3,13 +3,9 @@ import { cn } from "@/lib/utils";
 interface StackBadgeProps {
   children: React.ReactNode;
   className?: string;
-  /** When true, render the leading dot in the accent color. Defaults to false (muted). */
   active?: boolean;
 }
 
-/**
- * Small monospace label naming a stack piece (e.g. "Workers", "tRPC").
- */
 export function StackBadge({ children, className, active = false }: StackBadgeProps) {
   return (
     <span

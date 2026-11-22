@@ -28,19 +28,12 @@ export interface DistributionDataPoint {
 }
 
 export interface DistributionChartProps {
-  /** Chart title */
   title: string;
-  /** Chart description */
   description?: string;
-  /** Data points with name and value */
   data: DistributionDataPoint[];
-  /** Chart type: pie, donut, or bar */
   type?: "pie" | "donut" | "bar";
-  /** Show legend */
   showLegend?: boolean;
-  /** Height of the chart */
   height?: number;
-  /** Default colors if not provided in data */
   colors?: string[];
 }
 
@@ -98,7 +91,6 @@ export function DistributionChart({
       );
     }
 
-    // Pie or donut chart
     const innerRadius = type === "donut" ? 60 : 0;
 
     return (
