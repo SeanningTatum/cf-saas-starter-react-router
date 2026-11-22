@@ -66,7 +66,7 @@ const redactEntries = (
     Object.entries(value)
       .slice(0, MAX_REDACTION_ITEMS)
       .map(([key, item]) => [
-        key,
+        redactText(key),
         SENSITIVE_KEY_PATTERN.test(key) ? REDACTED : redactValue(item, ancestors),
       ])
   );

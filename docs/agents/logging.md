@@ -9,7 +9,7 @@ No `console` call belongs in `app/` or `workers/`. The two in `emitLog` are the 
 `emitLog` passes every line through `redactFields` (`app/lib/redact.ts`) before it writes it: the fields from the request context, the annotations and the message.
 
 - **By key.** A value under a key that contains `authorization`, `cookie`, `token`, `password`, `passwd`, `secret`, `api_key`, `session`, `credential`, `jwt`, `otp` or `signature` (any case, anywhere in the key: `accessToken`, `set-cookie`, `client_secret`) becomes `[redacted]`, whatever it holds, at any depth. The words are one list, `SECRET_WORDS` in `app/lib/constants/redaction.ts`; the text patterns are built from the same list.
-- **By content.** Every string, under any key, goes through `redactText`: an email address becomes `email:<16 hex characters of its SHA-256>`, and credentials in text are masked. The list of shapes and its gaps are in [error-reporting.md](error-reporting.md#redaction).
+- **By content.** Every string, under any key, and every key itself, goes through `redactText`: an email address becomes `email:<16 hex characters of its SHA-256>`, and credentials in text are masked. The list of shapes and its gaps are in [error-reporting.md](error-reporting.md#redaction).
 - An `Error` value is written as its name, message and stack, each redacted. A cycle is written as `[circular]`. Anything more than six levels deep (the line itself is level one) is written as `[too deep]`. A string is cut at 16,384 characters, an array or object at 100 entries, and bytes (a typed array or buffer) are written as `[binary]`.
 - If a field cannot be read (a getter that throws), `emitLog` does not throw: it writes the level, the time and a fixed message, and drops the fields.
 

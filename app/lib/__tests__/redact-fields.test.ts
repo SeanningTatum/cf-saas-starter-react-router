@@ -202,3 +202,19 @@ describe("redactText, strings with no address in them", () => {
     expect(performance.now() - start).toBeLessThan(50);
   });
 });
+
+describe("redactFields, property names", () => {
+  it("hashes an email used as a key, so counts grouped by address do not print the addresses", () => {
+    const out = redactFields({ byUser: { "user@example.com": 3 } });
+
+    expect(out).toEqual({ byUser: { [hashEmail("user@example.com")]: 3 } });
+  });
+
+  it("leaves an ordinary key as it is, so log search by field name still works", () => {
+    expect(Object.keys(redactFields({ requestId: "r1", durationMs: 4, "db.entity": "user" }))).toEqual([
+      "requestId",
+      "durationMs",
+      "db.entity",
+    ]);
+  });
+});

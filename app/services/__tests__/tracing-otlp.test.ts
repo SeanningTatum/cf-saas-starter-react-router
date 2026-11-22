@@ -134,3 +134,11 @@ describe("object attributes", () => {
     expect(JSON.stringify(spans)).not.toContain("plain-value");
   });
 });
+
+describe("object attributes, property names", () => {
+  it("hash an email used as a key, so an attribute that groups by address does not export the addresses", () => {
+    expect(toOtlpValue({ "user@example.com": 1 })).toEqual({
+      stringValue: `{"${hashEmail("user@example.com")}":1}`,
+    });
+  });
+});
