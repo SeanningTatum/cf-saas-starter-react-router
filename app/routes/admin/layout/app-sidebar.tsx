@@ -1,25 +1,20 @@
-import * as React from "react"
+import type * as React from "react"
 import {
   IconCamera,
-  IconChartBar,
   IconDashboard,
   IconDatabase,
   IconFileAi,
   IconFileDescription,
   IconFileWord,
-  IconFolder,
   IconHelp,
   IconInnerShadowTop,
-  IconListDetails,
   IconReport,
   IconSearch,
   IconSettings,
   IconUsers,
 } from "@tabler/icons-react"
 
-import { NavDocuments } from "./nav-documents"
 import { NavMain } from "./nav-main"
-import { NavSecondary } from "./nav-secondary"
 import { NavUser } from "./nav-user"
 import {
   Sidebar,

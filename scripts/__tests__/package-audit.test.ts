@@ -34,7 +34,9 @@ const entry = (over: Partial<AllowEntry> = {}): AllowEntry => ({
 function auditJson(items: { pkg: string; severity: string; ghsa: string; title?: string }[]): string {
   const out: Record<string, unknown[]> = {};
   for (const i of items) {
-    (out[i.pkg] ??= []).push({
+    const list = out[i.pkg] ?? [];
+    out[i.pkg] = list;
+    list.push({
       id: 1000,
       url: `https://github.com/advisories/${i.ghsa}`,
       title: i.title ?? "A title",

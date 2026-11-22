@@ -258,28 +258,28 @@ describe("buildOtlpPayload", () => {
     child.event("retry", 250n, { attempt: 1 });
     child.end(300n, Exit.void);
     const payload = buildOtlpPayload([child], "svc");
-    return { parent, child, span: payload.resourceSpans[0].scopeSpans[0].spans[0], payload };
+    return { parent, child, span: payload.resourceSpans[0]?.scopeSpans[0]?.spans[0], payload };
   };
 
   it("puts service.name on the resource", () => {
-    expect(built().payload.resourceSpans[0].resource.attributes).toEqual([
+    expect(built().payload.resourceSpans[0]?.resource.attributes).toEqual([
       { key: "service.name", value: { stringValue: "svc" } },
     ]);
   });
 
   it("emits ids, parent link, numeric kind, nanosecond strings and attributes, with bigint timestamps as strings and the kind as 3, not client", () => {
     const { parent, child, span } = built();
-    expect(span.traceId).toBe(parent.traceId);
-    expect(span.spanId).toBe(child.spanId);
-    expect(span.parentSpanId).toBe(parent.spanId);
-    expect(span.name).toBe("db.query user");
-    expect(span.kind).toBe(3);
-    expect(span.startTimeUnixNano).toBe("200");
-    expect(span.endTimeUnixNano).toBe("300");
-    expect(span.attributes).toEqual([
+    expect(span?.traceId).toBe(parent.traceId);
+    expect(span?.spanId).toBe(child.spanId);
+    expect(span?.parentSpanId).toBe(parent.spanId);
+    expect(span?.name).toBe("db.query user");
+    expect(span?.kind).toBe(3);
+    expect(span?.startTimeUnixNano).toBe("200");
+    expect(span?.endTimeUnixNano).toBe("300");
+    expect(span?.attributes).toEqual([
       { key: "db.entity", value: { stringValue: "user" } },
     ]);
-    expect(span.events).toEqual([
+    expect(span?.events).toEqual([
       {
         name: "retry",
         timeUnixNano: "250",
@@ -292,7 +292,7 @@ describe("buildOtlpPayload", () => {
     const buffer = makeSpanBuffer();
     const root = makeSpan("root", buffer);
     root.end(200n, Exit.void);
-    const span = buildOtlpPayload([root], "svc").resourceSpans[0].scopeSpans[0].spans[0];
+    const span = buildOtlpPayload([root], "svc").resourceSpans[0]?.scopeSpans[0]?.spans[0];
     expect(span).not.toHaveProperty("parentSpanId");
   });
 
@@ -303,14 +303,14 @@ describe("buildOtlpPayload", () => {
     const bad = makeSpan("bad", buffer);
     bad.end(200n, Exit.fail(new Error("boom".padEnd(2000, "!"))));
 
-    const [okOut, badOut] = buildOtlpPayload([ok, bad], "svc").resourceSpans[0]
-      .scopeSpans[0].spans as ReadonlyArray<{
+    const [okOut, badOut] = (buildOtlpPayload([ok, bad], "svc").resourceSpans[0]
+      ?.scopeSpans[0]?.spans ?? []) as ReadonlyArray<{
       status: { code: number; message?: string };
     }>;
-    expect(okOut.status).toEqual({ code: 1 });
-    expect(badOut.status.code).toBe(2);
-    expect(badOut.status.message).toContain("boom");
-    expect(badOut.status.message!.length).toBeLessThanOrEqual(512);
+    expect(okOut?.status).toEqual({ code: 1 });
+    expect(badOut?.status.code).toBe(2);
+    expect(badOut?.status.message).toContain("boom");
+    expect(badOut?.status.message?.length).toBeLessThanOrEqual(512);
   });
 });
 
@@ -337,13 +337,13 @@ describe("flushSpans", () => {
       );
 
       expect(calls).toHaveLength(1);
-      expect(calls[0].url).toBe("http://collector:4318/v1/traces");
-      expect(calls[0].init.method).toBe("POST");
-      expect(calls[0].init.headers).toEqual({
+      expect(calls[0]?.url).toBe("http://collector:4318/v1/traces");
+      expect(calls[0]?.init.method).toBe("POST");
+      expect(calls[0]?.init.headers).toEqual({
         "content-type": "application/json",
         "x-api-key": "abc",
       });
-      const body = JSON.parse(calls[0].init.body);
+      const body = JSON.parse(calls[0]?.init.body ?? "");
       expect(body.resourceSpans[0].scopeSpans[0].spans.map((s: { name: string }) => s.name)).toEqual(
         ["work"]
       );
@@ -427,8 +427,8 @@ describe("TracingLayer", () => {
     await runtime.dispose();
 
     expect(calls).toHaveLength(1);
-    expect(calls[0].url).toBe("http://localhost:4318/v1/traces");
-    const body = JSON.parse(calls[0].init.body);
+    expect(calls[0]?.url).toBe("http://localhost:4318/v1/traces");
+    const body = JSON.parse(calls[0]?.init.body ?? "");
     expect(body.resourceSpans[0].resource.attributes).toEqual([
       { key: "service.name", value: { stringValue: "cf-saas-starter" } },
     ]);

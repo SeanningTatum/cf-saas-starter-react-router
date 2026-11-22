@@ -24,7 +24,7 @@ export type RefResult = typeof RefSchema.Type;
 
 const firstLine = (error: Error): string => error.message.split("\n")[0] ?? "";
 
-export const samePage = (a: string, b: string): boolean => {
+const samePage = (a: string, b: string): boolean => {
   const path = (url: string): string => {
     const parsed = URL.parse(url);
     return parsed === null ? url : `${parsed.origin}${parsed.pathname.replace(/(.)\/+$/, "$1")}`;

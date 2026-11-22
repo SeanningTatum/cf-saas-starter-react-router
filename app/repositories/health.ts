@@ -3,7 +3,7 @@ import { sql } from "drizzle-orm";
 import { Database } from "@/services/database";
 import { tryQuery } from "@/lib/effect-utils";
 
-export interface DatabasePing {
+interface DatabasePing {
   readonly ok: boolean;
   readonly latencyMs: number;
   readonly error?: string;

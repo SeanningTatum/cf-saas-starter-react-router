@@ -1,5 +1,6 @@
 import { data } from "react-router";
-import { localeCookie, supportedLngs } from "@/i18n";
+import { localeCookie } from "@/i18n/i18n";
+import { supportedLngs } from "@/lib/constants/i18n";
 import type { Route } from "./+types/set-locale";
 
 export async function action({ request }: Route.ActionArgs) {

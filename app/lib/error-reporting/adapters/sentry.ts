@@ -38,7 +38,7 @@ const tags = (report: ErrorReport): Record<string, string> => ({
   ...(report.requestId === undefined ? {} : { request_id: report.requestId }),
 });
 
-export const toSentryEvent = (report: ErrorReport) => ({
+const toSentryEvent = (report: ErrorReport) => ({
   event_id: report.id,
   timestamp: report.timestamp,
   platform: "javascript",

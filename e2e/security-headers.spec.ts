@@ -24,7 +24,7 @@ declare global {
 const nonceOf = (csp: string | undefined): string => {
   const match = /'nonce-([^']+)'/.exec(csp ?? "");
   expect(match, `no 'nonce-…' in the CSP: ${csp}`).not.toBeNull();
-  return match![1];
+  return match?.[1] ?? "";
 };
 
 const expectedHeaders = (nonce: string) =>

@@ -54,8 +54,8 @@ const loadHydrated = async (
     response = await page.reload();
     expect(await hydrated(ready(page), 30_000), `${url} never hydrated`).toBe(true);
   }
-  expect(response, `${url}: no document response`).not.toBeNull();
-  return response!;
+  if (response === null) throw new Error(`${url}: no document response`);
+  return response;
 };
 
 const signInLink = (page: Page) => page.getByTestId("topbar-sign-in");
@@ -290,7 +290,7 @@ test.describe("Browser report endpoint", () => {
 
       const get = await request.get(BROWSER_REPORT_PATH);
       expect(get.status(), "a GET was not refused").toBe(405);
-      expect(get.headers()["allow"]).toBe("POST");
+      expect(get.headers().allow).toBe("POST");
     },
   );
 

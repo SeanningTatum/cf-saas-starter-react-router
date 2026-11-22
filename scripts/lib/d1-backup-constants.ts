@@ -26,7 +26,7 @@ export const UNKNOWN_SHA = "unknown";
 export const SHA_PREFIX_LENGTH = 7;
 export const HEX_ONLY = /^[0-9a-f]+$/i;
 
-export const BACKUP_RETENTION_DAYS = 30;
+const BACKUP_RETENTION_DAYS = 30;
 
 export const BUCKET_NAME_RULE = /^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$/;
 export const BOOKMARK_RULE = /^[0-9A-Za-z_-]+$/;
@@ -35,7 +35,7 @@ export const COLON = /:/g;
 export const OPEN_BRACE = "{";
 export const CLOSE_BRACE = "}";
 
-export const MS_PER_SECOND = 1000;
+const MS_PER_SECOND = 1000;
 export const LIST_TIMEOUT_MS = 60_000;
 export const INFO_TIMEOUT_MS = 60_000;
 export const EXPORT_TIMEOUT_MS = 300_000;
@@ -47,7 +47,7 @@ export const BYTES_PER_MIB = 1_048_576;
 export const MAX_UPLOAD_MIB = 300;
 export const MAX_UPLOAD_BYTES = MAX_UPLOAD_MIB * BYTES_PER_MIB;
 
-export const ROLLBACK_DOC = "docs/ci/rollback.md";
+const ROLLBACK_DOC = "docs/ci/rollback.md";
 
 export const STEP_LIST = "list pending migrations";
 export const STEP_EXPORT = "export the database";

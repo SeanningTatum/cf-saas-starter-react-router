@@ -115,7 +115,7 @@ describe("baselineSize", () => {
 });
 
 describe("lowerBaseline", () => {
-  const before = () =>
+  const baseBaseline = () =>
     baseline({
       suppressions: 3,
       boundaries: { "no-bad": { "app/edge.ts": "framework contract", "app/gone.ts": "framework contract" } },
@@ -134,7 +134,7 @@ describe("lowerBaseline", () => {
     );
 
   it("lowers a count to what the code holds, deletes an entry for a clean file and a boundary that excuses nothing, and lowers the suppression total", () => {
-    const after = lowerBaseline(before(), tree());
+    const after = lowerBaseline(baseBaseline(), tree());
 
     expect(after.debt["no-bad"]).toMatchObject({ "app/a.ts": 1 });
     expect(after.debt["no-bad"]).not.toHaveProperty("app/clean.ts");
@@ -143,11 +143,11 @@ describe("lowerBaseline", () => {
   });
 
   it("refuses to raise a count the code has outgrown, so the new finding still fails the gate", () => {
-    expect(lowerBaseline(before(), tree()).debt["no-bad"]?.["app/over.ts"]).toBe(1);
+    expect(lowerBaseline(baseBaseline(), tree()).debt["no-bad"]?.["app/over.ts"]).toBe(1);
   });
 
   it("refuses to add an entry for a file with new findings and no debt", () => {
-    expect(lowerBaseline(before(), tree()).debt["no-bad"]).not.toHaveProperty("app/new.ts");
+    expect(lowerBaseline(baseBaseline(), tree()).debt["no-bad"]).not.toHaveProperty("app/new.ts");
   });
 
   it("refuses to raise the suppression total when the code holds more markers than allowed", () => {
@@ -168,6 +168,6 @@ describe("lowerBaseline", () => {
   });
 
   it("never grows against the baseline it started from, whatever the code holds", () => {
-    expect(compareWithBase(before(), lowerBaseline(before(), tree()))).toEqual([]);
+    expect(compareWithBase(baseBaseline(), lowerBaseline(baseBaseline(), tree()))).toEqual([]);
   });
 });

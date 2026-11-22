@@ -19,8 +19,9 @@ function executeCommand(
       stdio: silent ? "pipe" : "inherit",
       env: env ? { ...process.env, ...env } : undefined,
     });
-  } catch (error: any) {
-    return { error: true, message: error.stdout || error.stderr || "" };
+  } catch (error) {
+    const failure = error as { stdout?: string; stderr?: string };
+    return { error: true, message: failure.stdout || failure.stderr || "" };
   }
 }
 
@@ -59,7 +60,7 @@ function restorePackageJsonName() {
 
   const pkg = JSON.parse(fs.readFileSync(packageJsonPath, "utf-8"));
   pkg.name = "cf-saas-starter-react-router";
-  fs.writeFileSync(packageJsonPath, JSON.stringify(pkg, null, 2) + "\n");
+  fs.writeFileSync(packageJsonPath, `${JSON.stringify(pkg, null, 2)}\n`);
   console.log("\x1b[32m✓ Restored package.json name\x1b[0m");
 }
 

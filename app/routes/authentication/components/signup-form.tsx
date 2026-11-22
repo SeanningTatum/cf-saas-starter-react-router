@@ -19,7 +19,7 @@ import {
 import { Input } from "@/components/ui/input"
 import { Link, useNavigate } from "react-router"
 import { authClient } from "@/auth/client"
-import { effectResolver } from "@/lib/effect-form"
+import { effectTsResolver as effectResolver } from "@hookform/resolvers/effect-ts"
 import { useForm } from "react-hook-form"
 import { SignupSchema, type SignupInput } from "@/lib/schemas/auth"
 import { useState } from "react"

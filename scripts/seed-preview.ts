@@ -255,13 +255,13 @@ export async function buildSql(
     }
   }
 
-  return lines.join("\n") + "\n";
+  return `${lines.join("\n")}\n`;
 }
 
 function printCredentialsTable(target: Target): void {
   console.log(
     target.local
-      ? "\nSeeded credentials (password for all: " + PASSWORD + "):\n"
+      ? `\nSeeded credentials (password for all: ${PASSWORD}):\n`
       : "\nSeeded accounts (password derived from a seed secret; see docs/ci/pipelines.md):\n",
   );
   const rows = FIXTURES.map((f) => ({
@@ -314,7 +314,7 @@ export function describeMarkdown(): string {
       "idempotent (`INSERT OR IGNORE`, fixed `seed-*` ids), so data you " +
       "create on the preview survives new pushes to this PR.",
   );
-  return lines.join("\n") + "\n";
+  return `${lines.join("\n")}\n`;
 }
 
 async function seed(target: Target, password: string): Promise<void> {
@@ -343,8 +343,8 @@ async function seed(target: Target, password: string): Promise<void> {
 
     console.log(`\x1b[32m✓ Seeded ${target.label} D1 with ${FIXTURES.length} fixture users\x1b[0m`);
     printCredentialsTable(target);
-  } catch (error: any) {
-    failure = error?.message ?? String(error);
+  } catch (error) {
+    failure = (error as { message?: string } | null)?.message ?? String(error);
   } finally {
     fs.rmSync(tmpDir, { recursive: true, force: true });
   }

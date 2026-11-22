@@ -7,7 +7,7 @@ import {
 } from "@/components/ui/select";
 import { useTranslation } from "react-i18next";
 import { useFetcher } from "react-router";
-import { supportedLngs } from "@/i18n";
+import { supportedLngs } from "@/lib/constants/i18n";
 import { cn } from "@/lib/utils";
 import { API_ROUTES } from "@/lib/constants/routes";
 import { LANGUAGE_LABELS } from "@/lib/constants/i18n";

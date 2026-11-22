@@ -22,12 +22,12 @@ import {
   UNSAFE_PATH_REASON,
 } from "./verify-plan-constants";
 
-export interface Step {
+interface Step {
   gate: string;
   command: string;
 }
 
-export interface Skip {
+interface Skip {
   gate: string;
   reason: string;
 }

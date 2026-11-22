@@ -62,6 +62,7 @@ export function useTurnstile(siteKey: string | null): TurnstileController {
   const theme = turnstileTheme(resolvedTheme)
   const language = turnstileLanguage(i18n.language)
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: attempt is not read inside; bumping it is how reset() asks for a fresh widget
   useEffect(() => {
     const container = containerRef.current
     if (siteKey === null || theme === null || container === null) return
@@ -166,6 +167,7 @@ export function TurnstileWidget({ turnstile, className }: TurnstileWidgetProps) 
   }
 
   return (
+    // biome-ignore lint/a11y/useSemanticElements: a fieldset brings form styles to a widget that is not a form group; its own UI change
     <div
       ref={groupRef}
       tabIndex={-1}

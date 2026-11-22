@@ -3,8 +3,8 @@ import { securityHeaders } from "../security-headers";
 
 const NONCE = "dGVzdC1ub25jZS0xMjM0NQ==";
 
-const directive = (csp: string, name: string): string[] =>
-  csp
+const directive = (csp: string | undefined, name: string): string[] =>
+  (csp ?? "")
     .split("; ")
     .find((d) => d.startsWith(`${name} `))
     ?.split(" ")

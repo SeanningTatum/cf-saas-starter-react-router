@@ -88,7 +88,7 @@ describe("SessionLive", () => {
     return Session.pipe(
       Effect.provide(provide({ getSession: async () => null })),
       Effect.withTracer(makeOtlpTracer(buffer)),
-      Effect.map(() => {
+      Effect.andThen(() => {
         expect(buffer.spans.map((span) => span.name)).toEqual([AUTH_GET_SESSION_SPAN]);
       })
     );
@@ -151,7 +151,7 @@ describe("getSession", () => {
     const buffer = makeSpanBuffer();
     return getSession({ getSession: async () => null }, new Headers()).pipe(
       Effect.withTracer(makeOtlpTracer(buffer)),
-      Effect.map(() => {
+      Effect.andThen(() => {
         expect(buffer.spans).toHaveLength(1);
         const [span] = buffer.spans;
         expect(span?.name).toBe(AUTH_GET_SESSION_SPAN);
@@ -194,7 +194,7 @@ describe("getSession", () => {
       },
       headers
     ).pipe(
-      Effect.map(() => {
+      Effect.andThen(() => {
         expect(seen).toHaveLength(1);
         expect(seen[0]).toBe(headers);
       })

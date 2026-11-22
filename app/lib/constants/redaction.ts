@@ -27,7 +27,7 @@ export const SECRET_WORDS = [
   "signature",
 ] as const;
 
-export const CREDENTIAL_HEADER_WORDS = ["authorization", "cookie"] as const;
+const CREDENTIAL_HEADER_WORDS = ["authorization", "cookie"] as const;
 
 export const SECRET_PAIR_PATTERN = new RegExp(
   `((?:${SECRET_WORDS.join("|")})[A-Za-z0-9_-]{0,32}["']?[ \\t]{0,4}[=:][ \\t]{0,4})(?:"[^"\\n]*"|'[^'\\n]*'|["']?[^\\s&,;"']+)`,

@@ -16,7 +16,7 @@ export interface TraceParent {
   readonly sampled: boolean;
 }
 
-export type UrlPathnameWithoutQuery = string;
+type UrlPathnameWithoutQuery = string;
 
 export interface RequestContext {
   readonly requestId: string;
@@ -40,6 +40,9 @@ export const parseTraceparent = (
   if (!match) return undefined;
   const [, version, traceId, spanId, flags] = match;
   if (
+    traceId === undefined ||
+    spanId === undefined ||
+    flags === undefined ||
     version === INVALID_TRACEPARENT_VERSION ||
     ALL_ZEROS_PATTERN.test(traceId) ||
     ALL_ZEROS_PATTERN.test(spanId)

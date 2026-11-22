@@ -7,7 +7,7 @@ vi.hoisted(() => {
 import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
 import { Effect, Layer, ManagedRuntime } from "effect";
 import { runProcedure } from "@/lib/effect-trpc";
-import type { AppError } from "@/models/errors";
+import type { AppError } from "@/models/errors/app-error";
 import type { AppServices } from "@/runtime";
 import { createTRPCRouter, publicProcedure } from "@/trpc";
 import { appRouter } from "@/trpc/router";

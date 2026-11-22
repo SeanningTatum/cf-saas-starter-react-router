@@ -1,7 +1,7 @@
-import { Cause, Effect, Exit, ManagedRuntime } from "effect";
+import { Cause, Effect, Exit, type ManagedRuntime } from "effect";
 import { TRPCError } from "@trpc/server";
 import type { AppServices } from "@/runtime";
-import type { AppError } from "@/models/errors";
+import type { AppError } from "@/models/errors/app-error";
 import { loggers } from "@/lib/logger";
 import { RATE_LIMITED_MESSAGE } from "@/lib/constants/rate-limit";
 import { TRPC_SERVER_FAILURE_CODES } from "@/lib/constants/error-reporting";

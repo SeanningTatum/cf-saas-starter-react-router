@@ -1,4 +1,4 @@
-import { useEffect, useRef, type ChangeEvent, type DragEvent, type KeyboardEvent } from "react";
+import { useCallback, useEffect, useRef, type ChangeEvent, type DragEvent, type KeyboardEvent } from "react";
 import { useMachine } from "@xstate/react";
 import { useTranslation } from "react-i18next";
 import { cn } from "@/lib/utils";
@@ -39,16 +39,19 @@ export function FileUpload({
   const { file, key, error } = snapshot.context;
   const limit = toMB(snapshot.context.maxSize);
 
-  const describe = (failure: UploadFailure): string => {
-    switch (failure.reason) {
-      case "too_big":
-        return t("size_limit_exceeded", { size: limit });
-      case "rejected":
-        return failure.message;
-      case "unreachable":
-        return t("unreachable");
-    }
-  };
+  const describe = useCallback(
+    (failure: UploadFailure): string => {
+      switch (failure.reason) {
+        case "too_big":
+          return t("size_limit_exceeded", { size: limit });
+        case "rejected":
+          return failure.message;
+        case "unreachable":
+          return t("unreachable");
+      }
+    },
+    [t, limit]
+  );
 
   useEffect(() => {
     const uploaded = actorRef.on("uploaded", (e) => onUploadSuccess?.(e.key));
@@ -57,7 +60,7 @@ export function FileUpload({
       uploaded.unsubscribe();
       failed.unsubscribe();
     };
-  }, [actorRef, onUploadSuccess, onUploadError, t, limit]);
+  }, [actorRef, onUploadSuccess, onUploadError, describe]);
 
   const openPickerUnlessUploading = () => {
     if (!snapshot.matches("uploading")) fileInputRef.current?.click();
@@ -144,6 +147,7 @@ export function FileUpload({
           </Button>
         </div>
       ) : (
+        // biome-ignore lint/a11y/useSemanticElements: the zone wraps a file input the upload machine drives; a new element is its own UI change
         <div
           role="button"
           tabIndex={uploading ? -1 : 0}

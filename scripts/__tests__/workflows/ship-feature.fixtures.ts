@@ -1,4 +1,4 @@
-import { configLine, RUN_OK, type AnswerRule } from "../../lib/workflow-dry-run";
+import { configLine, RUN_OK, type AnswerInput, type AnswerRule } from "../../lib/workflow-dry-run";
 
 export const ROOT = "/work/repo";
 export const SLUG = "demo-widget";
@@ -18,7 +18,7 @@ export const GATES = [
   { name: "e2e", pass: true, tail: "" },
 ];
 export const PASS = { verdict: "PASS", findings: [], evidence: "" };
-export const LANE_OK = (path: string) => ({ files: [{ path, summary: "done" }], typecheck: "pass", blocked: [] });
+const LANE_OK = (path: string) => ({ files: [{ path, summary: "done" }], typecheck: "pass", blocked: [] });
 
 export const CONFIG_OK = { ok: true, reason: "", config_json: configLine() };
 
@@ -64,7 +64,7 @@ export function happy(over: AnswerRule[] = []): AnswerRule[] {
     ["contract:branch", { ok: true, reason: "" }],
     ["contract:map", { files: [] }],
     ["contract:schema", LANE_OK(`app/lib/schemas/${SLUG}.ts`)],
-    [/^build:pr\d+-(backend|ui)$/, (c) => LANE_OK(c.label)],
+    [/^build:pr\d+-(backend|ui)$/, (c: AnswerInput) => LANE_OK(c.label)],
     [/^build:typecheck:/, { pass: true, errors: [] }],
     ["write:impact", { changed: [], dependents: [] }],
     ["write:unit", "tests written"],

@@ -137,11 +137,11 @@ const ConfigFileSchema = Schema.Struct({
   brandInit: Schema.optional(Schema.partial(BrandInitSchema)),
 });
 
-export type Gate = typeof GateSchema.Type;
+type Gate = typeof GateSchema.Type;
 export type ReviewBot = typeof ReviewBotSchema.Type;
-export type LoginForm = typeof LoginFormSchema.Type;
+type LoginForm = typeof LoginFormSchema.Type;
 export type SeedLogin = typeof SeedLoginSchema.Type;
-export type Paths = Partial<typeof PathsSchema.Type>;
+type Paths = Partial<typeof PathsSchema.Type>;
 
 export interface HarnessConfig {
   version: typeof CONFIG_VERSION;

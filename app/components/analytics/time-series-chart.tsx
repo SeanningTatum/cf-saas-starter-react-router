@@ -30,7 +30,7 @@ import {
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { useIsMobile } from "@/hooks/use-mobile";
 
-export interface TimeSeriesDataPoint {
+interface TimeSeriesDataPoint {
   date: string;
   [key: string]: string | number;
 }
@@ -81,7 +81,10 @@ export function TimeSeriesChart({
     const selectedRange = timeRanges.find((r) => r.value === timeRange);
     if (!selectedRange) return data;
 
-    const latestDate = new Date(data[data.length - 1].date);
+    const latest = data[data.length - 1];
+    if (!latest) return data;
+
+    const latestDate = new Date(latest.date);
     const startDate = new Date(latestDate);
     startDate.setDate(startDate.getDate() - selectedRange.days);
 

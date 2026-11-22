@@ -30,8 +30,8 @@ describe("securityHeaders", () => {
     expect(securityHeaders({ nonce: NONCE, dev: true })).toEqual({
       ...prod,
       "Content-Security-Policy": prod["Content-Security-Policy"]
-        .replace("connect-src 'self'", "connect-src 'self' ws:")
-        .replace("; upgrade-insecure-requests", ""),
+        ?.replace("connect-src 'self'", "connect-src 'self' ws:")
+        ?.replace("; upgrade-insecure-requests", ""),
     });
   });
 
@@ -52,7 +52,7 @@ describe("securityHeaders", () => {
   });
 
   it("lets the Turnstile widget load its script and frame, and nothing more from its host", () => {
-    const directives = securityHeaders()["Content-Security-Policy"].split("; ");
+    const directives = (securityHeaders()["Content-Security-Policy"] ?? "").split("; ");
     const withTurnstile = directives.filter((d) => d.includes(TURNSTILE_ORIGIN)).map((d) => d.split(" ")[0]);
     expect(withTurnstile).toEqual(["script-src", "frame-src"]);
     expect(directives).toContain(`frame-src 'self' ${TURNSTILE_ORIGIN}`);

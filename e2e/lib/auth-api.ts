@@ -9,7 +9,7 @@ export interface AppApiCaller {
   readonly turnstileToken?: string | null;
 }
 
-export const appApiHeaders = ({ origin, clientIp, turnstileToken = TURNSTILE_TEST_TOKEN }: AppApiCaller) => ({
+const appApiHeaders = ({ origin, clientIp, turnstileToken = TURNSTILE_TEST_TOKEN }: AppApiCaller) => ({
   Origin: origin,
   [CLIENT_IP_HEADER]: clientIp,
   ...(turnstileToken === null ? {} : { [TURNSTILE_TOKEN_HEADER]: turnstileToken }),

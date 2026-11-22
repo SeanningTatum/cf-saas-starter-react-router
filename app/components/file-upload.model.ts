@@ -9,15 +9,15 @@ import {
   type UploadResult,
 } from "./file-upload.machine";
 
-export type UploadDoneEvent = { readonly type: "xstate.done.actor.upload"; readonly output: UploadResult };
+type UploadDoneEvent = { readonly type: "xstate.done.actor.upload"; readonly output: UploadResult };
 
 export type ModelEvent = FileUploadEvent | UploadDoneEvent;
 
-export const UPLOAD_OK: UploadResult = Either.right({ key: "uploads/model-test.txt" });
-export const UPLOAD_REFUSED: UploadResult = Either.left(
+const UPLOAD_OK: UploadResult = Either.right({ key: "uploads/model-test.txt" });
+const UPLOAD_REFUSED: UploadResult = Either.left(
   new BucketValidationError({ message: "File content does not match its declared type", field: "file" })
 );
-export const UPLOAD_UNREACHABLE: UploadResult = Either.left(
+const UPLOAD_UNREACHABLE: UploadResult = Either.left(
   new ExternalServiceError({ service: "upload-file", cause: "connection dropped" })
 );
 

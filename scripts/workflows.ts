@@ -58,21 +58,22 @@ export function buildWorkflow(name: string, source: string, lib: string): string
   if (!source.startsWith(META_START)) throw new Error(`${name}: a workflow source must begin with "${META_START}"`);
   const lines = source.split("\n");
   const marks = lines.flatMap((l, i) => (l.trim() === LIB_MARK ? [i] : []));
-  if (marks.length !== 1) throw new Error(`${name}: expected exactly one "${LIB_MARK}" line, found ${marks.length}`);
+  const mark = marks[0];
+  if (mark === undefined || marks.length !== 1) throw new Error(`${name}: expected exactly one "${LIB_MARK}" line, found ${marks.length}`);
   const metaEnd = metaEndLine(lines);
   if (metaEnd < 0) throw new Error(`${name}: could not find the end of the meta literal (a line that is just "}" or "};")`);
-  if (marks[0] < metaEnd) throw new Error(`${name}: the "${LIB_MARK}" line must come after the meta literal`);
+  if (mark < metaEnd) throw new Error(`${name}: the "${LIB_MARK}" line must come after the meta literal`);
 
   const text = stripLib(lib);
   const banner = `// ---- generated from ${SRC_DIR}/${LIB_FILE} by scripts/workflows.ts; edit the source, then run \`${BUILD_CMD}\` ----`;
   const out = [
     ...lines.slice(0, metaEnd + 1),
     `// GENERATED, edit ${SRC_DIR}/${name}.js`,
-    ...lines.slice(metaEnd + 1, marks[0]),
+    ...lines.slice(metaEnd + 1, mark),
     banner,
     text,
     `// ---- end of ${SRC_DIR}/${LIB_FILE} ----`,
-    ...lines.slice(marks[0] + 1),
+    ...lines.slice(mark + 1),
   ];
   return out.join("\n");
 }
@@ -93,7 +94,7 @@ export function drift(sources: Record<string, string>, built: Record<string, str
       problems.push(`${name}.js: no built file for ${SRC_DIR}/${name}.js`);
       continue;
     }
-    const want = buildWorkflow(name, sources[name], lib);
+    const want = buildWorkflow(name, sources[name] ?? "", lib);
     if (built[name] !== want) problems.push(`${name}.js: differs from what ${SRC_DIR}/${name}.js and ${SRC_DIR}/${LIB_FILE} produce`);
   }
   for (const name of Object.keys(built).sort()) {
@@ -133,7 +134,7 @@ export function run(argv: string[], root: string, deps: Deps): Outcome {
 
   if (verb === "build") {
     try {
-      const lines = names.map((n) => ({ n, text: buildWorkflow(n, sources[n], lib) }));
+      const lines = names.map((n) => ({ n, text: buildWorkflow(n, sources[n] ?? "", lib) }));
       deps.mkdirp(outDir);
       return done(lines.map(({ n, text }) => {
         deps.writeFile(join(outDir, `${n}.js`), text);

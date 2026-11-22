@@ -79,7 +79,7 @@ export const UNKNOWN_ERROR_MESSAGE = "Unknown error";
 export const URL_SUFFIX_PATTERN = /[?#]/;
 export const FINGERPRINT_SEPARATOR = "|";
 export const STACK_LINE_BREAK = "\n";
-export const MILLISECONDS_PER_SECOND = 1000;
+const MILLISECONDS_PER_SECOND = 1000;
 export const BROWSER_REPORT_RETRY_AFTER_SECONDS = Math.ceil(
   BROWSER_REPORT_WINDOW_MS / MILLISECONDS_PER_SECOND
 );

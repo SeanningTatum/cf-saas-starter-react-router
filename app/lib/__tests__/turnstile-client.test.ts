@@ -228,7 +228,7 @@ describe("loadTurnstileScript", () => {
   it("resolves null when the script never loads, so the form does not wait forever", async () => {
     const { host, script, timers } = fakeHost();
     const loading = loadTurnstileScript(host);
-    timers.forEach((fire) => fire());
+    for (const fire of timers) fire();
     await expect(loading).resolves.toBeNull();
     expect(script.removed).toBe(true);
   });

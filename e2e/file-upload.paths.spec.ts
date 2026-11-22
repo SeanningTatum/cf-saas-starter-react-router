@@ -114,7 +114,9 @@ test.describe("FileUpload paths (wiring only, since the machine unit tests own e
       if (end === "idle" || end === "dragging") {
         await expect(dropzone).toBeVisible();
       }
-      const uploads = statePath.steps.filter((s) => s.event.type === "xstate.done.actor.upload");
+      const uploads = (statePath.steps as ReadonlyArray<{ event: ModelEvent }>).filter(
+        (s) => s.event.type === "xstate.done.actor.upload"
+      );
       if (uploads.length === 0) expect(heldUploads).toHaveLength(0);
     });
   }

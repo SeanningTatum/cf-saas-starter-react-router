@@ -61,7 +61,7 @@ interface Started {
   verdict: string;
 }
 
-export function readJournal(text: string): Started[] {
+function readJournal(text: string): Started[] {
   const started: Started[] = [];
   const results = new Map<string, unknown>();
   for (const line of text.split("\n")) {
@@ -93,7 +93,7 @@ interface Transcript {
 const atLeastZero = (value: number | undefined): number => Math.max(0, Math.round(value ?? 0));
 const roundToTenth = (value: number): number => Math.round(value * 10) / 10;
 
-export function readTranscript(text: string): Transcript {
+function readTranscript(text: string): Transcript {
   const byMessage = new Map<string, { tokens: Tokens; model: string }>();
   let earliest = Number.POSITIVE_INFINITY;
   let latest = Number.NEGATIVE_INFINITY;

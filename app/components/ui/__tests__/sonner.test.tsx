@@ -5,7 +5,7 @@ import { I18nextProvider } from "react-i18next";
 import type { ToasterProps } from "sonner";
 import enCommon from "@/locales/en/common.json";
 import zhCommon from "@/locales/zh/common.json";
-import { defaultNS } from "@/i18n/i18n";
+import { defaultNS } from "@/lib/constants/i18n";
 import { Toaster } from "../sonner";
 
 function renderToaster(lng: "en" | "zh", props: ToasterProps = {}): string {

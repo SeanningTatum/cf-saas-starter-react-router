@@ -35,7 +35,7 @@ const done = (stdout: string[]): Outcome => ({ code: EXIT_OK, stdout, stderr: []
 const fail = (line: string): Outcome => ({ code: EXIT_BAD_CONFIG, stdout: [], stderr: [line] });
 const usage = (why: string): Outcome => ({ code: EXIT_USAGE, stdout: [], stderr: [`${MESSAGE_PREFIX} ${why}`, USAGE_TEXT] });
 
-const hasKey = (value: object, key: string): boolean => Object.prototype.hasOwnProperty.call(value, key);
+const hasKey = (value: object, key: string): boolean => Object.hasOwn(value, key);
 
 function lookup(config: HarnessConfig, dotted: string): { found: true; value: unknown } | { found: false } {
   let current: unknown = config;

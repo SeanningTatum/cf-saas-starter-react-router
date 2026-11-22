@@ -4,7 +4,7 @@ import { Cause, Effect, Exit, Layer, ManagedRuntime, Option } from "effect";
 import { TRPCError } from "@trpc/server";
 import { runProcedure, tagToTRPC } from "../effect-trpc";
 import type { AppServices } from "@/runtime";
-import type { AppError } from "@/models/errors";
+import type { AppError } from "@/models/errors/app-error";
 import { NotFoundError, QueryError } from "@/models/errors/repository";
 
 const failExit = <E>(e: E) => Effect.exit(tagToTRPC(Effect.fail(e)));

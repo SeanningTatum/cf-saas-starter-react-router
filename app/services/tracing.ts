@@ -1,4 +1,4 @@
-import { Clock, Context, Effect, Exit, Layer, Option, Tracer } from "effect";
+import { Clock, Context, Effect, type Exit, Layer, Option, Tracer } from "effect";
 import {
   FORCED_TRACE_EXPORT_WINDOW_LIMIT,
   FORCED_TRACE_EXPORT_WINDOW_MS,

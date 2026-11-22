@@ -8,7 +8,7 @@ const randomHex = (n: number) =>
 const idOf = (headers: Record<string, string>, where: string): string => {
   const id = headers[HEADER];
   expect(id, `${where}: no ${HEADER} header`).toBeTruthy();
-  return id;
+  return id ?? "";
 };
 
 const hydrated = (node: Locator, timeout: number) =>
@@ -61,8 +61,8 @@ test.describe("Error page (/:lng matches any single segment, so the missing page
 
   const loadErrorPage = async (page: Page) => {
     const response = await page.goto(MISSING);
-    expect(response, `${MISSING}: no document response`).not.toBeNull();
-    return response!;
+    if (response === null) throw new Error(`${MISSING}: no document response`);
+    return response;
   };
 
   test("a 404 page shows the request id of its own response, so the error page always has the id a user needs, equal to the response's and kept through hydration", { tag: "@error" }, async ({ page }) => {

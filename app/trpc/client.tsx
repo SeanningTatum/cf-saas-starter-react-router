@@ -9,12 +9,13 @@ import superjson from 'superjson';
 import { makeQueryClient } from './query-client';
 import { API_ROUTES } from "@/lib/constants/routes";
 
-export const api = createTRPCReact<AppRouter>();
+const api = createTRPCReact<AppRouter>();
 
 let clientQueryClientSingleton: QueryClient;
 
 function getQueryClient() {
-  return (clientQueryClientSingleton ??= makeQueryClient());
+  clientQueryClientSingleton ??= makeQueryClient();
+  return clientQueryClientSingleton;
 }
 
 function getUrl() {

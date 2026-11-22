@@ -30,8 +30,9 @@ function memDeps(files: Record<string, string>) {
   const writes: string[] = [];
   const deps: Deps = {
     readFile: (p) => {
-      if (!(p in disk)) throw new Error(`ENOENT ${p}`);
-      return disk[p];
+      const text = disk[p];
+      if (text === undefined) throw new Error(`ENOENT ${p}`);
+      return text;
     },
     writeFile: (p, t) => {
       disk[p] = t;
@@ -197,8 +198,8 @@ describe("run", () => {
     const { disk, deps } = memDeps(files());
     run(["write"], "/r", deps);
     const out = disk[`${A}/README.md`];
-    expect(out.startsWith("# Sub-agents\n\nIntro text.\n\n")).toBe(true);
-    expect(out.endsWith("\n\nOutro text.\n")).toBe(true);
+    expect(out?.startsWith("# Sub-agents\n\nIntro text.\n\n")).toBe(true);
+    expect(out?.endsWith("\n\nOutro text.\n")).toBe(true);
   });
   it("write twice changes nothing the second time", () => {
     const { writes, deps } = memDeps(files());

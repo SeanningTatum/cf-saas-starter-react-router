@@ -3,7 +3,7 @@ import { differ, rulesetDiffs } from "./repo-rules-diff";
 import { pendingChecks, splitPending, withoutMarks, type PendingCheck } from "./repo-rules-pending";
 import type { DeclaredRepositoryT, LiveRulesetT, Ruleset } from "./repo-rules-schemas";
 
-export interface Finding {
+interface Finding {
   level: "ok" | "notice" | "missing" | "drift";
   text: string;
   adminOnly?: boolean;

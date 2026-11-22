@@ -11,7 +11,7 @@ import {
 
 export type AuthForm = "login" | "signup";
 
-export const turnstileWidget = (page: Page) => page.getByTestId(TURNSTILE_WIDGET_TEST_ID);
+const turnstileWidget = (page: Page) => page.getByTestId(TURNSTILE_WIDGET_TEST_ID);
 export const turnstileProblem = (page: Page) => page.getByTestId(TURNSTILE_PROBLEM_TEST_ID);
 export const turnstileRetry = (page: Page) => page.getByTestId(TURNSTILE_RETRY_TEST_ID);
 

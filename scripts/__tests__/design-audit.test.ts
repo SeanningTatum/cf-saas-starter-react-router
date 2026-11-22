@@ -37,10 +37,10 @@ describe("parseColour", () => {
   it("parses oklch: white, black, and a saturated red land on the right sRGB values", () => {
     expect(parseColour("oklch(1 0 0)")).toEqual([255, 255, 255, 1]);
     expect(parseColour("oklch(0 0 0)")).toEqual([0, 0, 0, 1]);
-    const red = parseColour("oklch(0.628 0.2577 29.23)")!;
-    expect(red[0]).toBeGreaterThan(250);
-    expect(red[1]).toBeLessThan(5);
-    expect(red[2]).toBeLessThan(5);
+    const red = parseColour("oklch(0.628 0.2577 29.23)");
+    expect(red?.[0]).toBeGreaterThan(250);
+    expect(red?.[1]).toBeLessThan(5);
+    expect(red?.[2]).toBeLessThan(5);
   });
 
   it("parses oklch with percentage lightness and slash alpha", () => {
@@ -49,7 +49,7 @@ describe("parseColour", () => {
 
   it("parses hex, including 8-digit alpha", () => {
     expect(parseColour("#fff")).toEqual([255, 255, 255, 1]);
-    expect(parseColour("#00000080")![3]).toBeCloseTo(0.5, 1);
+    expect(parseColour("#00000080")?.[3]).toBeCloseTo(0.5, 1);
   });
 
   it("returns null for formats it cannot read so the canvas fallback runs", () => {

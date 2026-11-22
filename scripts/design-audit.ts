@@ -24,7 +24,7 @@
  * ignores prefers-reduced-motion). Everything else reports and lets the human decide — a low
  * shadow count is a fact, not automatically a defect.
  */
-import { chromium, type Page } from "playwright";
+import { chromium, type Page } from "@playwright/test";
 import {
   clamp,
   channel,
@@ -230,7 +230,23 @@ if (args.login) {
 await page.goto(args.url, { waitUntil: "networkidle" });
 await page.waitForTimeout(600);
 
-const desktop = (await measure(page, args)) as Record<string, any>;
+type Probe = {
+  surfaceLevels: unknown[];
+  fontFamilies: { family: string; elements: number }[];
+  radiiUsed: string[];
+  shadowedElements: number;
+  borderedElements: number;
+  panelElements: number;
+  chromaticColours: number;
+  accent: { elements: number; shareOfPainted: number } | null;
+  displaySizes: number[];
+  bodyContrast: number;
+  actionContrast: { label: string; ratio: number }[];
+  tables: number;
+  dataRows: number;
+};
+
+const desktop = (await measure(page, args)) as Probe;
 
 const overflow = async () =>
   page.evaluate(() => ({
@@ -289,7 +305,7 @@ console.log(line("surface levels", String(desktop.surfaceLevels.length)));
 console.log(
   line(
     "type faces",
-    desktop.fontFamilies.map((f: any) => `${f.family}(${f.elements})`).join(" · ") || "none"
+    desktop.fontFamilies.map((f) => `${f.family}(${f.elements})`).join(" · ") || "none"
   )
 );
 console.log(line("display sizes ≥28px", desktop.displaySizes.join(", ") || "none"));
@@ -316,7 +332,7 @@ if (overflowMobile.scrollWidth > overflowMobile.clientWidth)
 if (overflowDesktop.scrollWidth > overflowDesktop.clientWidth)
   hard.push("horizontal page scroll at 1440px");
 if (desktop.bodyContrast < 4.5) hard.push(`body copy contrast ${desktop.bodyContrast}:1 is below AA`);
-for (const a of desktop.actionContrast as any[])
+for (const a of desktop.actionContrast)
   if (a.ratio < 4.5) hard.push(`action "${a.label}" contrast ${a.ratio}:1 is below AA`);
 if (animatedDefault > 0 && animatedReduced === animatedDefault)
   hard.push("animation ignores prefers-reduced-motion");

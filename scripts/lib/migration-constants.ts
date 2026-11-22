@@ -6,13 +6,13 @@ export const GIT_OK = 0;
 
 export const DRIZZLE_DIR = "drizzle";
 export const SQL_SUFFIX = ".sql";
-export const REASON_SUFFIX = ".reason.md";
+const REASON_SUFFIX = ".reason.md";
 export const MIN_REASON_CHARS = 30;
 export const MAX_DETAIL_CHARS = 100;
 
 export const DEFAULT_SCHEMA_PATH = "./app/db/schema.ts";
 export const DRIZZLE_KIT_BIN = "node_modules/.bin/drizzle-kit";
-export const DRIZZLE_DIALECT = "sqlite";
+const DRIZZLE_DIALECT = "sqlite";
 export const drizzleKitArgs = (schemaPath: string, outDir: string): string[] => [
   "generate",
   "--dialect",
@@ -81,7 +81,7 @@ export const PASS_MARK = "✓";
 export const SKIP_NO_BASE_REF =
   "edited-migration check skipped: no base ref (no GITHUB_BASE_REF and no origin/HEAD commit)";
 export const GIT_DIFF_FAILED = "could not list changed migrations with git diff";
-export const DRIFT_UNCLEAR = "drizzle-kit gave no clear answer";
+const DRIFT_UNCLEAR = "drizzle-kit gave no clear answer";
 export const DRIFT_INDENT = "    ";
 export const FIX_DRIFT = "  fix: run `bun run db:generate`, review the migration, commit it";
 

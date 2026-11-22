@@ -120,7 +120,7 @@ export const rule: FileRule = {
       name: "a call piped through a local helper that makes the span is clean",
       files: {
         "app/repositories/x.ts":
-          'const span = (n: string) => Effect.withSpan(n, { kind: "client" });\n' + `export const get = () => ${TRY}.pipe(span("x.get"));`,
+          `const span = (n: string) => Effect.withSpan(n, { kind: "client" });\nexport const get = () => ${TRY}.pipe(span("x.get"));`,
       },
       expect: "clean",
     },

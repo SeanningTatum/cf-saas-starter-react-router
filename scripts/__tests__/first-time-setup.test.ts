@@ -93,7 +93,7 @@ describe("executeArgv (shell-injection safety)", () => {
       expect(spawnSync).toHaveBeenCalledTimes(1);
       const [file, argv, options] = (spawnSync as unknown as ReturnType<
         typeof vi.fn
-      >).mock.calls[0];
+      >).mock.calls[0] ?? [];
 
       // Correct executable, argv array (not a shell string).
       expect(file).toBe("gh");
@@ -179,10 +179,10 @@ describe("setupGitHubCiCredentials secrets (pipelines)", () => {
     const log = vi.spyOn(console, "log").mockImplementation((...a) => void logged.push(a.join(" ")));
     await setupGitHubCiCredentials("acct", (k, v) => void saved.push([k, v]));
     log.mockRestore();
-    const secretCalls = (execSync as unknown as Mock).mock.calls
-      .filter(([cmd]: [string]) => String(cmd).startsWith("gh secret set"))
-      .map(([cmd, opts]: [string, { input?: string }]) => ({ cmd: String(cmd), input: opts?.input }));
-    const argvs = (spawnSync as unknown as Mock).mock.calls.map(([, args]: [string, string[]]) => args);
+    const secretCalls = vi.mocked(execSync).mock.calls
+      .filter(([cmd]) => String(cmd).startsWith("gh secret set"))
+      .map(([cmd, opts]) => ({ cmd: String(cmd), input: opts?.input }));
+    const argvs = vi.mocked(spawnSync).mock.calls.map(([, args]) => args ?? []);
     return { saved, logged, secretCalls, argvs };
   }
 
@@ -229,8 +229,11 @@ describe("setupGitHubCiCredentials secrets (pipelines)", () => {
 
   it("puts no secret value in any argv or command string: argv shows in the process list", async () => {
     const { saved, argvs } = await wizard([PROD, PREVIEW]);
-    const seed = saved[0][1];
-    const commandStrings = (execSync as unknown as Mock).mock.calls.map(([cmd]: [string]) => String(cmd));
+    const [first] = saved;
+    expect(first).toBeDefined();
+    if (!first) return;
+    const seed = first[1];
+    const commandStrings = vi.mocked(execSync).mock.calls.map(([cmd]) => String(cmd));
     for (const secret of [PROD, PREVIEW, seed]) {
       expect(commandStrings.some((c) => c.includes(secret))).toBe(false);
       expect(argvs.flat().some((a) => a.includes(secret))).toBe(false);
@@ -255,7 +258,10 @@ describe("setupGitHubCiCredentials secrets (pipelines)", () => {
 
   it("never prints the seed secret or either token", async () => {
     const { saved, logged } = await wizard([PROD, PREVIEW]);
-    for (const secret of [PROD, PREVIEW, saved[0][1]]) {
+    const [first] = saved;
+    expect(first).toBeDefined();
+    if (!first) return;
+    for (const secret of [PROD, PREVIEW, first[1]]) {
       expect(logged.some((l) => l.includes(secret))).toBe(false);
     }
   });
@@ -301,16 +307,14 @@ describe("setupGitHubCiCredentials (call-site shell-injection regression)", () =
       await setupGitHubCiCredentials(payload, () => {});
 
       // The account ID reached `gh` as a discrete argv element via spawnSync (no shell).
-      const ghVarCall = (
-        spawnSync as unknown as ReturnType<typeof vi.fn>
-      ).mock.calls.find(
-        ([file, args]: [string, string[]]) =>
+      const ghVarCall = vi.mocked(spawnSync).mock.calls.find(
+        ([file, args]) =>
           file === "gh" &&
           Array.isArray(args) &&
           args[2] === "CLOUDFLARE_ACCOUNT_ID"
       );
       expect(ghVarCall).toBeDefined();
-      expect((ghVarCall![1] as string[])[4]).toBe(payload);
+      expect(ghVarCall?.[1]?.[4]).toBe(payload);
 
       // The payload must NEVER be interpolated into a shell command string handed to
       // execSync. This is what fails if someone reverts to `gh variable set ... --body

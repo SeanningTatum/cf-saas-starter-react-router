@@ -60,7 +60,7 @@ const SECRET_ASSIGNMENT =
 function secretAssignment(line: string): boolean {
   const found = SECRET_ASSIGNMENT.exec(line);
   if (!found) return false;
-  const [, before, after, value] = found;
+  const [, before = "", after = "", value = ""] = found;
   const mixed = /\d/.test(value) && /[a-z]/.test(value) && /[A-Z]/.test(value);
   if (!mixed) return false;
   const isHash = /^[0-9a-f]+$/i.test(value) && HEX_LENGTHS.has(value.length);
@@ -97,7 +97,7 @@ const MARKER_RULE = new RegExp(`${ALLOW_MARKER} ([a-z-]+)`, "g");
 /** Rules this line allows by name. A bare marker allows nothing. */
 function allowedRules(line: string): Set<string> {
   if (!line.includes(ALLOW_MARKER)) return new Set();
-  const named = [...line.matchAll(MARKER_RULE)].map((m) => m[1]);
+  const named = [...line.matchAll(MARKER_RULE)].map((m) => m[1] ?? "");
   return new Set(named.filter((rule) => rule !== NEVER_ALLOWED));
 }
 

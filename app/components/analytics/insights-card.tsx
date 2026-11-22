@@ -47,9 +47,9 @@ export function InsightsCard({
       </CardHeader>
       <CardContent>
         <ul className="space-y-3 text-sm">
-          {insights.map((insight, index) => (
+          {insights.map((insight) => (
             <li
-              key={index}
+              key={insight.text}
               className={cn("flex items-center gap-3", getInsightStyle(insight.type))}
             >
               <span className="size-1.5 shrink-0 rounded-full bg-current" />

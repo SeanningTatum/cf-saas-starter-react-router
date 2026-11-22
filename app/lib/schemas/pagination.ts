@@ -15,11 +15,3 @@ export const PaginationInput = Schema.Struct({
 });
 
 export type PaginationInput = typeof PaginationInput.Type;
-
-export interface PaginatedResult<T> {
-  readonly items: ReadonlyArray<T>;
-  readonly total: number;
-  readonly page: number;
-  readonly limit: number;
-  readonly totalPages: number;
-}

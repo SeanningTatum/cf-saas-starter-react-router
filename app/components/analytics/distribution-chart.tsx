@@ -21,7 +21,7 @@ import {
 } from "@/components/ui/chart";
 import { DEFAULT_DISTRIBUTION_COLORS } from "@/lib/constants/charts";
 
-export interface DistributionDataPoint {
+interface DistributionDataPoint {
   name: string;
   value: number;
   color?: string;
@@ -83,8 +83,8 @@ export function DistributionChart({
           />
           <ChartTooltip content={<ChartTooltipContent />} />
           <Bar dataKey="value" radius={[0, 4, 4, 0]}>
-            {dataWithColors.map((entry, index) => (
-              <Cell key={`cell-${index}`} fill={entry.fill} />
+            {dataWithColors.map((entry) => (
+              <Cell key={entry.name} fill={entry.fill} />
             ))}
           </Bar>
         </BarChart>
@@ -106,8 +106,8 @@ export function DistributionChart({
           outerRadius={80}
           strokeWidth={2}
         >
-          {dataWithColors.map((entry, index) => (
-            <Cell key={`cell-${index}`} fill={entry.fill} />
+          {dataWithColors.map((entry) => (
+            <Cell key={entry.name} fill={entry.fill} />
           ))}
         </Pie>
         {showLegend && <ChartLegend content={<ChartLegendContent nameKey="name" />} />}

@@ -1,11 +1,8 @@
 import { SiteHeader } from "./layout/site-header";
-import {
-  StatCard,
-  StatCardGrid,
-  TimeSeriesChart,
-  DistributionChart,
-  InsightsCard,
-} from "@/components/analytics";
+import { DistributionChart } from "@/components/analytics/distribution-chart";
+import { InsightsCard } from "@/components/analytics/insights-card";
+import { StatCard, StatCardGrid } from "@/components/analytics/stat-card";
+import { TimeSeriesChart } from "@/components/analytics/time-series-chart";
 import { buildUserInsights } from "@/lib/insights";
 import { Users, ShieldCheck, UserX, Shield } from "lucide-react";
 import type { Route } from "./+types/_index";

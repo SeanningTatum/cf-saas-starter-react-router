@@ -1,4 +1,4 @@
-import ts from "typescript";
+import type ts from "typescript";
 import { inApp } from "../cases";
 import { CONSTANTS_DIR } from "../constants";
 import { literalConstants } from "../literals";

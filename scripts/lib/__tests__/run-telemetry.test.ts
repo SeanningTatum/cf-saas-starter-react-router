@@ -88,25 +88,25 @@ describe("mergeLedger", () => {
     const numbers = { tokens: { in: 10, out: 5, cache_read: 0, cache_write: 0 }, seconds: 2, ran_model: "m", agent_id: "old" };
     return { ...first, workflows: { w: { calls: calls.map((c) => ({ ...c, ...numbers })) } } };
   };
-  const after = (labels: string[], stored: ReturnType<typeof measured>) =>
+  const mergedAfter = (labels: string[], stored: ReturnType<typeof measured>) =>
     mergeLedger(stored, "w", labels.map((label) => call({ label }))).workflows.w?.calls ?? [];
 
   it("keeps numbers and agent ids for the stored prefix when the new ledger is longer: only a resumed run does that", () => {
-    const calls = after(["a", "b", "c"], measured(["a", "b"]));
+    const calls = mergedAfter(["a", "b", "c"], measured(["a", "b"]));
     expect(calls.map((c) => [c.tokens?.in ?? null, c.agent_id])).toEqual([[10, "old"], [10, "old"], [null, null]]);
   });
 
   it("starts clean when the new ledger equals the stored one: a rerun with the same labels must not inherit the last run's numbers", () => {
-    const calls = after(["a", "b"], measured(["a", "b"]));
+    const calls = mergedAfter(["a", "b"], measured(["a", "b"]));
     expect(calls.map((c) => [c.tokens, c.seconds, c.ran_model, c.agent_id])).toEqual([[null, null, null, null], [null, null, null, null]]);
   });
 
   it("starts clean when the new ledger is shorter than the stored one: a shorter ledger cannot be a resume", () => {
-    expect(after(["a"], measured(["a", "b"])).map((c) => c.tokens)).toEqual([null]);
+    expect(mergedAfter(["a"], measured(["a", "b"])).map((c) => c.tokens)).toEqual([null]);
   });
 
   it("starts clean when one earlier call differs, even if the ledger is longer: a different run is not an extension", () => {
-    expect(after(["a", "x", "c"], measured(["a", "b"])).map((c) => c.tokens)).toEqual([null, null, null]);
+    expect(mergedAfter(["a", "x", "c"], measured(["a", "b"])).map((c) => c.tokens)).toEqual([null, null, null]);
   });
 });
 

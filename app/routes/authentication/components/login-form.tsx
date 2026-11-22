@@ -18,7 +18,7 @@ import {
 import { Input } from "@/components/ui/input"
 import { Link, useNavigate } from "react-router"
 import { authClient } from "@/auth/client"
-import { effectResolver } from "@/lib/effect-form"
+import { effectTsResolver as effectResolver } from "@hookform/resolvers/effect-ts"
 import { useForm } from "react-hook-form"
 import { LoginSchema, type LoginInput } from "@/lib/schemas/auth"
 import { useState } from "react"
@@ -112,6 +112,7 @@ export function LoginForm({ className, turnstileSiteKey = null, ...props }: Logi
                     <div className="flex items-center">
                       <FormLabel>{t("login.password_label")}</FormLabel>
                       <a
+                        // biome-ignore lint/a11y/useValidAnchor: placeholder, no reset-password route exists yet to point at
                         href="#"
                         className="ml-auto inline-block text-sm underline-offset-4 hover:underline"
                       >

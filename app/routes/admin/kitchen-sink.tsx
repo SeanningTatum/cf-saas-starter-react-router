@@ -975,9 +975,9 @@ export default function KitchenSink() {
               <CardContent>
                 <div className="h-[100px] w-full">
                   <ScrollArea className="h-full w-full rounded-md border p-4">
-                    {Array.from({ length: 10 }).map((_, i) => (
-                      <div key={i} className="text-sm py-1">
-                        Item {i + 1}
+                    {Array.from({ length: 10 }, (_, i) => i + 1).map((n) => (
+                      <div key={n} className="text-sm py-1">
+                        Item {n}
                       </div>
                     ))}
                   </ScrollArea>

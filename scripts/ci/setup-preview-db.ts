@@ -43,8 +43,9 @@ function fail(message: string): never {
 function executeCommand(command: string): string | { error: true; message: string } {
   try {
     return execSync(command, { encoding: "utf-8", stdio: "pipe" });
-  } catch (error: any) {
-    return { error: true, message: error.stdout || error.stderr || String(error) };
+  } catch (error) {
+    const failure = error as { stdout?: string; stderr?: string };
+    return { error: true, message: failure.stdout || failure.stderr || String(error) };
   }
 }
 
@@ -70,7 +71,7 @@ function writeWranglerConfig(config: WranglerConfig): void {
     "// Patched by scripts/ci/setup-preview-db.ts — per-PR preview D1 (CI checkout only, never committed).";
   fs.writeFileSync(
     WRANGLER_PATH,
-    `${header}\n` + JSON.stringify(config, null, 2) + "\n"
+    `${header}\n${JSON.stringify(config, null, 2)}\n`
   );
 }
 

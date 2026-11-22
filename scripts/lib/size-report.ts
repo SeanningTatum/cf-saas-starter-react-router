@@ -56,7 +56,6 @@ const ReportSchema = Schema.Struct({ rows: Schema.Array(RowSchema) });
 
 export type Manifest = typeof ManifestSchema.Type;
 export type ManifestRoute = typeof RouteSchema.Type;
-export type SizeRow = typeof RowSchema.Type;
 export type SizeReport = typeof ReportSchema.Type;
 
 export interface ComparedRow {
@@ -146,7 +145,7 @@ export function compare(base: SizeReport, head: SizeReport): ComparedRow[] {
   ];
 }
 
-export const formatBytes = (bytes: number): string => bytes.toLocaleString(NUMBER_LOCALE);
+const formatBytes = (bytes: number): string => bytes.toLocaleString(NUMBER_LOCALE);
 
 const signed = (value: number, text: string): string => (value > 0 ? `+${text}` : value < 0 ? `-${text}` : text);
 
@@ -211,7 +210,7 @@ export const touchesShippedCode = (paths: string[]): string[] =>
     (path) => SHIPPED_FILES.includes(path) || (SHIPPED_PREFIXES.some((prefix) => path.startsWith(prefix)) && !TEST_PATH_PATTERN.test(path)),
   );
 
-export const carriesTable = (body: string): boolean => {
+const carriesTable = (body: string): boolean => {
   const prose = body.replace(FENCED_BLOCK_PATTERN, "");
   return COMPARISON_HEADER_PATTERN.test(prose) && WORKER_ROW_PATTERN.test(prose);
 };

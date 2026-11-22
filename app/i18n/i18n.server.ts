@@ -1,10 +1,6 @@
 import { RemixI18Next } from "remix-i18next/server";
-import {
-  supportedLngs,
-  fallbackLng,
-  defaultNS,
-  localeCookie,
-} from "./i18n";
+import { supportedLngs, fallbackLng, defaultNS } from "@/lib/constants/i18n";
+import { localeCookie } from "./i18n";
 import resourcesToBackend from "i18next-resources-to-backend";
 
 export const i18nServer = new RemixI18Next({
@@ -25,7 +21,3 @@ export const i18nServer = new RemixI18Next({
     ),
   ],
 });
-
-export async function getLocale(request: Request): Promise<string> {
-  return i18nServer.getLocale(request);
-}

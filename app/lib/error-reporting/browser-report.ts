@@ -36,7 +36,7 @@ export const BrowserErrorReportSchema = Schema.Struct({
   requestId: Schema.optional(Schema.String.pipe(Schema.pattern(REQUEST_ID_PATTERN))),
 });
 
-export const LegacyCspReportSchema = Schema.Struct({
+const LegacyCspReportSchema = Schema.Struct({
   "csp-report": Schema.Union(
     Schema.Struct({
       "document-uri": capped(MAX_REPORT_URL_LENGTH),
@@ -67,7 +67,7 @@ const OtherReport = Schema.Struct({
   ),
 });
 
-export const ReportingApiReportsSchema = Schema.Array(
+const ReportingApiReportsSchema = Schema.Array(
   Schema.Union(CspViolationReport, OtherReport)
 ).pipe(Schema.maxItems(MAX_REPORTS_PER_BODY));
 

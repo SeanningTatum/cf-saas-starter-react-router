@@ -10,8 +10,8 @@ import {
 
 export type TurnstileTheme = "light" | "dark";
 export type TurnstileSize = "flexible" | "compact";
-export type TurnstileStatus = "loading" | "ready" | "error" | "expired";
-export type TurnstileFailure = "script" | "challenge";
+type TurnstileStatus = "loading" | "ready" | "error" | "expired";
+type TurnstileFailure = "script" | "challenge";
 
 export interface TurnstileRenderOptions {
   readonly sitekey: string;

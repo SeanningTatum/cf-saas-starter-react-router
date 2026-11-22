@@ -14,10 +14,6 @@ export const Email = Schema.String.pipe(
   })
 );
 
-export const NonEmptyString = Schema.String.pipe(
-  Schema.minLength(1, { message: () => "Required" })
-);
-
 const passwordTooLong = {
   message: () => `Password must be at most ${PASSWORD_MAX_LENGTH} characters`,
 };

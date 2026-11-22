@@ -15,7 +15,6 @@ import {
 } from "@tabler/icons-react";
 import {
   type ColumnDef,
-  type ColumnFiltersState,
   flexRender,
   getCoreRowModel,
   getFacetedRowModel,
@@ -116,6 +115,7 @@ export function UserDataTable({
     searchParams.get("search") || ""
   );
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: updateSearchParams is new each render, so listing it would restart the debounce every render
   React.useEffect(() => {
     const timer = setTimeout(() => {
       if (searchInput !== searchParams.get("search")) {
@@ -123,7 +123,6 @@ export function UserDataTable({
       }
     }, USER_SEARCH_DEBOUNCE_MS);
     return () => clearTimeout(timer);
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- updateSearchParams is new each render; listing it would restart the debounce every render
   }, [searchInput, searchParams]);
 
   const updateSearchParams = (updates: Record<string, string | undefined>) => {
@@ -279,7 +278,7 @@ export function UserDataTable({
           </Badge>
         );
       },
-      filterFn: (row, id, value) => {
+      filterFn: (row, _id, value) => {
         if (value === "verified") return row.original.emailVerified === true;
         if (value === "unverified") return row.original.emailVerified === false;
         if (value === "banned") return row.original.banned === true;

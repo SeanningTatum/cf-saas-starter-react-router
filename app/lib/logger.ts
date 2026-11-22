@@ -40,7 +40,7 @@ function createLogger(bindings: LogContext = {}): Logger {
   };
 }
 
-export const logger = createLogger();
+const logger = createLogger();
 
 export type LogLayer =
   | "client"
@@ -53,7 +53,7 @@ export type LogLayer =
   | "middleware"
   | "workflow";
 
-export function createLayerLogger(layer: LogLayer) {
+function createLayerLogger(layer: LogLayer) {
   return logger.child({ layer });
 }
 

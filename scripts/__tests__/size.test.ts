@@ -44,7 +44,7 @@ function fake(options: { gzip?: Record<string, number>; fail?: RegExp; diff?: st
       files.set(path, text);
     },
     list: () => ["manifest-1.js", "entry.js", "root.js", "root.css", "home.js"],
-    gzipSize: (path) => (options.gzip ?? {})[path.split("/").pop() ?? ""] ?? (path.startsWith(CWD) ? 20 : 10),
+    gzipSize: (path) => options.gzip?.[path.split("/").pop() ?? ""] ?? (path.startsWith(CWD) ? 20 : 10),
     tempDir: () => BASE_DIR,
     remove: (path) => calls.push(`remove ${path}`),
     out: (text) => out.push(text),

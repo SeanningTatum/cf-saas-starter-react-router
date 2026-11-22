@@ -107,7 +107,7 @@ const decodeUnreserved = (path: string): string =>
     return URL_UNRESERVED_CHARACTER.test(character) ? character : encoded;
   });
 
-export const normalizedPath = (request: Request): string => {
+const normalizedPath = (request: Request): string => {
   const collapsed = decodeUnreserved(new URL(request.url).pathname)
     .toLowerCase()
     .replace(REPEATED_SLASHES, PATH_SEPARATOR);

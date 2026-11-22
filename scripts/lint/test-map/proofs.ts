@@ -44,7 +44,7 @@ const isTypeOnly = (node: ts.Statement): boolean =>
 export const firstRuntimeStatement = (ast: ts.SourceFile): ts.Statement | undefined =>
   ast.statements.find((statement) => !isTypeOnly(statement));
 
-export const firstLogicStatement = (ast: ts.SourceFile): ts.Statement | undefined =>
+const firstLogicStatement = (ast: ts.SourceFile): ts.Statement | undefined =>
   ast.statements.find((statement) => !isTypeOnly(statement) && !isLiteralConstant(statement));
 
 function isAssertion(node: ts.Node): boolean {
@@ -78,7 +78,7 @@ export function emptyTest(test: Source): Problem | undefined {
   return undefined;
 }
 
-export const unitTestPaths = (path: string): string[] => {
+const unitTestPaths = (path: string): string[] => {
   const { dir, name } = splitPath(path);
   return TEST_EXTENSIONS.map((extension) => `${dir}/__tests__/${name}.test.${extension}`);
 };

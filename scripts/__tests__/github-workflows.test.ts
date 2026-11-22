@@ -91,7 +91,8 @@ describe("workflows hold least-privilege permissions", () => {
   it("preview.yml gives pull-requests: write at job level, never at the top", () => {
     const lines = codeLines("preview.yml").filter((l) => /pull-requests:\s*write/.test(l));
     expect(lines).toHaveLength(1);
-    expect(lines[0].length - lines[0].trimStart().length).toBeGreaterThan(2);
+    const [first = ""] = lines;
+    expect(first.length - first.trimStart().length).toBeGreaterThan(2);
   });
 });
 
@@ -117,6 +118,7 @@ describe(".github/dependabot.yml", () => {
 
 describe("workflows keep secrets and PR data out of shell text", () => {
   it.each(["deploy.yml", "preview.yml", "preview-cleanup.yml"])(
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: the title names the GitHub Actions ${{ }} syntax, not a template placeholder
     "%s has no ${{ }} expression inside a run script: PR-controlled values must go through env",
     (f) => {
       const lines = codeLines(f);
@@ -128,7 +130,7 @@ describe("workflows keep secrets and PR data out of shell text", () => {
         if (runIndent !== undefined && /\$\{\{/.test(line)) offenders.push(line.trim());
         const m = line.match(/^(\s*)(?:-\s+)?run:\s*(.*)$/);
         if (m) {
-          if (/\$\{\{/.test(m[2])) offenders.push(line.trim());
+          if (/\$\{\{/.test(m[2] ?? "")) offenders.push(line.trim());
           if (m[2] === "|" || m[2] === ">" || m[2] === ">-" || m[2] === "|-") runIndent = indent;
         }
       }
