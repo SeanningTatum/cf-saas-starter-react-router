@@ -22,6 +22,7 @@ import {
   type FetchLike,
   type TracingConfig,
 } from "../tracing";
+import type { RequestContext } from "@/lib/request-context";
 
 // --- helpers ------------------------------------------------------------------
 
@@ -223,6 +224,41 @@ describe("makeOtlpTracer", () => {
     expect(span.kind).toBe("server");
     span.end(60n, Exit.void);
     expect(buffer.spans).toHaveLength(1);
+  });
+
+  const startSpan = (tracer: ReturnType<typeof makeOtlpTracer>, name: string) =>
+    tracer.span(name, Option.none(), Context.empty(), [], 50n, "internal");
+
+  it("stamps request.id on every span when built with a request", () => {
+    // Catches the tracer ignoring its request: no child span could be found
+    // by request id in the trace backend.
+    const tracer = makeOtlpTracer(makeSpanBuffer(), {
+      requestId: "req-1",
+      method: "GET",
+      path: "/",
+    });
+    expect(startSpan(tracer, "a").attributes.get("request.id")).toBe("req-1");
+  });
+
+  it("adds user.id only to spans started after the request's user is set", () => {
+    // Catches copying the request when the tracer is built: `userId` is set
+    // later, when the session resolves, so every span would lack the user.
+    // Also catches writing `user.id: undefined` on anonymous spans.
+    const request: RequestContext = { requestId: "req-1", method: "GET", path: "/" };
+    const tracer = makeOtlpTracer(makeSpanBuffer(), request);
+
+    const before = startSpan(tracer, "before");
+    request.userId = "u1";
+    const after = startSpan(tracer, "after");
+
+    expect(before.attributes.has("user.id")).toBe(false);
+    expect(after.attributes.get("user.id")).toBe("u1");
+  });
+
+  it("sets neither attribute without a request", () => {
+    const span = startSpan(makeOtlpTracer(makeSpanBuffer()), "plain");
+    expect(span.attributes.has("request.id")).toBe(false);
+    expect(span.attributes.has("user.id")).toBe(false);
   });
 });
 

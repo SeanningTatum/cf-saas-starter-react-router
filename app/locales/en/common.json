@@ -25,7 +25,8 @@
     "unauthorized": "Unauthorized",
     "oops": "Oops!",
     "error": "Error",
-    "404": "404"
+    "404": "404",
+    "request_id": "Request ID: {{id}}"
   },
   "loading": "Loading...",
   "loading_protected_data": "Loading protected data...",

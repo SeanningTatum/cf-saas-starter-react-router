@@ -67,7 +67,6 @@ interface WranglerEnvConfig {
   d1_databases?: { binding: string; database_name: string; database_id: string }[];
   r2_buckets?: { binding: string; bucket_name: string }[];
   kv_namespaces?: { binding: string; id: string }[];
-  workflows?: { binding: string; name: string; class_name: string }[];
 }
 
 interface WranglerConfig extends WranglerEnvConfig {

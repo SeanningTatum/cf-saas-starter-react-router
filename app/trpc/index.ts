@@ -5,6 +5,7 @@ import { Session, SessionLive } from "@/services/session";
 import type { AppRuntime } from "@/runtime";
 import { loggers } from "@/lib/logger";
 import { isDev } from "@/lib/log-format";
+import { setRequestUser } from "@/lib/request-context";
 
 // Decision (fix 5): wire the already-tested `Session`/`SessionLive` service
 // in as the single source of truth for session resolution, rather than
@@ -21,7 +22,12 @@ export const createTRPCContext = async (opts: {
   runtime: AppRuntime;
 }) => {
   const exit = await opts.runtime.runPromiseExit(
-    Session.pipe(Effect.provide(SessionLive(opts.headers)))
+    Session.pipe(
+      Effect.provide(SessionLive(opts.headers)),
+      // Stamp the signed-in user on the request: every later log line of this
+      // request carries `userId`, and the request span gets `user.id`.
+      Effect.tap(({ user }) => setRequestUser(user?.id))
+    )
   );
 
   if (Exit.isFailure(exit)) {
