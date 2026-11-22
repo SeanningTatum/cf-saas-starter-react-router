@@ -89,7 +89,7 @@ The server does not trust the body for the user id, release, environment, method
 - In a failed database query (a Drizzle error), everything after `params:` becomes `[redacted]`: the bound values, and any stack frames after them in the same text. The SQL text stays.
 - A URL loses its query string and fragment, and a path segment of 24 or more characters that holds a digit (a token or an id) becomes `[redacted]`. The same goes for the request `path`.
 
-The hash is unsalted. It hides an address from a reader and lets you join lines about one address, but anyone with a list of candidate addresses can hash them and test for a match. It is not a secret store. Text redaction is best effort: a secret in a shape the patterns miss gets through, so keep secrets out of error messages. Known gaps: a bare OAuth `code=` or `state=` value in a message, an unquoted value with a space in it (the part after the space stays), and a path segment with no digit.
+The hash is unsalted. It hides an address from a reader and lets you join lines about one address, but anyone with a list of candidate addresses can hash them and test for a match. It is not a secret store. Text redaction is best effort: a secret in a shape the patterns miss gets through, so keep secrets out of error messages. Known gaps: a bare OAuth `code=` or `state=` value in a message, an unquoted value with a space in it (the part after the space stays), a quoted value with no closing quote or with an escaped quote inside it, and a path segment with no digit.
 
 ## Add a provider
 
