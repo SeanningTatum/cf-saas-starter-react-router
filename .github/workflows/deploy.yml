@@ -124,13 +124,17 @@ jobs:
 
       # The error reporter stamps each report with these two vars (docs/agents/error-reporting.md).
       # The version is the vX.Y.Z tag on this commit when release.yml has made one, else the commit sha.
+      # release.yml makes lightweight tags; an annotated tag is not matched here and reads as the sha.
       - name: Name the release
         id: release
         if: steps.token.outputs.ready == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          TAGS=$(gh api "repos/$GITHUB_REPOSITORY/git/matching-refs/tags/v" --jq '.[] | "\(.object.sha) \(.ref)"' || true)
+          TAGS=$(gh api --paginate "repos/$GITHUB_REPOSITORY/git/matching-refs/tags/v" --jq '.[] | "\(.object.sha) \(.ref)"') || {
+            echo "::warning::Could not list the version tags, so the release is named by its commit sha."
+            TAGS=""
+          }
           printf '%s\n' "$TAGS" | bun scripts/ci/release-version.ts "$DEPLOY_SHA" >> "$GITHUB_OUTPUT"
 
       - name: Deploy to Cloudflare Workers

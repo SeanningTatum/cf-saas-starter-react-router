@@ -20,6 +20,11 @@ export interface Deps {
 
 type Version = readonly [number, number, number];
 
+interface ReleaseTag {
+  tag: string;
+  version: Version;
+}
+
 function versionOf(tag: string): Version | undefined {
   const match = RELEASE_TAG_PATTERN.exec(tag);
   if (!match) return undefined;
@@ -32,25 +37,25 @@ function isNewer(a: Version, b: Version): boolean {
   return a[2] > b[2];
 }
 
-export function releaseTagsAt(listing: string, sha: string): string[] {
-  const tags: string[] = [];
+function releaseTagsAt(listing: string, sha: string): ReleaseTag[] {
+  const found: ReleaseTag[] = [];
   for (const line of listing.split(LINE_BREAK)) {
     const [lineSha, ref] = line.trim().split(FIELD_BREAK);
     if (lineSha !== sha || ref === undefined || !ref.startsWith(TAG_REF_PREFIX)) continue;
     const tag = ref.slice(TAG_REF_PREFIX.length);
-    if (versionOf(tag)) tags.push(tag);
+    const version = versionOf(tag);
+    if (version) found.push({ tag, version });
   }
-  return tags;
+  return found;
 }
 
 export function releaseVersion(listing: string, sha: string): string | undefined {
   if (!COMMIT_SHA_PATTERN.test(sha)) return undefined;
-  let best: { tag: string; version: Version } | undefined;
-  for (const tag of releaseTagsAt(listing, sha)) {
-    const version = versionOf(tag);
-    if (version && (best === undefined || isNewer(version, best.version))) best = { tag, version };
-  }
-  return best ? best.tag : sha;
+  const newest = releaseTagsAt(listing, sha).reduce<ReleaseTag | undefined>(
+    (best, next) => (best === undefined || isNewer(next.version, best.version) ? next : best),
+    undefined,
+  );
+  return newest ? newest.tag : sha;
 }
 
 export function run(argv: string[], deps: Deps): number {

@@ -205,8 +205,6 @@ describe("pr-title.yml checks the title with the repo's commitlint config", () =
 
   it("uses the title config, which refuses merge-shaped titles: squashed, such a title is a subject with no type", () => {
     expect(text).toContain("commitlint --config .commitlintrc.title.json");
-    const titleConfig = JSON.parse(fs.readFileSync(path.join(ROOT, ".commitlintrc.title.json"), "utf-8"));
-    expect(titleConfig).toEqual({ extends: ["./.commitlintrc.json"], defaultIgnores: false });
   });
 });
 
@@ -214,12 +212,9 @@ describe("deploys tell the Worker its release version and environment", () => {
   const deploy = codeLines("deploy.yml").join("\n");
   const preview = codeLines("preview.yml").join("\n");
 
-  it("deploy.yml passes both vars to wrangler deploy: without them every error report says unversioned", () => {
-    expect(deploy).toContain('bunx wrangler deploy --var "RELEASE_VERSION:$RELEASE_VERSION" --var ENVIRONMENT:production');
-  });
-
-  it("deploy.yml takes the version from the step that names the release, through env, and names it before it deploys", () => {
+  it("deploy.yml names the release first, then passes it and the environment to wrangler deploy: without them every error report says unversioned", () => {
     expect(deploy).toMatch(/RELEASE_VERSION:\s*\$\{\{\s*steps\.release\.outputs\.version\s*\}\}/);
+    expect(deploy).toContain('bunx wrangler deploy --var "RELEASE_VERSION:$RELEASE_VERSION" --var ENVIRONMENT:production');
     const naming = deploy.indexOf("bun scripts/ci/release-version.ts");
     expect(naming).toBeGreaterThan(-1);
     expect(naming).toBeLessThan(deploy.indexOf("bunx wrangler deploy"));

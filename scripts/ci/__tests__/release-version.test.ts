@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { releaseTagsAt, releaseVersion, run, type Deps } from "../release-version";
+import { releaseVersion, run, type Deps } from "../release-version";
 
 const SHA = "0123456789abcdef0123456789abcdef01234567";
 const OTHER = "89abcdef0123456789abcdef0123456789abcdef";
@@ -28,8 +28,16 @@ describe("releaseVersion", () => {
 
   it("ignores tags that are not plain versions and refs that are not tags: a stray name must not become the release", () => {
     const rows = listing([SHA, "refs/tags/vnext"], [SHA, "refs/tags/v1.2"], [SHA, "refs/heads/v9.9.9"], [SHA, "refs/tags/v1.2.3-rc.1"]);
-    expect(releaseTagsAt(rows, SHA)).toEqual([]);
     expect(releaseVersion(rows, SHA)).toBe(SHA);
+  });
+
+  it("reads a listing with blank lines, carriage returns and a repeated row", () => {
+    const rows = `\r\n${SHA} refs/tags/v3.0.0\r\n\n${SHA} refs/tags/v3.0.0\r\n`;
+    expect(releaseVersion(rows, SHA)).toBe("v3.0.0");
+  });
+
+  it("does not match a tag by a short sha: only the full commit sha names its tag", () => {
+    expect(releaseVersion(listing([SHA, "refs/tags/v3.0.0"]), SHA.slice(0, 7))).toBe(SHA.slice(0, 7));
   });
 
   it("refuses a value that is not a hex sha: it would reach a wrangler argument", () => {

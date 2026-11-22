@@ -10,8 +10,8 @@ Seven workflows live in `.github/workflows/`. Deploy and preview stay off until 
 | `codeql.yml` (CodeQL) | every push to `staging` or `production`, every pull request, and Mondays | reads the source for injection and workflow mistakes |
 | `production-guard.yml` (Production Guard) | a pull request into `production` | fails unless the pull request comes from this repo's `staging` |
 | `release.yml` (Release) | every push to `production` | picks the next version, tags the commit, creates the GitHub release |
-| `deploy.yml` (Deploy Production) | CI finished green on a push to `production` | migrates the production D1 database (first saving a [restore point](rollback.md)), builds, runs `wrangler deploy` with the release version (the tag, or the commit sha) and `ENVIRONMENT:production` |
-| `preview.yml` (Preview Deploy) | a pull request opened, updated or reopened | gives the PR its own D1 database, seeds it, uploads a Worker version with the PR's head sha as its release version and `ENVIRONMENT:preview`, comments the URL |
+| `deploy.yml` (Deploy Production) | CI finished green on a push to `production` | migrates the production D1 database (first saving a [restore point](rollback.md)), builds, runs `wrangler deploy` with a [release version and environment](../agents/error-reporting.md#environment) |
+| `preview.yml` (Preview Deploy) | a pull request opened, updated or reopened | gives the PR its own D1 database, seeds it, uploads a Worker version (with its [release version and environment](../agents/error-reporting.md#environment)), comments the URL |
 | `preview-cleanup.yml` (Preview Cleanup) | a pull request closed | deletes the PR's D1 database |
 
 ## How a change reaches production
