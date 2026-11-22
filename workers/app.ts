@@ -50,7 +50,7 @@ async function handle(
 ): Promise<Response> {
   const runtime = makeAppRuntime(
     env,
-    new URL(request.url).origin,
+    { dev: import.meta.env.DEV, requestOrigin: new URL(request.url).origin },
     requestContext
   );
 

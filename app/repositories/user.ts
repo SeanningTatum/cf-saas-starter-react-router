@@ -4,6 +4,9 @@ import { session, user } from "@/db/schema";
 import { Database } from "@/services/database";
 import { tryQuery, tryUpdate, tryDelete, requireFound } from "@/lib/effect-utils";
 import { ValidationError } from "@/models/errors/repository";
+import { isEmailChange } from "@/auth/email-change";
+import { isProtectedUser } from "@/auth/protected-user";
+import { PROTECTED_USER_MESSAGE } from "@/lib/constants/admin";
 import type {
   GetUsersInput,
   GetUserInput,
@@ -21,10 +24,11 @@ export interface FilterProtectedInput {
   readonly currentUserId: string;
 }
 
-export const isProtectedUser = (
-  target: { readonly role: string | null; readonly id: string },
-  currentUserId: string
-): boolean => target.role === "admin" || target.id === currentUserId;
+export const emailVerifiedAfterUpdate = (
+  storedEmail: string,
+  data: { readonly email?: string; readonly verified?: boolean }
+): boolean | undefined =>
+  isEmailChange(storedEmail, data.email) ? false : data.verified;
 
 export const buildUserConditions = (
   input: GetUsersInput
@@ -56,8 +60,6 @@ export class UserRepository extends Effect.Service<UserRepository>()(
     effect: Effect.gen(function* () {
       const { db } = yield* Database;
 
-      // Nothing reads `banned` when a session is resolved, so a ban must delete
-      // the sessions too. Batch this with the ban: D1 lands both or neither.
       const endSessions = (userIds: ReadonlyArray<string>) =>
         db.delete(session).where(inArray(session.userId, [...userIds]));
 
@@ -169,7 +171,7 @@ export class UserRepository extends Effect.Service<UserRepository>()(
         Effect.gen(function* () {
           const target = yield* tryQuery("user", () =>
             db
-              .select({ id: user.id, role: user.role })
+              .select({ id: user.id, role: user.role, email: user.email })
               .from(user)
               .where(eq(user.id, input.userId))
               .limit(1)
@@ -179,7 +181,7 @@ export class UserRepository extends Effect.Service<UserRepository>()(
             return yield* Effect.fail(
               new ValidationError({
                 entity: "user",
-                message: "Cannot modify admin users or yourself",
+                message: PROTECTED_USER_MESSAGE,
                 field: "userId",
               })
             );
@@ -191,7 +193,7 @@ export class UserRepository extends Effect.Service<UserRepository>()(
         input: UpdateUserInput & { currentUserId: string }
       ) =>
         Effect.gen(function* () {
-          yield* assertMutable({
+          const target = yield* assertMutable({
             userId: input.userId,
             currentUserId: input.currentUserId,
           });
@@ -204,8 +206,11 @@ export class UserRepository extends Effect.Service<UserRepository>()(
                 role: input.data.role,
                 banned: input.data.banned,
                 banReason: input.data.banReason,
-                banExpires: input.data.banExpires,
-                emailVerified: input.data.verified,
+                banExpires:
+                  input.data.banned === true
+                    ? (input.data.banExpires ?? null)
+                    : input.data.banExpires,
+                emailVerified: emailVerifiedAfterUpdate(target.email, input.data),
               })
               .where(eq(user.id, input.userId));
             return input.data.banned === true
