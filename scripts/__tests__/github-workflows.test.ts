@@ -210,6 +210,34 @@ describe("pr-title.yml checks the title with the repo's commitlint config", () =
   });
 });
 
+describe("deploys tell the Worker its release version and environment", () => {
+  const deploy = codeLines("deploy.yml").join("\n");
+  const preview = codeLines("preview.yml").join("\n");
+
+  it("deploy.yml passes both vars to wrangler deploy: without them every error report says unversioned", () => {
+    expect(deploy).toContain('bunx wrangler deploy --var "RELEASE_VERSION:$RELEASE_VERSION" --var ENVIRONMENT:production');
+  });
+
+  it("deploy.yml takes the version from the step that names the release, through env, and names it before it deploys", () => {
+    expect(deploy).toMatch(/RELEASE_VERSION:\s*\$\{\{\s*steps\.release\.outputs\.version\s*\}\}/);
+    const naming = deploy.indexOf("bun scripts/ci/release-version.ts");
+    expect(naming).toBeGreaterThan(-1);
+    expect(naming).toBeLessThan(deploy.indexOf("bunx wrangler deploy"));
+  });
+
+  it("deploy.yml names the release from the tested commit and gives that step only the read-only repo token", () => {
+    expect(deploy).toContain('bun scripts/ci/release-version.ts "$DEPLOY_SHA" >> "$GITHUB_OUTPUT"');
+    expect(deploy).toMatch(/GH_TOKEN:\s*\$\{\{\s*github\.token\s*\}\}/);
+    const releaseStep = deploy.slice(deploy.indexOf("- name: Name the release"), deploy.indexOf("- name: Deploy to Cloudflare Workers"));
+    expect(releaseStep).not.toContain("CLOUDFLARE_API_TOKEN");
+  });
+
+  it("preview.yml passes the PR head sha and the name preview: a preview's reports must not read as production", () => {
+    expect(preview).toContain('--var "RELEASE_VERSION:$HEAD_SHA" --var ENVIRONMENT:preview');
+    expect(preview).toMatch(/HEAD_SHA:\s*\$\{\{\s*github\.event\.pull_request\.head\.sha\s*\}\}/);
+  });
+});
+
 describe("workflows follow the staging to production flow", () => {
   const pushBranches = (f: string): string[] => {
     const lines = codeLines(f);
