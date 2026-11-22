@@ -6,15 +6,18 @@ Read this when a deploy went wrong. Start at the case that fits ([A](#case-a-the
 
 ## The rule that makes rollback possible
 
-Add first, switch the code, remove in a later deploy (expand, switch, contract). Each migration must work with the code before it and the code after it.
+Four steps, each in its own deploy: add, backfill, switch reads and writes, drop later. Each migration must work with the code before it and the code after it.
 
-Why: the deploy job migrates the database first, then deploys the Worker. For a while, old code runs on the new schema. And a Worker rollback never rolls the database back. If a migration breaks the code that is live, no rollback of the Worker fixes it.
+Why: the deploy job migrates the database first, then deploys the Worker. For a while, old code runs on the new schema; if the Worker deploy fails, it keeps running there. And a Worker rollback never rolls the database back. If a migration breaks the code that is live, no rollback of the Worker fixes it.
 
-Example, renaming `user.name` to `user.display_name`, in three deploys:
+Example, renaming `user.name` to `user.display_name`, in four deploys:
 
-1. **Deploy 1, expand.** The migration adds `display_name` (nullable, or with a default). The code writes both columns and still reads `name`.
-2. **Deploy 2, switch.** The code reads `display_name`. It still writes both, so a rollback to deploy 1 finds `name` current.
-3. **Deploy 3, contract.** The migration drops `name`. It needs `drizzle/<name>.reason.md` (below). No live code reads `name` any more.
+1. **Deploy 1, add.** The migration adds `display_name` (nullable, or with a default). The code writes both columns and still reads `name`.
+2. **Deploy 2, backfill.** The migration copies the old values: `UPDATE user SET display_name = name WHERE display_name IS NULL`. It runs while deploy 1's code is live, so every new write already fills both columns and no row is missed. The code does not change. Before you go on, check that no row is left: `SELECT count(*) FROM user WHERE display_name IS NULL` gives 0.
+3. **Deploy 3, switch reads and writes.** The code reads `display_name` and no longer reads or writes `name`. No migration. After this deploy no live code touches the old column. If you may need to roll this deploy back, split it in two: first read `display_name` while still writing both, then stop writing `name`; that way the older code always finds `name` current.
+4. **Deploy 4, drop.** The migration drops `name`. It needs `drizzle/<name>.reason.md` (below). Because deploy 3 already runs, the code that is live while the drop happens does not write the column, and a failed Worker deploy leaves working code behind.
+
+Two mistakes this order prevents. Switching reads without a backfill: rows written before deploy 1 have no `display_name`, read as blank, and lose their value when `name` is dropped. Dropping in the same deploy that stops the writes: the migration runs first, so the old code's writes to `name` fail until the new Worker is live, and keep failing if that deploy fails.
 
 Never rename or drop in one step. Never edit a migration that is already on the base branch: fix forward with a new one.
 
@@ -28,7 +31,7 @@ The `migrations` gate (`bun run scripts/migration-check.ts`, part of `./scripts/
 
 The 30-character floor only proves a reason exists; a reviewer judges whether it is a good one. The gate guards against mistakes. It is not a security boundary: a pull request can change the script.
 
-A good reason says two things: why the statement is safe for the code that is live while it runs, and how to get the data back. For example: "No code reads `user.name` since deploy 2. The column's values are copied in `display_name`; the deploy's restore point holds the old column."
+A good reason says two things: why the statement is safe for the code that is live while it runs, and how to get the data back. For example: "No code reads or writes `user.name` since deploy 3. Deploy 2 copied every value to `display_name` (0 rows left with a null). The deploy's restore point holds the old column."
 
 ## What the deploy saves before a migration
 
@@ -130,7 +133,7 @@ Use this when the Time Travel window has passed, or you want the data somewhere 
    ```
 
 4. Check the tables and row counts (`bunx wrangler d1 execute <name>-restore --remote --command "SELECT name FROM sqlite_master WHERE type = 'table'"`).
-5. Point the `DATABASE` binding in `wrangler.jsonc` at the new database id, then deploy.
+5. Point production at the new database id. If the repo variable `CLOUDFLARE_D1_DATABASE_ID` is set, change it to the new id (Settings, Secrets and variables, Actions, Variables): the deploy job writes that variable over the id in `wrangler.jsonc`, so editing the file alone would leave production on the old database. If the variable is not set, change the id of the `DATABASE` binding in `wrangler.jsonc` and commit it. Then deploy, and check the run's log names the new id.
 6. Delete the downloaded file: `rm export.sql`. It holds user data.
 
 ## What was never run here

@@ -89,7 +89,7 @@ export const reasonPathFor = (sqlPath: string): string =>
   `${sqlPath.slice(0, sqlPath.length - SQL_SUFFIX.length)}${REASON_SUFFIX}`;
 
 export const fixStatement = (reasonPath: string): string =>
-  `  fix: write ${reasonPath} (${MIN_REASON_CHARS}+ characters) saying why the change is safe for the code that is live while it runs, or split it: add first, switch the code, remove in a later deploy (docs/ci/rollback.md)`;
+  `  fix: write ${reasonPath} (${MIN_REASON_CHARS}+ characters) saying why the change is safe for the code that is live while it runs, or split it: add, backfill, switch reads and writes, drop in a later deploy (docs/ci/rollback.md)`;
 
 export const fixApplied = (reasonPath: string): string =>
   `  fix: restore the file and put the change in a new migration, or write ${reasonPath} (${MIN_REASON_CHARS}+ characters) saying why it is safe`;
