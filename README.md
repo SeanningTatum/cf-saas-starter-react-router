@@ -185,7 +185,7 @@ SKIP_HOOKS=1 git commit -m "..."
 
 ### Repo rules ([`.github/repo-rules.json`](.github/repo-rules.json))
 
-The rules GitHub enforces are a file: pull requests only on the default branch, the three CI jobs required, linear history, no force push, and a required reviewer on the `production` environment. The repo owner applies them with one command (it needs admin rights, and is safe to run twice):
+The rules GitHub enforces are a file: pull requests only on the default branch, the three CI jobs required, linear history, no force push, `production` taking merge commits from `staging` only ([details](docs/ci/repo-rules.md)), and a required reviewer on the `production` environment. The repo owner applies them with one command (it needs admin rights, and is safe to run twice):
 
 ```bash
 bun run scripts/repo-rules.ts --apply            # add --dry-run to see the writes first
@@ -458,7 +458,7 @@ CLOUDFLARE_ENV=preview bun run build \
 
 ## Contributing
 
-1. Branch off `main`
+1. Branch off the repo's default branch (`bun scripts/default-branch.ts`)
 2. Read [`AGENTS.md`](AGENTS.md) before starting
 3. Pre-commit gate runs typecheck + tests automatically
 4. Run `./scripts/verify.sh` — every gate green

@@ -9,9 +9,17 @@ import { run, type Deps, type GhResult } from "../repo-rules";
 const REPO = "acme/saas";
 const BASE = `repos/${REPO}`;
 const CHECKS = ["Baseline (typecheck + test + harness-check)", "Build (Cloudflare Workers)", "E2E smoke (Playwright)"];
+const GUARD = "Source branch is staging";
+const ACTIONS_APP_ID = 15368;
+const REVIEW_PARAMS = {
+  required_approving_review_count: 0,
+  require_code_owner_review: false,
+  dismiss_stale_reviews_on_push: false,
+  require_last_push_approval: false,
+  required_review_thread_resolution: false,
+};
 
-const DECLARED = {
-  ruleset: {
+const DEFAULT_BRANCH_DECLARED = {
     name: "default-branch",
     target: "branch",
     enforcement: "active",
@@ -39,18 +47,52 @@ const DECLARED = {
         },
       },
     ],
-  },
+};
+
+const PRODUCTION_DECLARED = {
+  name: "production",
+  target: "branch",
+  enforcement: "active",
+  bypass_actors: [],
+  conditions: { ref_name: { include: ["refs/heads/production"], exclude: [] } },
+  rules: [
+    { type: "deletion" },
+    { type: "non_fast_forward" },
+    { type: "pull_request", parameters: { ...REVIEW_PARAMS, allowed_merge_methods: ["merge"] } },
+    {
+      type: "required_status_checks",
+      parameters: {
+        strict_required_status_checks_policy: false,
+        do_not_enforce_on_create: true,
+        required_status_checks: [GUARD, ...CHECKS].map((context) => ({ context, integration_id: ACTIONS_APP_ID })),
+      },
+    },
+  ],
+};
+
+const DECLARED = {
+  rulesets: [DEFAULT_BRANCH_DECLARED, PRODUCTION_DECLARED],
   environments: [
     { name: "production", reviewers: ["@owner"], prevent_self_review: false, deployment_branches: ["~DEFAULT_BRANCH"] },
   ],
 };
 
-const ciYml = (names: string[]) =>
+const workflowYml = (names: string[]) =>
   [
     "name: CI",
     "jobs:",
     ...names.flatMap((n, i) => [`  job${i}:`, `    name: ${n}`, "    steps:", "      - name: Not a job name"]),
   ].join("\n");
+
+const ciYml = workflowYml;
+const guardYml = workflowYml([GUARD]);
+
+const files = (overrides: Record<string, string> = {}) => ({
+  ".github/repo-rules.json": JSON.stringify(DECLARED),
+  ".github/workflows/ci.yml": ciYml(CHECKS),
+  ".github/workflows/production-guard.yml": guardYml,
+  ...overrides,
+});
 
 const clone = <T>(v: T): T => JSON.parse(JSON.stringify(v));
 
@@ -94,6 +136,35 @@ const LIVE_RULESET = {
   ],
 };
 
+const LIVE_PRODUCTION = {
+  id: 9,
+  name: "production",
+  node_id: "RRS_prod",
+  target: "branch",
+  source_type: "Repository",
+  source: REPO,
+  enforcement: "active",
+  bypass_actors: [],
+  conditions: { ref_name: { exclude: [], include: ["refs/heads/production"] } },
+  created_at: "2026-01-03T00:00:00Z",
+  rules: [
+    { type: "deletion" },
+    { type: "non_fast_forward" },
+    {
+      type: "pull_request",
+      parameters: { ...REVIEW_PARAMS, required_reviewers: [], allowed_merge_methods: ["merge"] },
+    },
+    {
+      type: "required_status_checks",
+      parameters: {
+        strict_required_status_checks_policy: false,
+        do_not_enforce_on_create: true,
+        required_status_checks: [GUARD, ...CHECKS].map((context) => ({ context, integration_id: ACTIONS_APP_ID })),
+      },
+    },
+  ],
+};
+
 const OWNER = { login: "acme-owner", id: 42, type: "User" };
 
 const LIVE_ENV = {
@@ -119,8 +190,10 @@ interface World {
   owner?: { login: string; id: number; type: string };
   /** Whether the caller is a repo admin. Default true. */
   admin?: boolean;
-  /** Live ruleset object, or null for none. */
+  /** Live default-branch ruleset object, or null for none. */
   ruleset?: unknown;
+  /** Live production ruleset object, or null or undefined for none. */
+  production?: unknown;
   /** Live environment object, or null for a 404. */
   env?: unknown;
   /** Branch policies, or null for a 404. */
@@ -133,7 +206,7 @@ const notFound: Partial<GhResult> = { code: 1, stderr: "gh: Not Found (HTTP 404)
 const json = (v: unknown): Partial<GhResult> => ({ stdout: JSON.stringify(v) });
 
 function sync(): World {
-  return { ruleset: clone(LIVE_RULESET), env: clone(LIVE_ENV), policies: clone(LIVE_POLICIES) };
+  return { ruleset: clone(LIVE_RULESET), production: clone(LIVE_PRODUCTION), env: clone(LIVE_ENV), policies: clone(LIVE_POLICIES) };
 }
 
 interface Call {
@@ -146,6 +219,7 @@ function harness(world: World, opts: { files?: Record<string, string>; env?: Rec
   const files = opts.files ?? {
     ".github/repo-rules.json": JSON.stringify(DECLARED),
     ".github/workflows/ci.yml": ciYml(CHECKS),
+    ".github/workflows/production-guard.yml": guardYml,
   };
   const deps: Deps = {
     gh: (args, input) => {
@@ -159,14 +233,25 @@ function harness(world: World, opts: { files?: Record<string, string>; env?: Rec
       if (write) return reply(json({}));
       if (path === BASE) return reply(json({ default_branch: "main", owner: world.owner ?? OWNER, permissions: { admin: world.admin ?? true } }));
       if (path === `${BASE}/rulesets?per_page=100&includes_parents=false`)
-        return reply(json(world.ruleset ? [{ id: 7, name: "default-branch" }, { id: 8, name: "other" }] : [{ id: 8, name: "other" }]));
+        return reply(
+          json([
+            ...(world.ruleset ? [{ id: 7, name: "default-branch" }] : []),
+            ...(world.production ? [{ id: 9, name: "production" }] : []),
+            { id: 8, name: "other" },
+          ]),
+        );
       if (path === `${BASE}/rulesets/7`) return reply(json(world.ruleset));
+      if (path === `${BASE}/rulesets/9`) return reply(json(world.production));
       if (path === `${BASE}/environments/production`) return reply(world.env ? json(world.env) : notFound);
       if (path === `${BASE}/environments/production/deployment-branch-policies`)
         return reply(world.policies ? json(world.policies) : notFound);
       return reply({ code: 1, stderr: `unexpected gh call: ${args.join(" ")}` });
     },
     readFile: (p) => (p in files ? Either.right(files[p]) : Either.left("ENOENT")),
+    listDir: (dir) => {
+      const names = Object.keys(files).filter((f) => f.startsWith(`${dir}/`)).map((f) => f.slice(dir.length + 1));
+      return names.length ? Either.right(names) : Either.left("ENOENT");
+    },
     env: { GITHUB_REPOSITORY: REPO, ...opts.env },
   };
   return { deps, calls };
@@ -184,24 +269,51 @@ const check = (world: World, argv = ["--check"], opts = {}) => {
 describe("static check", () => {
   it("a required check that is no CI job name fails with exit 1 even with no gh: a job rename would otherwise block every merge", () => {
     const { o, calls } = check({}, ["--check"], {
-      files: {
-        ".github/repo-rules.json": JSON.stringify(DECLARED),
+      files: files({
         ".github/workflows/ci.yml": ciYml(["Baseline (typecheck + test + harness-check)", "Build (Cloudflare Workers)", "Renamed e2e"]),
-      },
+      }),
     });
     expect(o.code).toBe(1);
+    const missing = 'error: required check "E2E smoke (Playwright)" is not a job name in any workflow under .github/workflows';
+    expect(lines(o.stdout, "error")).toEqual([missing]);
+    expect(calls).toEqual([]);
+  });
+
+  it("a required check that is a job in production-guard.yml passes the offline check: the guard lives outside ci.yml", () => {
+    const { o } = check({}, ["--check"], { files: files() });
+    expect(lines(o.stdout, "error")).toEqual([]);
+    expect(o.stdout[0]).toMatch(/^ok: .*every required check is a job name in a workflow/);
+  });
+
+  it("a required check that is a job in no workflow fails the offline check: a deleted guard file would hang every release pull request", () => {
+    const withoutGuard = files();
+    delete (withoutGuard as Record<string, string>)[".github/workflows/production-guard.yml"];
+    const { o, calls } = check({}, ["--check"], { files: withoutGuard });
+    expect(o.code).toBe(1);
     expect(lines(o.stdout, "error")).toEqual([
-      'error: required check "E2E smoke (Playwright)" is not a job name in .github/workflows/ci.yml',
+      `error: required check "${GUARD}" is not a job name in any workflow under .github/workflows`,
     ]);
     expect(calls).toEqual([]);
   });
 
+  it("a workflow file that cannot be read is an error, not a pass", () => {
+    const h = harness({}, { files: files() });
+    const readFile: Deps["readFile"] = (p) => (p.endsWith("ci.yml") ? Either.left("EACCES") : h.deps.readFile(p));
+    const o = run(["--check"], { ...h.deps, readFile });
+    expect(o.code).toBe(1);
+    expect(lines(o.stdout, "error")[0]).toContain("cannot read .github/workflows/ci.yml: EACCES");
+  });
+
+  it("an unreadable workflows folder is an error, not a pass", () => {
+    const h = harness({}, { files: files() });
+    const o = run(["--check"], { ...h.deps, listDir: () => Either.left("ENOENT") });
+    expect(o.code).toBe(1);
+    expect(lines(o.stdout, "error")[0]).toContain("cannot read .github/workflows: ENOENT");
+  });
+
   it("with gh missing the same bad name still exits 1: the static check needs no network", () => {
     const h = harness({ override: () => ({ code: 127, stderr: "cannot run gh" }) }, {
-      files: {
-        ".github/repo-rules.json": JSON.stringify(DECLARED),
-        ".github/workflows/ci.yml": ciYml(["Only one job"]),
-      },
+      files: files({ ".github/workflows/ci.yml": ciYml(["Only one job"]) }),
     });
     const o = run(["--check"], h.deps);
     expect(o.code).toBe(1);
@@ -210,18 +322,18 @@ describe("static check", () => {
 
   it("step names are not job names: a check named after a step must fail", () => {
     const { o } = check({}, ["--check"], {
-      files: {
-        ".github/repo-rules.json": JSON.stringify(DECLARED),
+      files: files({
         ".github/workflows/ci.yml": ciYml(CHECKS.slice(0, 2)).replace("name: Not a job name", "name: E2E smoke (Playwright)"),
-      },
+      }),
     });
     expect(o.code).toBe(1);
   });
 
-  it("the real repo-rules.json and ci.yml pass: renaming a CI job breaks this test, not the merge button", () => {
+  it("the real repo-rules.json and workflows pass: renaming a CI job breaks this test, not the merge button", () => {
     const real = (p: string) => readFileSync(fileURLToPath(new URL(`../../${p}`, import.meta.url)), "utf8");
+    const workflows = ["ci.yml", "production-guard.yml"].map((f) => `.github/workflows/${f}`);
     const h = harness({ override: () => ({ code: 127, stderr: "cannot run gh" }) }, {
-      files: { ".github/repo-rules.json": real(".github/repo-rules.json"), ".github/workflows/ci.yml": real(".github/workflows/ci.yml") },
+      files: Object.fromEntries([".github/repo-rules.json", ...workflows].map((p) => [p, real(p)])),
     });
     const o = run(["--check"], h.deps);
     expect(lines(o.stdout, "error")).toEqual([]);
@@ -232,7 +344,7 @@ describe("static check", () => {
 
 describe("config file", () => {
   const bad = (text: string) =>
-    check({}, ["--check"], { files: { ".github/repo-rules.json": text, ".github/workflows/ci.yml": ciYml(CHECKS) } });
+    check({}, ["--check"], { files: files({ ".github/repo-rules.json": text }) });
 
   it("malformed JSON gives error and exit 1 without throwing: a typo must not read as 'no rules'", () => {
     const { o, calls } = bad("{ not json");
@@ -243,8 +355,24 @@ describe("config file", () => {
 
   it("a schema-invalid file gives error and exit 1: enforcement as a number must not reach GitHub", () => {
     const broken = clone(DECLARED) as any;
-    broken.ruleset.enforcement = 1;
+    broken.rulesets[0].enforcement = 1;
     const { o } = bad(JSON.stringify(broken));
+    expect(o.code).toBe(1);
+    expect(lines(o.stdout, "error")[0]).toContain("is not valid");
+  });
+
+  it("the old single ruleset key is an error that says to rename it: it must not pass as no rules", () => {
+    const old = { ruleset: DEFAULT_BRANCH_DECLARED, environments: DECLARED.environments };
+    const { o, calls } = bad(JSON.stringify(old));
+    expect(o.code).toBe(1);
+    expect(lines(o.stdout, "error")).toEqual([
+      'error: .github/repo-rules.json has the old "ruleset" key; rename it to "rulesets" and make it an array of rulesets',
+    ]);
+    expect(calls).toEqual([]);
+  });
+
+  it("an empty rulesets list is an error: a file that declares no rule must not read as a pass", () => {
+    const { o } = bad(JSON.stringify({ ...DECLARED, rulesets: [] }));
     expect(o.code).toBe(1);
     expect(lines(o.stdout, "error")[0]).toContain("is not valid");
   });
@@ -316,21 +444,21 @@ describe("cannot read GitHub", () => {
 // ---------------------------------------------------------------- check
 
 describe("--check: not applied", () => {
-  it("nothing applied (no ruleset, bare environment) is two notices with exit 0: a fresh fork is not broken", () => {
-    const { o } = check({ ruleset: null, env: LIVE_ENV_BARE() });
+  it("neither ruleset exists and the environment is bare: three notices with exit 0, so a fresh fork is not broken", () => {
+    const { o } = check({ ruleset: null, production: null, env: LIVE_ENV_BARE() });
     expect(o.code).toBe(0);
-    expect(lines(o.stdout, "notice")).toHaveLength(2);
+    expect(lines(o.stdout, "notice")).toHaveLength(3);
     expect(lines(o.stdout, "drift")).toEqual([]);
   });
 
   it("an environment that returns 404 also counts as not applied", () => {
     const { o } = check({ ruleset: null, env: null });
     expect(o.code).toBe(0);
-    expect(lines(o.stdout, "notice")).toHaveLength(2);
+    expect(lines(o.stdout, "notice")).toHaveLength(3);
   });
 
-  it("ruleset applied but environment bare is drift with exit 1: weakening one half after an apply must fail the gate", () => {
-    const { o } = check({ ruleset: clone(LIVE_RULESET), env: LIVE_ENV_BARE() });
+  it("rulesets applied but environment bare is drift with exit 1: weakening one half after an apply must fail the gate", () => {
+    const { o } = check({ ruleset: clone(LIVE_RULESET), production: clone(LIVE_PRODUCTION), env: LIVE_ENV_BARE() });
     expect(o.code).toBe(1);
     expect(lines(o.stdout, "drift")).toEqual([
       'drift: environment "production" is not applied but other rules are; run: bun run scripts/repo-rules.ts --apply',
@@ -339,7 +467,7 @@ describe("--check: not applied", () => {
   });
 
   it("the same bare environment seen without admin rights is a notice with exit 0: GitHub may hide protection from a CI token, and that must not turn every pull request red", () => {
-    const { o } = check({ ruleset: clone(LIVE_RULESET), env: LIVE_ENV_BARE(), admin: false });
+    const { o } = check({ ruleset: clone(LIVE_RULESET), production: clone(LIVE_PRODUCTION), env: LIVE_ENV_BARE(), admin: false });
     expect(o.code).toBe(0);
     expect(lines(o.stdout, "drift")).toEqual([]);
     expect(lines(o.stdout, "notice")).toEqual([
@@ -347,8 +475,26 @@ describe("--check: not applied", () => {
     ]);
   });
 
-  it("environment applied but no ruleset is drift with exit 1: deleting the ruleset must fail the gate", () => {
+  it("environment applied but no ruleset is drift with exit 1: deleting both rulesets must fail the gate", () => {
     const { o } = check({ ruleset: null, env: clone(LIVE_ENV), policies: clone(LIVE_POLICIES) });
+    expect(o.code).toBe(1);
+    expect(lines(o.stdout, "drift")).toEqual([
+      'drift: ruleset "default-branch" is not applied but other rules are; run: bun run scripts/repo-rules.ts --apply',
+      'drift: ruleset "production" is not applied but other rules are; run: bun run scripts/repo-rules.ts --apply',
+    ]);
+  });
+
+  it("default-branch exists but production does not: drift naming production and the fix, not a notice, so a fork that applied before the second ruleset sees it once", () => {
+    const { o } = check({ ...sync(), production: null });
+    expect(o.code).toBe(1);
+    expect(lines(o.stdout, "drift")).toEqual([
+      'drift: ruleset "production" is not applied but other rules are; run: bun run scripts/repo-rules.ts --apply',
+    ]);
+    expect(lines(o.stdout, "notice")).toEqual([]);
+  });
+
+  it("production exists but default-branch does not: drift naming default-branch", () => {
+    const { o } = check({ ...sync(), ruleset: null });
     expect(o.code).toBe(1);
     expect(lines(o.stdout, "drift")).toEqual([
       'drift: ruleset "default-branch" is not applied but other rules are; run: bun run scripts/repo-rules.ts --apply',
@@ -364,7 +510,12 @@ describe("--check: in sync", () => {
   it("GitHub's extra fields (ids, integration_id, allowed_merge_methods, node_id, _links, created_at) do not count as drift", () => {
     const { o, calls } = check(sync());
     expect(o.code).toBe(0);
-    expect(lines(o.stdout, "ok")).toHaveLength(3);
+    expect(lines(o.stdout, "ok")).toEqual([
+      expect.stringContaining("every required check is a job name"),
+      'ok: ruleset "default-branch" matches .github/repo-rules.json',
+      'ok: ruleset "production" matches .github/repo-rules.json',
+      'ok: environment "production" matches .github/repo-rules.json',
+    ]);
     expect(lines(o.stdout, "drift")).toEqual([]);
     expect(lines(o.stdout, "error")).toEqual([]);
     expect(writes(calls)).toEqual([]);
@@ -388,7 +539,7 @@ describe("--check: bypass list", () => {
     expect(lines(o.stdout, "notice")).toEqual([
       'notice: ruleset "default-branch" bypass list cannot be read without admin rights; not checked',
     ]);
-    expect(lines(o.stdout, "ok").join("\n")).not.toContain("ruleset");
+    expect(lines(o.stdout, "ok").join("\n")).not.toContain('ruleset "default-branch"');
   });
 
   it("other drift still reports when the bypass list is hidden", () => {
@@ -402,7 +553,7 @@ describe("--check: bypass list", () => {
 });
 
 describe("--check: drift", () => {
-  type W = World & { ruleset: any; env: any; policies: any };
+  type W = World & { ruleset: any; production: any; env: any; policies: any };
   const rule = (w: W, type: string) => w.ruleset.rules.find((r: any) => r.type === type);
 
   // [regression it catches, change to the live world, text the one drift line must contain]
@@ -430,6 +581,31 @@ describe("--check: drift", () => {
       ["required_approving_review_count", "declared 0", "live 2"],
     ],
     ["the include pattern changed: the rules would guard the wrong branch", (w) => (w.ruleset.conditions.ref_name.include = ["refs/heads/dev"]), ["conditions.ref_name.include"]],
+    [
+      "production takes squash too: a release would stop being a merge commit of staging",
+      (w) => (rule({ ruleset: w.production } as W, "pull_request").parameters.allowed_merge_methods = ["merge", "squash"]),
+      ['ruleset "production"', "allowed_merge_methods", '["merge"]'],
+    ],
+    [
+      "the production guard check removed: a pull request from any branch could reach production",
+      (w) => rule({ ruleset: w.production } as W, "required_status_checks").parameters.required_status_checks.shift(),
+      ['ruleset "production"', "required_status_checks", GUARD],
+    ],
+    [
+      "the production guard check bound to another app: a fake status could satisfy it",
+      (w) => (rule({ ruleset: w.production } as W, "required_status_checks").parameters.required_status_checks[0].integration_id = 1),
+      ['ruleset "production"', "required_status_checks", "(app 1)"],
+    ],
+    [
+      "linear history added to production by hand: the merge commit from staging would be refused",
+      (w) => w.production.rules.push({ type: "required_linear_history" }),
+      ['ruleset "production"', "rules.required_linear_history", "live present"],
+    ],
+    [
+      "production enforcement disabled: releases would take any push",
+      (w) => (w.production.enforcement = "disabled"),
+      ['ruleset "production"', "enforcement", '"disabled"'],
+    ],
     ["a reviewer removed: deploys would need no approval", (w) => (w.env.protection_rules[0].reviewers = []), ["reviewers", "@owner"]],
     ["prevent_self_review flipped", (w) => (w.env.protection_rules[0].prevent_self_review = true), ["prevent_self_review", "declared false", "live true"]],
     [
@@ -454,6 +630,30 @@ describe("--check: drift", () => {
     expect(d).toHaveLength(1);
     for (const n of needles) expect(d[0]).toContain(n);
   });
+
+  it("drift in production only is reported by that ruleset's name and never blames default-branch", () => {
+    const w = sync() as W;
+    w.production.enforcement = "disabled";
+    const { o } = check(w);
+    expect(lines(o.stdout, "ok")).toContain('ok: ruleset "default-branch" matches .github/repo-rules.json');
+    expect(lines(o.stdout, "drift").join("\n")).not.toContain("default-branch");
+  });
+
+  it("drift in default-branch only does not touch the production line", () => {
+    const w = sync() as W;
+    w.ruleset.enforcement = "disabled";
+    const { o } = check(w);
+    expect(lines(o.stdout, "ok")).toContain('ok: ruleset "production" matches .github/repo-rules.json');
+    expect(lines(o.stdout, "drift")).toHaveLength(1);
+    expect(lines(o.stdout, "drift")[0]).toContain('ruleset "default-branch"');
+  });
+
+  it("a live check with no integration_id passes when the file does not pin one: default-branch checks carry none", () => {
+    const w = sync() as W;
+    rule(w, "required_status_checks").parameters.required_status_checks.forEach((c: any) => (c.integration_id = 99));
+    const { o } = check(w);
+    expect(o.code).toBe(0);
+  });
 });
 
 // ---------------------------------------------------------------- apply
@@ -463,6 +663,7 @@ describe("--apply --dry-run", () => {
     const { o, calls } = check({ ruleset: null, env: null }, ["--apply", "--dry-run"]);
     expect(o.code).toBe(0);
     expect(lines(o.stdout, "would").map((l) => l.split(" ").slice(0, 3).join(" "))).toEqual([
+      `would: POST ${BASE}/rulesets`,
       `would: POST ${BASE}/rulesets`,
       `would: PUT ${BASE}/environments/production`,
       `would: POST ${BASE}/environments/production/deployment-branch-policies`,
@@ -474,30 +675,48 @@ describe("--apply --dry-run", () => {
 
   it("puts the compact JSON body after the path", () => {
     const { o } = check({ ruleset: null, env: null }, ["--apply", "--dry-run"]);
-    expect(lines(o.stdout, "would")[2]).toBe(
+    expect(lines(o.stdout, "would")[3]).toBe(
       `would: POST ${BASE}/environments/production/deployment-branch-policies {"name":"main","type":"branch"}`,
     );
   });
 });
 
 describe("--apply", () => {
-  it("from nothing: POST ruleset, PUT environment, POST branch policy, in that order, with the right bodies", () => {
+  it("from nothing: POST both rulesets, PUT environment, POST branch policy, in that order, with the right bodies", () => {
     const { o, calls } = check({ ruleset: null, env: null }, ["--apply"]);
     expect(o.code).toBe(0);
     const w = writes(calls);
     expect(w.map((c) => c.args.slice(1))).toEqual([
       ["-X", "POST", `${BASE}/rulesets`, "--input", "-"],
+      ["-X", "POST", `${BASE}/rulesets`, "--input", "-"],
       ["-X", "PUT", `${BASE}/environments/production`, "--input", "-"],
       ["-X", "POST", `${BASE}/environments/production/deployment-branch-policies`, "--input", "-"],
     ]);
-    expect(JSON.parse(w[0].input!)).toEqual(DECLARED.ruleset);
-    expect(JSON.parse(w[1].input!)).toEqual({
+    expect(JSON.parse(w[0].input!)).toEqual(DEFAULT_BRANCH_DECLARED);
+    expect(JSON.parse(w[1].input!)).toEqual(PRODUCTION_DECLARED);
+    expect(JSON.parse(w[2].input!)).toEqual({
       prevent_self_review: false,
       reviewers: [{ type: "User", id: 42 }],
       deployment_branch_policy: { protected_branches: false, custom_branch_policies: true },
     });
-    expect(JSON.parse(w[2].input!)).toEqual({ name: "main", type: "branch" });
-    expect(lines(o.stdout, "did")).toHaveLength(3);
+    expect(JSON.parse(w[3].input!)).toEqual({ name: "main", type: "branch" });
+    expect(lines(o.stdout, "did")).toHaveLength(4);
+  });
+
+  it("on a repo with only default-branch it POSTs production and leaves the first ruleset alone: a fork that applied before this change catches up", () => {
+    const { o, calls } = check({ ...sync(), production: null }, ["--apply"]);
+    expect(o.code).toBe(0);
+    const made = writes(calls);
+    expect(made.map((c) => c.args.slice(2, 4))).toEqual([["POST", `${BASE}/rulesets`]]);
+    expect(JSON.parse(made[0]?.input ?? "{}")).toEqual(PRODUCTION_DECLARED);
+  });
+
+  it("run twice, the second apply writes nothing: the first apply's result is what the file declares", () => {
+    const first = check({ ...sync(), production: null }, ["--apply"]);
+    expect(writes(first.calls)).toHaveLength(1);
+    const second = check(sync(), ["--apply"]);
+    expect(writes(second.calls)).toEqual([]);
+    expect(second.o.stdout.join("\n")).toContain("nothing needs to change");
   });
 
   it("when the repo already matches it makes no write call: running apply twice is safe", () => {
@@ -535,6 +754,7 @@ describe("--apply", () => {
     const { calls } = check(
       {
         ruleset: clone(LIVE_RULESET),
+        production: clone(LIVE_PRODUCTION),
         env: null,
         override: (_m, path) => {
           if (path === "users/octocat") return json({ id: 1, login: "octocat" });
@@ -542,7 +762,7 @@ describe("--apply", () => {
         },
       },
       ["--apply"],
-      { files: { ".github/repo-rules.json": JSON.stringify(declared), ".github/workflows/ci.yml": ciYml(CHECKS) } },
+      { files: files({ ".github/repo-rules.json": JSON.stringify(declared) }) },
     );
     const put = writes(calls).find((c) => c.args[2] === "PUT")!;
     expect(JSON.parse(put.input!).reviewers).toEqual([
@@ -557,7 +777,7 @@ describe("--apply", () => {
     const { o, calls } = check(
       { ruleset: null, env: null, override: (_m, path) => (path === "users/ghost" ? notFound : undefined) },
       ["--apply"],
-      { files: { ".github/repo-rules.json": JSON.stringify(declared), ".github/workflows/ci.yml": ciYml(CHECKS) } },
+      { files: files({ ".github/repo-rules.json": JSON.stringify(declared) }) },
     );
     expect(o.code).toBe(1);
     expect(lines(o.stdout, "error")[0]).toContain('reviewer "ghost"');
@@ -597,6 +817,7 @@ describe("--apply", () => {
     const { o } = check(
       {
         ruleset: clone(LIVE_RULESET),
+        production: clone(LIVE_PRODUCTION),
         env: null,
         override: (m, path) =>
           m === "PUT" && path.includes("/environments/") ? { code: 1, stderr: "gh: Validation Failed (HTTP 422)" } : undefined,
@@ -613,9 +834,9 @@ describe("--apply", () => {
 describe("GITHUB_ACTIONS", () => {
   it("adds ::notice:: for each notice and ::error:: for each drift or error, so the run page shows them", () => {
     const notices = check({ ruleset: null, env: null }, ["--check"], { env: { GITHUB_ACTIONS: "true" } }).o;
-    expect(notices.stdout.filter((l) => l.startsWith("::notice::"))).toHaveLength(2);
+    expect(notices.stdout.filter((l) => l.startsWith("::notice::"))).toHaveLength(3);
 
-    const drift = check({ ruleset: clone(LIVE_RULESET), env: null }, ["--check"], { env: { GITHUB_ACTIONS: "true" } }).o;
+    const drift = check({ ruleset: clone(LIVE_RULESET), production: clone(LIVE_PRODUCTION), env: null }, ["--check"], { env: { GITHUB_ACTIONS: "true" } }).o;
     expect(drift.stdout.filter((l) => l.startsWith("::error::"))).toHaveLength(1);
 
     const bad = check({}, ["--check"], { env: { GITHUB_ACTIONS: "true" }, files: {} }).o;

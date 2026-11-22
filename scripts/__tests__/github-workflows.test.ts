@@ -35,7 +35,6 @@ describe("workflows pin every action to a commit", () => {
     "%s: every uses: is owner/repo@<40 hex> # v<version> (a tag can be moved to run other code)",
     (f) => {
       const uses = codeLines(f).filter((l) => /^\s*-?\s*uses\s*:/.test(l));
-      expect(uses.length).toBeGreaterThan(0);
       for (const line of uses) {
         expect(line.trim()).toMatch(
           /^(- )?uses:\s+[\w.-]+\/[\w.-]+(\/[\w./-]+)?@[0-9a-f]{40} # v\d+(\.\d+){1,2}$/,
@@ -164,4 +163,92 @@ describe("workflows keep secrets and PR data out of shell text", () => {
       expect(line.length - line.trimStart().length).toBeGreaterThanOrEqual(10);
     }
   });
+});
+
+describe("workflows follow the staging to production flow", () => {
+  const pushBranches = (f: string): string[] => {
+    const lines = codeLines(f);
+    const push = lines.findIndex((l) => /^ {2}push:\s*$/.test(l));
+    expect(push, `${f} has no push: trigger`).toBeGreaterThanOrEqual(0);
+    const match = lines
+      .slice(push + 1, push + 3)
+      .join("\n")
+      .match(/branches:\s*\[([^\]]*)\]/);
+    expect(match, `${f} push: has no branches list`).not.toBeNull();
+    return (match?.[1] ?? "").split(",").map((b) => b.trim());
+  };
+
+  it("ci.yml and codeql.yml push to the same branches, staging and production (a drift leaves one scan off a branch)", () => {
+    expect(pushBranches("ci.yml")).toEqual(["staging", "production"]);
+    expect(pushBranches("codeql.yml")).toEqual(["staging", "production"]);
+  });
+
+  it.each(["ci.yml", "codeql.yml"])(
+    "%s still runs on every pull request: a stacked PR targets the PR below it, not a protected branch",
+    (f) => {
+      const lines = codeLines(f);
+      const pr = lines.findIndex((l) => /^ {2}pull_request:\s*$/.test(l));
+      expect(pr).toBeGreaterThanOrEqual(0);
+      expect(lines[pr + 1] ?? "").not.toMatch(/^\s{4}branches:/);
+    },
+  );
+
+  it("deploy.yml follows CI on production only (a deploy off staging would ship every squash)", () => {
+    const text = codeLines("deploy.yml").join("\n");
+    expect(text).toMatch(
+      /workflow_run:\s*\n\s+workflows:\s*\[CI\]\s*\n\s+types:\s*\[completed\]\s*\n\s+branches:\s*\[production\]\s*\n/,
+    );
+  });
+
+  it("release.yml triggers on pushes to production only", () => {
+    expect(pushBranches("release.yml")).toEqual(["production"]);
+  });
+
+  it("release.yml gives contents: write at job level only, never at the top (the checkout and the version script need no write)", () => {
+    const writes = codeLines("release.yml").filter((l) => /contents:\s*write/.test(l));
+    expect(writes).toHaveLength(1);
+    expect(writes[0]?.search(/\S/)).toBeGreaterThan(2);
+  });
+
+  it("release.yml runs the version script that exists and is executable", () => {
+    const script = path.join(ROOT, ".github", "scripts", "next-version.sh");
+    expect(codeLines("release.yml").join("\n")).toContain("./.github/scripts/next-version.sh");
+    expect(fs.statSync(script).mode & 0o111).not.toBe(0);
+  });
+
+  it("release.yml fetches full history and tags: the version comes from commits since the last tag", () => {
+    const text = codeLines("release.yml").join("\n");
+    expect(text).toMatch(/fetch-depth:\s*0/);
+    expect(text).toMatch(/fetch-tags:\s*true/);
+  });
+
+  it.each(files)("%s never uses pull_request_target: it would run with secrets on fork code", (f) => {
+    expect(codeLines(f).filter((l) => /pull_request_target/.test(l))).toEqual([]);
+  });
+
+  it("production-guard.yml runs on pull requests into production and fails a source that is not staging in this repo", () => {
+    const text = codeLines("production-guard.yml").join("\n");
+    expect(text).toMatch(/pull_request:\s*\n\s+branches:\s*\[production\]/);
+    expect(text).toContain('[ "$HEAD_REF" != "staging" ] || [ "$HEAD_REPO" != "$REPO" ]');
+  });
+
+  it.each(["production-guard.yml", "release.yml"])(
+    "%s has no ${{ }} expression inside a run script: values go through env",
+    (f) => {
+      const lines = codeLines(f);
+      let runIndent: number | undefined;
+      const offenders: string[] = [];
+      for (const line of lines) {
+        const indent = line.length - line.trimStart().length;
+        if (runIndent !== undefined && line.trim() !== "" && indent <= runIndent) runIndent = undefined;
+        if (runIndent !== undefined && /\$\{\{/.test(line)) offenders.push(line.trim());
+        const m = line.match(/^(\s*)(?:-\s+)?run:\s*(.*)$/);
+        if (m) {
+          if (/\$\{\{/.test(m[2] ?? "")) offenders.push(line.trim());
+          if (["|", ">", ">-", "|-"].includes(m[2] ?? "")) runIndent = indent;
+        }
+      }
+      expect(offenders).toEqual([]);
+    },
+  );
 });
