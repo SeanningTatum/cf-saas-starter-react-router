@@ -1,6 +1,7 @@
 import { TRPCError } from "@trpc/server";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { requireSession } from "@/lib/session";
+import { createCallerFactory, createTRPCRouter, protectedProcedure } from "@/trpc";
 import { BASE_URL, startRealApp, type Account, type RealApp } from "./real-d1";
 
 /**
@@ -47,10 +48,16 @@ const bannedFlag = async (userId: string) =>
       .first<{ banned: number | null }>()
   )?.banned;
 
+// The probe is a fixture: every procedure in the app router is admin-only,
+// which a non-admin victim never passes. One procedure on the REAL
+// `protectedProcedure`, called with the REAL context, tests the session alone.
+const probeRouter = createTRPCRouter({ ping: protectedProcedure.query(() => "ok") });
+
 /** "ok", or the tRPC code the next protected call was refused with. */
 const nextProtectedCall = (headers: Headers): Promise<string> =>
-  callerFor(headers)
-    .then((caller) => caller.user.createWorkflow({ email: "probe@ban.test", metadata: {} }))
+  app
+    .contextFor(headers)
+    .then((ctx) => createCallerFactory(probeRouter)(ctx).ping())
     .then(
       () => "ok",
       (e: unknown) => (e instanceof TRPCError ? e.code : `not a TRPCError: ${String(e)}`)

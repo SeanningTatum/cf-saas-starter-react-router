@@ -31,7 +31,7 @@ If you're a human, scroll to [Quick Start](#quick-start). If you're an agent, sc
 - **UI:** ShadCN/Radix + Tailwind v4 (oklch), next-themes, react-hook-form + Effect resolver
 - **i18n:** remix-i18next + i18next, route-level namespaces, fully typed
 - **Testing:** Vitest 3 (unit) + Playwright 1.58 (e2e) + `@effect/vitest`
-- **Background:** Cloudflare Workflows (`ExampleWorkflow`)
+- **Background:** no Workflow ships; [add a Cloudflare Workflow](docs/add-a-cloudflare-workflow.md) when you need one
 
 **Agent harness**
 - GitHub issues and PRs — specs, tickets and verdicts; the project state
@@ -223,7 +223,6 @@ e2e/                  Playwright tests
 public/               Static assets
 scripts/              Setup / teardown / seed + verify.sh + harness-check.sh
 workers/app.ts        Cloudflare Workers entrypoint
-workflows/            Cloudflare Workflow definitions
 init.sh               Harness bootstrap — install + skills + migrate + typecheck + test
 ```
 

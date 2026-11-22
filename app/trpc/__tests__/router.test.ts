@@ -25,7 +25,6 @@ import { startRealApp, type AppCaller, type RealApp } from "./real-d1";
 type Level = "protected" | "admin";
 
 const LEVELS: Record<string, Level> = {
-  "user.createWorkflow": "protected",
   "admin.getUsers": "admin",
   "admin.getUser": "admin",
   "admin.updateUser": "admin",
@@ -48,9 +47,7 @@ type OwnershipCase = (other: AppCaller) => Promise<unknown>;
 
 // A case is one line, e.g.
 //   "notes.get": async (other) => ({ noteId: (await other.notes.create({ title: "x" })).id }),
-const OWNERSHIP: Record<string, "takes no id" | OwnershipCase> = {
-  "user.createWorkflow": "takes no id", // starts a job from an email and metadata; reads no stored row
-};
+const OWNERSHIP: Record<string, "takes no id" | OwnershipCase> = {};
 
 // `import.meta.env.DEV` is always true under vitest, which makes
 // `timingMiddleware` sleep 100-499ms of real time per call.
