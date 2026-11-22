@@ -85,7 +85,7 @@ export const meta = {
  * The helpers every workflow shares; scripts/workflows.ts pastes this file into each workflow.
  * Rules for an author:
  *   - no import, and no free variable except a JS built-in: whatever needs the runtime comes in
- *     through `workflowLib({ agent, log })`;
+ *     through `workflowLib({ agent, log, name })`;
  *   - every top-level name here lands in each workflow's scope, so a workflow must not declare it again.
  */
 
@@ -174,13 +174,119 @@ function memoryRecordCommand(slug, fields) {
   return `bun scripts/memory.ts record ${slug} <<'MEMORY_EOF'\n${lines.join("\n")}\nMEMORY_EOF`;
 }
 
+// ---- Run telemetry ----------------------------------------------------------------------------------
+/** FNV-1a, 32 bit, over the UTF-16 code units of `text`, as 8 lower-case hex digits. scripts/run-telemetry.ts computes the same sum. */
+function ledgerChecksum(text) {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < text.length; i++) {
+    h ^= text.charCodeAt(i);
+    h = Math.imul(h, 0x01000193) >>> 0;
+  }
+  return h.toString(16).padStart(8, "0");
+}
+
+/** A short verdict for the ledger: the result's `verdict` string, else pass or fail from its first boolean among ok, pass, passed, else "". */
+function verdictOf(result) {
+  if (!result || typeof result !== "object") return "";
+  if (typeof result.verdict === "string") return result.verdict;
+  for (const k of ["ok", "pass", "passed"]) if (typeof result[k] === "boolean") return result[k] ? "pass" : "fail";
+  return "";
+}
+
+/** The most characters one ledger string keeps; agent output can reach a ledger string, so each is cut and stripped to a safe set. */
+const LEDGER_FIELD_MAX = 80;
+
+/**
+ * The shell command that hands the ledger to scripts/run-telemetry.ts: one JSON array per call, then a
+ * line with the call count and a checksum, so a runner that garbled the copy leaves nothing behind.
+ * A script has no clock and no file access, so this is how a run reports its calls.
+ */
+function runRecordCommand(workflow, slug, calls) {
+  const clean = (v) => String(v).replace(/[^A-Za-z0-9 :._/#()-]/g, "-").slice(0, LEDGER_FIELD_MAX).split("RUN_EOF").join("RUN-EOF");
+  const lines = calls.map((c) => JSON.stringify([clean(c.label), clean(c.phase), clean(c.agent), clean(c.model), c.attempt, clean(c.outcome), clean(c.verdict)]));
+  const footer = JSON.stringify({ calls: lines.length, check: ledgerChecksum(lines.join("\n")) });
+  return `bun scripts/run-telemetry.ts record ${slug} ${workflow} <<'RUN_EOF'\n${[...lines, footer].join("\n")}\nRUN_EOF`;
+}
+
+/** The sentence a stop that returns a `review` page adds to its `next`: the page shows the run's numbers too. */
+const runSummaryNote = (slug, workflow) =>
+  `The page also shows the run summary: the output of \`bun scripts/run-telemetry.ts summary ${slug}\`, run from ROOT. Tokens and seconds read n/a until \`bun scripts/run-telemetry.ts ingest ${slug} ${workflow} <this run's transcript directory>\` has run; run it first when you have the directory.`;
+
 // ---- Helpers that need the runtime ----------------------------------------------------------------
-function workflowLib({ agent, log }) {
+function workflowLib({ agent, log, name }) {
+  // Every agent call goes through `tracked`, which keeps one ledger entry per call. The entry is
+  // pushed when the call starts (so the ledger is in call order) and filled in when it settles.
+  const entries = [];
+  let attemptNo = 1;
+
+  function tracked(prompt, opts) {
+    const o = opts || {};
+    const entry = { label: o.label || "", phase: o.phase || "", agent: o.agentType || "", model: o.model || "", attempt: attemptNo, outcome: "", verdict: "" };
+    entries.push(entry);
+    let pending;
+    try {
+      pending = agent(prompt, opts);
+    } catch (e) {
+      entry.outcome = "threw";
+      throw e;
+    }
+    return Promise.resolve(pending).then(
+      (r) => {
+        entry.outcome = r === null || r === undefined ? "empty" : "ok";
+        entry.verdict = verdictOf(r);
+        return r;
+      },
+      (e) => {
+        entry.outcome = "threw";
+        throw e;
+      }
+    );
+  }
+
+  const ledger = () => entries.filter((e) => e.outcome).map((e) => ({ ...e }));
+
+  /**
+   * Has the runner write the ledger (scripts/run-telemetry.ts). A failed write is logged and changes
+   * nothing else. The command holds only values the run already has, so a resumed run replays it from cache.
+   */
+  async function recordRun(slug, label, phaseName, send, where) {
+    if (!SLUG.test(slug) || !SLUG.test(name)) {
+      log("Memory and run ledger: not written, slug is not kebab-case");
+      return null;
+    }
+    let out = null;
+    let why = "the runner returned nothing";
+    try {
+      out = await send(`Run this command from ${where} exactly as written and return what it prints. Change nothing in it and run nothing else.\n\n${runRecordCommand(name, slug, ledger())}`, { label, phase: phaseName });
+      if (out !== null && out !== undefined) why = String(out).slice(0, 200);
+    } catch (e) {
+      why = `the runner threw: ${e && e.message ? e.message : e}`.slice(0, 200);
+    }
+    if (!/run-telemetry: recorded/.test(String(out))) log(`Run telemetry: not recorded (${why})`);
+    return out;
+  }
+
+  /**
+   * Calls `fn()` so the agent call it makes shows in the ledger as attempt `n`. `fn` must make that
+   * call before its first await: the number is set for that call only and put back before anything
+   * else runs, so a parallel branch never reads this retry. A workflow that retries a call by hand
+   * (not through `twice`) wraps the retry in `atAttempt(2, ...)`.
+   */
+  function atAttempt(n, fn) {
+    const before = attemptNo;
+    attemptNo = Math.max(before, n);
+    try {
+      return fn();
+    } finally {
+      attemptNo = before;
+    }
+  }
+
   /** Run an agent thunk; one retry if it returns nothing or throws. Returns null after two failures. */
   async function twice(fn, what) {
     for (let attempt = 1; attempt <= 2; attempt++) {
       try {
-        const r = await fn(attempt);
+        const r = await atAttempt(attempt, () => fn(attempt));
         if (r) return r;
       } catch (e) {
         log(`${what}: attempt ${attempt} threw — ${e && e.message ? e.message : e}`);
@@ -213,9 +319,17 @@ function workflowLib({ agent, log }) {
    * args) and no clock, so a resumed run replays it from cache instead of writing twice.
    */
   function asker(preamble) {
-    const ask = (prompt, opts) => agent(`${preamble}\n\n${prompt}`, opts);
+    const ask = (prompt, opts) => tracked(`${preamble}\n\n${prompt}`, opts);
     const sh = (prompt, opts) => ask(prompt, { effort: "low", ...opts, agentType: "runner" });
     const remember = async (slug, fields, label, phaseName) => {
+      // A slug or workflow name reaches a shell line below, so only a kebab-case one gets that far.
+      if (!SLUG.test(slug) || !SLUG.test(name)) {
+        log("Memory and run ledger: not written, slug is not kebab-case");
+        return null;
+      }
+      // The ledger first, so the memory record that follows sees a file already written.
+      const runLabel = label.startsWith("memory") ? `run:record${label.replace(/^memory(:record)?/, "")}` : `run:record:${label}`;
+      await recordRun(slug, runLabel, phaseName, sh, "ROOT");
       const out = await sh(`Run this command from ROOT exactly as written and return what it prints. Change nothing in it and run nothing else.\n\n${memoryRecordCommand(slug, fields)}`, { label, phase: phaseName });
       // The script says so when a file has outgrown its limit; only a person can ask for the summary.
       if (/over 150 lines/.test(String(out))) log(`Memory: ${slug} is over 150 lines; ask context-memory to shorten it`);
@@ -243,10 +357,10 @@ function workflowLib({ agent, log }) {
     return null;
   }
 
-  return { twice, checkArgs, asker, preflightFault };
+  return { twice, atAttempt, checkArgs, asker, preflightFault, tracked, ledger, recordRun };
 }
 // ---- end of .claude/workflow-src/lib.js ----
-const { twice, checkArgs, asker } = workflowLib({ agent, log });
+const { twice, checkArgs, asker, tracked } = workflowLib({ agent, log, name: "ship-feature" });
 
 const ARG_TYPES = [["ticket", "string"], ["prompt", "string"], ["record", "string"], ["slug", "string"], ["base", "string"], ["root", "string"], ["ready", "string"], ["ships", "object"], ["reviewRounds", "number"], ["rollupRounds", "number"]];
 const input = parseArgs(args, "prompt");
@@ -355,7 +469,7 @@ const recordLine = input.record
     ? `  7. Record. Find the issue comment whose body starts with \`<!-- plan-feature:decision-record -->\` (\`gh issue view <n> --json comments\`; the last one wins). If there is one, write its body WITHOUT that first marker line to ROOT/.verify/_intake/record-<issue number>.md (mkdir -p) and return that absolute path as record_path. Else record_path "".`
     : "  7. Record. None (prompt input): record_path \"\".";
 
-const pre = await agent(
+const pre = await tracked(
   `Pre-flight for ship-feature. Check each item in order and stop at the first failure. Change nothing except the move in item 4b and the files item 7 names.
 
   0. Root. ${typeof input.root === "string" ? `Use ${shq(input.root)}: \`git -C <it> rev-parse --show-toplevel\` is ROOT.` : "`git rev-parse --show-toplevel` is ROOT."} cd there; everything below runs in ROOT.
@@ -486,6 +600,7 @@ ${sourceText}`,
   );
   if (!audit) return { stopped: "Intake", reason: "ticket-auditor returned nothing twice" };
   slug = input.slug || audit.slug;
+  if (!SLUG.test(slug)) return { stopped: "Intake", reason: "the ticket-auditor returned a slug that is not kebab-case" };
   if (audit.verdict !== "ready") {
     if (input.ready === "stop") return { stopped: "Intake", reason: `stopped by the human: ticket not ready (${audit.verdict})` };
     if (input.ready !== "override") {
@@ -1021,7 +1136,7 @@ for (; shipRound <= 3; shipRound++) {
       shots: hasUi ? `${shotsDir}/` : null,
       videos: reel,
       review: page,
-      next: `Write ${page} (run \`npx -y lavish-axi playbook explanation\` and \`playbook input\` first; style it with the tokens in app/app.css; relative image paths, never a leading /). Top: the feature, the verdict lines and a one-line recommendation (ship, or what blocks). Then: the PR stack as cards (title, branch -> base, its paths, a link to its body file); OPEN P0/P1 findings as a table, most severe first${hasUi ? "; the browser-walk screenshots from shots/ at desktop and mobile; every video in video/ (golden-*, error-*, demo-*) as a <video controls> element captioned with its file name" : ""}; the other findings collapsed; unfenced paths that fell to the last PR. One form: Approve (push and open the PRs) or Request changes (a textarea, one change per line), one submit that calls window.lavish.queuePrompt once. Open it with \`npx -y lavish-axi ${page}\`, run \`npx -y lavish-axi poll ${page}\` in the foreground (re-run on timeout), then ${resumeHow(`ships: { ...earlier rounds, "${shipRound}": <the answer> }`)} Never run \`lavish-axi share\`.`,
+      next: `Write ${page} (run \`npx -y lavish-axi playbook explanation\` and \`playbook input\` first; style it with the tokens in app/app.css; relative image paths, never a leading /). Top: the feature, the verdict lines and a one-line recommendation (ship, or what blocks). Then: the PR stack as cards (title, branch -> base, its paths, a link to its body file); OPEN P0/P1 findings as a table, most severe first${hasUi ? "; the browser-walk screenshots from shots/ at desktop and mobile; every video in video/ (golden-*, error-*, demo-*) as a <video controls> element captioned with its file name" : ""}; the other findings collapsed; unfenced paths that fell to the last PR. ${runSummaryNote(slug, "ship-feature")} One form: Approve (push and open the PRs) or Request changes (a textarea, one change per line), one submit that calls window.lavish.queuePrompt once. Open it with \`npx -y lavish-axi ${page}\`, run \`npx -y lavish-axi poll ${page}\` in the foreground (re-run on timeout), then ${resumeHow(`ships: { ...earlier rounds, "${shipRound}": <the answer> }`)} Never run \`lavish-axi share\`.`,
     });
   }
   if (answer.approved) {
@@ -1168,7 +1283,7 @@ const opened = await sh(
   `Push and open the stacked PRs for "${slug}". In order, stop at the first failure:
   0. ${rollupBranch ? `\`git branch -f ${rollupBranch} ${pre.base_sha}\`, then \`git push -u origin ${rollupBranch}\` (the roll-up branch, at the base commit; PR 1 targets it). A plain push: if origin already has ${rollupBranch} from an earlier run and refuses it, fail with that push.` : "Single PR: it targets the base directly; skip."}
   1. \`git push -u origin ${prs.map((p) => p.branch).join(" ")}\`.
-  2. For each PR in order: \`gh pr create --base <base> --head <branch> --title <title> --body-file <body>\` with
+  2. First run \`bun scripts/run-telemetry.ts summary ${slug} --markdown\` once from ROOT. If it fails, skip the \`## Run\` part below. For each PR in order, append a blank line, the heading \`## Run\` and that output to its body file, then \`gh pr create --base <base> --head <branch> --title <title> --body-file <body>\` with
 ${prs.map((p) => `       n=${p.n} base=${baseOf(p)} branch=${p.branch} title=${shq(p.title)} body=${outDir()}/pr-${p.n}.md`).join("\n")}
      Record each PR's number and url.
   3. ${prs.length > 1 ? `For each PR: append to its body file a section "## Stack" listing every PR in order as "${"`"}n. #<number> <title>${"`"}" with "← this PR" on its own line, then \`gh pr edit <number> --body-file <body>\`.` : "Single PR: nothing to do."}
@@ -1275,6 +1390,7 @@ ${issue ? `\nCloses ${issue.url}` : ""}
     `Merge the stacked PRs of "${slug}" into ${rollupBranch}, then open the roll-up PR. In order, stop at the first failure (ok=false, failed_command):
   1. Write this text byte for byte to ${outDir()}/rollup.md with a quoted heredoc. In it, replace the line starting "Fixture logins:" with the fixture logins line you find under "How to test" in ${outDir()}/pr-1.md (keep the "Fixture logins:" prefix).
 ${fence("rollup.md", body)}
+     Then run \`bun scripts/run-telemetry.ts summary ${slug} --markdown\` from ROOT and append a blank line, the heading \`## Run\` and its output to that file; if the command fails, append nothing.
   2. For each PR in order (${openPrs.map((p) => `#${p.number} ${p.branch}`).join(", ")}):
      a. \`gh pr edit <n> --base ${rollupBranch}\` (PR 1 targets it already, and GitHub may have retargeted the others; then it is a no-op).
      b. \`gh pr merge <n> --merge --match-head-commit $(git rev-parse <branch>)\`. Never --squash, --rebase, --admin, --auto or --delete-branch. If GitHub says the PR is not mergeable yet or its base was just modified, wait 10 s and run it again, up to three times.

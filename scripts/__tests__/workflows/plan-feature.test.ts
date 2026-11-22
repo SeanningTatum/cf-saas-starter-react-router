@@ -9,7 +9,7 @@
  * green.
  */
 import { describe, expect, it } from "vitest";
-import { type AgentCall, type AnswerRule, type DryRunResult, dryRun, labels } from "../../lib/workflow-dry-run";
+import { type AgentCall, type AnswerRule, type DryRunResult, dryRun, labels, ledgerAt, callShape, rowShape, RUN_OK, seq } from "../../lib/workflow-dry-run";
 
 // ---- Scripted answers: one happy table, each test overrides a few rules --------------------------
 
@@ -123,6 +123,7 @@ function rules(overrides: AnswerRule[] = []): AnswerRule[] {
     [/^check:/, CHECKED],
     ["publish:polish", { reverted: false, note: "" }],
     ["publish", { ok: true, failed_command: "", record_comment_url: COMMENT_URL, note: "" }],
+    [/^run:record/, RUN_OK],
     [/^memory:record:/, "recorded"],
   ];
 }
@@ -199,6 +200,7 @@ describe("plan-feature: happy path", () => {
       "preflight",
       "writeback",
       "publish",
+      "run:record:published",
       "memory:record:published",
     ]);
     // The human's brief answer reaches the planners: catches answers dropped for the recommended ones.
@@ -287,7 +289,7 @@ describe("plan-feature: happy path", () => {
   it("nothing is written to the tracker before the brief is approved, and the write-back guards against a concurrent edit", async () => {
     const { atBrief, done } = await happyPath();
     // At the brief stop the only runner call is preflight (read-only): no writer, no tracker call.
-    expect(labels(atBrief.calls)).toEqual(["preflight", "context", "judge:context", "audit", "judge:audit", "memory:record:needs-input:brief"]);
+    expect(labels(atBrief.calls)).toEqual(["preflight", "context", "judge:context", "audit", "judge:audit", "run:record:needs-input:brief", "memory:record:needs-input:brief"]);
     const writeback = find(done.calls, "writeback");
     // Catches the stale check dropped: the edit must carry the updatedAt read at Intake, on the full URL.
     expect(writeback.prompt).toContain(`edit "${ISSUE_URL}" --body-file "${ROOT}/.verify/${SLUG}/issue-body.md" --title "<final title>" --if-updated-at "${UPDATED_AT}"`);
@@ -382,7 +384,7 @@ describe("plan-feature: stop and resume", () => {
     expect(again.result).toEqual(atBrief.result);
 
     // With the answer: every call before the stop is cached, the brief record is not made again, and the run moves on.
-    const stopAt = atBrief.calls.length - 1;
+    const stopAt = atBrief.calls.length - 2;
     expect(atPlan.calls.slice(0, stopAt).every((c) => c.cached)).toBe(true);
     expect(labels(atPlan.calls)).not.toContain("memory:record:needs-input:brief");
     expect(atPlan.live[0].label).toBe("writeback:body");
@@ -404,7 +406,7 @@ describe("plan-feature: judge gate", () => {
     const r = await plan({}, auditFailsTwice);
     expect(r.result).toMatchObject({ status: "needs-input", stage: "escalation", label: "audit", fixes: ["item metric is still a guess"] });
     // One revise, one more judge, then the stop record: catches a second silent revise or a fall-through to Brief.
-    expect(labels(r.calls).slice(3)).toEqual(["audit", "judge:audit", "audit:revise", "judge:audit:2", "memory:record:needs-input:escalation:audit"]);
+    expect(labels(r.calls).slice(3)).toEqual(["audit", "judge:audit", "audit:revise", "judge:audit:2", "run:record:needs-input:escalation:audit", "memory:record:needs-input:escalation:audit"]);
     expect(r.phases).not.toContain("Brief");
     const revise = find(r.calls, "audit:revise");
     expect(revise.opts.agentType).toBe("ticket-auditor");
@@ -436,7 +438,7 @@ describe("plan-feature: judge gate", () => {
     const atEscalation = await plan({}, failing);
     const fix = { audit: "fix: link the PRD in Context" };
     const fixed = await plan({ escalations: fix }, failing, atEscalation);
-    expect(labels(fixed.live)).toEqual(["audit:revise", "judge:audit:3", "memory:record:needs-input:escalation:audit final"]);
+    expect(labels(fixed.live)).toEqual(["audit:revise", "judge:audit:3", "run:record:needs-input:escalation:audit final", "memory:record:needs-input:escalation:audit final"]);
     expect(fixed.live[0].prompt).toContain("- The human says: link the PRD in Context");
     expect(fixed.result).toMatchObject({ status: "needs-input", stage: "escalation", label: "audit final" });
     // Catches an unbounded human fix loop: a second "fix:" is not honoured, no agent runs again.
@@ -493,5 +495,59 @@ describe("plan-feature: plan review rounds", () => {
     const flipFlop = await plan({ brief: BRIEF, plans: { "1": pickB, "2": { approved: true, pick: "c" } } }, rules(), atPlan2);
     expect(flipFlop.result).toMatchObject({ stopped: "Plan" });
     expect(flipFlop.live).toEqual([]);
+  });
+});
+
+describe("plan-feature: run ledger", () => {
+
+  it("at each stop the run:record ledger lists exactly the calls made before it, in order, and its check line verifies: a call that dodges the ledger or a reordered one gives a false cost report", async () => {
+    const { atBrief, atPlan } = await happyPath();
+    for (const [r, label] of [
+      [atBrief, "run:record:needs-input:brief"],
+      [atPlan, "run:record:needs-plan:1"],
+    ] as const) {
+      const lg = ledgerAt(r, label);
+      expect(lg.verifies).toBe(true);
+      expect([lg.workflow, lg.slug]).toEqual(["plan-feature", SLUG]);
+      expect(rowShape(lg.rows)).toEqual(r.calls.slice(0, lg.at).map(callShape));
+      expect(lg.at).toBe(r.calls.length - 2);
+    }
+  });
+
+  it("a re-run with the same args replays the stop's run:record call from cache with the same prompt: a ledger that held a clock or a random value would write twice", async () => {
+    const { atBrief } = await happyPath();
+    const again = await plan({}, rules(), atBrief);
+    const before = find(atBrief.calls, "run:record:needs-input:brief");
+    const after = find(again.calls, "run:record:needs-input:brief");
+    expect(after.cached).toBe(true);
+    expect(after.prompt).toBe(before.prompt);
+    expect(again.live).toEqual([]);
+  });
+
+  it.each([
+    ["a dead agent", null, "empty"],
+    [
+      "a thrown error",
+      () => {
+        throw new Error("rate limited");
+      },
+      "threw",
+    ],
+  ] as const)("%s on the first try shows outcome %s with attempt 1, then the retry shows attempt 2: the ledger must tell a retry from a first try", async (_who, first, outcome) => {
+    const r = await plan({}, rules([["context", seq(first, CONTEXT)]]));
+    const lg = ledgerAt(r, "run:record:needs-input:brief");
+    expect(lg.rows.filter((row) => row.label === "context").map((row) => [row.attempt, row.outcome])).toEqual([
+      [1, outcome],
+      [2, "ok"],
+    ]);
+    expect(lg.rows.filter((row) => row.attempt === 2)).toHaveLength(1);
+    expect(lg.verifies).toBe(true);
+  });
+
+  it("the plan page stop tells the main thread to show the run summary on the page: a review page without the telemetry table breaks the ticket's second criterion", async () => {
+    const { atPlan } = await happyPath();
+    const next = (atPlan.result as { next: string }).next;
+    expect(next).toContain(`bun scripts/run-telemetry.ts summary ${SLUG}\``);
+    expect(next).toContain(`ingest ${SLUG} plan-feature <this run's transcript directory>`);
   });
 });

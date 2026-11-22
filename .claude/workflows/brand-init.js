@@ -82,7 +82,7 @@ export const meta = {
  * The helpers every workflow shares; scripts/workflows.ts pastes this file into each workflow.
  * Rules for an author:
  *   - no import, and no free variable except a JS built-in: whatever needs the runtime comes in
- *     through `workflowLib({ agent, log })`;
+ *     through `workflowLib({ agent, log, name })`;
  *   - every top-level name here lands in each workflow's scope, so a workflow must not declare it again.
  */
 
@@ -171,13 +171,119 @@ function memoryRecordCommand(slug, fields) {
   return `bun scripts/memory.ts record ${slug} <<'MEMORY_EOF'\n${lines.join("\n")}\nMEMORY_EOF`;
 }
 
+// ---- Run telemetry ----------------------------------------------------------------------------------
+/** FNV-1a, 32 bit, over the UTF-16 code units of `text`, as 8 lower-case hex digits. scripts/run-telemetry.ts computes the same sum. */
+function ledgerChecksum(text) {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < text.length; i++) {
+    h ^= text.charCodeAt(i);
+    h = Math.imul(h, 0x01000193) >>> 0;
+  }
+  return h.toString(16).padStart(8, "0");
+}
+
+/** A short verdict for the ledger: the result's `verdict` string, else pass or fail from its first boolean among ok, pass, passed, else "". */
+function verdictOf(result) {
+  if (!result || typeof result !== "object") return "";
+  if (typeof result.verdict === "string") return result.verdict;
+  for (const k of ["ok", "pass", "passed"]) if (typeof result[k] === "boolean") return result[k] ? "pass" : "fail";
+  return "";
+}
+
+/** The most characters one ledger string keeps; agent output can reach a ledger string, so each is cut and stripped to a safe set. */
+const LEDGER_FIELD_MAX = 80;
+
+/**
+ * The shell command that hands the ledger to scripts/run-telemetry.ts: one JSON array per call, then a
+ * line with the call count and a checksum, so a runner that garbled the copy leaves nothing behind.
+ * A script has no clock and no file access, so this is how a run reports its calls.
+ */
+function runRecordCommand(workflow, slug, calls) {
+  const clean = (v) => String(v).replace(/[^A-Za-z0-9 :._/#()-]/g, "-").slice(0, LEDGER_FIELD_MAX).split("RUN_EOF").join("RUN-EOF");
+  const lines = calls.map((c) => JSON.stringify([clean(c.label), clean(c.phase), clean(c.agent), clean(c.model), c.attempt, clean(c.outcome), clean(c.verdict)]));
+  const footer = JSON.stringify({ calls: lines.length, check: ledgerChecksum(lines.join("\n")) });
+  return `bun scripts/run-telemetry.ts record ${slug} ${workflow} <<'RUN_EOF'\n${[...lines, footer].join("\n")}\nRUN_EOF`;
+}
+
+/** The sentence a stop that returns a `review` page adds to its `next`: the page shows the run's numbers too. */
+const runSummaryNote = (slug, workflow) =>
+  `The page also shows the run summary: the output of \`bun scripts/run-telemetry.ts summary ${slug}\`, run from ROOT. Tokens and seconds read n/a until \`bun scripts/run-telemetry.ts ingest ${slug} ${workflow} <this run's transcript directory>\` has run; run it first when you have the directory.`;
+
 // ---- Helpers that need the runtime ----------------------------------------------------------------
-function workflowLib({ agent, log }) {
+function workflowLib({ agent, log, name }) {
+  // Every agent call goes through `tracked`, which keeps one ledger entry per call. The entry is
+  // pushed when the call starts (so the ledger is in call order) and filled in when it settles.
+  const entries = [];
+  let attemptNo = 1;
+
+  function tracked(prompt, opts) {
+    const o = opts || {};
+    const entry = { label: o.label || "", phase: o.phase || "", agent: o.agentType || "", model: o.model || "", attempt: attemptNo, outcome: "", verdict: "" };
+    entries.push(entry);
+    let pending;
+    try {
+      pending = agent(prompt, opts);
+    } catch (e) {
+      entry.outcome = "threw";
+      throw e;
+    }
+    return Promise.resolve(pending).then(
+      (r) => {
+        entry.outcome = r === null || r === undefined ? "empty" : "ok";
+        entry.verdict = verdictOf(r);
+        return r;
+      },
+      (e) => {
+        entry.outcome = "threw";
+        throw e;
+      }
+    );
+  }
+
+  const ledger = () => entries.filter((e) => e.outcome).map((e) => ({ ...e }));
+
+  /**
+   * Has the runner write the ledger (scripts/run-telemetry.ts). A failed write is logged and changes
+   * nothing else. The command holds only values the run already has, so a resumed run replays it from cache.
+   */
+  async function recordRun(slug, label, phaseName, send, where) {
+    if (!SLUG.test(slug) || !SLUG.test(name)) {
+      log("Memory and run ledger: not written, slug is not kebab-case");
+      return null;
+    }
+    let out = null;
+    let why = "the runner returned nothing";
+    try {
+      out = await send(`Run this command from ${where} exactly as written and return what it prints. Change nothing in it and run nothing else.\n\n${runRecordCommand(name, slug, ledger())}`, { label, phase: phaseName });
+      if (out !== null && out !== undefined) why = String(out).slice(0, 200);
+    } catch (e) {
+      why = `the runner threw: ${e && e.message ? e.message : e}`.slice(0, 200);
+    }
+    if (!/run-telemetry: recorded/.test(String(out))) log(`Run telemetry: not recorded (${why})`);
+    return out;
+  }
+
+  /**
+   * Calls `fn()` so the agent call it makes shows in the ledger as attempt `n`. `fn` must make that
+   * call before its first await: the number is set for that call only and put back before anything
+   * else runs, so a parallel branch never reads this retry. A workflow that retries a call by hand
+   * (not through `twice`) wraps the retry in `atAttempt(2, ...)`.
+   */
+  function atAttempt(n, fn) {
+    const before = attemptNo;
+    attemptNo = Math.max(before, n);
+    try {
+      return fn();
+    } finally {
+      attemptNo = before;
+    }
+  }
+
   /** Run an agent thunk; one retry if it returns nothing or throws. Returns null after two failures. */
   async function twice(fn, what) {
     for (let attempt = 1; attempt <= 2; attempt++) {
       try {
-        const r = await fn(attempt);
+        const r = await atAttempt(attempt, () => fn(attempt));
         if (r) return r;
       } catch (e) {
         log(`${what}: attempt ${attempt} threw — ${e && e.message ? e.message : e}`);
@@ -210,9 +316,17 @@ function workflowLib({ agent, log }) {
    * args) and no clock, so a resumed run replays it from cache instead of writing twice.
    */
   function asker(preamble) {
-    const ask = (prompt, opts) => agent(`${preamble}\n\n${prompt}`, opts);
+    const ask = (prompt, opts) => tracked(`${preamble}\n\n${prompt}`, opts);
     const sh = (prompt, opts) => ask(prompt, { effort: "low", ...opts, agentType: "runner" });
     const remember = async (slug, fields, label, phaseName) => {
+      // A slug or workflow name reaches a shell line below, so only a kebab-case one gets that far.
+      if (!SLUG.test(slug) || !SLUG.test(name)) {
+        log("Memory and run ledger: not written, slug is not kebab-case");
+        return null;
+      }
+      // The ledger first, so the memory record that follows sees a file already written.
+      const runLabel = label.startsWith("memory") ? `run:record${label.replace(/^memory(:record)?/, "")}` : `run:record:${label}`;
+      await recordRun(slug, runLabel, phaseName, sh, "ROOT");
       const out = await sh(`Run this command from ROOT exactly as written and return what it prints. Change nothing in it and run nothing else.\n\n${memoryRecordCommand(slug, fields)}`, { label, phase: phaseName });
       // The script says so when a file has outgrown its limit; only a person can ask for the summary.
       if (/over 150 lines/.test(String(out))) log(`Memory: ${slug} is over 150 lines; ask context-memory to shorten it`);
@@ -240,10 +354,10 @@ function workflowLib({ agent, log }) {
     return null;
   }
 
-  return { twice, checkArgs, asker, preflightFault };
+  return { twice, atAttempt, checkArgs, asker, preflightFault, tracked, ledger, recordRun };
 }
 // ---- end of .claude/workflow-src/lib.js ----
-const { twice, checkArgs, asker, preflightFault } = workflowLib({ agent, log });
+const { twice, atAttempt, checkArgs, asker, preflightFault, tracked } = workflowLib({ agent, log, name: "brand-init" });
 
 const input = args && typeof args === "object" ? args : {};
 const badArg = checkArgs("brand-init", [["brief", "string"], ["sector", "string"], ["root", "string"], ["redo", "boolean"], ["rebuildHome", "boolean"], ["answers", "object"], ["why", "object"], ["accept", "object"]], input, true);
@@ -280,7 +394,7 @@ const FINDINGS = arr(
 // =============================================================================================
 phase("Preflight");
 
-const pre = await agent(
+const pre = await tracked(
   `Pre-flight for /brand-init. Run these numbered steps in order and stop at the first failure. Fix nothing
 except where a step says to.
 
@@ -710,7 +824,7 @@ for (let round = 1; round <= 2; round++) {
       similar: r.similar,
       question: `Which comp should be the brand? Look at each comp and its screenshots. Pick a comp id, or "none" to draw three more.${typeof input.rebuildHome === "boolean" ? "" : " Also: rebuild the home page too (one more lane; app/routes/home.tsx changes)? Yes is recommended."}`,
       review: `${outDir}/pick-${round}.html`,
-      next: `Write the review page at ${outDir}/pick-${round}.html (run \`npx -y lavish-axi playbook comparison\` and \`playbook input\` first; style it with the app's tokens from app/app.css). One card per comp: the comp itself in an iframe (src = its comp.html path relative to the page, e.g. "a/comp.html", never a leading /), its desktop and mobile shots (relative paths), name, pitch, taste score, motion verdict, contrast and open P0/P1 count; mark look-alikes from \`similar\`. Below the cards ONE form: a radio per comp id plus "None of these — draw three more"${typeof input.rebuildHome === "boolean" ? "" : ", a yes/no for rebuilding the home page (yes preselected)"}, an optional "why not" note per comp, and one submit that calls window.lavish.queuePrompt once with data { ${pickKey}, ${typeof input.rebuildHome === "boolean" ? "" : "rebuildHome, "}why }. Open it with \`npx -y lavish-axi <page>\`, tell the user it is open, then run \`npx -y lavish-axi poll <page>\` in the foreground and re-run it if it times out. Read the answer, post \`npx -y lavish-axi reply <page> --agent-reply "<what happens next>"\`, then re-run with resumeFromRunId set to this run and args.${pickKey} = <comp id as a number> or "none"${typeof input.rebuildHome === "boolean" ? "" : ", and args.rebuildHome = true|false"}. Keep every other arg. Optional: args.why = { <comp id>: "<why they passed>" }. If lavish will not start, ask in chat instead.`,
+      next: `Write the review page at ${outDir}/pick-${round}.html (run \`npx -y lavish-axi playbook comparison\` and \`playbook input\` first; style it with the app's tokens from app/app.css). One card per comp: the comp itself in an iframe (src = its comp.html path relative to the page, e.g. "a/comp.html", never a leading /), its desktop and mobile shots (relative paths), name, pitch, taste score, motion verdict, contrast and open P0/P1 count; mark look-alikes from \`similar\`. ${runSummaryNote(slug, "brand-init")} Below the cards ONE form: a radio per comp id plus "None of these — draw three more"${typeof input.rebuildHome === "boolean" ? "" : ", a yes/no for rebuilding the home page (yes preselected)"}, an optional "why not" note per comp, and one submit that calls window.lavish.queuePrompt once with data { ${pickKey}, ${typeof input.rebuildHome === "boolean" ? "" : "rebuildHome, "}why }. Open it with \`npx -y lavish-axi <page>\`, tell the user it is open, then run \`npx -y lavish-axi poll <page>\` in the foreground and re-run it if it times out. Read the answer, post \`npx -y lavish-axi reply <page> --agent-reply "<what happens next>"\`, then re-run with resumeFromRunId set to this run and args.${pickKey} = <comp id as a number> or "none"${typeof input.rebuildHome === "boolean" ? "" : ", and args.rebuildHome = true|false"}. Keep every other arg. Optional: args.why = { <comp id>: "<why they passed>" }. If lavish will not start, ask in chat instead.`,
     };
   }
   const p = {
@@ -997,7 +1111,7 @@ const missingBuild = [];
 for (const lane of BUILD_LANES) {
   if (builtByName.get(lane.name)) continue;
   log(`WARNING: build:${lane.name} returned nothing; retrying once`);
-  const retry = await buildLane(lane);
+  const retry = await atAttempt(2, () => buildLane(lane));
   if (retry) builtByName.set(lane.name, retry);
   else missingBuild.push({ severity: "P1", source: `build:${lane.name}`, issue: `build lane returned nothing twice; its fence (${lane.owns.join(", ")}) was not rebuilt` });
 }
@@ -1307,7 +1421,7 @@ async function escalate(items, why, tag) {
         items,
         evidence: `${outDir}/check/ (screenshots, one folder per check)`,
         review: `${outDir}/accept-${tag}.html`,
-        next: `Write the review page at ${outDir}/accept-${tag}.html (run \`npx -y lavish-axi playbook table\` and \`playbook input\` first; style it with the app's tokens from app/app.css). One row per item as scored, with its severity, source, issue and file; do not round up. Beside each row, the screenshots from ${outDir}/check/ that show it (relative paths, never a leading /). Leave annotation on so the user can point at a screenshot. End with ONE form: "Ship with these open (accept the risk)" or "Stop", and one submit that calls window.lavish.queuePrompt once with data { accept: true|false }. Open it with \`npx -y lavish-axi <page>\`, tell the user it is open, then run \`npx -y lavish-axi poll <page>\` in the foreground and re-run it if it times out. Read the answer and any notes, post \`npx -y lavish-axi reply <page> --agent-reply "<what happens next>"\`, then re-run with resumeFromRunId set to this run and args.accept = { ...args.accept, "${tag}": true|false }. Keep every other arg. If lavish will not start, show the items in chat and ask there.`,
+        next: `Write the review page at ${outDir}/accept-${tag}.html (run \`npx -y lavish-axi playbook table\` and \`playbook input\` first; style it with the app's tokens from app/app.css). One row per item as scored, with its severity, source, issue and file; do not round up. Beside each row, the screenshots from ${outDir}/check/ that show it (relative paths, never a leading /). Leave annotation on so the user can point at a screenshot. ${runSummaryNote(slug, "brand-init")} End with ONE form: "Ship with these open (accept the risk)" or "Stop", and one submit that calls window.lavish.queuePrompt once with data { accept: true|false }. Open it with \`npx -y lavish-axi <page>\`, tell the user it is open, then run \`npx -y lavish-axi poll <page>\` in the foreground and re-run it if it times out. Read the answer and any notes, post \`npx -y lavish-axi reply <page> --agent-reply "<what happens next>"\`, then re-run with resumeFromRunId set to this run and args.accept = { ...args.accept, "${tag}": true|false }. Keep every other arg. If lavish will not start, show the items in chat and ask there.`,
       },
     };
   }
@@ -1417,7 +1531,7 @@ ${fs.map((f) => `  · [${f.severity}] ${f.source}: ${f.issue}${f.file ? ` (${f.f
         // A lane that returns nothing gets one retry. If it is still empty, the work it was handed
         // must not vanish with it: every assigned item goes to `unresolved`, which blocks Ship.
         return ask(prompt, opts)
-          .then((r) => r || ask(prompt, { ...opts, label: `${opts.label}:retry` }))
+          .then((r) => r || atAttempt(2, () => ask(prompt, { ...opts, label: `${opts.label}:retry` })))
           .then((r) => {
             if (!r) failedLane(name, fs);
             return toReport(name, lane, r, "fix lane returned nothing twice");
@@ -1747,7 +1861,7 @@ ${reportedFiles.map((p) => `       · ${p}`).join("\n") || "       · (none)"}
      Push the branch and open the PR with the \`engineering-toolkit:pr-format\` skill's layout: the pick
      screenshots (desktop and mobile, light and dark) and the final critique summary in the body, the
      contents of ${outDir}/verdict.md, the winning comp and why it won (its taste score), the list of
-     screenshot paths, the rejected comps and why, and any open finding named plainly. End the PR body with:
+     screenshot paths, the rejected comps and why, and any open finding named plainly. Before the closing line, add a \`## Run\` heading and the output of \`bun scripts/run-telemetry.ts summary brand-init --markdown\` (run from ROOT; if it fails, leave the section out). End the PR body with:
      🤖 Generated with [Claude Code](https://claude.com/claude-code)
   6. DO NOT MERGE.
 
