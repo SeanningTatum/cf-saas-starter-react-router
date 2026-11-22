@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { run, defaultDeps, parseConfidence, parseItems, type Deps, type GhResult } from "../pr-review-wait";
 import { ghSpawn } from "../lib/gh";
+import { HARNESS_DEFAULTS, type ReviewBot } from "../lib/harness-config";
 
 describe("defaultDeps", () => {
   it("gh is the shared ghSpawn: a private gh runner would drift from the shared output cap", () => {
@@ -32,7 +33,7 @@ interface World {
 }
 
 /** A gh stub plus a fake clock: `sleep` advances time, so no test waits. */
-function harness(w: World, flags: { commentFails?: boolean } = {}) {
+function harness(w: World, flags: { commentFails?: boolean; reviewBot?: ReviewBot } = {}) {
   const calls: string[][] = [];
   let t = 1_000_000;
   let poll = 0;
@@ -61,12 +62,38 @@ function harness(w: World, flags: { commentFails?: boolean } = {}) {
       t += ms;
     },
     now: () => t,
+    reviewBot: flags.reviewBot ?? HARNESS_DEFAULTS.reviewBot,
   };
   return { deps, calls, sleeps };
 }
 const retriggers = (calls: string[][]) => calls.filter((c) => c[0] === "pr" && c[1] === "comment");
 
 describe("pr-review-wait", () => {
+  it("takes the bot login, summary marker and trigger from the config: a literal in the script would ignore a project's own review bot", async () => {
+    const reviewBot: ReviewBot = { login: "acme-reviewer", summaryMarker: "<!-- acme_summary -->", trigger: "/acme review" };
+    const acme = { login: "acme-reviewer[bot]" };
+    const { deps, calls } = harness(
+      {
+        reviews: [[review({ id: 1, user: bot })], [review({ id: 1, user: bot })], [review({ id: 1, user: bot }), review({ id: 4, user: acme })]],
+        issueComments: [{ user: acme, body: `<!-- acme_summary -->\nConfidence Score: 4/5\n${SHA}` }],
+      },
+      { reviewBot },
+    );
+    const o = await run(["5", "--retrigger-after", "30", "--interval", "30"], deps);
+    expect((o.out as any).review.id).toBe(4);
+    expect((o.out as any).confidence).toBe(4);
+    expect(retriggers(calls)).toEqual([["pr", "comment", "5", "--body", "/acme review"]]);
+  });
+
+  it("regression: a configured login in mixed case still matches the bot's lower-case login: GitHub logins are not case-sensitive", async () => {
+    const reviewBot: ReviewBot = { ...HARNESS_DEFAULTS.reviewBot, login: "Acme-Reviewer" };
+    const acme = { login: "acme-reviewer[bot]" };
+    const { deps } = harness({ reviews: [[review({ id: 4, user: acme })]], issueComments: [{ user: acme, body: summaryBody(5) }] }, { reviewBot });
+    const o = await run(["5"], deps);
+    expect(o.code).toBe(0);
+    expect((o.out as any).review.id).toBe(4);
+  });
+
   it("matches on the head sha: a bot review of an older commit is ignored and the wait continues", async () => {
     const { deps } = harness({ reviews: [[review({ id: 1, commit_id: "old000" })], [review({ id: 1, commit_id: "old000" }), review({ id: 2 })]] });
     const o = await run(["5"], deps);

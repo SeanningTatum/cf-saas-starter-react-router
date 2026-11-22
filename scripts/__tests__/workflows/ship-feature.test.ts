@@ -9,99 +9,10 @@
  */
 import { describe, expect, it } from "vitest";
 import { lintTitle } from "../helpers/lint-title";
-import { dryRun, labels, ledgerAt, callShape, rowShape, RUN_OK, seq, type AgentCall, type AnswerRule, type DryRunResult } from "../../lib/workflow-dry-run";
-import { COAUTHOR } from "../../../.claude/workflow-src/lib.js";
+import { dryRun, labels, ledgerAt, callShape, rowShape, seq, type AgentCall, type AnswerRule, type DryRunResult } from "../../lib/workflow-dry-run";
+import { loadHarnessConfigFromDisk } from "../../lib/harness-config";
 
-const ROOT = "/work/repo";
-const SLUG = "demo-widget";
-const BASE_SHA = "a".repeat(40);
-const REVIEWED_SHA = "c".repeat(40);
-const ISSUE_URL = "https://github.com/o/r/issues/76";
-const PR1 = { n: 1, branch: `feat/${SLUG}/1-data`, base: "staging", title: "Widget data", fence: ["app/repositories/widget.ts", "app/repositories/__tests__/widget.test.ts"], greptile_focus: "authorization" };
-const PR2 = { n: 2, branch: `feat/${SLUG}/2-ui`, base: PR1.branch, title: "Widget screen", fence: ["app/routes/widget.tsx"], greptile_focus: "empty and error states" };
-const CONTRACT = "export type Widget = { id: string; name: string }";
-const ARGS = { ticket: "76" };
-
-/** Anything that writes outside the machine. Reads (`gh pr checks`, `gh issue view`) are allowed before the ship stop. */
-const GITHUB_WRITE = /git push|gh pr (create|comment|merge|edit|review|close|ready)|gh issue (create|comment|edit|close)|gh api|@greptileai review/;
-
-const GATES = [
-  { name: "typecheck", pass: true, tail: "" },
-  { name: "unit", pass: true, tail: "" },
-  { name: "e2e", pass: true, tail: "" },
-];
-const PASS = { verdict: "PASS", findings: [], evidence: "" };
-const LANE_OK = (path: string) => ({ files: [{ path, summary: "done" }], typecheck: "pass", blocked: [] });
-
-const preflight = (over: Record<string, unknown> = {}) => ({
-  ok: true,
-  reason: "",
-  root: ROOT,
-  date: "2026-11-22",
-  untracked: [],
-  base_branch: "staging",
-  base_sha: BASE_SHA,
-  issue: { ref: "#76", url: ISSUE_URL, title: "Demo widget", body: "Let users add widgets." },
-  record_path: `${ROOT}/.verify/_intake/record-76.md`,
-  has_analytics: false,
-  has_codegraph: false,
-  moved_nested_modules: false,
-  baseline: GATES,
-  ...over,
-});
-
-const PLAN = {
-  slug: SLUG,
-  title: "Demo widget",
-  summary: "Users add and list widgets.",
-  ui: true,
-  surface: "app",
-  prototype: "",
-  metric: "",
-  acceptance: ["The list shows an empty state"],
-  golden_path: "Open /widgets and add one",
-  error_path: "A duplicate name shows an error",
-  contract: CONTRACT,
-  seed_fixtures: ["one widget"],
-  prs: [PR1, PR2],
-};
-
-/**
- * A ticket with a plan-feature decision record, two stacked PRs (backend, then UI), every check green,
- * Greptile 5/5 on the roll-up. `over` rules come first, so they win.
- */
-function happy(over: AnswerRule[] = []): AnswerRule[] {
-  return [
-    ...over,
-    ["preflight", preflight()],
-    ["intake:record", PLAN],
-    ["contract:branch", { ok: true, reason: "" }],
-    ["contract:map", { files: [] }],
-    ["contract:schema", LANE_OK(`app/lib/schemas/${SLUG}.ts`)],
-    [/^build:pr\d+-(backend|ui)$/, (c) => LANE_OK(c.label)],
-    [/^build:typecheck:/, { pass: true, errors: [] }],
-    ["write:impact", { changed: [], dependents: [] }],
-    ["write:unit", "tests written"],
-    ["write:e2e", { specs: [{ path: `e2e/${SLUG}.spec.ts`, regression: "golden path" }], run: { passed: 2, failed: 0, tail: "" }, skipped: [] }],
-    ["write:instrument", { events: [], files: [], skipped: [], spans: ["spans added"] }],
-    ["review:paths", { files: ["app/repositories/widget.ts", "app/routes/widget.tsx"] }],
-    [/^review:gates:/, { gates: GATES }],
-    [/^review:(effect|security|scale|lean|walk|critique):/, PASS],
-    ["docs", { files: ["GLOSSARY.md"], pr_bodies: [{ n: 1, path: "pr-1.md" }, { n: 2, path: "pr-2.md" }], adr: null }],
-    [/^ship:assign:/, { assignments: [{ n: 1, branch: PR1.branch, paths: PR1.fence }, { n: 2, branch: PR2.branch, paths: PR2.fence }], unassigned: [], overlaps: [], excluded: [] }],
-    [/^ship:videos:/, { passed: true, videos: [{ kind: "golden", title: "adds a widget", path: "video/golden-1.webm", status: "passed" }], unrecorded: [] }],
-    [/^run:record/, RUN_OK],
-    [/^memory:/, "recorded"],
-    ["split", { ok: true, failed_command: "", branches: [{ n: 1, branch: PR1.branch, sha: "b1" }, { n: 2, branch: PR2.branch, sha: "b2" }], checks: [] }],
-    [/^local:code-review:/, { method: "code-review skill", findings: [] }],
-    ["local:home", "switched"],
-    ["open:prs", { ok: true, failed_command: "", prs: [{ n: 2, number: 102, url: "https://github.com/o/r/pull/102", branch: PR2.branch }, { n: 1, number: 101, url: "https://github.com/o/r/pull/101", branch: PR1.branch }] }],
-    [/:checks$/, { prs: [{ number: 101, checks: [{ name: "ci", state: "SUCCESS" }] }], preview_url: "" }],
-    ["rollup:pr", { ok: true, failed_command: "", merged: [101, 102], number: 103, url: "https://github.com/o/r/pull/103" }],
-    ["rollup-greptile:trigger", { ok: true, failed_command: "" }],
-    [/^rollup-greptile:wait:/, { status: "reviewed", sha: REVIEWED_SHA, confidence: 5, summary: "Looks good", comments: [] }],
-  ];
-}
+import { ROOT, SLUG, BASE_SHA, REVIEWED_SHA, ISSUE_URL, PR1, PR2, CONTRACT, ARGS, GITHUB_WRITE, GATES, PASS, preflight, PLAN, happy } from "./ship-feature.fixtures";
 
 const approve = (n = 1) => ({ ...ARGS, ships: { [String(n)]: { approved: true } } });
 const find = (calls: AgentCall[], label: string): AgentCall => {
@@ -159,6 +70,7 @@ describe("ship-feature: happy path, a ticket with a decision record, two stacked
     const { stopped, shipped } = await runHappy();
     const all = [...stopped.calls, ...shipped.live];
     const want: Record<string, string> = {
+      config: "runner",
       preflight: "runner",
       "intake:record": "context-scout",
       "contract:branch": "runner",
@@ -199,7 +111,7 @@ describe("ship-feature: happy path, a ticket with a decision record, two stacked
     // Catches the contract pasted bare, where text in a plan could pass for an instruction.
     expect(fenced(backend.prompt, "contract")).toBe(CONTRACT);
     // Catches a call made with agent() instead of ask(): it would run with no ROOT and no "never push" rule.
-    const missing = [...stopped.calls, ...shipped.live].filter((c) => c.label !== "preflight" && !c.prompt.startsWith(`ROOT = ${ROOT}.`)).map((c) => c.label);
+    const missing = [...stopped.calls, ...shipped.live].filter((c) => c.label !== "preflight" && c.label !== "config" && !c.prompt.startsWith(`ROOT = ${ROOT}.`)).map((c) => c.label);
     expect(missing).toEqual([]);
   });
 
@@ -262,7 +174,7 @@ describe("ship-feature: the base branch", () => {
   it("a preflight that reports no default branch stops the run when no base arg was given", async () => {
     const run = await dryRun("ship-feature", { args: ARGS, answers: happy([["preflight", preflight({ base_branch: "" })]]) });
     expect(run.result).toMatchObject({ stopped: "Preflight", reason: "no default branch reported" });
-    expect(labels(run.calls)).toEqual(["preflight"]);
+    expect(labels(run.calls)).toEqual(["config", "preflight"]);
   });
 });
 
@@ -271,7 +183,7 @@ describe("ship-feature: a failing gate", () => {
     const red = GATES.map((g) => (g.name === "unit" ? { ...g, pass: false, tail: "1 failed" } : g));
     const run = await dryRun("ship-feature", { args: ARGS, answers: happy([["preflight", preflight({ baseline: red })]]) });
     expect(run.result).toMatchObject({ stopped: "Preflight", reason: "baseline red on staging: unit" });
-    expect(labels(run.calls)).toEqual(["preflight"]);
+    expect(labels(run.calls)).toEqual(["config", "preflight"]);
   });
 
   it("a gate green on the base and red at Review is a P0 regression that goes to a fix round before Ship (catches it read as advisory)", async () => {
@@ -384,7 +296,7 @@ describe("ship-feature: fix rounds", () => {
     const trailers = (prompt: string) => prompt.match(/Co-Authored-By: [^\n"\\]+/g) ?? [];
     const committing = run.calls.filter((c) => trailers(c.prompt).length > 0);
     expect(labels(committing)).toEqual(expect.arrayContaining(["contract:branch", expect.stringMatching(/^local:respond:code-review:1:/)]));
-    for (const c of committing) expect({ label: c.label, trailers: [...new Set(trailers(c.prompt))] }).toEqual({ label: c.label, trailers: [COAUTHOR] });
+    for (const c of committing) expect({ label: c.label, trailers: [...new Set(trailers(c.prompt))] }).toEqual({ label: c.label, trailers: [loadHarnessConfigFromDisk().coauthor] });
   });
 
   it("stacked branches get one code-review round and the lean gates against the branch below at split and restack (catches a stacked branch paying for the full suite or a second round)", async () => {
@@ -523,7 +435,7 @@ describe("ship-feature: a ticket that is not ready", () => {
     ];
     const first = await dryRun("ship-feature", { args: ARGS, answers: happy(notReady) });
     expect(first.result).toMatchObject({ status: "needs-input", stage: "ready", verdict: "amend", gaps: [{ id: "errors", status: "missing" }] });
-    expect(labels(first.calls)).toEqual(["preflight", "intake:audit", "run:record:needs-input:ready", "memory:needs-input:ready"]);
+    expect(labels(first.calls)).toEqual(["config", "preflight", "intake:audit", "run:record:needs-input:ready", "memory:needs-input:ready"]);
     // Catches the ticket body pasted outside the DATA fence, where it reads as an instruction.
     expect(fenced(find(first.calls, "intake:audit").prompt, "ticket")).toBe(`${ISSUE_URL}\n# Widgets\n\n${injected}`);
 
@@ -601,7 +513,7 @@ describe("ship-feature: run ledger", () => {
       ]),
     });
     expect(run.result).toMatchObject({ stopped: "Intake" });
-    expect(labels(run.calls)).toEqual(["preflight", "intake:audit"]);
+    expect(labels(run.calls)).toEqual(["config", "preflight", "intake:audit"]);
     expect(run.calls.filter((c) => c.prompt.includes(steered))).toEqual([]);
   });
 

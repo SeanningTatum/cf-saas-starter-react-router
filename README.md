@@ -141,7 +141,7 @@ State lives in GitHub: the spec is an issue, each ticket is an issue, and a merg
 | build | `bun run build` | full |
 | e2e | `bun run test:e2e` | full |
 
-`./scripts/verify.sh --baseline` runs the quick set; bare `./scripts/verify.sh` runs them all. CI runs the same script, so adding a gate is a one-line change there. A stacked PR (one whose base is not the default branch or `production`) gets only the lean tier in CI, and `./scripts/verify.sh --changed [base]` runs just what its diff needs locally; see [which checks run where](docs/ci/pipelines.md#which-checks-run-where).
+`./scripts/verify.sh --baseline` runs the quick set; bare `./scripts/verify.sh` runs them all. CI runs the same script, so to add a gate, add an object with its `tier` to `gates` in `harness.config.json` ([gates](docs/agents/harness.md#gates)). A stacked PR (one whose base is not the default branch or `production`) gets only the lean tier in CI, and `./scripts/verify.sh --changed [base]` runs just what its diff needs locally; see [which checks run where](docs/ci/pipelines.md#which-checks-run-where).
 
 ### Slash commands
 

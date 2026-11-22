@@ -24,6 +24,7 @@
  * Lists use `gh api --paginate`; the parser takes a JSON array, concatenated arrays or one object per line.
  */
 import { ghSpawn, type GhResult, type GhRunner } from "./lib/gh";
+import { loadHarnessConfigFromDisk, type ReviewBot } from "./lib/harness-config";
 
 export type { GhResult };
 
@@ -32,6 +33,7 @@ export interface Deps {
   sleep: (ms: number) => Promise<void>;
   /** Milliseconds; any monotonic origin. */
   now: () => number;
+  reviewBot: ReviewBot;
 }
 
 export interface Outcome {
@@ -59,6 +61,7 @@ export const defaultDeps: Deps = {
   gh: ghSpawn,
   sleep: (ms) => new Promise((res) => setTimeout(res, ms)),
   now: () => Date.now(),
+  reviewBot: loadHarnessConfigFromDisk().reviewBot,
 };
 
 /** Items from `gh api --paginate`: one array, several arrays back to back, or one object per line. */
@@ -90,9 +93,6 @@ export function parseConfidence(summary: string): number | null {
   const m = /Confidence Score:\s*(\d)\s*\/\s*5/.exec(summary);
   return m ? Number(m[1]) : null;
 }
-
-const BOT = "greptile-apps";
-const MARKER = "<!-- greptile_summary -->";
 
 function num(flags: Map<string, string>, name: string, dflt: number): number | Outcome {
   const raw = flags.get(name);
@@ -134,12 +134,12 @@ export async function run(argv: string[], deps: Deps = defaultDeps): Promise<Out
   const sha = h.stdout.trim();
   if (h.code !== 0 || !sha) return ghFailure(h.code !== 0 ? h : { ...h, stderr: "no head sha" }, `gh pr view ${pr}`);
 
-  const isBot = (login: unknown) => typeof login === "string" && login.toLowerCase().startsWith(BOT);
+  const isBot = (login: unknown) => typeof login === "string" && login.toLowerCase().startsWith(deps.reviewBot.login.toLowerCase());
   const readSummary = (): string | Outcome => {
     const ir = deps.gh(["api", "--paginate", `repos/${repo}/issues/${pr}/comments`]);
     if (ir.code !== 0) return ghFailure(ir, "gh api issue comments");
     return parseItems(ir.stdout)
-      .filter((c) => isBot(c?.user?.login) && typeof c?.body === "string" && c.body.includes(MARKER) && c.body.includes(sha))
+      .filter((c) => isBot(c?.user?.login) && typeof c?.body === "string" && c.body.includes(deps.reviewBot.summaryMarker) && c.body.includes(sha))
       .pop()?.body ?? "";
   };
   const start = deps.now();
@@ -172,7 +172,7 @@ export async function run(argv: string[], deps: Deps = defaultDeps): Promise<Out
     const elapsed = (deps.now() - start) / 1000;
     if (elapsed >= timeout) break;
     if (!retriggered && !checkPending && elapsed >= retriggerAfter) {
-      const c = deps.gh(["pr", "comment", String(pr), "--body", "@greptileai review"]);
+      const c = deps.gh(["pr", "comment", String(pr), "--body", deps.reviewBot.trigger]);
       if (c.code !== 0) return ghFailure(c, "gh pr comment");
       retriggered = true;
     }
@@ -182,7 +182,7 @@ export async function run(argv: string[], deps: Deps = defaultDeps): Promise<Out
   if (!review && summary === null) {
     return {
       ...ok({ status: "timeout", pr, sha, review: null, confidence: null, summary: "", comments: [], retriggered }, 5),
-      err: { error: `no ${BOT} review of ${sha} within ${timeout}s`, code: "TIMEOUT", help: "check the PR on GitHub, or run again with a longer --timeout" },
+      err: { error: `no ${deps.reviewBot.login} review of ${sha} within ${timeout}s`, code: "TIMEOUT", help: "check the PR on GitHub, or run again with a longer --timeout" },
     };
   }
 
