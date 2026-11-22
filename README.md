@@ -296,6 +296,8 @@ wrangler secret put BETTER_AUTH_SECRET
 
 `AUTH_TRUSTED_ORIGINS` (optional, extra origins) and the accepted forms are in [`docs/auth.md`](docs/auth.md). Setup rewrites `wrangler.jsonc`, so re-add the `vars` after a re-run.
 
+**Turnstile and rate limits.** Sign-in and sign-up check a Cloudflare Turnstile token. A dev build uses Cloudflare's test keys; a deploy with no `TURNSTILE_SITE_KEY` and `TURNSTILE_SECRET_KEY` runs with Turnstile **off**, so create a widget and set both keys ([`docs/auth.md`](docs/auth.md#turnstile)). Four rate-limit bindings (`AUTH_SIGN_IN_LIMITER` and three more) ship in `wrangler.jsonc`; nothing to create in Cloudflare ([`docs/auth.md`](docs/auth.md#rate-limits)).
+
 **Promote a user to admin** — Drizzle Studio:
 
 ```bash

@@ -29,7 +29,7 @@ export function AuthShell({ children }: AuthShellProps) {
   return (
     <div className="grid min-h-svh grid-cols-1 md:grid-cols-[5fr_7fr]">
       {/* Form column */}
-      <div className="relative flex flex-col px-6 py-8 md:px-10">
+      <div className="relative flex flex-col px-4 py-8 sm:px-6 md:px-10">
         <div className="flex items-center justify-between">
           <Link
             to="/"

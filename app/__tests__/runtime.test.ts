@@ -6,6 +6,8 @@ vi.mock("@/auth/server", () => ({
 }));
 
 import { makeAppRuntime, observabilityLayer } from "../runtime";
+import { RateLimiter } from "@/services/rate-limit";
+import { RATE_LIMIT_BINDINGS } from "@/lib/constants/rate-limit";
 import type { FetchLike } from "@/services/tracing";
 import { currentSpanAnnotations } from "@/services/logger";
 import type { RequestContext } from "@/lib/request-context";
@@ -118,6 +120,31 @@ describe("observabilityLayer, logs outside any span", () => {
       traceId: parent.traceId,
       spanId: span.spanId,
     });
+  });
+});
+
+describe("makeAppRuntime rate limiter", () => {
+  it("provides RateLimiter backed by the env's binding, so routes limit with the real counter", async () => {
+    const keys: string[] = [];
+    const binding: RateLimit = {
+      limit: async ({ key }) => {
+        keys.push(key);
+        return { success: true };
+      },
+    };
+    const env = {
+      DATABASE: {},
+      BUCKET: {},
+      BETTER_AUTH_SECRET: "runtime-test-secret-not-real-0000000000",
+      BETTER_AUTH_URL: "https://app.example.test",
+      [RATE_LIMIT_BINDINGS.signIn]: binding,
+    } as unknown as Env;
+    const runtime = makeAppRuntime(env, { dev: false });
+
+    await runtime.runPromise(Effect.flatMap(RateLimiter, (limiter) => limiter.check("signIn", "198.51.100.200")));
+    await runtime.dispose();
+
+    expect(keys).toEqual(["198.51.100.200"]);
   });
 });
 

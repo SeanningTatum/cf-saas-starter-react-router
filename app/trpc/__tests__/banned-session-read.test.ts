@@ -1,9 +1,8 @@
 import { TRPCError } from "@trpc/server";
-import { Layer, ManagedRuntime } from "effect";
-import type { AppLoadContext } from "react-router";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { redirectIfAuthenticated, requireSession } from "@/lib/session";
 import { action as uploadAction } from "@/routes/api/upload-file";
+import { trackedUpload } from "@/routes/api/__tests__/tracked-upload";
 import { createCallerFactory, createTRPCRouter, protectedProcedure } from "@/trpc";
 import { BASE_URL, startRealApp, type Account, type RealApp } from "./real-d1";
 
@@ -16,7 +15,6 @@ const LONG_AGO_MS = Date.parse("2000-01-01T00:00:00Z");
 const FAR_AHEAD_MS = Date.parse("2999-01-01T00:00:00Z");
 
 let app: RealApp;
-const emptyRuntime = ManagedRuntime.make(Layer.empty);
 
 const probeRouter = createTRPCRouter({ ping: protectedProcedure.query(() => "ok") });
 
@@ -61,17 +59,12 @@ const guardedLoader = (headers: Headers) =>
 const publicLoader = (headers: Headers) =>
   outcomeOf(redirectIfAuthenticated(new Request(`${BASE_URL}/login`, { headers }), app.loadContext));
 
-const uploadStatus = async (headers: Headers): Promise<number> => {
-  const request = new Request(`${BASE_URL}/api/upload-file`, {
-    method: "POST",
-    headers,
-    body: new FormData(),
-  });
-  const context = { ...app.loadContext, runtime: emptyRuntime } as unknown as AppLoadContext;
-  const result = await uploadAction({ request, context, params: {} } as unknown as Parameters<
+const uploadOutcome = async (headers: Headers) => {
+  const { request, bodyRead } = await trackedUpload(`${BASE_URL}/api/upload-file`, { headers });
+  const result = await uploadAction({ request, context: app.loadContext, params: {} } as unknown as Parameters<
     typeof uploadAction
   >[0]);
-  return (result as { init: ResponseInit | null }).init?.status ?? 200;
+  return { status: (result as { init: ResponseInit | null }).init?.status ?? 200, bodyRead: bodyRead() };
 };
 
 const stateOf = async (account: Account) => ({
@@ -80,7 +73,7 @@ const stateOf = async (account: Account) => ({
   protectedCall: await protectedCall(account.headers),
   guardedLoader: await guardedLoader(account.headers),
   publicLoader: await publicLoader(account.headers),
-  uploadStatus: await uploadStatus(account.headers),
+  upload: await uploadOutcome(account.headers),
 });
 
 const signedIn = (account: Account) => ({
@@ -89,7 +82,7 @@ const signedIn = (account: Account) => ({
   protectedCall: "ok",
   guardedLoader: "allowed",
   publicLoader: "302 /dashboard",
-  uploadStatus: 400,
+  upload: { status: 400, bodyRead: true },
 });
 
 const SIGNED_OUT_WITH_ROW_LEFT = {
@@ -98,7 +91,7 @@ const SIGNED_OUT_WITH_ROW_LEFT = {
   protectedCall: "UNAUTHORIZED",
   guardedLoader: "302 /login",
   publicLoader: "allowed",
-  uploadStatus: 401,
+  upload: { status: 401, bodyRead: false },
 };
 
 beforeAll(async () => {
@@ -106,7 +99,6 @@ beforeAll(async () => {
 }, 60_000);
 
 afterAll(async () => {
-  await emptyRuntime.dispose();
   await app?.dispose();
 });
 

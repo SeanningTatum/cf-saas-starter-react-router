@@ -3,6 +3,7 @@ import { TRPCError } from "@trpc/server";
 import type { AppServices } from "@/runtime";
 import type { AppError } from "@/models/errors";
 import { loggers } from "@/lib/logger";
+import { RATE_LIMITED_MESSAGE } from "@/lib/constants/rate-limit";
 import { TRPC_SERVER_FAILURE_CODES } from "@/lib/constants/error-reporting";
 
 // The literal set of tags every AppError union member can carry. Anything
@@ -26,6 +27,7 @@ const APP_ERROR_TAGS = new Set<AppError["_tag"]>([
   "BucketListError",
   "BucketValidationError",
   "AnalyticsDeliveryError",
+  "RateLimitError",
 ]);
 
 // Compile-time exhaustiveness guard for `appErrorToTRPC`'s switch. Reachable
@@ -148,6 +150,11 @@ const appErrorToTRPC = (e: AppError): TRPCError => {
         code: "INTERNAL_SERVER_ERROR",
         message: "Internal Server Error",
         cause: e.cause,
+      });
+    case "RateLimitError":
+      return new TRPCError({
+        code: "TOO_MANY_REQUESTS",
+        message: RATE_LIMITED_MESSAGE,
       });
     default:
       return assertNever(e);

@@ -6,12 +6,13 @@
  * How to allow a new host: docs/security-headers.md
  */
 
+import { TURNSTILE_ORIGIN } from "@/lib/constants/turnstile";
 import { BROWSER_REPORT_PATH, CSP_REPORT_GROUP } from "@/lib/constants/error-reporting";
 
 /** The allow-list. The ONE place to add a host. Keys are CSP directives. */
 const CSP_SOURCES: Readonly<Record<string, ReadonlyArray<string>>> = {
   "default-src": ["'self'"],
-  "script-src": ["'self'"],
+  "script-src": ["'self'", TURNSTILE_ORIGIN],
   // `style` attributes and `<style>` tags (Radix, charts, Vite dev) cannot
   // carry a nonce, so styles keep 'unsafe-inline'. Never add a nonce here: a
   // nonce would switch 'unsafe-inline' off.
@@ -28,6 +29,7 @@ const CSP_SOURCES: Readonly<Record<string, ReadonlyArray<string>>> = {
     "https://avatars.githubusercontent.com",
   ],
   "connect-src": ["'self'"],
+  "frame-src": ["'self'", TURNSTILE_ORIGIN],
   "frame-ancestors": ["'none'"],
   "object-src": ["'none'"],
   "base-uri": ["'self'"],

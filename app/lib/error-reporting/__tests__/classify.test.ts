@@ -1,8 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { Cause, Effect, FiberId } from "effect";
+import { Cause, Effect, Exit, FiberId } from "effect";
 import { TRPCError } from "@trpc/server";
 import { classifyError } from "../classify";
 import { QueryError } from "@/models/errors/repository";
+import { RateLimitError } from "@/models/errors/rate-limit";
+import { RATE_LIMIT_PERIOD_SECONDS } from "@/lib/constants/rate-limit";
+import { tagToTRPC } from "@/lib/effect-trpc";
 
 const queryError = () =>
   new QueryError({ entity: "user", cause: new Error("D1 timed out") });
@@ -122,6 +125,31 @@ describe("classifyError, tRPC errors", () => {
       level: "error",
       message: "db down",
       stack: raw.stack,
+    });
+  });
+});
+
+describe("classifyError, rate limits", () => {
+  const limited = () =>
+    new RateLimitError({ rule: "signIn", retryAfterSeconds: RATE_LIMIT_PERIOD_SECONDS });
+
+  it("files a RateLimitError as expected, bare or in a failed Cause, so a refused caller is never a defect", () => {
+    expect(classifyError(limited())).toMatchObject({ kind: "expected", tag: "RateLimitError" });
+    expect(classifyError(Cause.fail(limited()))).toMatchObject({
+      kind: "expected",
+      tag: "RateLimitError",
+    });
+  });
+
+  it("files the TOO_MANY_REQUESTS error tRPC maps a RateLimitError to as an expected warning, so a limited procedure call is never a defect", () => {
+    const exit = Effect.runSyncExit(tagToTRPC(Effect.fail(limited())));
+    const mapped = Exit.isFailure(exit) ? Cause.squash(exit.cause) : undefined;
+
+    expect(mapped).toBeInstanceOf(TRPCError);
+    expect(classifyError(mapped)).toMatchObject({
+      kind: "expected",
+      level: "warning",
+      tag: "TOO_MANY_REQUESTS",
     });
   });
 });

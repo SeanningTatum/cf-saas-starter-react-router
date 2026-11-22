@@ -38,6 +38,22 @@ BETTER_AUTH_SECRET=paste-openssl-rand-hex-32
 #   per-PR previews: https://*-<worker>-preview.<subdomain>.workers.dev
 # AUTH_TRUSTED_ORIGINS=https://admin.example.com,https://*-my-app-preview.my-team.workers.dev
 
+# Optional — Cloudflare Turnstile on sign-in and sign-up. Set both keys or
+# neither; one without the other refuses to start.
+# - Unset in a dev build (`bun run dev`): Cloudflare's published test keys,
+#   which always pass. The widget shows a test badge and the server accepts
+#   its dummy token, so sign-in works without a Cloudflare account.
+# - Unset in any other build (preview, staging, production): Turnstile is off
+#   until you add real keys (Cloudflare dashboard → Turnstile → Add widget).
+# - A build outside dev refuses any of Cloudflare's published test keys.
+# The site key is public (it ships to the browser); keep the secret key a
+# secret: `wrangler secret put TURNSTILE_SECRET_KEY`.
+# TURNSTILE_SITE_KEY=0x4AAAAAAA...
+# TURNSTILE_SECRET_KEY=0x4AAAAAAA...
+# To see the refusal locally, set Cloudflare's always-fail test pair:
+# TURNSTILE_SITE_KEY=2x00000000000000000000AB
+# TURNSTILE_SECRET_KEY=2x0000000000000000000000000000000AA
+
 # Optional — OTLP trace export.
 # Unset = tracing export off (logs still carry traceId). Local viewer:
 # `otel-tui` or Jaeger listen on http://localhost:4318.

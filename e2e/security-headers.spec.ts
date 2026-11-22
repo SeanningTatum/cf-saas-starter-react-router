@@ -8,6 +8,8 @@ import {
 import { securityHeaders } from "../workers/security-headers";
 import { useAdminSessionSignedInOncePerFile } from "./lib/admin-session";
 import { loadHydratedReloadingWhileViteReoptimizesDeps } from "./lib/hydration";
+import { expectTurnstileState } from "./lib/auth-form";
+import { useClientIpPerFile } from "./lib/client-ip";
 
 /**
  * Security headers and the nonce CSP (issue #72), on the pages a user sees.
@@ -114,8 +116,12 @@ const watchViolations = async (page: Page) => {
 
 const watchers = new WeakMap<Page, Awaited<ReturnType<typeof watchViolations>>>();
 
-/** Headers, nonce on every script, and no violation, for one page. */
-const checkPage = async (page: Page, url: string, ready: (page: Page) => Locator) => {
+const checkPage = async (
+  page: Page,
+  url: string,
+  ready: (page: Page) => Locator,
+  settled: (page: Page) => Promise<void> = async () => {},
+) => {
   let violations = watchers.get(page);
   if (!violations) {
     violations = await watchViolations(page);
@@ -127,16 +133,28 @@ const checkPage = async (page: Page, url: string, ready: (page: Page) => Locator
   expect(response.status()).toBe(200);
   const nonce = expectSecurityHeaders(await response.allHeaders(), url);
   expectScriptsCarryNonce(await response.text(), nonce, url);
+  await settled(page);
   violations.expectNone(url);
 };
 
+const turnstileReadyUnderTheCsp = (page: Page) =>
+  expectTurnstileState(
+    page,
+    "ready",
+    `/login: the Turnstile widget never became ready; check script-src and frame-src allow it per ${DOC}`,
+  );
+
 test.describe("Security headers, signed out", () => {
-  // Catches: a page the CSP breaks (an inline script without the nonce, a
-  // script host missing from script-src), or a header dropped from the set.
-  test("home and login send the headers and load with no CSP violation", { tag: "@golden" }, async ({ page }) => {
-    await checkPage(page, "/", (p) => p.getByTestId("topbar-sign-in"));
-    await checkPage(page, "/login", (p) => p.getByTestId("login-submit"));
-  });
+  useClientIpPerFile("security-headers");
+
+  test(
+    "home and login send the headers, and the login page's Turnstile widget reaches ready with no CSP violation",
+    { tag: "@golden" },
+    async ({ page }) => {
+      await checkPage(page, "/", (p) => p.getByTestId("topbar-sign-in"));
+      await checkPage(page, "/login", (p) => p.getByTestId("login-submit"), turnstileReadyUnderTheCsp);
+    },
+  );
 
   // Catches: a nonce made once per isolate (or hard-coded) instead of per
   // request, which an attacker could read once and reuse.

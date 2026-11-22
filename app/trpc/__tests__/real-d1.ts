@@ -61,9 +61,10 @@ export const startRealApp = async () => {
   } as unknown as Env;
 
   const authOptions = { dev: false };
-  const auth = createAuth(env.DATABASE, Effect.runSync(resolveAuthConfig(env, authOptions)));
+  const authConfig = Effect.runSync(resolveAuthConfig(env, authOptions));
+  const auth = createAuth(env.DATABASE, authConfig);
   const runtime = makeAppRuntime(env, authOptions);
-  const loadContext = { auth, runtime } as unknown as AppLoadContext;
+  const loadContext = { auth, runtime, cloudflare: { env } } as unknown as AppLoadContext;
 
   const signUp = async (email: string): Promise<Account> => {
     const res = await auth.api.signUpEmail({
@@ -99,7 +100,20 @@ export const startRealApp = async () => {
     await proxy.dispose();
   };
 
-  return { db, auth, loadContext, signUp, signIn, contextFor, callerFor, signUpAdmin, dispose };
+  return {
+    db,
+    env,
+    auth,
+    authConfig,
+    runtime,
+    loadContext,
+    signUp,
+    signIn,
+    contextFor,
+    callerFor,
+    signUpAdmin,
+    dispose,
+  };
 };
 
 export type RealApp = Awaited<ReturnType<typeof startRealApp>>;

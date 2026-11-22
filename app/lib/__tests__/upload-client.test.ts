@@ -2,6 +2,10 @@ import { afterEach, describe, expect, vi } from "vitest";
 import { it } from "@effect/vitest";
 import { Effect, Either } from "effect";
 import { UPLOAD_ENDPOINT, uploadFile } from "../upload-client";
+import {
+  HTTP_TOO_MANY_REQUESTS,
+  UPLOAD_RATE_LIMITED_MESSAGE,
+} from "@/lib/constants/rate-limit";
 
 const file = () => new File(["hello"], "hello.txt", { type: "text/plain" });
 
@@ -50,6 +54,19 @@ describe("uploadFile", () => {
         expect(result.left._tag).toBe("BucketValidationError");
         expect(result.left).toMatchObject({ message: "Too big" });
       }
+    })
+  );
+
+  it.effect("shows the wait message when the route answers 429, rather than a generic failure", () =>
+    Effect.gen(function* () {
+      replyWith(
+        JSON.stringify({ success: false, error: UPLOAD_RATE_LIMITED_MESSAGE }),
+        HTTP_TOO_MANY_REQUESTS
+      );
+      const result = yield* Effect.either(uploadFile(file()));
+      expect(result).toEqual(
+        Either.left(expect.objectContaining({ _tag: "BucketValidationError", message: UPLOAD_RATE_LIMITED_MESSAGE }))
+      );
     })
   );
 

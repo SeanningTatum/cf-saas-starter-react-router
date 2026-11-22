@@ -165,6 +165,8 @@ Listed in `gates` in [`harness.config.json`](../../harness.config.json) and run 
 
 `./scripts/verify.sh --changed [base]` is for a stacked change. It diffs the working tree (committed, staged, unstaged and untracked) against the merge base with `base` (default: the pull request's target, else the default branch) and runs: typecheck; `bun run lint:house <changed .ts/.tsx>`; `bunx vitest related --run <changed .ts/.tsx>` (the tests that import them, at any depth); and `CI=1 bun run test:e2e <specs>` for the specs the [test map](lint-rules.md#the-test-map) ties to them (a changed spec, a `covered-by` spec, a machine's paths spec, the specs that visit a changed route, the specs that import a changed file). It prints the base, what it ran, and each gate it skipped with the reason. A change to a gate script, `harness.config.json`, `scripts/lint/**`, a config file, `.github/`, `.claude/`, a migration, the schema or the lockfile runs every gate instead and says which file caused it. The plan is `scripts/verify-changed.ts`; its rules are `scripts/lib/verify-plan.ts`.
 
+The `e2e` gate needs the network: the sign-in and sign-up pages load Turnstile from `challenges.cloudflare.com`. Each spec file sends its own client IP (`e2e/lib/client-ip.ts`), so the auth rate limits count per file ([`docs/auth.md`](../auth.md#rate-limits)).
+
 The two `non-negotiables` gates run the house linter (`bun run lint:house`): one file per rule in `scripts/lint/rules/`, findings that say the fix, and a baseline that only shrinks. The rules, the baseline and how to add a rule: [`lint-rules.md`](lint-rules.md).
 
 ## Commands (README.md has the same list)
