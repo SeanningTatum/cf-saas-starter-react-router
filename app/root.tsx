@@ -16,6 +16,8 @@ import { TRPCProvider } from "./trpc/client";
 import { useTranslation } from "react-i18next";
 import { useChangeLanguage } from "remix-i18next/react";
 import { i18nServer } from "./i18n/i18n.server";
+import { useNonce } from "./lib/csp-nonce";
+import { useDocumentRequestId } from "./lib/request-id";
 
 export const handle = { i18n: ["common"] };
 
@@ -32,19 +34,31 @@ export const links: Route.LinksFunction = () => [
   },
 ];
 
-export async function loader({ request }: Route.LoaderArgs) {
+export async function loader({ request, context }: Route.LoaderArgs) {
   const locale = await i18nServer.getLocale(request);
-  return { locale };
+  return { locale, requestId: context.requestId };
 }
 
+/**
+ * The id to show a user who reports a problem. Loader data is the freshest
+ * source (the root loader runs again on each navigation), but React Router
+ * skips the root loader on a 404 or 405, so fall back to the id of the
+ * request that rendered the document.
+ */
+const useRequestId = () => {
+  const fromLoader = useRouteLoaderData<typeof loader>("root")?.requestId;
+  const fromDocument = useDocumentRequestId();
+  return fromLoader ?? fromDocument;
+};
+
 export function Layout({ children }: { children: React.ReactNode }) {
-  const loaderData = useRouteLoaderData("root") as
-    | { locale: string }
-    | undefined;
+  const loaderData = useRouteLoaderData<typeof loader>("root");
   const locale = loaderData?.locale ?? "en";
+  const nonce = useNonce();
+  const requestId = useRequestId();
 
   return (
-    <html lang={locale} suppressHydrationWarning>
+    <html lang={locale} data-request-id={requestId} suppressHydrationWarning>
       <head>
         <meta charSet="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -53,8 +67,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
       </head>
       <body>
         {children}
-        <ScrollRestoration />
-        <Scripts />
+        <ScrollRestoration nonce={nonce} />
+        <Scripts nonce={nonce} />
       </body>
     </html>
   );
@@ -62,9 +76,15 @@ export function Layout({ children }: { children: React.ReactNode }) {
 
 export default function App({ loaderData }: Route.ComponentProps) {
   useChangeLanguage(loaderData.locale);
+  const nonce = useNonce();
 
   return (
-    <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
+    <ThemeProvider
+      attribute="class"
+      defaultTheme="system"
+      enableSystem
+      nonce={nonce}
+    >
       <TRPCProvider>
         <Outlet />
       </TRPCProvider>
@@ -74,6 +94,7 @@ export default function App({ loaderData }: Route.ComponentProps) {
 
 export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {
   const { t } = useTranslation("common");
+  const requestId = useRequestId();
 
   let message = t("errors.oops");
   let details = t("errors.unexpected");
@@ -94,6 +115,14 @@ export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {
     <main className="pt-16 p-4 container mx-auto">
       <h1>{message}</h1>
       <p>{details}</p>
+      {requestId && (
+        <p
+          className="text-sm text-muted-foreground"
+          data-testid="error-request-id"
+        >
+          {t("errors.request_id", { id: requestId })}
+        </p>
+      )}
       {stack && (
         <pre className="w-full p-4 overflow-x-auto">
           <code>{stack}</code>

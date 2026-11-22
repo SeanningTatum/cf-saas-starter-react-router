@@ -52,12 +52,10 @@ export const startRealApp = async () => {
     for (const statement of statements) await db.prepare(statement).run();
   }
 
-  // The proxy has no workflow binding and no secret; `user.createWorkflow`
-  // needs the first, Better Auth the second.
+  // The proxy has no secret, and Better Auth needs one.
   const env = {
     ...proxy.env,
     BETTER_AUTH_SECRET: "real-d1-test-secret-0123456789abcdef0123456789",
-    EXAMPLE_WORKFLOW: { create: async () => ({ id: "wf-test" }) },
   } as unknown as Env;
 
   const auth = createAuth(env.DATABASE, env.BETTER_AUTH_SECRET, BASE_URL);
@@ -82,8 +80,9 @@ export const startRealApp = async () => {
 
   // A fresh context per call: the session is resolved when the context is
   // built, so reusing one would hide a session that died after it was built.
+  const contextFor = (headers: Headers) => createTRPCContext({ headers, runtime });
   const callerFor = async (headers: Headers) =>
-    createCallerFactory(appRouter)(await createTRPCContext({ headers, runtime }));
+    createCallerFactory(appRouter)(await contextFor(headers));
 
   /** Signs up, makes the user an admin, then signs in again so the session carries the role. */
   const signUpAdmin = async (email: string): Promise<Account> => {
@@ -97,7 +96,7 @@ export const startRealApp = async () => {
     await proxy.dispose();
   };
 
-  return { db, auth, loadContext, signUp, signIn, callerFor, signUpAdmin, dispose };
+  return { db, auth, loadContext, signUp, signIn, contextFor, callerFor, signUpAdmin, dispose };
 };
 
 export type RealApp = Awaited<ReturnType<typeof startRealApp>>;

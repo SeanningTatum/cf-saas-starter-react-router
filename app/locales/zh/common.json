@@ -25,7 +25,8 @@
     "unauthorized": "未授权",
     "oops": "哎呀！",
     "error": "错误",
-    "404": "404"
+    "404": "404",
+    "request_id": "请求 ID：{{id}}"
   },
   "loading": "加载中...",
   "loading_protected_data": "正在加载受保护的数据...",

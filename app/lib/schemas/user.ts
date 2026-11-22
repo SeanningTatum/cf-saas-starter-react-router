@@ -93,17 +93,3 @@ export const BulkUpdateUserRolesInput = Schema.Struct({
   role: Role,
 });
 export type BulkUpdateUserRolesInput = typeof BulkUpdateUserRolesInput.Type;
-
-export const CreateWorkflowInput = Schema.Struct({
-  email: Email,
-  metadata: Schema.Record({
-    key: Schema.String.pipe(Schema.maxLength(64)),
-    value: Schema.String.pipe(Schema.maxLength(500)),
-  }).pipe(
-    Schema.filter((r) => Object.keys(r).length <= 20, {
-      message: () => "metadata must have at most 20 entries",
-      jsonSchema: { maxProperties: 20 },
-    })
-  ),
-});
-export type CreateWorkflowInput = typeof CreateWorkflowInput.Type;

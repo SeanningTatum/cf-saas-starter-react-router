@@ -15,7 +15,7 @@ The diff given, or `git diff $(git merge-base HEAD main)..HEAD`. Read changed re
 
 ## Checks
 
-What the repo has today: D1, R2, Workers AI, a Cloudflare Workflow binding (`wrangler.jsonc` `workflows`, see `app/services/workflows.ts`), `ctx.waitUntil`. No Queue, no rate-limiter binding, no KV. When a fix needs one, name the binding to add to `wrangler.jsonc` and say it is new.
+What the repo has today: D1, R2, Workers AI, `ctx.waitUntil`. No Workflow (`docs/add-a-cloudflare-workflow.md` adds one), no Queue, no rate-limiter binding, no KV. When a fix needs one, name the binding to add to `wrangler.jsonc` and say it is new.
 
 **Reads**
 1. **N+1.** A query inside `Effect.forEach`, `map`, a loop, or a procedure that calls a repo method once per row. Name the fix (join, `inArray`, one grouped query).

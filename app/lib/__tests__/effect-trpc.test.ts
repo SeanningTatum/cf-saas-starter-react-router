@@ -28,7 +28,6 @@ import {
   BucketListError,
   BucketValidationError,
 } from "@/models/errors/bucket";
-import { WorkflowTriggerError } from "@/models/errors/workflow";
 
 const failExit = <E>(e: E) => Effect.exit(tagToTRPC(Effect.fail(e)));
 
@@ -158,15 +157,6 @@ describe("tagToTRPC error mapping", () => {
     Effect.gen(function* () {
       const exit = yield* failExit(new BucketValidationError({ message: "x" }));
       expectTRPC(exit, "BAD_REQUEST");
-    })
-  );
-
-  it.effect("WorkflowTriggerError → INTERNAL_SERVER_ERROR", () =>
-    Effect.gen(function* () {
-      const exit = yield* failExit(
-        new WorkflowTriggerError({ name: "EXAMPLE_WORKFLOW" })
-      );
-      expectTRPC(exit, "INTERNAL_SERVER_ERROR");
     })
   );
 
