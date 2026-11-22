@@ -9,7 +9,8 @@ const ARITHMETIC = new Set([
   ts.SyntaxKind.AsteriskAsteriskToken,
 ]);
 const SIGNS = new Set([ts.SyntaxKind.MinusToken, ts.SyntaxKind.PlusToken]);
-const COLLECTIONS = new Set(["Set", "Map"]);
+const COLLECTIONS = new Set(["Set", "Map", "RegExp"]);
+const WRAPPERS = new Set(["String", "Number", "RegExp", "Object.freeze"]);
 
 function unwrap(node: ts.Expression): ts.Expression {
   if (ts.isAsExpression(node) || ts.isSatisfiesExpression(node) || ts.isParenthesizedExpression(node)) return unwrap(node.expression);
@@ -32,9 +33,20 @@ export function isLiteralValue(expression: ts.Expression): boolean {
   if (isScalar(node)) return true;
   if (ts.isArrayLiteralExpression(node)) return node.elements.length > 0 && node.elements.every(isLiteralValue);
   if (ts.isObjectLiteralExpression(node)) return node.properties.length > 0 && node.properties.every(isLiteralMember);
+  if (ts.isCallExpression(node)) return WRAPPERS.has(node.expression.getText()) && hasLiteralArguments(node.arguments);
   if (!ts.isNewExpression(node) || !ts.isIdentifier(node.expression) || !COLLECTIONS.has(node.expression.text)) return false;
-  const [items] = node.arguments ?? [];
-  return node.arguments?.length === 1 && items !== undefined && isLiteralValue(items);
+  return hasLiteralArguments(node.arguments ?? []);
+}
+
+function hasLiteralArguments(items: readonly ts.Expression[]): boolean {
+  return items.length > 0 && items.every(isLiteralValue);
+}
+
+export function isLiteralConstant(statement: ts.Statement): boolean {
+  if (!ts.isVariableStatement(statement) || !(statement.declarationList.flags & ts.NodeFlags.Const)) return false;
+  return statement.declarationList.declarations.every(
+    (declaration) => declaration.initializer !== undefined && isLiteralValue(declaration.initializer)
+  );
 }
 
 const isExported = (statement: ts.VariableStatement): boolean =>

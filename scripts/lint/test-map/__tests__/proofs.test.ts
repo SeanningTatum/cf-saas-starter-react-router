@@ -50,6 +50,7 @@ describe("proofProblems unit", () => {
         message: "has no unit test at app/lib/__tests__/helper.test.ts",
         fix: "add app/lib/__tests__/helper.test.ts; it imports this file and asserts on what it returns",
         example: "app/lib/__tests__/date-utils.test.ts",
+        related: ["app/lib/__tests__/helper.test.ts", "app/lib/__tests__/helper.test.tsx"],
       },
     ]);
   });

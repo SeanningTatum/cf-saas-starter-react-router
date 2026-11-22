@@ -73,7 +73,13 @@ describe("commentsIn", () => {
   it("fills pos and body, so a caller can place the comment and read it without its markers", () => {
     const code = "export const a = 1; /* why */\n";
 
-    expect(commentsIn(sourceOf(code))).toEqual([{ pos: code.indexOf("/*"), line: 1, text: "/* why */", body: "why" }]);
+    expect(commentsIn(sourceOf(code))).toEqual([{ pos: code.indexOf("/*"), line: 1, endLine: 1, text: "/* why */", body: "why" }]);
+  });
+
+  it("gives a comment over several lines the line it ends on, so a caller knows which line of code follows it", () => {
+    const [comment] = commentsIn(sourceOf("/* one\n   two\n   three */\nexport const a = 1;\n"));
+
+    expect(comment).toMatchObject({ line: 1, endLine: 3 });
   });
 
   it("finds no comment in a string, a template or a regex that holds // or /*", () => {

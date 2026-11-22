@@ -1,5 +1,6 @@
 import ts from "typescript";
 import { E2E_DIR, E2E_SPEC, MIN_TEST_FILE_CHARS, SANDBOX_DIR, SANDBOX_ISSUE, SOURCE_FILE, TEST_MAP_PATH } from "../constants";
+import { isLiteralConstant } from "../literals";
 import { isSourcePath, isTestPath, lineOf, walkNodes } from "../source";
 import type { Repo, Source } from "../types";
 import { importedModules, importsFile } from "./imports";
@@ -11,6 +12,7 @@ export interface Problem {
   message: string;
   fix: string;
   example?: string;
+  related?: string[];
 }
 
 const DECLARATION_FILE = /\.d\.ts$/;
@@ -41,6 +43,9 @@ const isTypeOnly = (node: ts.Statement): boolean =>
 
 export const firstRuntimeStatement = (ast: ts.SourceFile): ts.Statement | undefined =>
   ast.statements.find((statement) => !isTypeOnly(statement));
+
+export const firstLogicStatement = (ast: ts.SourceFile): ts.Statement | undefined =>
+  ast.statements.find((statement) => !isTypeOnly(statement) && !isLiteralConstant(statement));
 
 function isAssertion(node: ts.Node): boolean {
   if (!ts.isCallExpression(node)) return false;
@@ -80,7 +85,7 @@ export const unitTestPaths = (path: string): string[] => {
 
 export function unitProblems(repo: Repo, path: string): Problem[] {
   const source = repo.source(path);
-  const runtime = source && firstRuntimeStatement(source.ast);
+  const runtime = source && firstLogicStatement(source.ast);
   if (!source || !runtime) return [];
   const candidates = unitTestPaths(path);
   const test = candidates.map((candidate) => repo.source(candidate)).find((found) => found !== undefined);
@@ -92,6 +97,7 @@ export function unitProblems(repo: Repo, path: string): Problem[] {
         message: `has no unit test at ${expected}`,
         fix: `add ${expected}; it imports this file and asserts on what it returns`,
         example: UNIT_TEST_EXAMPLE,
+        related: candidates,
       },
     ];
   }
@@ -106,10 +112,10 @@ export function machineProblems(repo: Repo, path: string): Problem[] {
   const spec = `${E2E_DIR}/${splitPath(base).name}.paths.spec.ts`;
   const found = repo.source(spec);
   const fix = `add ${spec}: replay the machine's generated paths in the browser, one per DOM binding and per state's view, and assert on each`;
-  if (!found) return [...unitProblems(repo, path), { message: `has no paths spec at ${spec}`, fix }];
+  if (!found) return [...unitProblems(repo, path), { message: `has no paths spec at ${spec}`, fix, related: [spec] }];
   const wired = importedModules(found).some((module) => module.startsWith(`${base}.`));
-  if (!wired) return [...unitProblems(repo, path), { message: `its paths spec ${spec} imports neither the machine nor its model`, fix }];
-  return asserts(found) ? unitProblems(repo, path) : [...unitProblems(repo, path), { message: `its paths spec ${spec} asserts nothing`, fix }];
+  if (!wired) return [...unitProblems(repo, path), { message: `its paths spec ${spec} imports neither the machine nor its model`, fix, related: [spec] }];
+  return asserts(found) ? unitProblems(repo, path) : [...unitProblems(repo, path), { message: `its paths spec ${spec} asserts nothing`, fix, related: [spec] }];
 }
 
 export function sandboxProblems(repo: Repo, path: string): Problem[] {
@@ -152,8 +158,24 @@ export function coveredByProblems(repo: Repo, entry: MapEntry): Problem[] {
   const fix = `point \`test\` in ${TEST_MAP_PATH} at a unit test or an e2e spec in this repo that exists and asserts`;
   if (!isTestFile(named)) return [{ message: `its covered-by entry names ${named}, which is not a test file in this repo`, fix }];
   const test = repo.source(named);
-  if (!test) return [{ message: `its covered-by entry names ${named}, which does not exist`, fix }];
-  return asserts(test) ? [] : [{ message: `its covered-by entry names ${named}, which asserts nothing`, fix }];
+  if (!test) return [{ message: `its covered-by entry names ${named}, which does not exist`, fix, related: [named] }];
+  return asserts(test) ? [] : [{ message: `its covered-by entry names ${named}, which asserts nothing`, fix, related: [named] }];
+}
+
+export function specHelperProblems(repo: Repo, path: string): Problem[] {
+  const specs = repo.files(E2E_DIR).filter((spec) => E2E_SPEC.test(spec));
+  const used = specs.some((spec) => {
+    const source = repo.source(spec);
+    return source !== undefined && importsFile(source, path);
+  });
+  if (used) return [];
+  return [
+    {
+      message: `no spec under ${E2E_DIR}/ imports it`,
+      fix: `import it from the spec that needs it, or delete it; a helper under ${E2E_DIR}/ is proven by the specs that run through it`,
+      related: specs,
+    },
+  ];
 }
 
 export function testSupportProblems(repo: Repo, path: string): Problem[] {

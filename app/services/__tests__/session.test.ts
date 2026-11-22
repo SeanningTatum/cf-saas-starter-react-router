@@ -1,6 +1,6 @@
 import { describe, expect } from "vitest";
 import { it } from "@effect/vitest";
-import { Effect, Exit, Cause, Layer } from "effect";
+import { Effect, Exit, Cause, Layer, TestClock } from "effect";
 import { Session, SessionLive } from "../session";
 import { AuthApi } from "../auth";
 import { ExternalServiceError } from "@/models/errors/repository";
@@ -78,4 +78,55 @@ describe("SessionLive", () => {
       }
     })
   );
+
+  describe("with a banned user", () => {
+    const NOW = new Date("2030-06-15T12:00:00Z");
+    const sessionFor = (ban: { banned: boolean; banExpires?: Date }) => ({
+      getSession: async () => ({
+        session: { id: "s1", userId: "u1", expiresAt: new Date(), token: "t" },
+        user: {
+          id: "u1",
+          email: "a@b.c",
+          name: "A",
+          emailVerified: true,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+          ...ban,
+        },
+      }),
+    });
+    const resolveAt = (api: Api) =>
+      Effect.gen(function* () {
+        yield* TestClock.setTime(NOW.getTime());
+        return yield* Session.pipe(Effect.provide(provide(api)));
+      });
+
+    it.effect("gives no session to a user whose ban has no end", () =>
+      Effect.gen(function* () {
+        const { session, user } = yield* resolveAt(sessionFor({ banned: true }));
+        expect(session).toBeNull();
+        expect(user).toBeNull();
+      })
+    );
+
+    it.effect("gives no session to a user whose ban ends later", () =>
+      Effect.gen(function* () {
+        const { session, user } = yield* resolveAt(
+          sessionFor({ banned: true, banExpires: new Date("2030-06-15T12:00:01Z") })
+        );
+        expect(session).toBeNull();
+        expect(user).toBeNull();
+      })
+    );
+
+    it.effect("lets the session through once the ban has run out, by the Effect clock", () =>
+      Effect.gen(function* () {
+        const { session, user } = yield* resolveAt(
+          sessionFor({ banned: true, banExpires: new Date("2030-06-15T11:59:59Z") })
+        );
+        expect(session?.id).toBe("s1");
+        expect(user?.id).toBe("u1");
+      })
+    );
+  });
 });

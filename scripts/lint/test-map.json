@@ -75,6 +75,7 @@
       "test": "scripts/lint/__tests__/selftest.test.ts",
       "reason": "Case data for the rules. The self-test runs every case and fails one whose expectation is wrong."
     },
-    { "match": "scripts/**", "kind": "unit" }
+    { "match": "scripts/**", "kind": "unit" },
+    { "match": "e2e/lib/**", "kind": "spec-helper" }
   ]
 }

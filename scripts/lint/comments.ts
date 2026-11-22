@@ -4,6 +4,7 @@ import type { Source } from "./types";
 export interface Comment {
   pos: number;
   line: number;
+  endLine: number;
   text: string;
   body: string;
 }
@@ -21,7 +22,7 @@ export const commentBody = (text: string): string =>
 const isJsxContainer = (node: ts.Node | undefined): boolean =>
   node !== undefined && (ts.isJsxElement(node) || ts.isJsxFragment(node));
 
-function textCanFollow(token: ts.Node): boolean {
+function jsxTextFollows(token: ts.Node): boolean {
   const parent = token.parent;
   if (token.kind === ts.SyntaxKind.CloseBraceToken) return ts.isJsxExpression(parent) && isJsxContainer(parent.parent);
   if (token.kind !== ts.SyntaxKind.GreaterThanToken) return false;
@@ -32,35 +33,35 @@ function textCanFollow(token: ts.Node): boolean {
   return false;
 }
 
-function forEachToken(root: ts.Node, ast: ts.SourceFile, visit: (token: ts.Node) => void): void {
-  const queue: ts.Node[] = [root];
-  for (let node = queue.pop(); node !== undefined; node = queue.pop()) {
-    if (node.kind >= ts.SyntaxKind.FirstJSDocNode && node.kind <= ts.SyntaxKind.LastJSDocNode) continue;
-    if (node.kind < ts.SyntaxKind.FirstNode) {
-      visit(node);
-      continue;
-    }
-    const children = node.getChildren(ast);
-    for (let index = children.length - 1; index >= 0; index -= 1) {
-      const child = children[index];
-      if (child !== undefined) queue.push(child);
-    }
+const isJsDocNode = (node: ts.Node): boolean =>
+  node.kind >= ts.SyntaxKind.FirstJSDocNode && node.kind <= ts.SyntaxKind.LastJSDocNode;
+
+function forEachToken(node: ts.Node, ast: ts.SourceFile, visit: (token: ts.Node) => void): void {
+  if (isJsDocNode(node)) return;
+  if (node.kind < ts.SyntaxKind.FirstNode) {
+    visit(node);
+    return;
   }
+  for (const child of node.getChildren(ast)) forEachToken(child, ast, visit);
 }
 
 export function commentsIn(source: Source): Comment[] {
   const { ast, text } = source;
-  const found = new Map<number, Comment>();
+  const seen = new Set<number>();
+  const comments: Comment[] = [];
+  const lineAt = (pos: number): number => ast.getLineAndCharacterOfPosition(pos).line + 1;
   const collect = (pos: number, end: number): void => {
+    if (seen.has(pos)) return;
+    seen.add(pos);
     const raw = text.slice(pos, end);
-    found.set(pos, { pos, line: ast.getLineAndCharacterOfPosition(pos).line + 1, text: raw, body: commentBody(raw) });
+    comments.push({ pos, line: lineAt(pos), endLine: lineAt(end), text: raw, body: commentBody(raw) });
   };
   forEachToken(ast, ast, (token) => {
     if (token.kind !== ts.SyntaxKind.JsxText) {
       const start = token.pos === 0 ? (ts.getShebang(text) ?? "").length : token.pos;
       ts.forEachLeadingCommentRange(text, start, collect);
     }
-    if (!textCanFollow(token)) ts.forEachTrailingCommentRange(text, token.end, collect);
+    if (!jsxTextFollows(token)) ts.forEachTrailingCommentRange(text, token.end, collect);
   });
-  return [...found.values()].sort((a, b) => a.pos - b.pos);
+  return comments.sort((a, b) => a.pos - b.pos);
 }

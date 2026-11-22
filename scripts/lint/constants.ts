@@ -16,8 +16,8 @@ export const ERROR_MAP_FILE = "app/lib/effect-trpc.ts";
 export const MIN_TEST_FILE_CHARS = 40;
 
 export const TEST_MAP_PATH = "scripts/lint/test-map.json";
-export const TEST_MAP_ROOTS = ["app", "workers", "scripts"] as const;
-export const TEST_MAP_KINDS = ["unit", "machine", "procedure", "route", "component", "primitive", "declaration", "covered-by"] as const;
+export const TEST_MAP_ROOTS = ["app", "workers", "scripts", "e2e"] as const;
+export const TEST_MAP_KINDS = ["unit", "machine", "procedure", "route", "component", "primitive", "declaration", "spec-helper", "covered-by"] as const;
 export const APP_ALIAS = "@/";
 export const APP_DIR = "app/";
 export const ROUTES_FILE = "app/routes.ts";
