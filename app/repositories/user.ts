@@ -1,5 +1,5 @@
 import { Effect } from "effect";
-import { eq, inArray, count, desc, or, like, and, type SQL } from "drizzle-orm";
+import { eq, inArray, count, desc, or, and, sql, type SQL } from "drizzle-orm";
 import { session, user } from "@/db/schema";
 import { Database } from "@/services/database";
 import { tryQuery, tryUpdate, tryDelete, requireFound } from "@/lib/effect-utils";
@@ -26,13 +26,20 @@ export const isProtectedUser = (
   currentUserId: string
 ): boolean => target.role === "admin" || target.id === currentUserId;
 
+/** Escapes LIKE wildcards so a search term matches literally (`ESCAPE '\'`). */
+export const escapeLike = (term: string): string =>
+  term.replace(/[\\%_]/g, (c) => `\\${c}`);
+
 export const buildUserConditions = (
   input: GetUsersInput
 ): SQL | undefined => {
   const conditions: SQL[] = [];
   if (input.search) {
-    const term = `%${input.search}%`;
-    const cond = or(like(user.name, term), like(user.email, term));
+    const term = `%${escapeLike(input.search)}%`;
+    const cond = or(
+      sql`${user.name} LIKE ${term} ESCAPE '\\'`,
+      sql`${user.email} LIKE ${term} ESCAPE '\\'`
+    );
     if (cond) conditions.push(cond);
   }
   if (input.role) conditions.push(eq(user.role, input.role));

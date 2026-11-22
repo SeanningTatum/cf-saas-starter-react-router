@@ -12,6 +12,7 @@ import {
   UnbanUserInput,
   DeleteUserInput,
   CreateWorkflowInput,
+  MAX_BULK_USER_IDS,
   Role,
   Status,
 } from "../user";
@@ -159,5 +160,112 @@ describe("CreateWorkflowInput", () => {
         metadata: { source: "signup" },
       })._tag
     ).toBe("Right");
+  });
+});
+
+// Catches: a cap dropped or loosened, letting a client send a field (or a
+// list) of any size to the server and the database.
+describe("input caps: at the cap decodes, one over fails", () => {
+  const s = (n: number) => "a".repeat(n);
+  const ids = (n: number) => Array.from({ length: n }, (_, i) => `u${i}`);
+  const email = (n: number) => `${"a".repeat(n - "@b.co".length)}@b.co`;
+  const metadata = (n: number) =>
+    Object.fromEntries(Array.from({ length: n }, (_, i) => [`k${i}`, "v"]));
+  const cases: ReadonlyArray<
+    [
+      string,
+      (u: unknown) => { readonly _tag: "Left" | "Right" },
+      number,
+      (n: number) => unknown,
+    ]
+  > = [
+    ["GetUsersInput.search", decode(GetUsersInput), 100, (n) => ({ search: s(n) })],
+    ["GetUserInput.userId", decode(GetUserInput), 128, (n) => ({ userId: s(n) })],
+    ["UnbanUserInput.userId", decode(UnbanUserInput), 128, (n) => ({ userId: s(n) })],
+    ["DeleteUserInput.userId", decode(DeleteUserInput), 128, (n) => ({ userId: s(n) })],
+    [
+      "UpdateUserInput.userId",
+      decode(UpdateUserInput),
+      128,
+      (n) => ({ userId: s(n), data: {} }),
+    ],
+    ["UpdateUserData.name", decode(UpdateUserData), 100, (n) => ({ name: s(n) })],
+    ["UpdateUserData.email", decode(UpdateUserData), 254, (n) => ({ email: email(n) })],
+    [
+      "UpdateUserData.banReason",
+      decode(UpdateUserData),
+      500,
+      (n) => ({ banReason: s(n) }),
+    ],
+    [
+      "BanUserInput.reason",
+      decode(BanUserInput),
+      500,
+      (n) => ({ userId: "u1", reason: s(n) }),
+    ],
+    [
+      "BulkBanUsersInput.reason",
+      decode(BulkBanUsersInput),
+      500,
+      (n) => ({ userIds: ["u1"], reason: s(n) }),
+    ],
+    [
+      "BulkBanUsersInput.userIds item",
+      decode(BulkBanUsersInput),
+      128,
+      (n) => ({ userIds: [s(n)] }),
+    ],
+    [
+      "BulkBanUsersInput.userIds",
+      decode(BulkBanUsersInput),
+      MAX_BULK_USER_IDS,
+      (n) => ({ userIds: ids(n) }),
+    ],
+    [
+      "BulkDeleteUsersInput.userIds",
+      decode(BulkDeleteUsersInput),
+      MAX_BULK_USER_IDS,
+      (n) => ({ userIds: ids(n) }),
+    ],
+    [
+      "BulkUpdateUserRolesInput.userIds",
+      decode(BulkUpdateUserRolesInput),
+      MAX_BULK_USER_IDS,
+      (n) => ({ userIds: ids(n), role: "user" }),
+    ],
+    [
+      "CreateWorkflowInput.email",
+      decode(CreateWorkflowInput),
+      254,
+      (n) => ({ email: email(n), metadata: {} }),
+    ],
+    [
+      "CreateWorkflowInput.metadata entries",
+      decode(CreateWorkflowInput),
+      20,
+      (n) => ({ email: "a@b.co", metadata: metadata(n) }),
+    ],
+    [
+      "CreateWorkflowInput.metadata key",
+      decode(CreateWorkflowInput),
+      64,
+      (n) => ({ email: "a@b.co", metadata: { [s(n)]: "v" } }),
+    ],
+    [
+      "CreateWorkflowInput.metadata value",
+      decode(CreateWorkflowInput),
+      500,
+      (n) => ({ email: "a@b.co", metadata: { k: s(n) } }),
+    ],
+  ];
+  for (const [name, check, cap, build] of cases) {
+    it(`${name}: ${cap} decodes, ${cap + 1} fails`, () => {
+      expect(check(build(cap))._tag).toBe("Right");
+      expect(check(build(cap + 1))._tag).toBe("Left");
+    });
+  }
+
+  it("MAX_BULK_USER_IDS stays at 50 (D1's 100-variable limit)", () => {
+    expect(MAX_BULK_USER_IDS).toBe(50);
   });
 });

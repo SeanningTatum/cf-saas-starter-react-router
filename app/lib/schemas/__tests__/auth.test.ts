@@ -45,6 +45,50 @@ describe("LoginSchema", () => {
   });
 });
 
+// Catches: a cap dropped or loosened, letting the form accept a field the
+// server (or Better Auth, for passwords over 128) would refuse.
+describe("form caps: at the cap decodes, one over fails", () => {
+  const s = (n: number) => "a".repeat(n);
+  const email = (n: number) => `${"a".repeat(n - "@b.co".length)}@b.co`;
+  const signup = (fields: Record<string, string>) => ({
+    name: "Alice",
+    email: "a@b.co",
+    password: "12345678",
+    confirmPassword: "12345678",
+    ...fields,
+  });
+  const cases: ReadonlyArray<
+    [
+      string,
+      (u: unknown) => { readonly _tag: "Left" | "Right" },
+      number,
+      (n: number) => unknown,
+    ]
+  > = [
+    ["Email", decode(Email), 254, email],
+    ["Password", decode(Password), 128, s],
+    [
+      "LoginSchema.password",
+      decode(LoginSchema),
+      128,
+      (n) => ({ email: "a@b.co", password: s(n) }),
+    ],
+    ["SignupSchema.name", decode(SignupSchema), 100, (n) => signup({ name: s(n) })],
+    [
+      "SignupSchema.password + confirmPassword",
+      decode(SignupSchema),
+      128,
+      (n) => signup({ password: s(n), confirmPassword: s(n) }),
+    ],
+  ];
+  for (const [name, check, cap, build] of cases) {
+    it(`${name}: ${cap} decodes, ${cap + 1} fails`, () => {
+      expect(check(build(cap))._tag).toBe("Right");
+      expect(check(build(cap + 1))._tag).toBe("Left");
+    });
+  }
+});
+
 describe("SignupSchema", () => {
   it("decodes a valid signup payload", () => {
     expect(
