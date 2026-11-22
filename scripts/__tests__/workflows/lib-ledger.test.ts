@@ -167,6 +167,18 @@ describe("tracked", () => {
 describe("twice and the ledger", () => {
   const attempts = (ledger: { label: string; attempt: number }[]) => ledger.map((e) => [e.label, e.attempt]);
 
+  it("atAttempt marks only the call made inside it: a workflow that retries by hand, outside twice(), must still show as a retry", async () => {
+    const { lib } = wired(async () => "r");
+    await lib.tracked("p", { label: "first" });
+    await lib.atAttempt(2, () => lib.tracked("p", { label: "by-hand" }));
+    await lib.tracked("p", { label: "after" });
+    expect(attempts(lib.ledger())).toEqual([
+      ["first", 1],
+      ["by-hand", 2],
+      ["after", 1],
+    ]);
+  });
+
   it("marks the retry attempt 2, and a parallel sibling and a later first-try call stay attempt 1: the retry flag must not leak to another call", async () => {
     let sibling: Promise<unknown> = Promise.resolve();
     const { lib } = wired(async (_p, o) => {

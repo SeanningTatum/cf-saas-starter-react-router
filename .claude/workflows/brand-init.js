@@ -263,21 +263,27 @@ function workflowLib({ agent, log, name }) {
     return out;
   }
 
+  /**
+   * Calls `fn()` so the agent call it makes shows in the ledger as attempt `n`. `fn` must make that
+   * call before its first await: the number is set for that call only and put back before anything
+   * else runs, so a parallel branch never reads this retry. A workflow that retries a call by hand
+   * (not through `twice`) wraps the retry in `atAttempt(2, ...)`.
+   */
+  function atAttempt(n, fn) {
+    const before = attemptNo;
+    attemptNo = Math.max(before, n);
+    try {
+      return fn();
+    } finally {
+      attemptNo = before;
+    }
+  }
+
   /** Run an agent thunk; one retry if it returns nothing or throws. Returns null after two failures. */
   async function twice(fn, what) {
     for (let attempt = 1; attempt <= 2; attempt++) {
       try {
-        // `fn` makes its agent call before its first await. The attempt number is set for that call
-        // only and put back before anything else runs, so a parallel branch never reads this retry.
-        const before = attemptNo;
-        attemptNo = Math.max(before, attempt);
-        let pending;
-        try {
-          pending = fn(attempt);
-        } finally {
-          attemptNo = before;
-        }
-        const r = await pending;
+        const r = await atAttempt(attempt, () => fn(attempt));
         if (r) return r;
       } catch (e) {
         log(`${what}: attempt ${attempt} threw — ${e && e.message ? e.message : e}`);
@@ -348,10 +354,10 @@ function workflowLib({ agent, log, name }) {
     return null;
   }
 
-  return { twice, checkArgs, asker, preflightFault, tracked, ledger, recordRun };
+  return { twice, atAttempt, checkArgs, asker, preflightFault, tracked, ledger, recordRun };
 }
 // ---- end of .claude/workflow-src/lib.js ----
-const { twice, checkArgs, asker, preflightFault, tracked } = workflowLib({ agent, log, name: "brand-init" });
+const { twice, atAttempt, checkArgs, asker, preflightFault, tracked } = workflowLib({ agent, log, name: "brand-init" });
 
 const input = args && typeof args === "object" ? args : {};
 const badArg = checkArgs("brand-init", [["brief", "string"], ["sector", "string"], ["root", "string"], ["redo", "boolean"], ["rebuildHome", "boolean"], ["answers", "object"], ["why", "object"], ["accept", "object"]], input, true);
@@ -1105,7 +1111,7 @@ const missingBuild = [];
 for (const lane of BUILD_LANES) {
   if (builtByName.get(lane.name)) continue;
   log(`WARNING: build:${lane.name} returned nothing; retrying once`);
-  const retry = await buildLane(lane);
+  const retry = await atAttempt(2, () => buildLane(lane));
   if (retry) builtByName.set(lane.name, retry);
   else missingBuild.push({ severity: "P1", source: `build:${lane.name}`, issue: `build lane returned nothing twice; its fence (${lane.owns.join(", ")}) was not rebuilt` });
 }
@@ -1525,7 +1531,7 @@ ${fs.map((f) => `  · [${f.severity}] ${f.source}: ${f.issue}${f.file ? ` (${f.f
         // A lane that returns nothing gets one retry. If it is still empty, the work it was handed
         // must not vanish with it: every assigned item goes to `unresolved`, which blocks Ship.
         return ask(prompt, opts)
-          .then((r) => r || ask(prompt, { ...opts, label: `${opts.label}:retry` }))
+          .then((r) => r || atAttempt(2, () => ask(prompt, { ...opts, label: `${opts.label}:retry` })))
           .then((r) => {
             if (!r) failedLane(name, fs);
             return toReport(name, lane, r, "fix lane returned nothing twice");
