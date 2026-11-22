@@ -11,17 +11,6 @@ import { appRouter } from "@/trpc/router";
 import type { AppRuntime } from "@/runtime";
 import { startRealApp, type AppCaller, type RealApp } from "./real-d1";
 
-/**
- * LEVELS: who may call each procedure. `user.deleteUser` once sat behind
- * `protectedProcedure`, so any signed-in user could delete any account by id,
- * and no test asked "who may call this?". A new procedure fails here until it
- * is listed with its level, so the level is a choice a reviewer sees.
- *
- * OWNERSHIP: every `protected` procedure again. The hole it stands for is a
- * signed-in user acting on another user's row by sending its id. Real cases
- * run on real D1 (`./real-d1.ts`): the guard is a WHERE clause, and a stub
- * cannot run one.
- */
 type Level = "protected" | "admin";
 
 const LEVELS: Record<string, Level> = {
@@ -42,22 +31,15 @@ const LEVELS: Record<string, Level> = {
   "analytics.getRecentSignupsCount": "admin",
 };
 
-/** Acting as the other user, makes a row through the router and returns the input that names it. */
 type OwnershipCase = (other: AppCaller) => Promise<unknown>;
 
-// A case is one line, e.g.
-//   "notes.get": async (other) => ({ noteId: (await other.notes.create({ title: "x" })).id }),
 const OWNERSHIP: Record<string, "takes no id" | OwnershipCase> = {};
 
-// `import.meta.env.DEV` is always true under vitest, which makes
-// `timingMiddleware` sleep 100-499ms of real time per call.
 vi.mock("@/lib/log-format", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/log-format")>()),
   isDev: false,
 }));
 
-// The auth middleware runs before input parsing and before the handler, so a
-// refused call never reaches the runtime. A runtime that fails loudly proves it.
 const runtime = new Proxy(
   {},
   {
@@ -73,7 +55,6 @@ const contextAs = (user: { id: string; role: "admin" | "user" } | null) =>
     auth: user === null ? null : { session: { id: `session-${user.id}` }, user },
   }) as unknown as Context;
 
-/** Calls the procedure at a dotted path on a tRPC caller. */
 const callAt = (caller: unknown, path: string, input?: unknown): Promise<unknown> => {
   const procedure = path
     .split(".")
@@ -92,14 +73,12 @@ const call = (role: "admin" | "user" | null, path: string) =>
     path
   );
 
-/** "ok", or the tRPC code the call was refused with. */
 const outcomeOf = (call: Promise<unknown>): Promise<string> =>
   call.then(
     () => "ok",
     (e: unknown) => (e instanceof TRPCError ? e.code : `not a TRPCError: ${String(e)}`)
   );
 
-/** The assertion every ownership case runs, real or fixture. */
 const expectOtherUsersRowRefused = async <C>(
   path: string,
   makeInput: (other: C) => Promise<unknown>,
@@ -109,8 +88,6 @@ const expectOtherUsersRowRefused = async <C>(
   expect(["FORBIDDEN", "NOT_FOUND"], `${path} with another user's row, as a user who does not own it`).toContain(
     await outcomeOf(callAt(callers.me, path, input))
   );
-  // The control: the owner gets through with the same input, so the refusal
-  // above is about ownership, not about an input that names nothing.
   expect(
     await outcomeOf(callAt(callers.other, path, input)),
     `${path} with the same input, as the row's owner`
@@ -121,53 +98,41 @@ const REAL_CASES = Object.entries(OWNERSHIP).flatMap(([path, entry]) =>
   entry === "takes no id" ? [] : [{ path, makeInput: entry }]
 );
 
-describe("procedure auth levels", () => {
-  it("lists every procedure in the router, and nothing else", () => {
-    // Catches: a procedure added without a declared level, and a removed
-    // procedure (such as the old user.deleteUser) coming back unnoticed.
+describe("procedure auth levels (a new procedure fails here until it is listed with its level; the auth middleware runs before input parsing and the handler, so a refused call never reaches the runtime, which fails loudly to prove it)", () => {
+  it("lists every procedure in the router, and nothing else, so none is added without a level and a removed one (the old user.deleteUser) cannot return unnoticed", () => {
     expect(Object.keys(appRouter._def.procedures).sort()).toEqual(
       Object.keys(LEVELS).sort()
     );
   });
 
-  it("has no user-level procedure that deletes users", () => {
-    // Catches: the original hole. Deleting an account by id is admin-only
-    // and lives at admin.deleteUser.
+  it("has no user-level procedure that deletes users, so deleting an account by id stays admin-only at admin.deleteUser (the original hole)", () => {
     expect(Object.keys(appRouter._def.procedures)).not.toContain("user.deleteUser");
   });
 
-  it("has no user-level procedure that lists users", () => {
-    // Catches: user.getUsers coming back, which let any signed-in user read
-    // the id, name and image of up to 100 other users. Listing users is
-    // admin-only and lives at admin.getUsers.
+  it("has no user-level procedure that lists users, so a signed-in user cannot read the id, name and image of 100 others (admin-only at admin.getUsers)", () => {
     expect(Object.keys(appRouter._def.procedures)).not.toContain("user.getUsers");
   });
 
-  it.each(Object.keys(LEVELS))("%s refuses an anonymous caller", async (path) => {
-    // Catches: a procedure moved to publicProcedure.
+  it.each(Object.keys(LEVELS))("%s refuses an anonymous caller, so no procedure becomes public by moving to publicProcedure", async (path) => {
     await expect(call(null, path)).rejects.toMatchObject({ code: "UNAUTHORIZED" });
   });
 
   it.each(Object.keys(LEVELS).filter((path) => LEVELS[path] === "admin"))(
-    "%s refuses a signed-in non-admin",
+    "%s refuses a signed-in non-admin, so no admin procedure becomes protected by moving to protectedProcedure",
     async (path) => {
-      // Catches: an admin procedure moved to protectedProcedure.
       await expect(call("user", path)).rejects.toMatchObject({ code: "FORBIDDEN" });
     }
   );
 });
 
-describe("ownership of protected procedures", () => {
-  it("lists every protected procedure, and nothing else", () => {
-    // Catches: a new protected procedure shipped without anyone deciding
-    // whether it takes another user's id.
+describe("ownership of protected procedures (the hole: a signed-in user acting on another user's row by sending its id; see docs/features/trpc-procedure-levels.md)", () => {
+  it("lists every protected procedure, and nothing else, so none ships before someone decides whether it takes another user's id", () => {
     expect(Object.keys(OWNERSHIP).sort()).toEqual(
       Object.keys(LEVELS).filter((path) => LEVELS[path] === "protected").sort()
     );
   });
 
-  // Skipped while there is no case, so workerd does not start.
-  describe.skipIf(REAL_CASES.length === 0)("on real D1", { timeout: 60_000 }, () => {
+  describe.skipIf(REAL_CASES.length === 0)("on real D1 (skipped while there is no case, so workerd does not start)", { timeout: 60_000 }, () => {
     let app: RealApp;
     let callers: { me: AppCaller; other: AppCaller };
 
@@ -188,11 +153,7 @@ describe("ownership of protected procedures", () => {
   });
 });
 
-/**
- * The ownership assertion on a router built to pass or fail it. With no real
- * case today, nothing else shows that the assertion can fail.
- */
-describe("the ownership assertion itself", () => {
+describe("the ownership assertion itself (run on a router built to pass or fail it, since with no real case nothing else shows it can fail)", () => {
   let owner = "";
   const NoteIdInput = Schema.standardSchemaV1(
     Schema.Struct({ noteId: Schema.String.pipe(Schema.maxLength(64)) })
@@ -208,7 +169,6 @@ describe("the ownership assertion itself", () => {
         if (owner !== ctx.auth.user.id) throw new TRPCError({ code: "NOT_FOUND" });
         return { id: input.noteId };
       }),
-      // The hole: found by id alone.
       getLeaky: protectedProcedure.input(NoteIdInput).query(({ input }) => ({ id: input.noteId })),
     }),
   });

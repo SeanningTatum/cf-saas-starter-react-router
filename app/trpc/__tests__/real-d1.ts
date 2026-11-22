@@ -9,22 +9,6 @@ import { makeAppRuntime } from "@/runtime";
 import { createCallerFactory, createTRPCContext } from "@/trpc";
 import { appRouter } from "@/trpc/router";
 
-/**
- * The whole app on real local D1, for tests whose claim only a real database
- * can prove: a live session dying, a WHERE clause refusing another user's row,
- * a statement staying under D1's bound-variable limit.
- *
- * Why these tests break the "no D1" rule, on purpose: a stub returns what the
- * test told it to, so it cannot show what SQLite does with the query. This runs
- * real local D1 (wrangler's platform proxy, in memory, a fresh database per
- * call), the migrations in `drizzle/`, real Better Auth and the real tRPC
- * router; nothing under test is mocked.
- *
- * Each test file must still mock `@/lib/log-format` itself (vi.mock is hoisted
- * per file): `import.meta.env.DEV` is always true under vitest, which makes
- * `timingMiddleware` sleep 100-499ms of real time per call.
- */
-
 const PASSWORD = "correct-horse-battery-staple";
 export const BASE_URL = "http://localhost";
 const MIGRATIONS = fileURLToPath(new URL("../../../drizzle/", import.meta.url));
@@ -82,13 +66,10 @@ export const startRealApp = async () => {
     return headersFrom(res.headers);
   };
 
-  // A fresh context per call: the session is resolved when the context is
-  // built, so reusing one would hide a session that died after it was built.
   const contextFor = (headers: Headers) => createTRPCContext({ headers, runtime });
   const callerFor = async (headers: Headers) =>
     createCallerFactory(appRouter)(await contextFor(headers));
 
-  /** Signs up, makes the user an admin, then signs in again so the session carries the role. */
   const signUpAdmin = async (email: string): Promise<Account> => {
     const account = await signUp(email);
     await db.prepare("UPDATE user SET role = 'admin' WHERE id = ?").bind(account.userId).run();
