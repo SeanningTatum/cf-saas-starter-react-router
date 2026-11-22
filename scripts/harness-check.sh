@@ -10,7 +10,8 @@
 #        H. The SessionStart skill restore and the context-memory store resolver pass their own tests
 #        I. Workflows: every command that launches one has its script, every script
 #           parses and names itself by filename, brand-init fences cover app/components/ui once
-#        J. The repo's ruleset and production environment match .github/repo-rules.json
+#        J. The workflow scripts are what their sources build (.claude/workflow-src + the shared library)
+#        K. The repo's ruleset and production environment match .github/repo-rules.json
 
 set -uo pipefail
 
@@ -147,7 +148,8 @@ fi
 # I2. brand-init hardcodes the primitive fences. Every file in app/components/ui must
 #     appear exactly once as "<name>" inside the fence arrays, which the workflow marks with
 #     `// harness:primitive-fences:start` and `// harness:primitive-fences:end` (0 = a
-#     primitive escapes the redesign, 2+ = two lanes fight over it). Names elsewhere don't count.
+#     primitive escapes the redesign, 2+ = two lanes fight over it), and every name in a
+#     `ui([...])` fence must be a file there. Names elsewhere don't count.
 if [ -f .claude/workflows/brand-init.js ]; then
   FENCE_FILE=.claude/workflows/brand-init.js
   FENCE_TEXT=$(awk '/harness:primitive-fences:start/{f=1;next} /harness:primitive-fences:end/{f=0} f' "$FENCE_FILE")
@@ -162,15 +164,29 @@ if [ -f .claude/workflows/brand-init.js ]; then
       c=$(printf '%s\n' "$FENCE_TEXT" | grep -o "\"${n}\"" | wc -l | tr -d ' ')
       [ "$c" = "1" ] || FENCE_BAD="$FENCE_BAD ${n}(x${c})"
     done
+    # The reverse: a fence must not name a primitive that is gone, or a lane is told to edit a missing file.
+    while IFS= read -r n; do
+      [ -z "$n" ] && continue
+      [ -f "app/components/ui/${n}.tsx" ] || FENCE_BAD="$FENCE_BAD ${n}(no-file)"
+    done < <(printf '%s\n' "$FENCE_TEXT" | grep 'ui(\[' | grep -oE '"[a-z0-9-]+"' | tr -d '"' | sort -u)
     if [ -z "$FENCE_BAD" ]; then
-      ok "brand-init fences cover every app/components/ui primitive exactly once"
+      ok "brand-init fences cover every app/components/ui primitive exactly once and name no missing one"
     else
       fail "brand-init fence mismatch:$FENCE_BAD"
     fi
   fi
 fi
 
-# J. Repo rules. The ruleset on the default branch and the production environment must
+# J. .claude/workflows/*.js are built: each is its source in .claude/workflow-src/ with the shared
+#    library pasted in. A script edited by hand, or a source edited without a rebuild, drifts.
+if WF_OUT=$(bun scripts/workflows.ts check 2>&1); then
+  ok "$WF_OUT"
+else
+  fail "workflow scripts differ from their sources:"
+  printf '%s\n' "$WF_OUT" | sed 's/^/      /'
+fi
+
+# K. Repo rules. The ruleset on the default branch and the production environment must
 #    match .github/repo-rules.json (docs/ci/repo-rules.md says when a notice stays green).
 RR_OUT=$(bun run scripts/repo-rules.ts --check 2>&1)
 RR_CODE=$?

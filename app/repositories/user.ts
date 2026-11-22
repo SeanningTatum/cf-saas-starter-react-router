@@ -1,6 +1,6 @@
 import { Effect } from "effect";
-import { eq, inArray, count, desc, or, like, and, type SQL } from "drizzle-orm";
-import { user } from "@/db/schema";
+import { eq, inArray, count, desc, or, and, sql, type SQL } from "drizzle-orm";
+import { session, user } from "@/db/schema";
 import { Database } from "@/services/database";
 import { tryQuery, tryUpdate, tryDelete, requireFound } from "@/lib/effect-utils";
 import { ValidationError } from "@/models/errors/repository";
@@ -31,8 +31,12 @@ export const buildUserConditions = (
 ): SQL | undefined => {
   const conditions: SQL[] = [];
   if (input.search) {
-    const term = `%${input.search}%`;
-    const cond = or(like(user.name, term), like(user.email, term));
+    // instr, not LIKE: `%` and `_` in the term stay literal, and D1 refuses
+    // any LIKE pattern over 50 bytes.
+    const cond = or(
+      sql`instr(lower(${user.name}), lower(${input.search})) > 0`,
+      sql`instr(lower(${user.email}), lower(${input.search})) > 0`
+    );
     if (cond) conditions.push(cond);
   }
   if (input.role) conditions.push(eq(user.role, input.role));
@@ -51,6 +55,27 @@ export class UserRepository extends Effect.Service<UserRepository>()(
   {
     effect: Effect.gen(function* () {
       const { db } = yield* Database;
+
+      // Nothing reads `banned` when a session is resolved, so a ban must delete
+      // the sessions too. Batch this with the ban: D1 lands both or neither.
+      const endSessions = (userIds: ReadonlyArray<string>) =>
+        db.delete(session).where(inArray(session.userId, [...userIds]));
+
+      const banAndEndSessions = (
+        userIds: ReadonlyArray<string>,
+        ban: { readonly reason?: string; readonly expiresAt?: Date }
+      ) =>
+        db.batch([
+          db
+            .update(user)
+            .set({
+              banned: true,
+              banReason: ban.reason ?? null,
+              banExpires: ban.expiresAt ?? null,
+            })
+            .where(inArray(user.id, [...userIds])),
+          endSessions(userIds),
+        ]);
 
       const getUsers = (input: GetUsersInput) =>
         Effect.gen(function* () {
@@ -109,14 +134,7 @@ export class UserRepository extends Effect.Service<UserRepository>()(
         input.userIds.length === 0
           ? Effect.succeed(0)
           : tryUpdate("user", async () => {
-              await db
-                .update(user)
-                .set({
-                  banned: true,
-                  banReason: input.reason ?? null,
-                  banExpires: input.expiresAt ?? null,
-                })
-                .where(inArray(user.id, [...input.userIds]));
+              await banAndEndSessions(input.userIds, input);
               return input.userIds.length;
             });
 
@@ -177,8 +195,8 @@ export class UserRepository extends Effect.Service<UserRepository>()(
             userId: input.userId,
             currentUserId: input.currentUserId,
           });
-          yield* tryUpdate("user", () =>
-            db
+          yield* tryUpdate<unknown>("user", () => {
+            const update = db
               .update(user)
               .set({
                 name: input.data.name,
@@ -189,8 +207,11 @@ export class UserRepository extends Effect.Service<UserRepository>()(
                 banExpires: input.data.banExpires,
                 emailVerified: input.data.verified,
               })
-              .where(eq(user.id, input.userId))
-          );
+              .where(eq(user.id, input.userId));
+            return input.data.banned === true
+              ? db.batch([update, endSessions([input.userId])])
+              : update;
+          });
           return { success: true } as const;
         });
 
@@ -201,14 +222,7 @@ export class UserRepository extends Effect.Service<UserRepository>()(
             currentUserId: input.currentUserId,
           });
           yield* tryUpdate("user", () =>
-            db
-              .update(user)
-              .set({
-                banned: true,
-                banReason: input.reason ?? null,
-                banExpires: input.expiresAt ?? null,
-              })
-              .where(eq(user.id, input.userId))
+            banAndEndSessions([input.userId], input)
           );
           return { success: true } as const;
         });

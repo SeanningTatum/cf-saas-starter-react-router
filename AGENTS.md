@@ -84,9 +84,11 @@ Enforced by `scripts/check-non-negotiables.ts`.
 |--------|----|
 | New tagged error | Add it to `tagToTRPC` in `app/lib/effect-trpc.ts` |
 | New helper or repository | Add its unit test in the same diff |
+| New / changed tRPC procedure | Add it to `LEVELS` (and `OWNERSHIP` if `protected`) in `app/trpc/__tests__/router.test.ts`; cap every string and array in its input (`input-bounds.test.ts`) |
 | New / changed DB table or user-visible data | Extend the fixtures in `scripts/seed-preview.ts` |
 | New / changed user-visible flow | `feature-verifier` → `.verify/<slug>/verdict.md`, in the PR |
 | New / changed component driven by a `*.machine.ts` | Unit tests on the machine own the logic: every transition, guard and reachable state. The e2e spec owns the wiring: generated paths that hit each DOM binding and each state's view once, never one per transition (model: `e2e/file-upload.paths.spec.ts`) |
+| New / changed workflow | Edit `.claude/workflow-src/`, never `.claude/workflows/`; `bun scripts/workflows.ts build`; a dry-run test for the new branch ([how](docs/agents/harness.md#editing-a-workflow)) |
 | New / changed feature | A GitHub issue (`/to-spec`, `/to-tickets`); its PR closes it |
 | A new domain term | `GLOSSARY.md`  |
 | A decision worth keeping | `context-memory` record (dated, why); an ADR if hard to reverse; an agent rule goes in this file |

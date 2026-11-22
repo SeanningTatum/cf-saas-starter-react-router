@@ -1,0 +1,2 @@
+# Built by `bun scripts/workflows.ts build` from .claude/workflow-src/. Review the source, not these.
+*.js linguist-generated=true
