@@ -72,6 +72,16 @@ An app screen's `impeccable` lanes: `shape` (direction), `critique`, `audit` / `
 | [`eval-plan-feature`](../../.claude/workflows/eval-plan-feature.js) | Run the `ticket-auditor` over the 20 golden tickets in `evals/plan-feature/` and score them in-script. Run it after any change to the auditor's prompt; the gate is every frozen case passing and ≥ 17/20. `args: { degrade: true }` proves the score can drop. |
 | [`brand-init`](../../.claude/workflows/brand-init.js) | Give a fresh fork its own brand, in one run. Interview → three brand directions as live comps → you pick → tokens, fonts, every primitive and the shared components redesigned → one PR. Agents in a workflow can't talk to you, so when it needs you it stops and returns `{ status: "needs-input" | "needs-pick" | "needs-accept", ... }`; the main thread asks you — the brief in chat, the comp pick and fix acceptance on a lavish review page — then re-runs with `resumeFromRunId: "<run id>"` and the answer in `args` (`answers`, `pick` + `rebuildHome`, or `accept`). Comps and screenshots land in `.verify/brand-init/`. Refuses if `DESIGN.md` exists unless you pass `redo: true`. Run: `Workflow({ name: "brand-init", args: { brief: "..." } })`. |
 
+### Editing a workflow
+
+A workflow script is one body the runtime runs: it cannot import a file. So the scripts in `.claude/workflows/` are built, and you edit their sources.
+
+- **Source:** `.claude/workflow-src/<name>.js`. The helpers every workflow shares live in [`.claude/workflow-src/lib.js`](../../.claude/workflow-src/lib.js). One `// @lib` line in each source marks where the build pastes the library.
+- **Build:** `bun scripts/workflows.ts build` writes `.claude/workflows/<name>.js`. Commit the source and the built file together. Never edit a built file: the `harness` gate runs `bun scripts/workflows.ts check` and fails when one differs from its source.
+- **Test:** `scripts/__tests__/workflows/<name>.test.ts` runs each built script with scripted agents, through `dryRun(name, { args, answers, resumeFrom })` in [`scripts/lib/workflow-dry-run.ts`](../../scripts/lib/workflow-dry-run.ts). No model is called, so they run in the `test` gate. An agent call no rule answers fails the run; so does an answer its schema rejects. Each workflow has a happy path, a failing gate, a stop and resume, and a fix round. Add a case when you add a branch.
+- **Prove an edit changed no prompt:** `WORKFLOW_DRY_RUN_TRACE=<file>` appends every dry run (each prompt, opts, log line and result) as one JSON line. Trace `bunx vitest run scripts/__tests__/workflows` before the edit and after the rebuild, then `diff <(sort before.jsonl) <(sort after.jsonl)`. `WORKFLOW_DRY_RUN_DIR=<dir>` points the tests at a build made with `build --out <dir>`.
+- **What a dry run does not show:** how the real runtime finds cached results on resume (the harness replays call by call, in order), and anything an agent would do with a prompt. A change to what a prompt asks for still needs one real run.
+
 ## Review loop and merge bar
 
 `ship-feature` reviews stacked PRs on this machine and spends Greptile on one PR per feature: the roll-up, or the single PR when there is one. Per feature that is 1-3 Greptile reviews. Before this, every stacked PR was reviewed by the Greptile CLI before push, then by Greptile on GitHub, and re-scored after every rebase: on Sola in November 2026, six features of 8-11 stacked PRs each cost 30+ Greptile reviews per feature, mostly of code already reviewed, and days of approvals.
@@ -103,7 +113,7 @@ After the first push no branch is rewritten: `.claude/settings.json` denies `git
 
 | Command | Purpose |
 |---------|---------|
-| [`/harness-check`](../../.claude/commands/harness-check.md) | [`scripts/harness-check.sh`](../../scripts/harness-check.sh) — CLAUDE↔AGENTS symlink, sub-agent frontmatter, Kimi roster symlink, hook wiring + hook tests, workflow scripts. Deterministic, no LLM, exits non-zero on drift. |
+| [`/harness-check`](../../.claude/commands/harness-check.md) | [`scripts/harness-check.sh`](../../scripts/harness-check.sh) — CLAUDE↔AGENTS symlink, sub-agent frontmatter, Kimi roster symlink, hook wiring + hook tests, workflow scripts (they parse, and match their sources). Deterministic, no LLM, exits non-zero on drift. |
 
 ## Gates
 
