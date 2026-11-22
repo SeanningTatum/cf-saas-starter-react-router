@@ -15,6 +15,9 @@
 import { appendFileSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { Either } from "effect";
+import { configChecksum, HARNESS_ROOT, loadHarnessConfig, loadHarnessConfigFromDisk, shownConfig, type HarnessConfig } from "./harness-config";
+import { CONFIG_FILE_NAME } from "./harness-config-constants";
 import { parseLedger, type LedgerCall } from "./run-telemetry";
 
 export interface AgentOpts {
@@ -280,3 +283,23 @@ export function ledgerAt(result: DryRunResult, label: string) {
   if (!call) throw new Error(`no call labelled ${label}; got ${labels(result.calls).join(", ")}`);
   return { at, ...ledgerOf(call.prompt) };
 }
+
+export const configLine = (change: (config: HarnessConfig) => HarnessConfig = (config) => config): string => {
+  const config = shownConfig(change(loadHarnessConfigFromDisk()));
+  return JSON.stringify({ config, check: configChecksum(config) });
+};
+
+const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null && !Array.isArray(value);
+
+/** The line `show` prints for this repo's file with `patch` laid over it (one level deep), loaded as typed: the loader's folder rules apply. */
+export const configLineFromFile = (patch: Record<string, unknown>): string => {
+  const file: unknown = JSON.parse(readFileSync(join(HARNESS_ROOT, CONFIG_FILE_NAME), "utf8"));
+  if (!isRecord(file)) throw new Error(`${CONFIG_FILE_NAME} is not an object`);
+  const merged = Object.fromEntries(
+    Object.entries(patch).map(([key, value]) => [key, isRecord(file[key]) && isRecord(value) ? { ...file[key], ...value } : value]),
+  );
+  const loaded = loadHarnessConfig({ root: HARNESS_ROOT, readFile: () => JSON.stringify({ ...file, ...merged }) });
+  if (Either.isLeft(loaded)) throw new Error(loaded.left);
+  const config = shownConfig(loaded.right);
+  return JSON.stringify({ config, check: configChecksum(config) });
+};

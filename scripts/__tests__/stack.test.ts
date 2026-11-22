@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+import { HARNESS_DEFAULTS } from "../lib/harness-config";
 import { lintTitle } from "./helpers/lint-title";
 import { run, assignPaths, normalizePath, type Deps, type GitResult, type Plan } from "../stack";
 
@@ -22,6 +23,7 @@ function stub(reply: (args: string[]) => Partial<GitResult> = () => ({}), p: Pla
       return { code: 0, stdout: "", stderr: "", ...reply(args) };
     },
     readFile: () => JSON.stringify(p),
+    scratchDirs: HARNESS_DEFAULTS.scratchDirs,
   };
   return { deps, calls };
 }
@@ -90,6 +92,24 @@ describe("exclude", () => {
     const r = assignPaths(ex, ["plans/a.html", "notes.md", "notes.mdx", "app/db/schema.ts"]);
     expect(r.excluded).toEqual(["plans/a.html", "notes.md"]);
     expect(r.unassigned).toEqual(["notes.mdx"]);
+  });
+});
+
+describe("scratchDirs from the config", () => {
+  const status = (a: string[]) =>
+    a[0] === "status" ? { stdout: "?? scratch/a.txt\0?? app/repositories/x.ts\0" } : { stdout: "" };
+  const excludedBy = (p: Plan, scratchDirs: string[]) => {
+    const { deps } = stub(status, p);
+    const o = run(["assign", "--plan", "p.json"], { ...deps, scratchDirs });
+    return (o.out as { excluded: string[] }).excluded;
+  };
+
+  it("a plan with no exclude skips the config's scratch dirs: a literal list in the script would stage a project's own scratch folder", () => {
+    expect(excludedBy(noRest, ["scratch/"])).toEqual(["scratch/a.txt"]);
+  });
+
+  it("an exclude in the plan wins over the config, even when it is empty", () => {
+    expect(excludedBy({ ...noRest, exclude: [] }, ["scratch/"])).toEqual([]);
   });
 });
 

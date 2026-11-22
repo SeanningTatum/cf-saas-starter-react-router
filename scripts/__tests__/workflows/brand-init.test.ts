@@ -6,109 +6,11 @@
  * never on how the script is laid out, so moving its helpers into a shared library must keep them green.
  */
 import { readdirSync } from "node:fs";
-import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { lintTitle } from "../helpers/lint-title";
-import { dryRun, labels, ledgerAt, callShape, rowShape, RUN_OK, seq, type AgentCall, type AnswerInput, type AnswerRule, type DryRunResult } from "../../lib/workflow-dry-run";
+import { configLine, labels, ledgerAt, callShape, rowShape, seq, type AnswerInput, type AnswerRule, type DryRunResult } from "../../lib/workflow-dry-run";
 
-/** The workflow returns untyped JSON. */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type Obj = Record<string, any>;
-
-const ROOT = "/work/acme";
-const OUT = `${ROOT}/.verify/brand-init`;
-const UI_DIR = fileURLToPath(new URL("../../../app/components/ui", import.meta.url));
-
-const ANSWERS = { users: "Studio owners who bill by the hour" };
-/** Args that settle both the brief and the pick, so a run goes straight to Contract. */
-const SHIP_ARGS = { answers: ANSWERS, pick: 2, rebuildHome: true };
-
-const run = (args: unknown, answers: AnswerRule[], resumeFrom?: DryRunResult) => dryRun("brand-init", { args, answers, resumeFrom });
-const res = (r: DryRunResult) => r.result as Obj;
-const byLabel = (r: DryRunResult, label: string) => r.calls.filter((c) => c.label === label);
-const one = (r: DryRunResult, label: string): AgentCall => {
-  const found = byLabel(r, label);
-  expect(found, `exactly one call labelled ${label}`).toHaveLength(1);
-  return found[0];
-};
-const indexOf = (r: DryRunResult, label: string) => r.calls.findIndex((c) => c.label === label);
-
-/** The `  · path` lines under a prompt's FILE FENCE header: the paths that lane is held to. */
-function fenceIn(prompt: string): string[] {
-  const after = prompt.split("FILE FENCE")[1];
-  if (!after) return [];
-  const out: string[] = [];
-  for (const line of after.split("\n").slice(1)) {
-    const m = /^\s+· (\S+)$/.exec(line);
-    if (!m) break;
-    out.push(m[1]);
-  }
-  return out;
-}
-const fileIn = (fence: string) => (fence.endsWith("/**") ? `${fence.slice(0, -2)}index.tsx` : fence);
-/** A lane that edited the first file of its own fence. */
-const laneDid = (c: AnswerInput, files = [fileIn(fenceIn(c.prompt)[0])]) => ({ files, report: `${c.label}: done`, cwd: ROOT });
-
-const idOf = (label: string) => Number(label.split(":")[1]);
-const tokensFor = (id: number, stage: "drawn" | "tasted") => ({
-  name: `Comp ${id} ${stage}`,
-  light: { primary: `oklch(0.5 0.2 ${id * 90})` },
-  dark: { primary: `oklch(0.7 0.2 ${id * 90})` },
-  voice: [`Voice of comp ${id}`],
-});
-
-const QUESTIONS = [
-  { id: "users", question: "Who uses it?", draft: "Small teams", confident: false },
-  { id: "tone", question: "What tone?", draft: "Calm and exact", confident: true },
-];
-const PASS = { verdict: "PASS", findings: [], evidence: "all green" };
-const SHIPPED = { shipped: true, gatesGreen: true, verdictWritten: true, commit: "abc1234", pr: "https://github.com/acme/app/pull/7" };
-
-/** The happy path. Overrides go first, because the first matching rule answers. */
-function rules(overrides: AnswerRule[] = []): AnswerRule[] {
-  return [
-    ...overrides,
-    ["preflight", { ok: true, reason: "", branch: "feat/brand-init", root: ROOT }],
-    [/^run:record/, RUN_OK],
-    ["memory:recall", "nothing recorded"],
-    [/^memory:record:/, (c: AnswerInput) => `recorded ${c.label}`],
-    ["brief:interview", { questions: QUESTIONS }],
-    ["brief:write", { oneLine: "Invoicing for small studios", sector: "saas" }],
-    [
-      /^draw:directions:\d+$/,
-      (c: AnswerInput) => {
-        const first = Number(c.label.split(":")[2]);
-        const ids = [first, first + 1, first + 2];
-        return { drawIds: ids.map((i) => `dir-${i}`), directions: ids.map((id) => ({ id, sheet: `${OUT}/directions/${id}.md` })) };
-      },
-    ],
-    [
-      /^draw:\d+(:redraw)?$/,
-      (c: AnswerInput) => {
-        const id = idOf(c.label);
-        const dir = `${OUT}/${id}${c.label.endsWith(":redraw") ? "-r" : ""}`;
-        return { html: `${dir}/comp.html`, tokens: tokensFor(id, "drawn"), screenshots: [`${dir}/shots/mobile-light.png`, `${dir}/shots/desktop-light.png`] };
-      },
-    ],
-    [/^critique:\d+:taste(:redraw)?$/, (c: AnswerInput) => ({ score: 8, notes: "hero type tightened", tokens: tokensFor(idOf(c.label), "tasted") })],
-    [/^critique:\d+:impeccable(:redraw)?$/, { findings: [], contrastAA: { light: true, dark: true } }],
-    [/^critique:\d+:motion(:redraw)?$/, { verdict: "PASS", notes: "eases out, reduced motion collapses" }],
-    ["critique:sameness", { pairs: [] }],
-    ["contract:snapshot", { paths: ["PRODUCT.md"] }],
-    ["contract:tokens", { files: ["app/app.css", "app/root.tsx"], report: "contrast: muted-foreground L 0.55 -> 0.50", cwd: ROOT }],
-    ["build:fence-diff", { paths: ["PRODUCT.md", "app/app.css"] }],
-    ["build:polish", { files: [], report: "polish: nothing to change", cwd: ROOT }],
-    [/^build:/, (c: AnswerInput) => laneDid(c)],
-    [/^check:/, PASS],
-    [/^fix:\d+:repair:/, { files: [], reverted: [], report: "repair: nothing reverted", cwd: ROOT }],
-    [/^fix:\d+:revert-strays$/, { files: [], reverted: [], report: "nothing reverted", cwd: ROOT }],
-    [/^fix:\w+:orphans$/, { files: [], report: "orphans: nothing changed", cwd: ROOT }],
-    [/^fix:/, (c: AnswerInput) => laneDid(c)],
-    ["close:design-md", { written: true, files: ["DESIGN.md"] }],
-    ["close:synthesis", "STATE: brand applied. BLOCKING: none."],
-    ["ship:record-commit-pr", SHIPPED],
-  ];
-}
+import { type Obj, ROOT, OUT, UI_DIR, ANSWERS, SHIP_ARGS, run, res, byLabel, one, indexOf, fenceIn, laneDid, tokensFor, PASS, SHIPPED, rules } from "./brand-init.fixtures";
 
 /** Brief stop, then pick stop, then the build: the three runs a user drives by hand. */
 let happy: Promise<{ r1: DryRunResult; r2: DryRunResult; r3: DryRunResult }> | undefined;
@@ -129,7 +31,7 @@ describe("brand-init: happy path, Preflight to Ship", () => {
     expect(res(r1).questions).toHaveLength(1);
     expect(labels(r1.calls).at(-1)).toBe("memory:record:needs-input");
     // The resume replays preflight, recall and the interview from cache, and does not record the brief stop again.
-    expect(labels(r2.calls.filter((c) => c.cached))).toEqual(["preflight", "memory:recall", "brief:interview"]);
+    expect(labels(r2.calls.filter((c) => c.cached))).toEqual(["config", "preflight", "memory:recall", "brief:interview"]);
     expect(r2.live[0].label).toBe("brief:write");
     expect(byLabel(r2, "memory:record:needs-input")).toEqual([]);
     expect(r3.live[0].label).toBe("contract:snapshot");
@@ -205,11 +107,12 @@ describe("brand-init: happy path, Preflight to Ship", () => {
     for (const c of [...r1.calls, ...r2.calls, ...r3.calls]) expect(declared).toContain(c.phase);
 
     // An agent that starts in the launcher's checkout must be told where to work. Catches a call that skips the preamble.
-    for (const c of r3.calls.filter((c) => c.label !== "preflight")) {
+    for (const c of r3.calls.filter((c) => c.label !== "preflight" && c.label !== "config")) {
       expect(c.prompt.startsWith(`ROOT = ${ROOT}\nWork only inside ${ROOT}.`), c.label).toBe(true);
     }
 
     const typeOf = (label: string) => one(r3, label).opts.agentType;
+    expect(typeOf("config")).toBe("runner");
     expect(typeOf("preflight")).toBe("runner");
     expect(typeOf("contract:snapshot")).toBe("runner");
     expect(typeOf("contract:tokens")).toBe("ui-builder");
@@ -319,7 +222,7 @@ describe("brand-init: happy path, Preflight to Ship", () => {
 describe("brand-init: the branch to leave", () => {
   it("preflight asks for a new branch off the repo's default branch, read from scripts/default-branch.ts, not off a literal main (catches a repo whose default is staging getting brand work committed on it)", async () => {
     const r = await run({}, rules([["preflight", { ok: false, reason: "stop here", branch: "staging", root: ROOT }]]));
-    const prompt = r.calls[0].prompt;
+    const prompt = one(r, "preflight").prompt;
     expect(prompt).toContain("bun scripts/default-branch.ts");
     expect(prompt).not.toMatch(/If on main\b/);
   });
@@ -328,17 +231,17 @@ describe("brand-init: the branch to leave", () => {
 describe("brand-init: a failing gate stops the run", () => {
   it("a red preflight, a relative root or a bad arg stops before any other agent", async () => {
     const red = await run({}, rules([["preflight", { ok: false, reason: "baseline red: typecheck", branch: "staging", root: ROOT }]]));
-    expect(labels(red.calls)).toEqual(["preflight"]);
+    expect(labels(red.calls)).toEqual(["config", "preflight"]);
     expect(res(red)).toEqual({ error: "baseline red: typecheck" });
     // The DESIGN.md guard lives in the preflight agent; the script must hand it the redo flag.
-    expect(red.calls[0].prompt).toContain("redo is false");
+    expect(one(red, "preflight").prompt).toContain("redo is false");
     const redo = await run({ redo: true }, rules([["preflight", { ok: false, reason: "dirty tree: app/root.tsx", branch: "staging", root: ROOT }]]));
-    expect(redo.calls[0].prompt).toContain("redo is true");
-    expect(labels(redo.calls)).toEqual(["preflight"]);
+    expect(one(redo, "preflight").prompt).toContain("redo is true");
+    expect(labels(redo.calls)).toEqual(["config", "preflight"]);
 
     // Every later agent is fenced to ROOT; a relative one would fence them to wherever they start.
     const relative = await run({}, rules([["preflight", { ok: true, reason: "", branch: "feat/brand-init", root: "work/acme" }]]));
-    expect(labels(relative.calls)).toEqual(["preflight"]);
+    expect(labels(relative.calls)).toEqual(["config", "preflight"]);
     expect(res(relative)).toEqual({ error: "preflight did not resolve an absolute repo root" });
 
     // A pick typed as a string would never match a comp id: rejected before any agent runs.

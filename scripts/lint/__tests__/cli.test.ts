@@ -204,3 +204,34 @@ describe("lint: registry problems", () => {
     }
   );
 });
+
+describe("lint: --lower-baseline", () => {
+  const staleBaseline = () => baselineText({ debt: { "no-bad": { "app/a.ts": 3, "app/clean.ts": 1 } } });
+
+  it("writes the baseline with the lower counts and says nothing was raised", () => {
+    const run = cli({ "scripts/lint/baseline.json": staleBaseline(), "app/a.ts": "const BAD = 1;", "app/clean.ts": "const GOOD = 1;" });
+
+    const outcome = run.run("--lower-baseline");
+
+    expect(outcome.code).toBe(0);
+    expect(outcome.stdout.join(" ")).toContain("Nothing was raised or added");
+    expect(run.written.map(([path, text]) => [path, JSON.parse(text).debt])).toEqual([["scripts/lint/baseline.json", { "no-bad": { "app/a.ts": 1 } }]]);
+  });
+
+  it("writes nothing when a file has more findings than its count, because it only lowers", () => {
+    const run = cli({ "scripts/lint/baseline.json": baselineText({ debt: { "no-bad": { "app/a.ts": 1 } } }), "app/a.ts": "const BAD = 1;\nconst BAD_TOO = 2;" });
+
+    const outcome = run.run("--lower-baseline");
+
+    expect(outcome.code).toBe(0);
+    expect(run.written).toEqual([]);
+    expect(run.run().code).toBe(1);
+  });
+
+  it("names the command in the stale finding, so the fix is one command away", () => {
+    const outcome = cli({ "scripts/lint/baseline.json": staleBaseline(), "app/a.ts": "const BAD = 1;", "app/clean.ts": "const GOOD = 1;" }).run();
+
+    expect(outcome.code).toBe(1);
+    expect(outcome.stderr.filter((line) => line.includes("baseline-stale")).every((line) => line.includes("bun run lint:house --lower-baseline"))).toBe(true);
+  });
+});

@@ -46,6 +46,8 @@ describe("fullRunReasons", () => {
   it.each([
     ["scripts/verify.sh", "the gate runner"],
     ["scripts/lib/verify-plan.ts", "the gate runner"],
+    ["harness.config.json", "the gate list"],
+    ["scripts/lib/harness-config.ts", "the reader of the gate list"],
     ["scripts/check-non-negotiables.ts", "a gate script"],
     ["scripts/lint/rules/no-throw.ts", "the house linter"],
     ["scripts/lint/baseline.json", "the house linter"],
@@ -72,11 +74,14 @@ describe("fullRunReasons", () => {
     },
   );
 
-  it("every script verify.sh and the harness gate run forces the full run (catches the trigger list drifting from the gates)", () => {
+  it("every script verify.sh, the gate list and the harness gate run forces the full run (catches the trigger list drifting from the gates)", () => {
     const read = (file: string) => readFileSync(join(__dirname, "..", "..", "..", file), "utf-8");
     const named = (text: string) => text.match(/scripts\/[\w./-]+\.(?:ts|sh)/g) ?? [];
     const looped = [...read("scripts/harness-check.sh").matchAll(/for t in ([\w -]+); do/g)].flatMap((m) => (m[1] ?? "").split(" ").map((t) => `scripts/${t}.sh`));
-    const gateScripts = [...new Set([...named(read("scripts/verify.sh")), ...named(read("scripts/harness-check.sh")), ...looped])];
+    const gateRuns = (JSON.parse(read("harness.config.json")) as { gates: { run: string }[] }).gates.map((gate) => gate.run).join("\n");
+    const scannedNotRun = /N_CANDIDATES=\([^)]*\)/;
+    const sources = [read("scripts/verify.sh"), gateRuns, read("scripts/harness-check.sh").replace(scannedNotRun, "")];
+    const gateScripts = [...new Set([...sources.flatMap(named), ...looped])];
     expect(gateScripts.length).toBeGreaterThan(5);
     expect(gateScripts.filter((path) => fullRunReasons([path]).length === 0)).toEqual([]);
   });

@@ -5,6 +5,7 @@
  * ticket body. It does that through this one script so the tracker is swappable and the workflow
  * never builds a `gh` command line itself. Spec: plans/plan-feature-contract.md section 2.
  *
+ *   bun run tracker ready
  *   bun run tracker view <ref>
  *   bun run tracker create --title <t> --body-file <f> [--label <l>]...
  *   bun run tracker edit <ref> --body-file <f> [--title <t>] [--if-updated-at <iso>]
@@ -28,12 +29,14 @@
  */
 import { readFileSync } from "node:fs";
 import { ghSpawn, type GhResult, type GhRunner } from "./lib/gh";
+import { loadHarnessConfigFromDisk } from "./lib/harness-config";
 
 export type { GhResult };
 
 export interface Deps {
   gh: GhRunner;
   readFile: (path: string) => string;
+  readyLabel: string;
   /** ISO time of "now"; injected so tests control the write timestamp. */
   now?: () => string;
 }
@@ -54,12 +57,13 @@ const usage = (error: string): Outcome =>
     1,
     "USAGE",
     error,
-    "verbs: view <ref> | create --title --body-file | edit <ref> --body-file | comment <ref> --body-file | upsert-comment <ref> --marker --body-file",
+    "verbs: ready | view <ref> | create --title --body-file | edit <ref> --body-file | comment <ref> --body-file | upsert-comment <ref> --marker --body-file",
   );
 
 export const defaultDeps: Deps = {
   gh: ghSpawn,
   readFile: (p) => readFileSync(p, "utf8"),
+  readyLabel: loadHarnessConfigFromDisk().tracker.readyLabel,
 };
 
 interface Ref {
@@ -112,6 +116,7 @@ function parseArgs(argv: string[]): Parsed | string {
 
 /** Flags each verb accepts besides --backend. An unknown flag is a typo, never silently ignored. */
 const FLAGS: Record<string, string[]> = {
+  ready: [],
   view: [],
   create: ["--title", "--body-file", "--label"],
   edit: ["--body-file", "--title", "--if-updated-at"],
@@ -156,6 +161,16 @@ function readBody(p: Parsed, deps: Deps): { body: string; path: string } | Outco
 }
 
 const isOutcome = (v: unknown): v is Outcome => typeof v === "object" && v !== null && "code" in v;
+
+function ready(deps: Deps): Outcome {
+  const r = deps.gh(["issue", "list", "--label", deps.readyLabel, "--state", "open", "--json", "number,title,url"]);
+  if (r.code !== 0) return ghFailure(r);
+  try {
+    return ok(JSON.parse(r.stdout));
+  } catch {
+    return bad(2, "NOT_FOUND", "gh returned unreadable JSON", "run: gh issue list --label <label> --json number,title,url");
+  }
+}
 
 async function view(ref: Ref, deps: Deps): Promise<Outcome> {
   const v = await viewJson(ref, deps);
@@ -350,6 +365,7 @@ export async function run(argv: string[], deps: Deps = defaultDeps): Promise<Out
   const unknown = [...p.flags.keys()].filter((f) => f !== "--backend" && !FLAGS[p.verb].includes(f));
   if (unknown.length) return usage(`unknown flag ${unknown.join(", ")} for ${p.verb}; accepts ${FLAGS[p.verb].join(" ") || "no flags"}`);
   if (p.verb === "create") return create(p, deps);
+  if (p.verb === "ready") return ready(deps);
   const ref = parseRef(p.positional[0]);
   if (!ref) return usage(`<ref> must be 12, #12 or an issue URL, got "${p.positional[0] ?? ""}"`);
 

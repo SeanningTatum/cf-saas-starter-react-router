@@ -1,9 +1,9 @@
 import { Either } from "effect";
 import { describe, expect, it } from "vitest";
-import { baselineSize, compareWithBase, parseBaseline } from "../baseline";
+import { baselineSize, compareWithBase, lowerBaseline, parseBaseline } from "../baseline";
 import { BASELINE_PATH, FINDING_LINE } from "../constants";
 import { formatFinding } from "../format";
-import { baseline } from "./fixtures";
+import { baseline, finding, ran } from "./fixtures";
 
 const shapeOf = (text: string): string => {
   const parsed = parseBaseline(text);
@@ -110,6 +110,64 @@ describe("baselineSize", () => {
       })
     );
 
-    expect(size).toEqual({ debt: 6, boundaries: 3 });
+    expect(size).toEqual({ entries: 3, debt: 6, boundaries: 3 });
+  });
+});
+
+describe("lowerBaseline", () => {
+  const before = () =>
+    baseline({
+      suppressions: 3,
+      boundaries: { "no-bad": { "app/edge.ts": "framework contract", "app/gone.ts": "framework contract" } },
+      debt: { "no-bad": { "app/a.ts": 3, "app/clean.ts": 2, "app/over.ts": 1 }, other: {} },
+    });
+  const tree = () =>
+    ran(
+      [
+        finding("no-bad", "app/a.ts"),
+        finding("no-bad", "app/edge.ts"),
+        finding("no-bad", "app/over.ts", 1),
+        finding("no-bad", "app/over.ts", 2),
+        finding("no-bad", "app/new.ts"),
+      ],
+      1
+    );
+
+  it("lowers a count to what the code holds, deletes an entry for a clean file and a boundary that excuses nothing, and lowers the suppression total", () => {
+    const after = lowerBaseline(before(), tree());
+
+    expect(after.debt["no-bad"]).toMatchObject({ "app/a.ts": 1 });
+    expect(after.debt["no-bad"]).not.toHaveProperty("app/clean.ts");
+    expect(after.boundaries["no-bad"]).toEqual({ "app/edge.ts": "framework contract" });
+    expect(after.suppressions).toBe(1);
+  });
+
+  it("refuses to raise a count the code has outgrown, so the new finding still fails the gate", () => {
+    expect(lowerBaseline(before(), tree()).debt["no-bad"]?.["app/over.ts"]).toBe(1);
+  });
+
+  it("refuses to add an entry for a file with new findings and no debt", () => {
+    expect(lowerBaseline(before(), tree()).debt["no-bad"]).not.toHaveProperty("app/new.ts");
+  });
+
+  it("refuses to raise the suppression total when the code holds more markers than allowed", () => {
+    expect(lowerBaseline(baseline({ suppressions: 1 }), ran([], 4)).suppressions).toBe(1);
+  });
+
+  it("keeps a rule's key when its last entry goes, since the key is how a rule is known at the base", () => {
+    const after = lowerBaseline(baseline({ debt: { "no-bad": { "app/clean.ts": 1 }, other: {} } }), ran([]));
+
+    expect(after.debt).toEqual({ "no-bad": {}, other: {} });
+  });
+
+  it("lowers a weighted entry to the new weight and never raises it, so a long file's recorded length only goes down", () => {
+    const recorded = baseline({ debt: { "no-bad": { "app/long.ts": 1000 }, other: {} } });
+
+    expect(lowerBaseline(recorded, ran([{ ...finding("no-bad", "app/long.ts"), weight: 990 }])).debt["no-bad"]).toEqual({ "app/long.ts": 990 });
+    expect(lowerBaseline(recorded, ran([{ ...finding("no-bad", "app/long.ts"), weight: 1010 }])).debt["no-bad"]).toEqual({ "app/long.ts": 1000 });
+  });
+
+  it("never grows against the baseline it started from, whatever the code holds", () => {
+    expect(compareWithBase(before(), lowerBaseline(before(), tree()))).toEqual([]);
   });
 });
