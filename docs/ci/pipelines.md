@@ -1,12 +1,13 @@
 # CI and deploy pipelines
 
-Seven workflows live in `.github/workflows/`. Deploy and preview stay off until you set up your Cloudflare account. A repo that is not set up ends those runs as skipped with a one-line notice, and the run stays green.
+Eight workflows live in `.github/workflows/`. Deploy and preview stay off until you set up your Cloudflare account. A repo that is not set up ends those runs as skipped with a one-line notice, and the run stays green.
 
 ## What each workflow does
 
 | Workflow | Runs on | What it does |
 |----------|---------|--------------|
-| `ci.yml` | every push to `staging` or `production`, every pull request | typecheck, tests, build, e2e smoke; on a stacked PR only the lean job ([which checks run where](#which-checks-run-where)) |
+| `ci.yml` | every push to `staging` or `production`, every pull request | typecheck, tests, build, e2e smoke; on a PR into `staging` or `production` also the size table and Lighthouse in one comment ([reading it](#reading-the-size-table)); on a stacked PR only the lean job ([which checks run where](#which-checks-run-where)) |
+| `pr-body.yml` (PR body) | every pull request, opened, edited, updated or reopened | fails a PR that changes shipped code and whose body has no size table ([reading it](#reading-the-size-table)) |
 | `codeql.yml` (CodeQL) | every push to `staging` or `production`, every pull request into the default branch or `production`, and Mondays | reads the source for injection and workflow mistakes |
 | `production-guard.yml` (Production Guard) | a pull request into `production` | fails unless the pull request comes from this repo's `staging` |
 | `release.yml` (Release) | every push to `production` | picks the next version, tags the commit, creates the GitHub release |
@@ -26,6 +27,10 @@ A stacked PR is one whose base is neither the default branch nor `production`: a
 | E2E smoke (Playwright) | — | yes, required | yes, required | yes |
 | CodeQL | — | yes | yes | yes (and Mondays) |
 | Preview Deploy | — | yes | yes | — |
+| Size (against the base branch) | — | yes | yes | — |
+| Lighthouse (mobile, against the base branch) | — | yes | yes | — |
+| Size and Lighthouse comment | — | yes, unless the PR comes from a fork | yes | — |
+| PR body (size table) | yes | yes | yes | — |
 | PR title (Conventional Commits) | yes | yes | yes | — |
 | Source branch is staging | — | — | yes, required | — |
 | Greptile (`greptile.json`) | — | yes | yes | — |
@@ -35,6 +40,29 @@ A stacked PR is one whose base is neither the default branch nor `production`: a
 - GitHub counts a skipped job as passed. A stacked PR that is later retargeted to the default branch keeps the skipped results of its last push, and retargeting starts no new run. After a retarget, push a commit (or close and reopen the PR) so the full suite runs before the merge. `ship-feature` never retargets a stacked PR onto the default branch: the roll-up is a new PR.
 - `greptile.json` names `staging` and `production` in `includeBranches`, since Greptile has no word for "the default branch". A fork with another default branch name edits that list.
 - Locally, `./scripts/verify.sh --changed [base]` is the stacked counterpart: see [Gates](../agents/harness.md#gates).
+
+## Reading the size table
+
+Every PR that changes shipped code (`app/` or `workers/` outside `__tests__/` and `*.test.ts(x)` files, `package.json` or `bun.lock`) carries a size table in its body; one that changes none says "No shipped code changed." `ship-feature` writes it when it opens a PR. By hand:
+
+```bash
+bun run size                                  # this checkout: one build, one column
+bun run size --base origin/staging            # base, this change and the difference
+bun run size --base origin/staging --pr-body  # the PR body section, table or sentence
+bun run size --json size.json                 # save a report; pass it later as --base size.json
+```
+
+`--base` builds the base commit in a temporary worktree and caches the result by commit in `node_modules/.cache/size/`, so a stack measures each base once. Every number is in bytes, gzip:
+
+- **Worker upload**: what `wrangler deploy --dry-run` reports. It is not sent to the browser; a big jump slows cold starts and nears Cloudflare's script size limit.
+- **entry.client and root chunks**: the JavaScript every page loads.
+- **`/path` first-load JS and CSS**: everything the browser fetches before that page can run: the entry, each route from the root down, and their imports, each file counted once. Read from the React Router manifest in `build/client/assets/manifest-*.js`.
+
+The line under the table turns the largest first-load change into time: the extra bytes over Lighthouse's slow 4G link (1,638.4 kbit/s), `ms = bytes × 8 ÷ 1,638.4`. 10 KB is about 49 ms. It is transfer time alone, before the browser parses and runs the code. A page that exists on one side only has nothing to compare with, so the line names it as new or removed instead of counting it. `bun run size` builds with `CI=1`, so it opens no remote-bindings session and needs no Cloudflare login.
+
+`PR body (size table)` fails a PR that changes shipped code with no filled comparison table (the header row and a Worker row with numbers; a table inside a code fence does not count), and one whose body claims "No shipped code changed." when it does. It reads the body and the list of changed files, so it re-runs in seconds when you edit the body.
+
+On a PR into `staging` or `production`, CI measures the size itself against the base branch and runs Lighthouse (`bun run lighthouse --base <ref>`): each ref is built in its own worktree with a seeded local D1 and a `.dev.vars` holding `BETTER_AUTH_URL=http://localhost:4173` and a throwaway secret, served with `vite preview`, and measured with mobile settings on `/`, `/login`, `/sign-up` and `/dashboard` (signed in as the seeded user), three runs each, the median of each number. One comment on the PR holds both tables and is edited on each push. The limits in `.github/lighthouse-limits.json` only warn for now. The HTML and JSON reports are in the run's `lighthouse` artifact for 14 days; nothing is uploaded anywhere else.
 
 ## How a change reaches production
 

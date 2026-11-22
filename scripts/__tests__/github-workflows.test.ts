@@ -311,7 +311,7 @@ describe("workflows follow the staging to production flow", () => {
     expect(text).toContain(`[ "$HEAD_REF" != "${integration}" ] || [ "$HEAD_REPO" != "$REPO" ]`);
   });
 
-  it.each(["production-guard.yml", "release.yml"])(
+  it.each(["production-guard.yml", "release.yml", "ci.yml", "pr-body.yml"])(
     "%s has no ${{ }} expression inside a run script: values go through env",
     (f) => {
       const lines = codeLines(f);
@@ -333,13 +333,19 @@ describe("workflows follow the staging to production flow", () => {
 });
 
 describe("which jobs run for which base: the full suite into the default branch and production, the lean job on a stacked PR", () => {
-  const event = (name: string, base: string, defaultBranch = "staging"): Context => ({
-    github: { event_name: name, base_ref: base, event: { repository: { default_branch: defaultBranch } } },
+  const event = (name: string, base: string, defaultBranch = "staging", headRepo = "o/r"): Context => ({
+    github: {
+      event_name: name,
+      base_ref: base,
+      repository: "o/r",
+      event: { repository: { default_branch: defaultBranch }, pull_request: { head: { repo: { full_name: headRepo } } } },
+    },
     needs: { readiness: { outputs: { ready: "true" } } },
   });
   const ran = (f: string, context: Context) => jobsThatRun(jobsOf(read(f)), context);
-  const full = { "ci.yml": ["baseline", "build", "e2e"], "codeql.yml": ["analyze"], "preview.yml": ["readiness", "deploy-preview"] };
-  const lean = { "ci.yml": ["lean"], "codeql.yml": [], "preview.yml": [] };
+  const pushed = ["baseline", "build", "e2e"];
+  const full = { "ci.yml": [...pushed, "size", "lighthouse", "report"], "codeql.yml": ["analyze"], "preview.yml": ["readiness", "deploy-preview"], "pr-body.yml": ["size-table"] };
+  const lean = { "ci.yml": ["lean"], "codeql.yml": [], "preview.yml": [], "pr-body.yml": ["size-table"] };
   const required = JSON.parse(fs.readFileSync(path.join(ROOT, ".github", "repo-rules.json"), "utf-8")).rulesets.flatMap(
     (set: { rules: { type: string; parameters?: { required_status_checks?: { context: string }[] } }[] }) =>
       set.rules.flatMap((rule) => rule.parameters?.required_status_checks?.map((check) => check.context) ?? []),
@@ -356,8 +362,12 @@ describe("which jobs run for which base: the full suite into the default branch 
     for (const [f, jobs] of Object.entries(expected)) expect(ran(f, context), f).toEqual(jobs);
   });
 
-  it("a push runs the full suite and not the lean job (the push trigger already limits it to staging and production)", () => {
-    expect(ran("ci.yml", event("push", ""))).toEqual(full["ci.yml"]);
+  it("a PR from a fork into the default branch measures size and Lighthouse but skips the comment: its token cannot write", () => {
+    expect(ran("ci.yml", event("pull_request", "staging", "staging", "someone/fork"))).toEqual([...pushed, "size", "lighthouse"]);
+  });
+
+  it("a push runs the full suite and not the lean job, the size job, Lighthouse or the comment (no PR to compare or comment on)", () => {
+    expect(ran("ci.yml", event("push", ""))).toEqual(pushed);
     expect(ran("codeql.yml", event("push", ""))).toEqual(["analyze"]);
   });
 

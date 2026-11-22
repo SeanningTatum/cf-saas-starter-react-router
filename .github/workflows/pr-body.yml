@@ -1,0 +1,47 @@
+name: PR body
+
+# A PR that changes shipped code (app/, workers/, package.json, bun.lock) carries the size table that
+# `bun run size --base <base> --pr-body` prints; a PR that changes none needs nothing
+# (docs/ci/pipelines.md#reading-the-size-table). The harness fills it in when it opens a PR.
+# Its own workflow, on every base branch, so it re-runs when the body is edited: an `edited` trigger
+# on ci.yml would re-run, and cancel, the whole suite on every edit.
+on:
+  # Never pull_request_target: this job runs the PR's own script with no secrets.
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr-body-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  size-table:
+    name: PR body (size table)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+          # The check diffs the PR's base sha with its head sha.
+          fetch-depth: 0
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version-file: .bun-version  # one pinned version for every workflow
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile --ignore-scripts
+
+      # No build: it reads the body and the list of changed files, nothing else.
+      - name: Check the body for the size table
+        # The body is untrusted text. It reaches the script only through env.
+        run: bun scripts/ci/pr-size-body.ts
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
