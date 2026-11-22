@@ -134,6 +134,7 @@ State lives in GitHub: the spec is an issue, each ticket is an issue, and a merg
 | test | `bun run test` | baseline, full |
 | non-negotiables-selftest | `bun run scripts/check-non-negotiables.ts --selftest` | baseline, full |
 | non-negotiables | `bun run scripts/check-non-negotiables.ts` | baseline, full |
+| migrations | `bun run scripts/migration-check.ts` | baseline, full |
 | harness | `./scripts/harness-check.sh` | baseline, full |
 | secrets | `bun run scripts/secret-scan.ts` | baseline, full |
 | audit | `bun run scripts/package-audit.ts` | baseline, full |

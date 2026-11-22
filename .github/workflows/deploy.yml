@@ -97,6 +97,15 @@ jobs:
         if: steps.token.outputs.ready == 'true' && vars.CLOUDFLARE_D1_DATABASE_ID != ''
         run: bun scripts/ci/deploy-gate.ts use-d1
 
+      # A way back before the schema changes: a Time Travel bookmark, and an
+      # export to a private R2 bucket when D1_BACKUP_BUCKET is set. docs/ci/rollback.md
+      - name: Record a restore point before the migration
+        if: steps.token.outputs.ready == 'true'
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          D1_BACKUP_BUCKET: ${{ vars.D1_BACKUP_BUCKET }}
+        run: bun scripts/ci/d1-backup.ts
+
       - name: Apply production D1 migrations
         if: steps.token.outputs.ready == 'true'
         env:
