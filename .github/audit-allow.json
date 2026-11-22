@@ -1,0 +1,328 @@
+{
+  "allow": [
+    {
+      "id": "GHSA-392p-2q2v-4372",
+      "package": "better-auth",
+      "reason": "baseline 2026-11-22: runtime dependency; upgrade better-auth and delete this entry",
+      "expires": "2026-12-06"
+    },
+    {
+      "id": "GHSA-7w99-5wm4-3g79",
+      "package": "better-auth",
+      "reason": "baseline 2026-11-22: runtime dependency; upgrade better-auth and delete this entry",
+      "expires": "2026-12-06"
+    },
+    {
+      "id": "GHSA-86j7-9j95-vpqj",
+      "package": "better-auth",
+      "reason": "baseline 2026-11-22: runtime dependency; upgrade better-auth and delete this entry",
+      "expires": "2026-12-06"
+    },
+    {
+      "id": "GHSA-965c-763c-88jm",
+      "package": "better-auth",
+      "reason": "baseline 2026-11-22: runtime dependency; upgrade better-auth and delete this entry",
+      "expires": "2026-12-06"
+    },
+    {
+      "id": "GHSA-9h47-pqcx-hjr4",
+      "package": "better-auth",
+      "reason": "baseline 2026-11-22: runtime dependency; upgrade better-auth and delete this entry",
+      "expires": "2026-12-06"
+    },
+    {
+      "id": "GHSA-fmh4-wcc4-5jm3",
+      "package": "better-auth",
+      "reason": "baseline 2026-11-22: runtime dependency; upgrade better-auth and delete this entry",
+      "expires": "2026-12-06"
+    },
+    {
+      "id": "GHSA-g38m-r43w-p2q7",
+      "package": "better-auth",
+      "reason": "baseline 2026-11-22: runtime dependency; upgrade better-auth and delete this entry",
+      "expires": "2026-12-06"
+    },
+    {
+      "id": "GHSA-pw9m-5jxm-xr6h",
+      "package": "better-auth",
+      "reason": "baseline 2026-11-22: runtime dependency; upgrade better-auth and delete this entry",
+      "expires": "2026-12-06"
+    },
+    {
+      "id": "GHSA-q84f-53jg-9ppm",
+      "package": "better-auth",
+      "reason": "baseline 2026-11-22: runtime dependency; upgrade better-auth and delete this entry",
+      "expires": "2026-12-06"
+    },
+    {
+      "id": "GHSA-qq9h-g4jm-xgf3",
+      "package": "better-auth",
+      "reason": "baseline 2026-11-22: runtime dependency; upgrade better-auth and delete this entry",
+      "expires": "2026-12-06"
+    },
+    {
+      "id": "GHSA-73wf-gq98-2v4g",
+      "package": "browserslist",
+      "reason": "baseline 2026-11-22: dev or build tooling only; upgrade browserslist and delete this entry",
+      "expires": "2027-01-22"
+    },
+    {
+      "id": "GHSA-c83g-rgw3-j3cx",
+      "package": "browserslist",
+      "reason": "baseline 2026-11-22: dev or build tooling only; upgrade browserslist and delete this entry",
+      "expires": "2027-01-22"
+    },
+    {
+      "id": "GHSA-737v-mqg7-c878",
+      "package": "defu",
+      "reason": "baseline 2026-11-22: runtime dependency; upgrade defu and delete this entry",
+      "expires": "2026-12-06"
+    },
+    {
+      "id": "GHSA-gpj5-g38j-94v9",
+      "package": "drizzle-orm",
+      "reason": "baseline 2026-11-22: runtime dependency; upgrade drizzle-orm and delete this entry",
+      "expires": "2026-12-06"
+    },
+    {
+      "id": "GHSA-7589-6fvf-x4pw",
+      "package": "effect",
+      "reason": "baseline 2026-11-22: runtime dependency; upgrade effect and delete this entry",
+      "expires": "2026-12-06"
+    },
+    {
+      "id": "GHSA-8cpq-38p9-67gx",
+      "package": "kysely",
+      "reason": "baseline 2026-11-22: runtime dependency; upgrade kysely and delete this entry",
+      "expires": "2026-12-06"
+    },
+    {
+      "id": "GHSA-pv5w-4p9q-p3v2",
+      "package": "kysely",
+      "reason": "baseline 2026-11-22: runtime dependency; upgrade kysely and delete this entry",
+      "expires": "2026-12-06"
+    },
+    {
+      "id": "GHSA-wmrf-hv6w-mr66",
+      "package": "kysely",
+      "reason": "baseline 2026-11-22: runtime dependency; upgrade kysely and delete this entry",
+      "expires": "2026-12-06"
+    },
+    {
+      "id": "GHSA-r5fr-rjxr-66jc",
+      "package": "lodash",
+      "reason": "baseline 2026-11-22: runtime dependency; upgrade lodash and delete this entry",
+      "expires": "2026-12-06"
+    },
+    {
+      "id": "GHSA-28wg-ghj8-5hjv",
+      "package": "nanoid",
+      "reason": "baseline 2026-11-22: dev or build tooling only; upgrade nanoid and delete this entry",
+      "expires": "2027-01-22"
+    },
+    {
+      "id": "GHSA-2v37-7h3g-55p8",
+      "package": "nanoid",
+      "reason": "baseline 2026-11-22: dev or build tooling only; upgrade nanoid and delete this entry",
+      "expires": "2027-01-22"
+    },
+    {
+      "id": "GHSA-xwg4-73v4-xw9w",
+      "package": "nanoid",
+      "reason": "baseline 2026-11-22: dev or build tooling only; upgrade nanoid and delete this entry",
+      "expires": "2027-01-22"
+    },
+    {
+      "id": "GHSA-c2c7-rcm5-vvqj",
+      "package": "picomatch",
+      "reason": "baseline 2026-11-22: dev or build tooling only; upgrade picomatch and delete this entry",
+      "expires": "2027-01-22"
+    },
+    {
+      "id": "GHSA-6g55-p6wh-862q",
+      "package": "postcss",
+      "reason": "baseline 2026-11-22: dev or build tooling only; upgrade postcss and delete this entry",
+      "expires": "2027-01-22"
+    },
+    {
+      "id": "GHSA-r28c-9q8g-f849",
+      "package": "postcss",
+      "reason": "baseline 2026-11-22: dev or build tooling only; upgrade postcss and delete this entry",
+      "expires": "2027-01-22"
+    },
+    {
+      "id": "GHSA-49rj-9fvp-4h2h",
+      "package": "react-router",
+      "reason": "baseline 2026-11-22: runtime dependency; upgrade react-router and delete this entry",
+      "expires": "2026-12-06"
+    },
+    {
+      "id": "GHSA-8646-j5j9-6r62",
+      "package": "react-router",
+      "reason": "baseline 2026-11-22: runtime dependency; upgrade react-router and delete this entry",
+      "expires": "2026-12-06"
+    },
+    {
+      "id": "GHSA-8x6r-g9mw-2r78",
+      "package": "react-router",
+      "reason": "baseline 2026-11-22: runtime dependency; upgrade react-router and delete this entry",
+      "expires": "2026-12-06"
+    },
+    {
+      "id": "GHSA-chx6-hx7r-mcp5",
+      "package": "react-router",
+      "reason": "baseline 2026-11-22: runtime dependency; upgrade react-router and delete this entry",
+      "expires": "2026-12-06"
+    },
+    {
+      "id": "GHSA-qwww-vcr4-c8h2",
+      "package": "react-router",
+      "reason": "baseline 2026-11-22: runtime dependency; upgrade react-router and delete this entry",
+      "expires": "2026-12-06"
+    },
+    {
+      "id": "GHSA-rxv8-25v2-qmq8",
+      "package": "react-router",
+      "reason": "baseline 2026-11-22: runtime dependency; upgrade react-router and delete this entry",
+      "expires": "2026-12-06"
+    },
+    {
+      "id": "GHSA-mw96-cpmx-2vgc",
+      "package": "rollup",
+      "reason": "baseline 2026-11-22: dev or build tooling only; upgrade rollup and delete this entry",
+      "expires": "2027-01-22"
+    },
+    {
+      "id": "GHSA-f88m-g3jw-g9cj",
+      "package": "sharp",
+      "reason": "baseline 2026-11-22: dev or build tooling only; upgrade sharp and delete this entry",
+      "expires": "2027-01-22"
+    },
+    {
+      "id": "GHSA-rgj7-g3m4-5g8c",
+      "package": "sharp",
+      "reason": "baseline 2026-11-22: dev or build tooling only; upgrade sharp and delete this entry",
+      "expires": "2027-01-22"
+    },
+    {
+      "id": "GHSA-wq5f-xc86-pv6w",
+      "package": "sharp",
+      "reason": "baseline 2026-11-22: dev or build tooling only; upgrade sharp and delete this entry",
+      "expires": "2027-01-22"
+    },
+    {
+      "id": "GHSA-68fv-2mgg-jv7q",
+      "package": "source-map-js",
+      "reason": "baseline 2026-11-22: dev or build tooling only; upgrade source-map-js and delete this entry",
+      "expires": "2027-01-22"
+    },
+    {
+      "id": "GHSA-5gmw-xhrv-c9v3",
+      "package": "tinypool",
+      "reason": "baseline 2026-11-22: dev or build tooling only; upgrade tinypool and delete this entry",
+      "expires": "2027-01-22"
+    },
+    {
+      "id": "GHSA-85c8-ppgw-ccpr",
+      "package": "tinypool",
+      "reason": "baseline 2026-11-22: dev or build tooling only; upgrade tinypool and delete this entry",
+      "expires": "2027-01-22"
+    },
+    {
+      "id": "GHSA-2m5v-pch6-74hx",
+      "package": "undici",
+      "reason": "baseline 2026-11-22: dev or build tooling only; upgrade undici and delete this entry",
+      "expires": "2027-01-22"
+    },
+    {
+      "id": "GHSA-4cwx-7wf7-3272",
+      "package": "undici",
+      "reason": "baseline 2026-11-22: dev or build tooling only; upgrade undici and delete this entry",
+      "expires": "2027-01-22"
+    },
+    {
+      "id": "GHSA-4w7w-5xrc-9h26",
+      "package": "undici",
+      "reason": "baseline 2026-11-22: dev or build tooling only; upgrade undici and delete this entry",
+      "expires": "2027-01-22"
+    },
+    {
+      "id": "GHSA-f269-vfmq-vjvj",
+      "package": "undici",
+      "reason": "baseline 2026-11-22: dev or build tooling only; upgrade undici and delete this entry",
+      "expires": "2027-01-22"
+    },
+    {
+      "id": "GHSA-qrxm-fqhp-jwvm",
+      "package": "undici",
+      "reason": "baseline 2026-11-22: dev or build tooling only; upgrade undici and delete this entry",
+      "expires": "2027-01-22"
+    },
+    {
+      "id": "GHSA-rfgv-xxqx-mfg5",
+      "package": "undici",
+      "reason": "baseline 2026-11-22: dev or build tooling only; upgrade undici and delete this entry",
+      "expires": "2027-01-22"
+    },
+    {
+      "id": "GHSA-v9p9-hfj2-hcw8",
+      "package": "undici",
+      "reason": "baseline 2026-11-22: dev or build tooling only; upgrade undici and delete this entry",
+      "expires": "2027-01-22"
+    },
+    {
+      "id": "GHSA-vrm6-8vpv-qv8q",
+      "package": "undici",
+      "reason": "baseline 2026-11-22: dev or build tooling only; upgrade undici and delete this entry",
+      "expires": "2027-01-22"
+    },
+    {
+      "id": "GHSA-vxpw-j846-p89q",
+      "package": "undici",
+      "reason": "baseline 2026-11-22: dev or build tooling only; upgrade undici and delete this entry",
+      "expires": "2027-01-22"
+    },
+    {
+      "id": "GHSA-xjj6-f33q-929c",
+      "package": "undici",
+      "reason": "baseline 2026-11-22: dev or build tooling only; upgrade undici and delete this entry",
+      "expires": "2027-01-22"
+    },
+    {
+      "id": "GHSA-587h-7wmj-h5pm",
+      "package": "vite",
+      "reason": "baseline 2026-11-22: dev or build tooling only; upgrade vite and delete this entry",
+      "expires": "2027-01-22"
+    },
+    {
+      "id": "GHSA-p9ff-h696-f583",
+      "package": "vite",
+      "reason": "baseline 2026-11-22: dev or build tooling only; upgrade vite and delete this entry",
+      "expires": "2027-01-22"
+    },
+    {
+      "id": "GHSA-v2wj-q39q-566r",
+      "package": "vite",
+      "reason": "baseline 2026-11-22: dev or build tooling only; upgrade vite and delete this entry",
+      "expires": "2027-01-22"
+    },
+    {
+      "id": "GHSA-5xrq-8626-4rwp",
+      "package": "vitest",
+      "reason": "baseline 2026-11-22: dev or build tooling only; upgrade vitest and delete this entry",
+      "expires": "2027-01-22"
+    },
+    {
+      "id": "GHSA-96hv-2xvq-fx4p",
+      "package": "ws",
+      "reason": "baseline 2026-11-22: dev or build tooling only; upgrade ws and delete this entry",
+      "expires": "2027-01-22"
+    },
+    {
+      "id": "GHSA-mrhx-c7xc-m3w5",
+      "package": "zod",
+      "reason": "baseline 2026-11-22: runtime dependency; upgrade zod and delete this entry",
+      "expires": "2026-12-06"
+    }
+  ]
+}
