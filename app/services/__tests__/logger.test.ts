@@ -5,6 +5,7 @@ import {
   stringify,
   currentSpanAnnotations,
   currentRequestAnnotations,
+  currentRequestLogSampled,
   LoggerLive,
 } from "../logger";
 import {
@@ -190,5 +191,77 @@ describe("LoggerLive with a request", () => {
       spy.mockRestore();
       await runtime.dispose();
     }
+  });
+});
+
+const baseRequest: RequestContext = { requestId: "fiber-request-id", method: "GET", path: "/" };
+
+describe("currentRequestLogSampled", () => {
+  const refsWith = (request: RequestContext) =>
+    Effect.runSync(
+      Effect.getFiberRefs.pipe(Effect.provide(Layer.succeed(CurrentRequest, request)))
+    );
+
+  it("reads the fiber request's log decision, keeps a request with no decision, and is undefined with no request, so the sink falls back to the async store only outside the runtime", () => {
+    expect(
+      currentRequestLogSampled(
+        refsWith({ ...baseRequest, sampling: { logs: false, traces: true } })
+      )
+    ).toBe(false);
+    expect(
+      currentRequestLogSampled(refsWith({ requestId: "r", method: "GET", path: "/" }))
+    ).toBe(true);
+    expect(currentRequestLogSampled(Effect.runSync(Effect.getFiberRefs))).toBeUndefined();
+  });
+});
+
+describe("LoggerLive with a sampled request", () => {
+  const runLogs = async (
+    layer: Layer.Layer<never>,
+    store: RequestContext
+  ) => {
+    const infoSpy = vi.spyOn(console, "info").mockImplementation(() => {});
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const runtime = ManagedRuntime.make(Layer.merge(LoggerLive, layer));
+    try {
+      await runWithRequestContext(store, () =>
+        runtime.runPromise(
+          Effect.logInfo("info line").pipe(Effect.zipRight(Effect.logWarning("warn line")))
+        )
+      );
+      return {
+        info: infoSpy.mock.calls.map(([line]) => String(line)).join("\n"),
+        warn: warnSpy.mock.calls.map(([line]) => String(line)).join("\n"),
+      };
+    } finally {
+      infoSpy.mockRestore();
+      warnSpy.mockRestore();
+      await runtime.dispose();
+    }
+  };
+
+  it("drops Effect.logInfo and keeps Effect.logWarning of a fiber request sampled out, even while the async store holds a sampled request", async () => {
+    const out = await runLogs(
+      Layer.succeed(CurrentRequest, { ...baseRequest, sampling: { logs: false, traces: true } }),
+      { ...baseRequest, requestId: "other-request-id", sampling: { logs: true, traces: true } }
+    );
+
+    expect(out.info).not.toContain("info line");
+    expect(out.warn).toContain("warn line");
+  });
+
+  it("follows the async store's decision when the runtime has no request, so an Effect log outside the request runtime is still sampled", async () => {
+    const dropped = await runLogs(Layer.empty, {
+      ...baseRequest,
+      sampling: { logs: false, traces: true },
+    });
+    const kept = await runLogs(Layer.empty, {
+      ...baseRequest,
+      sampling: { logs: true, traces: true },
+    });
+
+    expect(dropped.info).not.toContain("info line");
+    expect(dropped.warn).toContain("warn line");
+    expect(kept.info).toContain("info line");
   });
 });

@@ -1,12 +1,35 @@
 import { describe, it, expect } from "vitest";
 import { run, defaultDeps, type Deps, type GhResult } from "../tracker";
 import { ghSpawn } from "../lib/gh";
+import { HARNESS_DEFAULTS } from "../lib/harness-config";
 
 type Call = string[];
 
 describe("defaultDeps", () => {
   it("gh is the shared ghSpawn: a private gh runner would drift from the shared output cap", () => {
     expect(defaultDeps.gh).toBe(ghSpawn);
+  });
+});
+
+describe("ready", () => {
+  it("lists open issues under the label from the config: a hard-coded label would ignore a project's own ready label", async () => {
+    const { deps, calls } = stub(() => ({ stdout: JSON.stringify([{ number: 9, title: "t", url: "u" }]) }));
+    const o = await run(["ready"], { ...deps, readyLabel: "go-agent" });
+    expect(o.code).toBe(0);
+    expect(o.out).toEqual([{ number: 9, title: "t", url: "u" }]);
+    expect(calls).toEqual([["issue", "list", "--label", "go-agent", "--state", "open", "--json", "number,title,url"]]);
+  });
+
+  it("turns a failed gh call into the error shape instead of printing an empty list", async () => {
+    const { deps } = stub(() => ({ code: 1, stderr: "HTTP 401" }));
+    const o = await run(["ready"], deps);
+    expect(o.code).toBe(2);
+    expect(o.err?.code).toBe("AUTH");
+  });
+
+  it("refuses a flag: ready takes none", async () => {
+    const { deps } = stub(() => ({}));
+    expect((await run(["ready", "--label", "x"], deps)).code).toBe(1);
   });
 });
 
@@ -22,6 +45,7 @@ function stub(reply: (args: string[]) => Partial<GhResult>, files: Record<string
       if (!(p in files)) throw new Error("ENOENT");
       return files[p];
     },
+    readyLabel: HARNESS_DEFAULTS.tracker.readyLabel,
   };
   return { deps, calls };
 }

@@ -1,5 +1,6 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { Effect, Layer } from "effect";
+import { loggers } from "@/lib/logger";
 import {
   CurrentRequest,
   currentRequestContext,
@@ -93,6 +94,13 @@ describe("makeRequestContext", () => {
     expect(makeRequestContext(req({ "cf-ray": "a".repeat(64) })).requestId).toBe("a".repeat(64));
   });
 
+  it("carries the sampling decision it is given and has no sampled key without one, so an unsampled request stays unsampled and a plain one keeps everything", () => {
+    const decision = { logs: false, traces: true };
+
+    expect(makeRequestContext(req(), decision).sampling).toBe(decision);
+    expect(makeRequestContext(req())).not.toHaveProperty("sampling");
+  });
+
   it("uses a random id with neither header, and keeps the path without its query", () => {
     // Catches logging the query string, which can carry tokens.
     const ctx = makeRequestContext(
@@ -127,6 +135,30 @@ describe("runWithRequestContext / currentRequestContext", () => {
     const [a, b] = await Promise.all([seen("a"), seen("b")]);
     expect(a).toEqual(["a", "a"]);
     expect(b).toEqual(["b", "b"]);
+  });
+});
+
+describe("plain logger lines inside a request", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("drops an info line and keeps a warn line of a request sampled out for logs, so a plain logger call obeys the request's decision", () => {
+    const infoSpy = vi.spyOn(console, "info").mockImplementation(() => {});
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    runWithRequestContext(context({ sampling: { logs: false, traces: true } }), () => {
+      loggers.server.info("dropped info");
+      loggers.server.warn("kept warn");
+    });
+    runWithRequestContext(context({ sampling: { logs: true, traces: true } }), () => {
+      loggers.server.info("kept info");
+    });
+
+    const info = infoSpy.mock.calls.map(([line]) => String(line)).join("\n");
+    expect(info).not.toContain("dropped info");
+    expect(info).toContain("kept info");
+    expect(String(warnSpy.mock.calls[0]?.[0])).toContain("kept warn");
   });
 });
 

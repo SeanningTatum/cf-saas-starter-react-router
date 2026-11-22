@@ -17,6 +17,7 @@ export const meta = {
 //   text must appear in that field, case-insensitive substring. A listed mention that is absent fails the case.
 // args: { degrade?: boolean, only?: string[], includeHeldOut?: boolean (default true), reload?: number (see the "differs" stop) }
 // @lib
+const { tracked, recordRun } = workflowLib({ agent, log, name: 'eval-plan-feature' })
 const opts = (args && typeof args === 'object') ? args : {}
 const degrade = opts.degrade === true
 const includeHeldOut = opts.includeHeldOut !== false
@@ -51,7 +52,7 @@ const AUDIT_SCHEMA = shape({
 phase('Load')
 // Tickets are never copied through a model: only short metadata and the source list come back.
 // Each auditor reads its own ticket from disk.
-const loaded = await agent(
+const loaded = await tracked(
   'Run these two commands in bash and return the results as JSON, copied exactly:\n' +
   `1. jq -c '${META_PROJ}' evals/plan-feature/tickets.jsonl   -> cases: one object per output line, in file order.\n` +
   `2. jq -c '${SRC_PROJ}' evals/plan-feature/context.json   -> sources: that object.\n` +
@@ -64,7 +65,7 @@ if (!loaded || !Array.isArray(loaded.cases) || !loaded.sources) {
 }
 
 phase('Verify load')
-const check = await agent(
+const check = await tracked(
   'The JSON below was copied by a loader agent. Do exactly this and nothing else.\n' +
   '1. mkdir -p tmp. Write each element of CASES to tmp/eval-loaded-meta.jsonl as one compact JSON object per line, and write SOURCES to tmp/eval-loaded-sources.json, with no change to any value.\n' +
   '2. Run in bash: ' +
@@ -168,7 +169,7 @@ function score(c, out) {
 phase('Audit')
 const results = await pipeline(
   cases,
-  (c) => agent(auditPrompt(c), {
+  (c) => tracked(auditPrompt(c), {
     label: `audit ${c.id}`,
     phase: 'Audit',
     agentType: degrade ? 'general-purpose' : 'ticket-auditor',
@@ -199,6 +200,9 @@ for (const b of ['typical', 'edge', 'adversarial', 'refuse']) {
 }
 const gate = total === 20 ? (passed >= 17 && frozen_failed.length === 0) : null
 log(`score ${passed}/${total}${degrade ? ' (degraded)' : ''}; frozen failed: ${frozen_failed.length ? frozen_failed.join(', ') : 'none'}; gate (>=17/20, frozen absolute): ${gate === null ? 'n/a, partial run' : gate ? 'PASS' : 'FAIL'}`)
+
+// No memory record here, so the runner writes the ledger once, last; a Load stop above records nothing.
+await recordRun('eval-plan-feature', 'run:record', 'Score', (prompt, o) => tracked(prompt, { effort: 'low', ...o, agentType: 'runner' }), 'the repository root')
 
 return {
   score: passed,

@@ -11,11 +11,12 @@ import { I18nextProvider, initReactI18next } from "react-i18next";
 import { i18nServer } from "./i18n/i18n.server";
 import { supportedLngs, fallbackLng, defaultNS } from "./i18n";
 import resourcesToBackend from "i18next-resources-to-backend";
-import { FIRST_SERVER_ERROR_STATUS } from "@/lib/constants/error-reporting";
+import {
+  FIRST_SERVER_ERROR_STATUS,
+  READ_METHODS,
+} from "@/lib/constants/error-reporting";
 import { NonceContext } from "@/lib/csp-nonce";
 import { RequestIdContext } from "@/lib/request-id";
-
-const READ_METHODS: ReadonlyArray<string> = ["GET", "HEAD"];
 
 export const handleError: HandleErrorFunction = (error, { request, context }) => {
   if (request.signal.aborted) return;

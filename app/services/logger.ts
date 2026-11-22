@@ -9,7 +9,11 @@ import {
   Tracer,
 } from "effect";
 import { emitLog, isDev, type LogLevel as AppLogLevel } from "@/lib/log-format";
-import { CurrentRequest, requestLogFields } from "@/lib/request-context";
+import {
+  CurrentRequest,
+  keepsLogs,
+  requestLogFields,
+} from "@/lib/request-context";
 
 export const toAppLevel = (level: LogLevel.LogLevel): AppLogLevel => {
   switch (level._tag) {
@@ -68,6 +72,14 @@ export const currentRequestAnnotations = (
   return requestLogFields(Option.getOrUndefined(request));
 };
 
+export const currentRequestLogSampled = (
+  context: FiberRefs.FiberRefs
+): boolean | undefined => {
+  const fiberContext = FiberRefs.getOrDefault(context, FiberRef.currentContext);
+  const request = Context.getOption(fiberContext, CurrentRequest);
+  return Option.isSome(request) ? keepsLogs(request.value) : undefined;
+};
+
 const customLogger = Logger.make(({ logLevel, message, annotations, context }) => {
   const ann: Record<string, unknown> = {
     ...currentSpanAnnotations(context),
@@ -76,7 +88,12 @@ const customLogger = Logger.make(({ logLevel, message, annotations, context }) =
   HashMap.forEach(annotations, (value, key) => {
     ann[key] = value;
   });
-  emitLog(toAppLevel(logLevel), stringify(message), ann);
+  emitLog(
+    toAppLevel(logLevel),
+    stringify(message),
+    ann,
+    currentRequestLogSampled(context)
+  );
 });
 
 export const LoggerLive = Logger.replace(Logger.defaultLogger, customLogger);

@@ -2,7 +2,7 @@
  * The helpers every workflow shares; scripts/workflows.ts pastes this file into each workflow.
  * Rules for an author:
  *   - no import, and no free variable except a JS built-in: whatever needs the runtime comes in
- *     through `workflowLib({ agent, log })`;
+ *     through `workflowLib({ agent, log, name })`;
  *   - every top-level name here lands in each workflow's scope, so a workflow must not declare it again.
  */
 
@@ -28,8 +28,6 @@ export const CHECKLIST_IDS = ["problem", "user", "fit", "duplicate", "acceptance
 export const isP0P1 = (f) => f.severity === "P0" || f.severity === "P1";
 
 // ---- Prompt pieces ------------------------------------------------------------------------------
-/** The trailer on every commit a workflow asks an agent to make. Written here and nowhere else. */
-export const COAUTHOR = "Co-Authored-By: Claude Fable 5.2 <noreply@anthropic.com>";
 /** Makes a `fence(label, text)` that wraps untrusted text in DATA markers; `note` goes after the label on the opening marker. */
 export const makeFence = (note = "") => (label, text) => `----- DATA: ${label}${note} -----\n${text}\n----- END DATA: ${label} -----`;
 /** The preflight step that names the checkout: the caller's `args.root`, else the launch directory's git root. */
@@ -91,13 +89,165 @@ export function memoryRecordCommand(slug, fields) {
   return `bun scripts/memory.ts record ${slug} <<'MEMORY_EOF'\n${lines.join("\n")}\nMEMORY_EOF`;
 }
 
+// ---- Run telemetry ----------------------------------------------------------------------------------
+/** FNV-1a, 32 bit, over the UTF-16 code units of `text`, as 8 lower-case hex digits. scripts/run-telemetry.ts computes the same sum. */
+export function ledgerChecksum(text) {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < text.length; i++) {
+    h ^= text.charCodeAt(i);
+    h = Math.imul(h, 0x01000193) >>> 0;
+  }
+  return h.toString(16).padStart(8, "0");
+}
+
+/** A short verdict for the ledger: the result's `verdict` string, else pass or fail from its first boolean among ok, pass, passed, else "". */
+export function verdictOf(result) {
+  if (!result || typeof result !== "object") return "";
+  if (typeof result.verdict === "string") return result.verdict;
+  for (const k of ["ok", "pass", "passed"]) if (typeof result[k] === "boolean") return result[k] ? "pass" : "fail";
+  return "";
+}
+
+/** The most characters one ledger string keeps; agent output can reach a ledger string, so each is cut and stripped to a safe set. */
+export const LEDGER_FIELD_MAX = 80;
+
+/**
+ * The shell command that hands the ledger to scripts/run-telemetry.ts: one JSON array per call, then a
+ * line with the call count and a checksum, so a runner that garbled the copy leaves nothing behind.
+ * A script has no clock and no file access, so this is how a run reports its calls.
+ */
+export function runRecordCommand(workflow, slug, calls) {
+  const clean = (v) => String(v).replace(/[^A-Za-z0-9 :._/#()-]/g, "-").slice(0, LEDGER_FIELD_MAX).split("RUN_EOF").join("RUN-EOF");
+  const lines = calls.map((c) => JSON.stringify([clean(c.label), clean(c.phase), clean(c.agent), clean(c.model), c.attempt, clean(c.outcome), clean(c.verdict)]));
+  const footer = JSON.stringify({ calls: lines.length, check: ledgerChecksum(lines.join("\n")) });
+  return `bun scripts/run-telemetry.ts record ${slug} ${workflow} <<'RUN_EOF'\n${[...lines, footer].join("\n")}\nRUN_EOF`;
+}
+
+/** The sentence a stop that returns a `review` page adds to its `next`: the page shows the run's numbers too. */
+export const runSummaryNote = (slug, workflow) =>
+  `The page also shows the run summary: the output of \`bun scripts/run-telemetry.ts summary ${slug}\`, run from ROOT. Tokens and seconds read n/a until \`bun scripts/run-telemetry.ts ingest ${slug} ${workflow} <this run's transcript directory>\` has run; run it first when you have the directory.`;
+
+// ---- Project config -----------------------------------------------------------------------------------
+/** JSON with object keys sorted at every depth and no whitespace. scripts/lib/harness-config.ts computes the same text. */
+export function stableJson(value) {
+  if (Array.isArray(value)) return `[${value.map(stableJson).join(",")}]`;
+  if (typeof value === "object" && value !== null) {
+    return `{${Object.keys(value).sort().map((k) => `${JSON.stringify(k)}:${stableJson(value[k])}`).join(",")}}`;
+  }
+  const text = JSON.stringify(value);
+  return text === undefined ? "null" : text;
+}
+
+/** The sentence a run stops with when the config line a runner copied does not check out. */
+export const CONFIG_COPY_FAULT = "the config copy did not verify; run the workflow again";
+
+/**
+ * Parses the one line `bun scripts/harness-config.ts show` prints ({ config, check }) and verifies it: the
+ * checksum is recomputed over the stable JSON of `config`, so a runner that garbled the copy is caught.
+ * `need` lists dotted keys the workflow cannot run without: a key is missing when it is undefined, null or
+ * an empty string. An empty list is a value; a workflow that cannot run on one checks that itself.
+ * Returns { config } or { error }.
+ */
+export function readConfig(configJson, need) {
+  let parsed;
+  try {
+    parsed = JSON.parse(configJson);
+  } catch {
+    return { error: `${CONFIG_COPY_FAULT} (not JSON)` };
+  }
+  if (!parsed || typeof parsed !== "object" || !parsed.config || typeof parsed.config !== "object" || typeof parsed.check !== "string") {
+    return { error: `${CONFIG_COPY_FAULT} (no config or check)` };
+  }
+  if (ledgerChecksum(stableJson(parsed.config)) !== parsed.check) return { error: `${CONFIG_COPY_FAULT} (checksum differs)` };
+  for (const key of need || []) {
+    const value = key.split(".").reduce((o, k) => (o && typeof o === "object" ? o[k] : undefined), parsed.config);
+    if (value === undefined || value === null || value === "") {
+      return { error: `harness-config: set ${key} in harness.config.json` };
+    }
+  }
+  return { config: parsed.config };
+}
+
+/** "a", "a and b", "a, b and c". */
+export const andList = (items) => (items.length < 2 ? items.join("") : `${items.slice(0, -1).join(", ")} and ${items[items.length - 1]}`);
+/** A string as a regular expression's source, matched literally. */
+export const reEscape = (text) => text.replace(/[.*+?^${}()|[\]\\/]/g, "\\$&");
+
 // ---- Helpers that need the runtime ----------------------------------------------------------------
-export function workflowLib({ agent, log }) {
+export function workflowLib({ agent, log, name }) {
+  // Every agent call goes through `tracked`, which keeps one ledger entry per call. The entry is
+  // pushed when the call starts (so the ledger is in call order) and filled in when it settles.
+  const entries = [];
+  let attemptNo = 1;
+
+  function tracked(prompt, opts) {
+    const o = opts || {};
+    const entry = { label: o.label || "", phase: o.phase || "", agent: o.agentType || "", model: o.model || "", attempt: attemptNo, outcome: "", verdict: "" };
+    entries.push(entry);
+    let pending;
+    try {
+      pending = agent(prompt, opts);
+    } catch (e) {
+      entry.outcome = "threw";
+      throw e;
+    }
+    return Promise.resolve(pending).then(
+      (r) => {
+        entry.outcome = r === null || r === undefined ? "empty" : "ok";
+        entry.verdict = verdictOf(r);
+        return r;
+      },
+      (e) => {
+        entry.outcome = "threw";
+        throw e;
+      }
+    );
+  }
+
+  const ledger = () => entries.filter((e) => e.outcome).map((e) => ({ ...e }));
+
+  /**
+   * Has the runner write the ledger (scripts/run-telemetry.ts). A failed write is logged and changes
+   * nothing else. The command holds only values the run already has, so a resumed run replays it from cache.
+   */
+  async function recordRun(slug, label, phaseName, send, where) {
+    if (!SLUG.test(slug) || !SLUG.test(name)) {
+      log("Memory and run ledger: not written, slug is not kebab-case");
+      return null;
+    }
+    let out = null;
+    let why = "the runner returned nothing";
+    try {
+      out = await send(`Run this command from ${where} exactly as written and return what it prints. Change nothing in it and run nothing else.\n\n${runRecordCommand(name, slug, ledger())}`, { label, phase: phaseName });
+      if (out !== null && out !== undefined) why = String(out).slice(0, 200);
+    } catch (e) {
+      why = `the runner threw: ${e && e.message ? e.message : e}`.slice(0, 200);
+    }
+    if (!/run-telemetry: recorded/.test(String(out))) log(`Run telemetry: not recorded (${why})`);
+    return out;
+  }
+
+  /**
+   * Calls `fn()` so the agent call it makes shows in the ledger as attempt `n`. `fn` must make that
+   * call before its first await: the number is set for that call only and put back before anything
+   * else runs, so a parallel branch never reads this retry. A workflow that retries a call by hand
+   * (not through `twice`) wraps the retry in `atAttempt(2, ...)`.
+   */
+  function atAttempt(n, fn) {
+    const before = attemptNo;
+    attemptNo = Math.max(before, n);
+    try {
+      return fn();
+    } finally {
+      attemptNo = before;
+    }
+  }
+
   /** Run an agent thunk; one retry if it returns nothing or throws. Returns null after two failures. */
   async function twice(fn, what) {
     for (let attempt = 1; attempt <= 2; attempt++) {
       try {
-        const r = await fn(attempt);
+        const r = await atAttempt(attempt, () => fn(attempt));
         if (r) return r;
       } catch (e) {
         log(`${what}: attempt ${attempt} threw — ${e && e.message ? e.message : e}`);
@@ -122,6 +272,26 @@ export function workflowLib({ agent, log }) {
   }
 
   /**
+   * The first call of a run: a runner prints the config on its own, so no ticket text or file name from the
+   * tree shares a step with it. `rootText` is the sentence that names ROOT, ending where `cd there` follows.
+   * Returns { config } or { error }; the error is a reason the run stops with.
+   */
+  async function loadConfig(who, rootText, need) {
+    const run = await tracked(
+      `Pre-flight for ${who}, config step. Change nothing.
+
+  0. Root. ${rootText} cd there.
+  1. Config. Run \`bun scripts/harness-config.ts show\` and return its one line of output exactly as \`config_json\`: copy it character for character, change nothing.
+Return ok=false with a one-line reason at the first failure.`,
+      { label: "config", phase: "Preflight", agentType: "runner", effort: "low", schema: obj({ ok: BOOL, reason: STR, config_json: STR }) }
+    );
+    if (!run || !run.ok) return { error: (run && run.reason) || "config step returned nothing" };
+    const conf = readConfig(run.config_json, need);
+    if (conf.error) log(`Pre-flight: ${conf.error}. Nothing ran.`);
+    return conf;
+  }
+
+  /**
    * The ways a run talks to an agent once the checkout is known. Workflow agents start in the
    * launching session's cwd, which can be another checkout, so every prompt after Preflight opens
    * with `preamble`. `sh` is a shell-only step for the runner. `remember` and `recall` are the
@@ -130,9 +300,17 @@ export function workflowLib({ agent, log }) {
    * args) and no clock, so a resumed run replays it from cache instead of writing twice.
    */
   function asker(preamble) {
-    const ask = (prompt, opts) => agent(`${preamble}\n\n${prompt}`, opts);
+    const ask = (prompt, opts) => tracked(`${preamble}\n\n${prompt}`, opts);
     const sh = (prompt, opts) => ask(prompt, { effort: "low", ...opts, agentType: "runner" });
     const remember = async (slug, fields, label, phaseName) => {
+      // A slug or workflow name reaches a shell line below, so only a kebab-case one gets that far.
+      if (!SLUG.test(slug) || !SLUG.test(name)) {
+        log("Memory and run ledger: not written, slug is not kebab-case");
+        return null;
+      }
+      // The ledger first, so the memory record that follows sees a file already written.
+      const runLabel = label.startsWith("memory") ? `run:record${label.replace(/^memory(:record)?/, "")}` : `run:record:${label}`;
+      await recordRun(slug, runLabel, phaseName, sh, "ROOT");
       const out = await sh(`Run this command from ROOT exactly as written and return what it prints. Change nothing in it and run nothing else.\n\n${memoryRecordCommand(slug, fields)}`, { label, phase: phaseName });
       // The script says so when a file has outgrown its limit; only a person can ask for the summary.
       if (/over 150 lines/.test(String(out))) log(`Memory: ${slug} is over 150 lines; ask context-memory to shorten it`);
@@ -160,5 +338,5 @@ export function workflowLib({ agent, log }) {
     return null;
   }
 
-  return { twice, checkArgs, asker, preflightFault };
+  return { twice, atAttempt, checkArgs, asker, preflightFault, loadConfig, tracked, ledger, recordRun };
 }

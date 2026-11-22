@@ -10,6 +10,13 @@ import {
   BucketDeleteError,
   BucketListError,
 } from "@/models/errors/bucket";
+import { makeOtlpTracer, makeSpanBuffer } from "@/services/tracing";
+import {
+  R2_DELETE_SPAN,
+  R2_GET_SPAN,
+  R2_LIST_SPAN,
+  R2_PUT_SPAN,
+} from "@/lib/constants/spans";
 
 const makeBucketLayer = (stub: unknown): Layer.Layer<Bucket> =>
   Layer.succeed(Bucket, { bucket: stub as R2Bucket });
@@ -162,6 +169,33 @@ describe("BucketRepository.list", () => {
         }
       }
     }).pipe(Effect.provide(provideStub(stub)));
+  });
+
+  it.effect("records an r2 client span for put, get, delete and list, so a slow bucket call shows in the trace", () => {
+    const buffer = makeSpanBuffer();
+    const stub = {
+      put: async () => {},
+      get: async () => ({ body: "data" }),
+      delete: async () => {},
+      list: async () => ({ objects: [] }),
+    };
+    return Effect.gen(function* () {
+      const repo = yield* BucketRepository;
+      yield* repo.upload("x", { key: "k" });
+      yield* repo.get("k");
+      yield* repo.remove("k");
+      yield* repo.list();
+
+      expect(buffer.spans.map((span) => [span.name, span.kind])).toEqual([
+        [R2_PUT_SPAN, "client"],
+        [R2_GET_SPAN, "client"],
+        [R2_DELETE_SPAN, "client"],
+        [R2_LIST_SPAN, "client"],
+      ]);
+    }).pipe(
+      Effect.provide(provideStub(stub)),
+      Effect.withTracer(makeOtlpTracer(buffer))
+    );
   });
 
   it.effect("uses default limit when input omitted", () => {

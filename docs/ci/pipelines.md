@@ -6,13 +6,35 @@ Seven workflows live in `.github/workflows/`. Deploy and preview stay off until 
 
 | Workflow | Runs on | What it does |
 |----------|---------|--------------|
-| `ci.yml` | every push to `staging` or `production`, every pull request | typecheck, tests, build, e2e smoke |
-| `codeql.yml` (CodeQL) | every push to `staging` or `production`, every pull request, and Mondays | reads the source for injection and workflow mistakes |
+| `ci.yml` | every push to `staging` or `production`, every pull request | typecheck, tests, build, e2e smoke; on a stacked PR only the lean job ([which checks run where](#which-checks-run-where)) |
+| `codeql.yml` (CodeQL) | every push to `staging` or `production`, every pull request into the default branch or `production`, and Mondays | reads the source for injection and workflow mistakes |
 | `production-guard.yml` (Production Guard) | a pull request into `production` | fails unless the pull request comes from this repo's `staging` |
 | `release.yml` (Release) | every push to `production` | picks the next version, tags the commit, creates the GitHub release |
-| `deploy.yml` (Deploy Production) | CI finished green on a push to `production` | migrates the production D1 database (first saving a [restore point](rollback.md)), builds, runs `wrangler deploy` |
-| `preview.yml` (Preview Deploy) | a pull request opened, updated or reopened | gives the PR its own D1 database, seeds it, uploads a Worker version, comments the URL |
+| `deploy.yml` (Deploy Production) | CI finished green on a push to `production` | migrates the production D1 database (first saving a [restore point](rollback.md)), builds, runs `wrangler deploy` with a [release version and environment](../agents/error-reporting.md#environment) |
+| `preview.yml` (Preview Deploy) | a pull request into the default branch or `production`, opened, updated or reopened | gives the PR its own D1 database, seeds it, uploads a Worker version (with its [release version and environment](../agents/error-reporting.md#environment)), comments the URL |
 | `preview-cleanup.yml` (Preview Cleanup) | a pull request closed | deletes the PR's D1 database |
+
+## Which checks run where
+
+A stacked PR is one whose base is neither the default branch nor `production`: a ticket PR into a wave branch, or a PR into the branch of the PR below it. It gates nothing, so it gets one lean job. The full suite runs where it gates a merge.
+
+| Check | Stacked PR | PR into the default branch | PR into `production` | Push to either |
+|-------|------------|----------------------------|----------------------|----------------|
+| Lean (stacked PR, typecheck + lint + unit) | yes | — | — | — |
+| Baseline (typecheck + test + harness-check) | — | yes, required | yes, required | yes |
+| Build (Cloudflare Workers) | — | yes, required | yes, required | yes |
+| E2E smoke (Playwright) | — | yes, required | yes, required | yes |
+| CodeQL | — | yes | yes | yes (and Mondays) |
+| Preview Deploy | — | yes | yes | — |
+| PR title (Conventional Commits) | yes | yes | yes | — |
+| Source branch is staging | — | — | yes, required | — |
+| Greptile (`greptile.json`) | — | yes | yes | — |
+
+- The lean job runs `./scripts/verify.sh --lean`: typecheck, the house linter over the whole tree with its shrink-only baseline (and its self-test), and every unit test. It leaves out the migration check, the harness gate, the secret scan, the package audit (it reads the network), the build, e2e, the code scan and the preview. All of those run on the roll-up.
+- The jobs choose with a job-level `if:` that compares `github.base_ref` with `github.event.repository.default_branch` and `production`, so a fork with another default branch name needs no edit. `scripts/__tests__/github-workflows.test.ts` reads the workflow files and proves which jobs run for each base.
+- GitHub counts a skipped job as passed. A stacked PR that is later retargeted to the default branch keeps the skipped results of its last push, and retargeting starts no new run. After a retarget, push a commit (or close and reopen the PR) so the full suite runs before the merge. `ship-feature` never retargets a stacked PR onto the default branch: the roll-up is a new PR.
+- `greptile.json` names `staging` and `production` in `includeBranches`, since Greptile has no word for "the default branch". A fork with another default branch name edits that list.
+- Locally, `./scripts/verify.sh --changed [base]` is the stacked counterpart: see [Gates](../agents/harness.md#gates).
 
 ## How a change reaches production
 
@@ -56,7 +78,7 @@ A new fork has one branch (`staging`) and no rules. CI and CodeQL run on pull re
 2. Apply the rules: `bun run scripts/repo-rules.ts --apply`.
 3. Set up the `production` environment ([Turn on production deploys](#turn-on-production-deploys)).
 
-If your default branch has another name, the simplest way is to rename it to `staging`. To keep your name instead, change it in three places: the `branches:` lines under `push:` in `ci.yml` and in `codeql.yml`, and the source check in `production-guard.yml` (`"$HEAD_REF" != "staging"`). The workflow tests read the two names from `ci.yml` and hold the other workflows to them, so a missed place fails `bun run test`.
+If your default branch has another name, the simplest way is to rename it to `staging`. To keep your name instead, change it in four places: the `branches:` lines under `push:` in `ci.yml` and in `codeql.yml`, the source check in `production-guard.yml` (`"$HEAD_REF" != "staging"`), and `includeBranches` in `greptile.json`. The workflow tests read the two names from `ci.yml` and hold the other workflows to them, so a missed place fails `bun run test`.
 
 ## Commit subjects and PR titles
 
@@ -68,7 +90,7 @@ Three checks read the same rule:
 - the `PR title (Conventional Commits)` job in `pr-title.yml` lints the PR title on open, edit, push and reopen, on every base branch;
 - once the repo ruleset lists that job as required, a PR with a bad title cannot merge.
 
-The types and the scopes live in `.commitlintrc.json` and nowhere else; read that file for the lists. Merge commits (`Merge pull request ...`, `Merge branch ...`) pass. Body and footer lines may be as long as you like.
+The types and the scopes live in `.commitlintrc.json` and nowhere else; read that file for the lists. Merge commits (`Merge pull request ...`, `Merge branch ...`) pass the hook. A PR title shaped like one does not pass the title job (`.commitlintrc.title.json` takes every rule from the first file and turns that one exception off): squashed, such a title would be a subject with no type. Body and footer lines may be as long as you like.
 
 Four PRs carry a title the version script reads, so word each one on purpose:
 
@@ -77,7 +99,7 @@ Four PRs carry a title the version script reads, so word each one on purpose:
 | A feature PR into `staging` or into a stacked branch | `feat(scope): ...`, `fix(scope): ...` | It is squashed, so this line is the commit the version script reads. |
 | A wave roll-up into `release/v3.0` | `feat: v3.0 wave <n>, <what it brings>` (`feat!:` if it breaks something) | It is squashed into the release branch. |
 | The release PR squashing `release/v3.0` into `staging` | `feat!: v3.0, <summary>` | The `!` makes a major bump. |
-| `staging` into `production` | any title that passes the check | It is merged with a merge commit, so its own title is not read. |
+| `staging` into `production` | any title that passes the check, for example `chore(release): staging to production` | It is merged with a merge commit, so its own title is not read. |
 
 Worked example: the release PR is titled `feat!: v3.0, the new starter`. It lands on `staging` as one commit with that subject. The merge-commit PR into `production` carries it, `release.yml` reads the `!`, and the tag comes out as `v3.0.0` (the last tag is `v2.4.0`). Titled `v3.0 wave 0: guardrails, trim and foundations` instead, the same commit would have read as a patch: `v2.4.1`.
 

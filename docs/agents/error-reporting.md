@@ -111,8 +111,8 @@ Pass the error as it is (a `Cause`, a tagged error, a thrown value). Do not buil
 |-----|---------|
 | `ERROR_REPORTER` | `console` (default), `none` or `sentry`. |
 | `SENTRY_DSN` | The Sentry project DSN. A secret: `.dev.vars` locally, `wrangler secret put SENTRY_DSN` in production. It must be `https` (plain `http` is taken for `localhost` only). With `sentry` and no usable DSN, the reporter falls back to `console`. |
-| `RELEASE_VERSION` | Default `unversioned`. The deploy step should pass it, for example `wrangler deploy --var RELEASE_VERSION:<git sha or tag>`. |
-| `ENVIRONMENT` | Default `development` in dev, else `production`. A preview or staging deploy should pass its own name the same way (`--var ENVIRONMENT:staging`). |
+| `RELEASE_VERSION` | Default `unversioned`. The deploy workflows pass it with `--var`: production sends the `vX.Y.Z` tag on the deployed commit when `release.yml` has made one, else the commit sha (`scripts/ci/release-version.ts`); a preview sends the PR's head sha. A deploy by hand (`bun run deploy`) sends nothing, so it reads `unversioned` unless you add `--var RELEASE_VERSION:<sha or tag>`. |
+| `ENVIRONMENT` | Default `development` in dev, else `production`. The production workflow sends `production` and the preview workflow sends `preview`. Another target passes its own name the same way (`--var ENVIRONMENT:staging`). |
 
 ## Check span export against a real collector
 

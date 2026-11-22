@@ -52,6 +52,7 @@ function runBulkUserAction<E>(
       Effect.tap((result) =>
         Effect.logInfo(logEvent).pipe(
           Effect.annotateLogs({
+            audit: true,
             actor: ctx.auth.user.id,
             targets: userIds,
             affectedCount: result.affectedCount,

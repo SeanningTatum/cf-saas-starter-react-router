@@ -10,6 +10,11 @@ import {
   MAGIC_BYTES_SNIFF_LENGTH,
   matchesMagicBytes,
 } from "@/lib/constants/upload";
+import {
+  UPLOAD_READ_HEAD_SPAN,
+  UPLOAD_STORE_FILE_SPAN,
+} from "@/lib/constants/spans";
+import { getSession } from "@/services/session";
 import { ErrorReporter } from "@/services/error-reporter";
 import type { Route } from "./+types/upload-file";
 
@@ -27,10 +32,7 @@ export async function action({ request, context }: Route.ActionArgs) {
   const file = formData.get("file");
 
   const program = Effect.gen(function* () {
-    const session = yield* Effect.tryPromise({
-      try: () => context.auth.api.getSession({ headers: request.headers }),
-      catch: (cause) => new ExternalServiceError({ service: "BetterAuth", cause }),
-    });
+    const session = yield* getSession(context.auth.api, request.headers);
     if (!activeSession(session, new Date(yield* Clock.currentTimeMillis))) {
       return data({ success: false as const, error: "Unauthorized" }, { status: 401 });
     }
@@ -64,7 +66,7 @@ export async function action({ request, context }: Route.ActionArgs) {
       try: () => file.slice(0, MAGIC_BYTES_SNIFF_LENGTH).arrayBuffer(),
       catch: (cause) =>
         new ExternalServiceError({ service: "FileRead", cause }),
-    });
+    }).pipe(Effect.withSpan(UPLOAD_READ_HEAD_SPAN));
     if (!matchesMagicBytes(meta.type, new Uint8Array(head))) {
       return yield* Effect.fail(
         new BucketValidationError({
@@ -79,6 +81,7 @@ export async function action({ request, context }: Route.ActionArgs) {
     return data({ success: true as const, key });
   }).pipe(
     Effect.tapErrorCause((cause) => Effect.logError("Upload failed", cause)),
+    Effect.withSpan(UPLOAD_STORE_FILE_SPAN),
     Effect.catchTags({
       ValidationError: (e) =>
         Effect.succeed(
