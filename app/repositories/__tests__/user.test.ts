@@ -1,4 +1,4 @@
-import { describe, it as itVitest, expect } from "vitest";
+import { describe, it as itVitest, expect, vi } from "vitest";
 import { it } from "@effect/vitest";
 import { Effect, Layer, Exit, Cause } from "effect";
 import { UserRepository, isProtectedUser, buildUserConditions } from "../user";
@@ -8,7 +8,7 @@ import {
   chainableSpy,
   makeTestDatabase,
 } from "@/services/database.test-layer";
-import { user } from "@/db/schema";
+import { session, user } from "@/db/schema";
 import {
   NotFoundError,
   ValidationError,
@@ -18,6 +18,28 @@ import {
 
 const provideStub = (stub: unknown) =>
   UserRepository.Default.pipe(Layer.provide(makeTestDatabase(stub)));
+
+/** A mutable plain user, with spies on every write a ban road can make. */
+const banStub = (
+  batch = vi.fn((_statements: ReadonlyArray<unknown>) => Promise.resolve([]))
+) => ({
+  select: () => chainable([{ id: "u1", role: "user" }]),
+  update: chainableSpy(undefined),
+  delete: chainableSpy(undefined),
+  batch,
+});
+
+/** The ban's user UPDATE and the session DELETE went to D1 as one batch. */
+const expectBanBatchedWithSessionDelete = (stub: ReturnType<typeof banStub>) => {
+  expect(stub.update).toHaveBeenCalledWith(user);
+  expect(stub.delete).toHaveBeenCalledTimes(1);
+  expect(stub.delete).toHaveBeenCalledWith(session);
+  expect(stub.batch).toHaveBeenCalledTimes(1);
+  const statements = stub.batch.mock.calls[0][0];
+  expect(statements).toHaveLength(2);
+  expect(statements).toContain(stub.update.mock.results[0].value);
+  expect(statements).toContain(stub.delete.mock.results[0].value);
+};
 
 describe("isProtectedUser", () => {
   itVitest("returns true for admin role", () => {
@@ -119,9 +141,10 @@ describe("UserRepository.bulkBanUsers", () => {
     }).pipe(Effect.provide(provideStub({})))
   );
 
-  it.effect("bans the given users and returns the count", () => {
-    const updateSpy = chainableSpy(undefined);
-    const stub = { update: updateSpy };
+  it.effect("bans the given users, ends their sessions in the same batch, returns the count", () => {
+    // Catches: a bulk ban that sets the flag but leaves live sessions, or
+    // deletes them in a separate statement that can land without the ban.
+    const stub = banStub();
     return Effect.gen(function* () {
       const repo = yield* UserRepository;
       const n = yield* repo.bulkBanUsers({
@@ -129,8 +152,7 @@ describe("UserRepository.bulkBanUsers", () => {
         reason: "spam",
       });
       expect(n).toBe(2);
-      expect(updateSpy).toHaveBeenCalledTimes(1);
-      expect(updateSpy).toHaveBeenCalledWith(user);
+      expectBanBatchedWithSessionDelete(stub);
     }).pipe(Effect.provide(provideStub(stub)));
   });
 
@@ -350,19 +372,38 @@ describe("UserRepository.updateUser", () => {
     }).pipe(Effect.provide(provideStub(stub)));
   });
 
-  it.effect("updates a valid non-protected target and returns success", () => {
-    const stub = {
-      select: () => chainable([{ id: "u1", role: "user" }]),
-      update: () => chainable(undefined),
-    };
+  for (const data of [{ name: "New Name" }, { banned: false }]) {
+    it.effect(`updates ${JSON.stringify(data)} without touching sessions`, () => {
+      // Catches: ending sessions on every update, or on any update that
+      // mentions `banned` (an unban-by-update would sign the user out).
+      const stub = banStub();
+      return Effect.gen(function* () {
+        const repo = yield* UserRepository;
+        const result = yield* repo.updateUser({
+          userId: "u1",
+          currentUserId: "actor",
+          data,
+        });
+        expect(result).toEqual({ success: true });
+        expect(stub.update).toHaveBeenCalledWith(user);
+        expect(stub.batch).not.toHaveBeenCalled();
+        expect(stub.delete).not.toHaveBeenCalled();
+      }).pipe(Effect.provide(provideStub(stub)));
+    });
+  }
+
+  it.effect("with banned: true, ends the user's sessions in the same batch", () => {
+    // Catches: the update road setting the flag but leaving the live session.
+    const stub = banStub();
     return Effect.gen(function* () {
       const repo = yield* UserRepository;
       const result = yield* repo.updateUser({
         userId: "u1",
         currentUserId: "actor",
-        data: { name: "New Name" },
+        data: { banned: true },
       });
       expect(result).toEqual({ success: true });
+      expectBanBatchedWithSessionDelete(stub);
     }).pipe(Effect.provide(provideStub(stub)));
   });
 });
@@ -459,11 +500,9 @@ describe("UserRepository.banUser", () => {
     }).pipe(Effect.provide(provideStub(stub)));
   });
 
-  it.effect("bans a valid non-protected target and returns success", () => {
-    const stub = {
-      select: () => chainable([{ id: "u1", role: "user" }]),
-      update: () => chainable(undefined),
-    };
+  it.effect("bans a valid target, ends its sessions in the same batch, returns success", () => {
+    // Catches: a ban that sets the flag but leaves the live session working.
+    const stub = banStub();
     return Effect.gen(function* () {
       const repo = yield* UserRepository;
       const result = yield* repo.banUser({
@@ -472,6 +511,20 @@ describe("UserRepository.banUser", () => {
         reason: "spam",
       });
       expect(result).toEqual({ success: true });
+      expectBanBatchedWithSessionDelete(stub);
+    }).pipe(Effect.provide(provideStub(stub)));
+  });
+
+  it.effect("fails with UpdateError when the batch rejects", () => {
+    // Catches: a failed ban batch escaping as a defect (a 500 with no tag)
+    // instead of the repository's UpdateError.
+    const stub = banStub(vi.fn(() => Promise.reject(new Error("batch boom"))));
+    return Effect.gen(function* () {
+      const repo = yield* UserRepository;
+      const error = yield* Effect.flip(
+        repo.banUser({ userId: "u1", currentUserId: "actor" })
+      );
+      expect(error).toBeInstanceOf(UpdateError);
     }).pipe(Effect.provide(provideStub(stub)));
   });
 });
