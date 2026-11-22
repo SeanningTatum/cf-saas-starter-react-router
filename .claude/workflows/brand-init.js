@@ -1742,7 +1742,7 @@ ${reportedFiles.map((p) => `       · ${p}`).join("\n") || "       · (none)"}
      Do NOT stage anything under .verify/ (the comps, screenshots and verdict.md stay local), or draw
      files. Check \`git status --short\` afterwards: anything modified and unstaged that is not one of
      those is a surprise, so name it in your note. Commit message:
-     \`feat(brand): ${tokens.name ?? "new"} brand — tokens, primitives, DESIGN.md\`, ending with the
+     \`feat(design): ${tokens.name ?? "new"} brand, tokens, primitives, DESIGN.md\` (Conventional Commits per .commitlintrc.json; the PR title is the same line), ending with the
      Co-Authored-By line for the model you run as (\`Co-Authored-By: <your model name> <noreply@anthropic.com>\`).
      Push the branch and open the PR with the \`engineering-toolkit:pr-format\` skill's layout: the pick
      screenshots (desktop and mobile, light and dark) and the final critique summary in the body, the

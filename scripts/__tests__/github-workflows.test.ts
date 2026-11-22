@@ -165,6 +165,45 @@ describe("workflows keep secrets and PR data out of shell text", () => {
   });
 });
 
+describe("pr-title.yml checks the title with the repo's commitlint config", () => {
+  const lines = codeLines("pr-title.yml");
+  const text = lines.join("\n");
+
+  it("runs on opened, edited, synchronize and reopened: an edited title must be checked again", () => {
+    expect(text).toMatch(/pull_request:\s*\n\s+types:\s*\[opened, edited, synchronize, reopened\]/);
+  });
+
+  it("has no branches filter: a stacked PR targets the PR below it", () => {
+    expect(text).not.toMatch(/^\s{4}branches:/m);
+  });
+
+  it("never uses pull_request_target: it would run PR code with secrets", () => {
+    expect(text).not.toMatch(/pull_request_target/);
+  });
+
+  it("reads the title only inside an env: block: a title such as $(rm -rf ~) must never reach shell text", () => {
+    const uses = lines.flatMap((line, i) => (/github\.event\.pull_request\.title/.test(line) ? [i] : []));
+    expect(uses).toHaveLength(1);
+    const at = uses[0] ?? 0;
+    expect(lines[at]).toMatch(/^\s+PR_TITLE:\s*\$\{\{\s*github\.event\.pull_request\.title\s*\}\}\s*$/);
+    expect(lines[at - 1]).toMatch(/^\s+env:\s*$/);
+  });
+
+  it("names the job exactly 'PR title (Conventional Commits)': a ruleset will require it by that name", () => {
+    expect(text).toMatch(/^\s+name: PR title \(Conventional Commits\)\s*$/m);
+  });
+
+  it("installs with --ignore-scripts: the install must not run the prepare script or a dependency's hook", () => {
+    const installs = lines.filter((l) => /bun install/.test(l));
+    expect(installs).toHaveLength(1);
+    expect(installs[0]).toContain("--frozen-lockfile --ignore-scripts");
+  });
+
+  it("lints on stdin with the local commitlint: no title in argv, no package fetched at run time", () => {
+    expect(text).toContain(`printf '%s\\n' "$PR_TITLE" | bunx --no-install commitlint`);
+  });
+});
+
 describe("workflows follow the staging to production flow", () => {
   const pushBranches = (f: string): string[] => {
     const lines = codeLines(f);
