@@ -1,9 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Effect, ManagedRuntime } from "effect";
-import { observabilityLayer } from "../runtime";
+
+vi.mock("@/auth/server", () => ({
+  createAuth: () => ({ api: { getSession: () => Promise.resolve(null) } }),
+}));
+
+import { makeAppRuntime, observabilityLayer } from "../runtime";
 import type { FetchLike } from "@/services/tracing";
 import { currentSpanAnnotations } from "@/services/logger";
 import type { RequestContext } from "@/lib/request-context";
+import { ErrorReporter, type ErrorReporterShape } from "@/services/error-reporter";
 
 // The wiring under test is `observabilityLayer`, the exact layer
 // `makeAppRuntime` puts under the app services. Building the whole app runtime
@@ -112,5 +118,26 @@ describe("observabilityLayer, logs outside any span", () => {
       traceId: parent.traceId,
       spanId: span.spanId,
     });
+  });
+});
+
+describe("makeAppRuntime", () => {
+  it("provides the error reporter it was given, so Effect code and plain code report through one per-request budget", async () => {
+    const reporter: ErrorReporterShape = { capture: () => Effect.void };
+    const runtime = makeAppRuntime(
+      {
+        DATABASE: {} as D1Database,
+        BUCKET: {} as R2Bucket,
+        BETTER_AUTH_SECRET: "fake-secret-for-tests",
+      } as Env,
+      { dev: true, requestOrigin: "https://app.example.com" },
+      request(),
+      reporter
+    );
+
+    const resolved = await runtime.runPromise(ErrorReporter);
+    await runtime.dispose();
+
+    expect(resolved).toBe(reporter);
   });
 });

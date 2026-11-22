@@ -5,6 +5,7 @@ import {
   prefix,
   layout,
 } from "@react-router/dev/routes";
+import { BROWSER_REPORT_PATH } from "./lib/constants/error-reporting";
 
 export default [
   // API Routes (no locale prefix)
@@ -12,6 +13,7 @@ export default [
   route("/api/auth/*", "routes/api/auth.$.ts"),
   route("/api/upload-file", "routes/api/upload-file.ts"),
   route("/api/set-locale", "routes/api/set-locale.ts"),
+  route(BROWSER_REPORT_PATH, "routes/api/browser-report.ts"),
 
   // Public routes at root (default locale)
   index("routes/home.tsx"),

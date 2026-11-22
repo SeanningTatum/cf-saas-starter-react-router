@@ -11,6 +11,10 @@ Dev differs in three ways: `connect-src` adds `ws:` for Vite's reload socket, th
 
 `workers/app.ts` makes a fresh nonce for each request and puts it in `script-src`. An inline `<script>` runs only if it carries that nonce: take it from `useNonce()` (`app/lib/csp-nonce.ts`), as `app/root.tsx` does. Styles need no nonce, and must not get one: a nonce in `style-src` would switch `'unsafe-inline'` off.
 
+## CSP reporting
+
+The policy ends with `report-uri /api/browser-report` and `report-to csp`, and every response carries `Reporting-Endpoints: csp="/api/browser-report"`, both from `workers/security-headers.ts`. The browser posts each violation to that route, which records it as a warning-level error report with source `csp` ([error reporting](agents/error-reporting.md)). The route drops the query string of the page URL and of the blocked URL, caps body size and limits the rate, so it does not log every violation under load.
+
 ## Allow a new host
 
 Example: a browser analytics SDK that loads a script from, and posts to, `https://us.i.posthog.com`.

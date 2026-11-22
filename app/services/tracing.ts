@@ -1,4 +1,8 @@
 import { Context, Effect, Exit, Layer, Option, Tracer } from "effect";
+import {
+  FIRST_SERVER_ERROR_STATUS,
+  HTTP_STATUS_ATTRIBUTE,
+} from "@/lib/constants/error-reporting";
 import { randomHex, type RequestContext } from "@/lib/request-context";
 
 /**
@@ -234,9 +238,18 @@ const spanToOtlp = (span: OtlpSpan) => {
       timeUnixNano: e.startTime.toString(),
       attributes: toOtlpAttributes(Object.entries(e.attributes)),
     })),
-    status: failed ? { code: 2, message: exitMessage(status.exit) } : { code: 1 },
+    status: failed
+      ? { code: 2, message: exitMessage(status.exit) }
+      : otlpStatusForResponse(span.attributes.get(HTTP_STATUS_ATTRIBUTE)),
   };
 };
+
+export const otlpStatusForResponse = (
+  httpStatus: unknown
+): { code: 1 } | { code: 2; message: string } =>
+  typeof httpStatus === "number" && httpStatus >= FIRST_SERVER_ERROR_STATUS
+    ? { code: 2, message: `HTTP ${httpStatus}` }
+    : { code: 1 };
 
 const exitMessage = (exit: Exit.Exit<unknown, unknown>): string =>
   Exit.match(exit, {
