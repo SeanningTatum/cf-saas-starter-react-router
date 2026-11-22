@@ -12,7 +12,6 @@ import {
   UnbanUserInput,
   DeleteUserInput,
   CreateWorkflowInput,
-  DeleteUserSelfCheckInput,
   Role,
   Status,
 } from "../user";
@@ -160,11 +159,5 @@ describe("CreateWorkflowInput", () => {
         metadata: { source: "signup" },
       })._tag
     ).toBe("Right");
-  });
-});
-
-describe("DeleteUserSelfCheckInput", () => {
-  it("decodes a plain string", () => {
-    expect(decode(DeleteUserSelfCheckInput)("confirm")._tag).toBe("Right");
   });
 });

@@ -3,11 +3,7 @@ import { createTRPCRouter, protectedProcedure } from ".";
 import { runProcedure } from "@/lib/effect-trpc";
 import { UserRepository } from "@/repositories/user";
 import { Workflows } from "@/services/workflows";
-import {
-  CreateWorkflowInput,
-  DeleteUserSelfCheckInput,
-} from "@/lib/schemas/user";
-import { ValidationError } from "@/models/errors/repository";
+import { CreateWorkflowInput } from "@/lib/schemas/user";
 import { adminRouter } from "./routes/admin";
 import { analyticsRouter } from "./routes/analytics";
 
@@ -42,30 +38,10 @@ const userRouter = createTRPCRouter({
     )
   ),
 
-  deleteUser: protectedProcedure
-    .input(Schema.standardSchemaV1(DeleteUserSelfCheckInput))
-    .mutation(({ ctx, input }) =>
-      runProcedure(
-        ctx.runtime,
-        Effect.gen(function* () {
-          if (ctx.auth.user?.id === input) {
-            return yield* Effect.fail(
-              new ValidationError({
-                entity: "user",
-                message: "Cannot delete self",
-                field: "userId",
-              })
-            );
-          }
-          const repo = yield* UserRepository;
-          return yield* repo.deleteUser({
-            userId: input,
-            currentUserId: ctx.auth.user.id,
-          });
-        }),
-        { span: "trpc.user.deleteUser" }
-      )
-    ),
+  // No `deleteUser` here. It used to sit behind `protectedProcedure`, which
+  // let any signed-in user delete any non-admin account by id. Deleting an
+  // account by id is admin-only: `admin.deleteUser` in routes/admin.ts.
+  // app/trpc/__tests__/router.test.ts fails if it comes back.
 
   createWorkflow: protectedProcedure
     .input(Schema.standardSchemaV1(CreateWorkflowInput))
