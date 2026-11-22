@@ -15,8 +15,6 @@ export class HealthRepository extends Effect.Service<HealthRepository>()(
     effect: Effect.gen(function* () {
       const { db } = yield* Database;
 
-      // A failed ping is data, not an error: the caller shows a red status
-      // instead of an error toast, so the error channel stays `never`.
       const pingDatabase = (): Effect.Effect<DatabasePing> =>
         tryQuery("health", () => db.run(sql`select 1`)).pipe(
           Effect.either,

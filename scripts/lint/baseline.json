@@ -76,8 +76,6 @@
       "app/models/errors/analytics.ts": 1,
       "app/repositories/__tests__/health.test.ts": 3,
       "app/repositories/__tests__/user.test.ts": 10,
-      "app/repositories/health.ts": 2,
-      "app/repositories/user.ts": 2,
       "app/root.tsx": 1,
       "app/routes.ts": 5,
       "app/routes/admin/_index.tsx": 3,
