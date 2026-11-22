@@ -841,7 +841,7 @@ const MAP_SCHEMA = obj({ files: arr(obj({ path: STR, role: STR })) });
 const map = await sh(
   pre.has_codegraph
     ? `Run \`./scripts/codegraph.sh context ${shq(`${plan.title}. ${plan.summary}`.slice(0, 300))}\`. From its output return up to 15 files a builder should copy or extend, each with a one-line role ("repository pattern to copy", "router to register the procedure in"). Paths repo-relative. Add nothing the output does not show.`
-    : `CodeGraph is off. Run \`rg -l -i ${shq((plan.title.split(/\s+/).filter((w) => w.length > 3)[0] || slug).toLowerCase())} ${cfg.paths.sourceRoots.join(" ")} | head -15\` and return those files with role "matches the feature name".`,
+    : `CodeGraph is off. Run \`rg -l -i ${shq((plan.title.split(/\s+/).filter((w) => w.length > 3)[0] || slug).toLowerCase())} -- ${cfg.paths.sourceRoots.map(shq).join(" ")} | head -15\` and return those files with role "matches the feature name".`,
   { label: "contract:map", phase: "Contract", schema: MAP_SCHEMA }
 );
 const mapText = map && map.files.length ? `\nNearest existing code (${pre.has_codegraph ? "CodeGraph" : "rg"}) — read these before writing, copy their patterns:\n${map.files.map((f) => `  · ${f.path} — ${f.role}`).join("\n")}` : "";
