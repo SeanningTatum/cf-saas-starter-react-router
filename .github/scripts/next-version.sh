@@ -22,9 +22,11 @@ fi
 
 LOG=$(git log --format='%s%n%b' "$RANGE")
 
-if printf '%s\n' "$LOG" | grep -qE '^[a-zA-Z]+(\([^)]*\))?!:|^BREAKING[ -]CHANGE:'; then
+# No `grep -q` here: it exits on the first match, and with a long log `printf`
+# then dies on the closed pipe, which `pipefail` reports as "no match".
+if printf '%s\n' "$LOG" | grep -E '^[a-zA-Z]+(\([^)]*\))?!:|^BREAKING[ -]CHANGE:' > /dev/null; then
   BUMP=major
-elif printf '%s\n' "$LOG" | grep -qE '^feat(\([^)]*\))?:'; then
+elif printf '%s\n' "$LOG" | grep -E '^feat(\([^)]*\))?:' > /dev/null; then
   BUMP=minor
 else
   BUMP=patch
