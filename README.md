@@ -154,7 +154,7 @@ State lives in GitHub: the spec is an issue, each ticket is an issue, and a merg
 |-------|----------|
 | [`effect-ts-enforcer`](.claude/agents/effect-ts-enforcer.md) | After writing — review the diff against the 5 non-negotiables |
 | [`test-author`](.claude/agents/test-author.md) | After a change — write the tests that pin it |
-| [`span-instrumenter`](.claude/agents/span-instrumenter.md) | After adding a procedure, repo method or service — add tracing spans |
+| [`instrumenter`](.claude/agents/instrumenter.md) | After adding a procedure, repo method or service — add tracing spans, and analytics events for a metric |
 | [`ui-builder`](.claude/agents/ui-builder.md) | Any user-visible work |
 | [`context-memory`](.claude/agents/context-memory.md) | Keep per-feature working memory — context, decisions, links, todos — shared by every worktree |
 | [`feature-verifier`](.claude/agents/feature-verifier.md) | Walk a user-visible flow in the browser and record the verdict |

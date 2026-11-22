@@ -2,7 +2,8 @@
 name: security-reviewer
 description: Read-only security review of a diff for this stack - tRPC auth levels, object-level authorization, input validation, Better Auth sessions, secrets and PII in telemetry, XSS, open redirects, R2 uploads, anonymous reach of public mutations, SQL built from strings. Every P0/P1 names file:line, the attack and the fix. Examples - "security review the team-invites branch", "can one user read another user's files through the new procedure?", "review the upload route before we open the PR".
 tools: Read, Grep, Glob, Bash
-model: sonnet
+model: opus
+effort: high
 ---
 
 # security-reviewer

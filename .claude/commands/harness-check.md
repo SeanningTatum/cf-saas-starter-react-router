@@ -4,7 +4,7 @@ description: Validate harness invariants — CLAUDE↔AGENTS symlink, sub-agent 
 
 Run `./scripts/harness-check.sh` and surface the result verbatim.
 
-The script checks: init.sh executable, CLAUDE↔AGENTS symlink, sub-agent frontmatter, `.kimi-code/agents` symlink, hook scripts wired in `.claude/settings.json` exist, restore-skills hook test, workflow scripts parse, resolve and match their sources in `.claude/workflow-src/`, brand-init fences cover every primitive.
+The script checks: init.sh executable, CLAUDE↔AGENTS symlink, sub-agent frontmatter, agent roster (frontmatter fields valid, README table matches), `.kimi-code/agents` symlink, hook scripts wired in `.claude/settings.json` exist, restore-skills hook test, workflow scripts parse, resolve and match their sources in `.claude/workflow-src/`, brand-init fences cover every primitive.
 
 If the script exits non-zero:
 1. Quote the failing line(s).

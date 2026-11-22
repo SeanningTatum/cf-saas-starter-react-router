@@ -174,29 +174,102 @@ describe("plan-feature: happy path", () => {
       expect.arrayContaining([
         ["context", "context-scout"],
         ["audit", "ticket-auditor"],
-        ["fit", "product-strategist"],
+        ["fit", "ticket-auditor"],
         ["ux", "ux-planner"],
         ["architect", "architect"],
-        ["stack", "stack-planner"],
+        ["stack", "architect"],
         ["proto:a:direction", "ui-prototyper"],
         ["critic:a:1", "proto-critic"],
         ["proto:a:states", "ui-prototyper"],
         ["writeback", "runner"],
         ["publish", "runner"],
-        ["memory:record:published", "context-memory"],
+        ["memory:record:published", "runner"],
       ])
     );
     const judges = done.calls.filter((c) => c.label.startsWith("judge:"));
     expect(judges.length).toBeGreaterThanOrEqual(7);
-    expect(judges.every((c) => c.opts.agentType === "plan-judge" && c.opts.model === "sonnet")).toBe(true);
-    // Only the three shell steps run on the runner (haiku): catches a judgment step moved onto it.
-    expect(done.calls.filter((c) => c.opts.agentType === "runner").map((c) => c.label)).toEqual(["preflight", "writeback", "publish"]);
+    expect(judges.every((c) => c.opts.agentType === "plan-judge")).toBe(true);
+    // Catches a call with no agent type (it would run as a general agent with every tool and no rules) and a
+    // per-call model override (the agent's frontmatter is the one source).
+    expect(done.calls.filter((c) => !c.opts.agentType).map((c) => c.label)).toEqual([]);
+    expect(done.calls.filter((c) => "model" in c.opts).map((c) => c.label)).toEqual([]);
+    // Only the shell steps and the memory records run on the runner (haiku): catches a judgment step moved onto it.
+    expect(done.calls.filter((c) => c.opts.agentType === "runner").map((c) => c.label)).toEqual([
+      "preflight",
+      "writeback",
+      "publish",
+      "memory:record:published",
+    ]);
     // The human's brief answer reaches the planners: catches answers dropped for the recommended ones.
     expect(find(done.calls, "fit").prompt).toContain('"answer": "weekly"');
     // The published memory record names the comment, and is written once over the three runs.
     expect(find(done.calls, "memory:record:published").prompt).toContain(COMMENT_URL);
     const allLive = [...atBrief.live, ...atPlan.live, ...done.live];
     expect(allLive.filter((c) => c.label === "memory:record:published")).toHaveLength(1);
+  });
+
+  it("fit and stack are modes of ticket-auditor and architect: the mode line comes first, an audit or a design has none, and the judge reads the matching checklist heading", async () => {
+    // Catches the fold going wrong three ways: no mode line (the agent audits instead of writing the product
+    // case), a mode line on the first job (the eval and ship-feature intake rely on "no line = audit"), or the
+    // judge grading fit against the audit's `## Checklist`.
+    const { done } = await happyPath();
+    expect(find(done.calls, "fit").prompt.startsWith("Mode: fit.\n")).toBe(true);
+    expect(find(done.calls, "stack").prompt.startsWith("Mode: stack.\n")).toBe(true);
+    for (const label of ["audit", "architect"]) {
+      expect({ label, hasMode: /^Mode: /m.test(find(done.calls, label).prompt) }).toEqual({ label, hasMode: false });
+    }
+    const judged = (label: string) => find(done.calls, `judge:${label}`).prompt;
+    expect(judged("fit")).toContain(`against the ## Fit checklist section of ${ROOT}/.claude/agents/ticket-auditor.md`);
+    expect(judged("stack")).toContain(`against the ## Stack checklist section of ${ROOT}/.claude/agents/architect.md`);
+    expect(judged("audit")).toContain(`against the ## Checklist section of ${ROOT}/.claude/agents/ticket-auditor.md`);
+    expect(judged("architect")).toContain(`against the ## Checklist section of ${ROOT}/.claude/agents/architect.md`);
+  });
+
+  it("working memory goes to the runner as one memory.ts record command; no call reaches the context-memory agent", async () => {
+    // Catches a return to the free-text prompt (a model would edit the store) and a lost field: the stop's
+    // place, what it waits for and the next step, and the published links, decisions and todo.
+    const { atBrief, done } = await happyPath();
+    expect(done.calls.filter((c) => c.opts.agentType === "context-memory")).toEqual([]);
+    const stopRecord = find(atBrief.calls, "memory:record:needs-input:brief");
+    expect(stopRecord.opts.agentType).toBe("runner");
+    expect(stopRecord.prompt).toContain(`bun scripts/memory.ts record ${SLUG} <<'MEMORY_EOF'`);
+    expect(stopRecord.prompt).toContain("status: in-progress");
+    expect(stopRecord.prompt).toContain("stopped: Brief phase, status needs-input");
+    expect(stopRecord.prompt).toMatch(/^waiting: the user's approval of the amended ticket/m);
+    expect(stopRecord.prompt).toMatch(/^next: re-run Workflow plan-feature with resumeFromRunId/m);
+    expect(stopRecord.prompt).toContain(`checkout ${ROOT}`);
+    const published = find(done.calls, "memory:record:published").prompt;
+    expect(published).toContain(`bun scripts/memory.ts record ${SLUG} <<'MEMORY_EOF'`);
+    for (const line of [
+      "status: planned",
+      `issue: ${ISSUE_URL}`,
+      `link: decision record: ${COMMENT_URL}`,
+      `link: issue: ${ISSUE_URL}`,
+      'decision: Which format first? \u2014 chose "CSV" (agent) \u2014 owners use spreadsheets \u2014 plan-feature record on the issue',
+      "todo: review the PR stack, then build it (PR 1 first); build prototype a",
+      "next: run Workflow ship-feature",
+    ]) {
+      expect(published).toContain(line);
+    }
+    // Ticket text must not reach the store: the fields hold run facts only.
+    expect(published).not.toContain(INJECTION);
+    expect(stopRecord.prompt).not.toContain(INJECTION);
+  });
+
+  it("a run that has to write PRODUCT.md first still gives every call an agent type", async () => {
+    // Catches the untyped product interview and its writer, which ran as the general agent by default.
+    const r = await plan(
+      {},
+      rules([
+        ["preflight", { ...PREFLIGHT, has_product: false }],
+        ["product:interview", { questions: [{ id: "q1", question: "Who is it for?", draft: "owners", confident: true }] }],
+        ["product:write", { written: true, note: "" }],
+      ])
+    );
+    expect(r.phases).toContain("Product");
+    expect(r.calls.filter((c) => !c.opts.agentType).map((c) => c.label)).toEqual([]);
+    expect(find(r.calls, "product:interview").opts.agentType).toBe("general-purpose");
+    expect(find(r.calls, "product:write").opts.agentType).toBe("docs-writer");
   });
 
   it("every phase the runs enter, and every phase an agent call names, is declared in meta.phases", async () => {
@@ -241,8 +314,9 @@ describe("plan-feature: happy path", () => {
       expect({ label: c.label, outside: c.prompt.replace(fenced, "").includes(INJECTION) }).toEqual({ label: c.label, outside: false });
     }
     // Catches a new agent() call that skips the preamble (it would run in whatever checkout it starts in).
+    // A mode producer (fit, stack) opens with its mode line, then the preamble.
     for (const c of done.calls.slice(1)) {
-      expect({ label: c.label, head: c.prompt.slice(0, 40) }).toEqual({ label: c.label, head: `ROOT = ${ROOT}\nWork only inside ${ROOT}. cd there`.slice(0, 40) });
+      expect({ label: c.label, head: c.prompt.replace(/^Mode: (fit|stack)\.\n/, "").slice(0, 40) }).toEqual({ label: c.label, head: `ROOT = ${ROOT}\nWork only inside ${ROOT}. cd there`.slice(0, 40) });
     }
   });
 
@@ -270,7 +344,7 @@ describe("plan-feature: stop and resume", () => {
   it("a re-run replays every call before the stop from cache and never writes the stop's memory record twice", async () => {
     const { atBrief, atPlan } = await happyPath();
 
-    // Same args again (no answer yet): every call replays, the stop's context-memory record included.
+    // Same args again (no answer yet): every call replays, the stop's memory record included.
     const again = await plan({}, rules(), atBrief);
     expect(again.live).toEqual([]);
     expect(again.result).toEqual(atBrief.result);
@@ -355,8 +429,11 @@ describe("plan-feature: plan review rounds", () => {
     const arch = find(atPlan2.live, "architect:revise");
     expect(arch.opts.agentType).toBe("architect");
     expect(arch.prompt).toContain("- The human says: Use a queue for exports");
-    // Catches the stack re-planned against the stale architecture.
+    // Catches the stack re-planned against the stale architecture, and the stack revise losing its mode (the
+    // architect would redesign instead of re-cutting the PRs).
     expect(find(atPlan2.live, "stack:revise").prompt).toContain("ExportJob");
+    expect(find(atPlan2.live, "stack:revise").prompt.startsWith("Mode: stack.\n")).toBe(true);
+    expect(find(atPlan2.live, "stack:revise").opts.agentType).toBe("architect");
     expect(find(atPlan2.live, "check:assemble").prompt).toContain("- [architect] Use a queue for exports");
     expect(atPlan2.result).toMatchObject({ status: "needs-plan", round: 2, changedSinceLastRound: ["[architect] Use a queue for exports"] });
 

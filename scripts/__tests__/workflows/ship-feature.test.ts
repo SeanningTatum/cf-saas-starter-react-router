@@ -80,7 +80,7 @@ function happy(over: AnswerRule[] = []): AnswerRule[] {
     ["write:impact", { changed: [], dependents: [] }],
     ["write:unit", "tests written"],
     ["write:e2e", { specs: [{ path: `e2e/${SLUG}.spec.ts`, regression: "golden path" }], run: { passed: 2, failed: 0, tail: "" }, skipped: [] }],
-    ["write:spans", "spans added"],
+    ["write:instrument", { events: [], files: [], skipped: [], spans: ["spans added"] }],
     ["review:paths", { files: ["app/repositories/widget.ts", "app/routes/widget.tsx"] }],
     [/^review:gates:/, { gates: GATES }],
     [/^review:(effect|security|scale|lean|walk|critique):/, PASS],
@@ -163,19 +163,21 @@ describe("ship-feature: happy path, a ticket with a decision record, two stacked
       "build:pr2-ui": "ui-builder",
       "write:unit": "test-author",
       "write:e2e": "e2e-author",
-      "write:spans": "span-instrumenter",
+      "write:instrument": "instrumenter",
       "review:gates:1": "runner",
       "review:effect:1": "effect-ts-enforcer",
       "review:security:1": "security-reviewer",
       "review:scale:1": "scale-reviewer",
       "review:lean:1": "maintainability-reviewer",
       "review:walk:1": "feature-verifier",
+      "review:critique:1": "general-purpose",
       docs: "docs-writer",
-      "memory:needs-ship:1": "context-memory",
+      "memory:needs-ship:1": "runner",
+      "local:code-review:1:1": "general-purpose",
       split: "runner",
       "open:prs": "runner",
       "rollup:pr": "runner",
-      "memory:record": "context-memory",
+      "memory:record": "runner",
     };
     const got = Object.fromEntries(Object.keys(want).map((l) => [l, find(all, l).opts.agentType]));
     expect(got).toEqual(want);
@@ -207,11 +209,12 @@ describe("ship-feature: happy path, a ticket with a decision record, two stacked
       rollupReview: { pr: 103, status: "passed", sha: REVIEWED_SHA, confidence: 5 },
       open_findings: [],
       local_open: [],
-      greptile: [],
     });
+    // Catches the per-PR Greptile result field coming back: that path is gone.
+    expect(shipped.result).not.toHaveProperty("greptile");
     // Catches a merge command without --match-head-commit, or pinned to some other sha.
     expect((shipped.result as { next: string }).next).toContain(`gh pr merge 103 --squash --match-head-commit ${REVIEWED_SHA}`);
-    // The roll-up gets its own CI watch and a context-memory record at the very end.
+    // The roll-up gets its own CI watch and a working-memory record at the very end.
     expect(labels(shipped.calls).slice(-2)).toEqual(["close:checks", "memory:record"]);
     // Catches a phase() title renamed without meta, a phase out of order, or a call tagged with a phase that does not exist.
     const titles = (shipped.meta.phases ?? []).map((p) => p.title);
@@ -254,8 +257,9 @@ describe("ship-feature: stop and resume at the ship review", () => {
     expect(shipped.calls.slice(0, before).every((c) => c.cached)).toBe(true);
     // Catches a prompt that changes with args.ships: every agent before the stop would run again.
     expect(shipped.live.filter((c) => labels(stopped.calls).includes(c.label)).map((c) => c.label)).toEqual([]);
-    // Catches the stop's context-memory record running again on the approved resume.
+    // Catches the stop's working-memory record running again on the approved resume: the only record after it is the Close one.
     expect(labels(shipped.calls)).not.toContain("memory:needs-ship:1");
+    expect(shipped.live.filter((c) => c.prompt.includes("scripts/memory.ts record")).map((c) => c.label)).toEqual(["memory:record"]);
     expect(shipped.live[0]?.label).toBe("split");
   });
 
@@ -363,6 +367,74 @@ describe("ship-feature: fix rounds", () => {
     expect(r.status).toBe("shipped");
     expect(r.local_open).toEqual([`${PR1.branch}: 1 code-review finding(s) unanswered in round 1`]);
     expect(r.next).toContain("Local review left P0/P1 unanswered");
+  });
+});
+
+describe("ship-feature: one instrumenter, no per-PR Greptile, memory by script", () => {
+  it("Write makes ONE instrumenter call, spans only when there is no metric or no wrapper (catches the two instrumenter calls coming back, or analytics asked for with nothing to measure)", async () => {
+    const { stopped } = await runHappy();
+    const instr = stopped.calls.filter((c) => /^write:(instrument|spans|analytics)/.test(c.label));
+    expect(instr.map((c) => c.label)).toEqual(["write:instrument"]);
+    expect(instr[0].opts.agentType).toBe("instrumenter");
+    expect(instr[0].prompt).toContain("add spans only");
+    expect(instr[0].prompt).not.toContain("Success metric:");
+    expect(stopped.result).toMatchObject({ analytics: null });
+    // A metric alone is not enough: with no wrapper the call stays spans-only.
+    const noWrapper = await dryRun("ship-feature", {
+      args: ARGS,
+      answers: happy([["intake:record", { ...PLAN, metric: "share of users who add a widget" }]]),
+    });
+    expect(find(noWrapper.calls, "write:instrument").prompt).not.toContain("Success metric:");
+  });
+
+  it("with a metric and the wrapper, the same one call carries the metric and its events reach the ship page and the PR docs", async () => {
+    const event = { name: "widget_added", where: "app/trpc/routes/widget.ts:30", metric: "numerator" };
+    const run = await dryRun("ship-feature", {
+      args: ARGS,
+      answers: happy([
+        ["preflight", preflight({ has_analytics: true })],
+        ["intake:record", { ...PLAN, metric: "share of users who add a widget" }],
+        ["write:instrument", { events: [event], files: ["app/lib/analytics/events.ts"], skipped: [], spans: [] }],
+      ]),
+    });
+    const calls = run.calls.filter((c) => c.label.startsWith("write:instrument"));
+    expect(calls).toHaveLength(1);
+    expect(calls[0].prompt).toContain("Success metric: share of users who add a widget");
+    expect((run.result as { analytics: { events: unknown[] } }).analytics.events).toEqual([event]);
+    expect(find(run.calls, "docs").prompt).toContain("widget_added (app/trpc/routes/widget.ts:30)");
+  });
+
+  it("there is no per-PR Greptile phase, call or option; Greptile runs on the roll-up only (catches the dead path returning)", async () => {
+    const run = await dryRun("ship-feature", { args: approve(), answers: happy() });
+    // No greptile:* or local Greptile call, and no per-PR "Greptile" phase in meta or in the run.
+    expect(labels(run.calls).filter((l) => /^(greptile:|local:greptile)/.test(l))).toEqual([]);
+    expect((run.meta.phases ?? []).map((p) => p.title)).not.toContain("Greptile");
+    expect(run.phases).not.toContain("Greptile");
+    expect(labels(run.calls).filter((l) => l.startsWith("rollup-greptile:wait:"))).toEqual(["rollup-greptile:wait:1"]);
+  });
+
+  it("memory records go to the runner as one `bun scripts/memory.ts record` command, never to context-memory (catches a free-text prompt to a model that edits the store)", async () => {
+    const { stopped, shipped } = await runHappy();
+    const stop = find(stopped.calls, "memory:needs-ship:1");
+    expect(stop.opts.agentType).toBe("runner");
+    expect(stop.prompt).toContain(`bun scripts/memory.ts record ${SLUG} <<'MEMORY_EOF'`);
+    expect(stop.prompt).toContain("status: in-progress");
+    expect(stop.prompt).toContain(`issue: ${ISSUE_URL}`);
+    expect(stop.prompt).toMatch(/stopped: ship-feature, Ship round 1/);
+    expect(stop.prompt).toMatch(/next: re-run Workflow ship-feature/);
+    const close = find(shipped.calls, "memory:record");
+    expect(close.opts.agentType).toBe("runner");
+    expect(close.prompt).toContain(`bun scripts/memory.ts record ${SLUG} <<'MEMORY_EOF'`);
+    expect(close.prompt).toContain("link: roll-up PR: https://github.com/o/r/pull/103");
+    expect(close.prompt).toContain("todo: ");
+    expect([...stopped.calls, ...shipped.calls].filter((c) => c.opts.agentType === "context-memory")).toEqual([]);
+  });
+
+  it("every call in the happy path names an agent type and none overrides the model (catches an untyped call or a model pinned outside frontmatter)", async () => {
+    const { stopped, shipped } = await runHappy();
+    const all = [...stopped.calls, ...shipped.calls];
+    expect(all.filter((c) => !c.opts.agentType).map((c) => c.label)).toEqual([]);
+    expect(all.filter((c) => c.opts.model !== undefined).map((c) => c.label)).toEqual([]);
   });
 });
 

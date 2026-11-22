@@ -3,6 +3,7 @@ name: ux-planner
 description: Plans a feature's user flow, every screen and each screen's empty, loading, error and success states. Returns has_ui false for backend-only work. Used by the plan-feature workflow. Examples - "plan the screens for team invites", "state matrix for the billing page", "this ticket is a cron job, does it need UX?".
 tools: Read, Bash, Skill
 model: opus
+effort: high
 ---
 
 # ux-planner

@@ -3,6 +3,7 @@ name: scale-reviewer
 description: Read-only review of a diff for Cloudflare Workers and D1 scale - N+1 queries, missing indexes, unbounded lists, batching, rate limiting, queuing and backpressure, races and idempotency, CPU-time and subrequest limits, buffering whole R2 objects, cache chances, client bundle weight. Each finding names the data size where it breaks. Examples - "scale review the invoices branch", "will the admin users table survive 100k rows?", "check the new migration for missing indexes".
 tools: Read, Grep, Glob, Bash
 model: sonnet
+effort: medium
 ---
 
 # scale-reviewer

@@ -216,7 +216,7 @@ describe("brand-init: happy path, Preflight to Ship", () => {
     expect(typeOf("check:browser-walk")).toBe("feature-verifier");
     expect(typeOf("close:design-md")).toBe("impeccable:impeccable-documenter");
     for (const c of r3.calls.filter((c) => c.label === "build:fence-diff")) expect(c.opts.agentType).toBe("runner");
-    for (const c of r3.calls.filter((c) => c.label.startsWith("memory:"))) expect(c.opts.agentType).toBe("context-memory");
+    for (const c of r3.calls.filter((c) => c.label.startsWith("memory:"))) expect(c.opts.agentType, c.label).toBe("runner");
 
     const builds = r3.calls.filter((c) => c.label.startsWith("build:") && !["build:fence-diff", "build:polish"].includes(c.label));
     for (const c of builds) expect(c.opts.agentType, c.label).toBe("ui-builder");
@@ -234,6 +234,56 @@ describe("brand-init: happy path, Preflight to Ship", () => {
     const primitives = [...fences].filter(([l]) => l.startsWith("build:primitives:")).flatMap(([, f]) => f);
     const onDisk = readdirSync(UI_DIR).filter((f) => f.endsWith(".tsx")).map((f) => `app/components/ui/${f}`);
     expect([...primitives].sort()).toEqual([...onDisk].sort());
+  });
+
+  it("every call names its agent type and none overrides the model: the agent's frontmatter is the one source", async () => {
+    const { r1, r2, r3 } = await happyPath();
+    // Catches a new ask() with no agentType (it would run as the default agent) and a `model:` on a call.
+    for (const c of [...r1.calls, ...r2.calls, ...r3.calls]) {
+      expect(typeof c.opts.agentType, `${c.label} names an agent type`).toBe("string");
+      expect(c.opts, `${c.label} passes no model`).not.toHaveProperty("model");
+    }
+    const typeOf = (label: string) => one(r3, label).opts.agentType;
+    expect(typeOf("check:impeccable-critique")).toBe("general-purpose");
+    expect(typeOf("ship:record-commit-pr")).toBe("general-purpose");
+    // The comps are drawn and tuned by the design lead; a read-only shell step deals the directions.
+    expect(one(r2, "draw:1").opts.agentType).toBe("ui-builder");
+    expect(one(r2, "critique:1:taste").opts.agentType).toBe("ui-builder");
+    expect(one(r2, "draw:directions:1").opts.agentType).toBe("runner");
+  });
+
+  it("working memory goes through scripts/memory.ts on the runner, never a model editing the store", async () => {
+    const { r1, r2, r3 } = await happyPath();
+    const all = [...r1.calls, ...r2.calls, ...r3.calls];
+    // Catches a record sent to the context-memory agent as a free-text prompt.
+    expect(all.filter((c) => c.opts.agentType === "context-memory")).toEqual([]);
+
+    expect(one(r1, "memory:recall").prompt).toContain("bun scripts/memory.ts recall brand-init");
+
+    // The brief stop: fields on stdin, one `key: value` per line, with the same facts the old prompt carried.
+    const stop = one(r1, "memory:record:needs-input").prompt;
+    expect(stop).toContain("bun scripts/memory.ts record brand-init <<'MEMORY_EOF'");
+    expect(stop).toContain("status: in-progress");
+    expect(stop).toContain("stopped: Brief phase, status needs-input");
+    expect(stop).toContain("waiting: the user's answers to 1 interview question(s), ids users");
+    expect(stop).toContain("next: re-run Workflow brand-init with resumeFromRunId");
+    expect(stop).toContain("todo: answer the open interview questions");
+    expect(stop).toContain(`checkout ${ROOT}`);
+
+    // The pick stop names every comp so a later session can find the files.
+    const pick = one(r2, "memory:record:needs-pick").prompt;
+    expect(pick).toContain("bun scripts/memory.ts record brand-init");
+    expect(pick).toContain("waiting: the user's choice (pick and rebuildHome)");
+    expect(pick).toContain(`3, Comp 3 tasted, ${OUT}/3/comp.html, taste 8`);
+
+    // The ship record: done, the PR as a link, one decision per comp, no clock in any value.
+    const ship = one(r3, "memory:record:ship").prompt;
+    expect(ship).toContain("status: done");
+    expect(ship).toContain(`link: PR: ${SHIPPED.pr}`);
+    expect(ship).toContain(`link: commit: ${SHIPPED.commit}`);
+    expect(ship.match(/^decision: /gm)).toHaveLength(3);
+    expect(ship).toContain("todo: merge the PR after review");
+    expect(ship).not.toMatch(/\d{4}-\d{2}-\d{2}/);
   });
 
   it("the gates run first and every check runs alone: parallel dev servers share one Vite cache and corrupt each other", async () => {

@@ -2,7 +2,8 @@
 name: e2e-author
 description: Writes committed Playwright specs under e2e/ for a feature - one golden path and one error path per flow, logged in with the seeded fixtures, each naming the regression it catches. Runs only its own specs and reports pass or fail. Edits e2e/** only; reports app bugs, never fixes them. Examples - "write the e2e specs for team invites", "add the error path for the upload size limit", "the banned-user login spec is flaky, fix it".
 tools: Read, Write, Edit, Grep, Glob, Bash
-model: opus
+model: sonnet
+effort: medium
 ---
 
 # e2e-author

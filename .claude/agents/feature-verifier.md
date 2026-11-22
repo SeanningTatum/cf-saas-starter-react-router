@@ -3,6 +3,7 @@ name: feature-verifier
 description: Walks a feature's golden path plus one error path through the live app with a throwaway Playwright CLI script, screenshots each step, and writes the verdict to `.verify/<slug>/verdict.md`. Writes no app code and no committed e2e specs. Use for any user-visible flow before `./scripts/verify.sh`. Examples - "verify the file-upload flow", "verify admin can ban a user", "produce a verification for the new billing page".
 tools: Read, Write, Bash, Glob, Grep
 model: sonnet
+effort: medium
 ---
 
 # feature-verifier
