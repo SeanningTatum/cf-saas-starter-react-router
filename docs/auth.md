@@ -59,6 +59,8 @@ A dev build is `bun run dev`. Every other build is not dev: `bun run preview`, t
 }
 ```
 
+Secrets are not in `wrangler.jsonc`, so `wrangler types` sees one only through a local `.dev.vars` or `.env`, which a fresh clone and a CI runner lack. `workers/env.d.ts` declares every secret on `Env` (interface merging with the generated type), so `bun run typecheck` does not depend on local secret files. A new secret gets a line there.
+
 Wrangler does not inherit `vars` into an environment, so set them in both blocks. Local dev reads `.dev.vars` (copy `.dev.vars.example`).
 
 `wrangler.jsonc` is generated. `scripts/first-time-setup.ts` builds it with `buildWranglerConfig` in `scripts/lib/wrangler-config.ts` and overwrites the whole file, so a hand-added `vars` block does not survive a re-run of setup. Teardown also rewrites it from the placeholder values. The builder emits no `vars`. After a re-run, add the `vars` back. To keep them, add them in `buildWranglerConfig` instead. The rate-limit bindings are different: the builder emits them ([Rate limits](#rate-limits)).

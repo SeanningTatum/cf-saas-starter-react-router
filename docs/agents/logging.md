@@ -70,3 +70,7 @@ Two house lint rules (`bun run lint:house`; the table and how to add a rule are 
 What the gates do not see, so a reviewer still must: a procedure whose `runProcedure` call sits in dead code; a procedure built on a variable whose name does not end in `Procedure` (`const base = adminProcedure.use(mw)`); a span added in the data-first form `Effect.withSpan(effect, name)`, which the gate flags (use `.pipe`); an awaited call made through a wrapper in another file; a call that is only covered by a wide span around a whole block, not one of its own; a `tryPromise` in a small local helper whose caller adds the span (the gate flags this one: put the span in the helper). The ticket asked for "a public repository or service method without a span"; the rule checks awaited calls instead, because a method that only buffers or reads config needs no span.
 
 The `console` ban is Biome's `noConsole` rule (issue #79), not a house rule.
+
+## Why
+
+- **Two ways to read the request.** `workers/app.ts` opens an async-local store around each request (`runWithRequestContext`), and plain `loggers.x.info(...)` lines read `requestId` and `userId` from it, since they take no context argument. Effect code reads the same request from the per-request runtime (`CurrentRequest`) instead.

@@ -154,10 +154,7 @@
       "scripts/tracker.ts": 18,
       "scripts/workflows.ts": 8,
       "workers/__tests__/request-flow.test.ts": 18,
-      "workers/__tests__/security-headers.test.ts": 2,
-      "workers/app.ts": 8,
-      "workers/env.d.ts": 4,
-      "workers/security-headers.ts": 14
+      "workers/__tests__/security-headers.test.ts": 2
     },
     "external-call-span": {},
     "no-effect-promise": {},

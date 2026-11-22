@@ -32,9 +32,7 @@ declare module "react-router" {
     trpc: ReturnType<typeof createCaller>;
     auth: Auth;
     runtime: AppRuntime;
-    /** Per-request CSP nonce; see workers/security-headers.ts. */
     cspNonce: string;
-    /** This request's id, also sent as `x-request-id`; see app/lib/request-context.ts. */
     requestId: string;
     reportError: (capture: ErrorCapture) => void;
   }
@@ -108,11 +106,6 @@ async function handle(
 }
 
 export default {
-  // The one place that applies the security headers and the request id:
-  // every path out of `handle`, the two 500s included, passes through here.
-  // The async-local store opened here is what plain `loggers.x.info(...)`
-  // lines read their `requestId`/`userId` from; Effect code reads the same
-  // context from the runtime instead.
   async fetch(request, env, ctx) {
     const nonce = makeNonce();
     const requestContext = makeRequestContext(
@@ -129,7 +122,6 @@ export default {
       nonce,
       dev: import.meta.env.DEV,
     });
-    // `withSecurityHeaders` returns a fresh response with mutable headers.
     secured.headers.set("x-request-id", requestContext.requestId);
     return secured;
   },
