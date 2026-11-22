@@ -86,6 +86,7 @@ Enforced by `scripts/check-non-negotiables.ts`.
 | New helper or repository | Add its unit test in the same diff |
 | New / changed DB table or user-visible data | Extend the fixtures in `scripts/seed-preview.ts` |
 | New / changed user-visible flow | `feature-verifier` → `.verify/<slug>/verdict.md`, in the PR |
+| New / changed component driven by a `*.machine.ts` | Unit tests on the machine own the logic: every transition, guard and reachable state. The e2e spec owns the wiring: generated paths that hit each DOM binding and each state's view once, never one per transition (model: `e2e/file-upload.paths.spec.ts`) |
 | New / changed feature | A GitHub issue (`/to-spec`, `/to-tickets`); its PR closes it |
 | A new domain term | `GLOSSARY.md`  |
 | A decision worth keeping | `context-memory` record (dated, why); an ADR if hard to reverse; an agent rule goes in this file |
