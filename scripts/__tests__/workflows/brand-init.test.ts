@@ -8,6 +8,7 @@
 import { readdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
+import { lintTitle } from "../helpers/lint-title";
 import { dryRun, labels, seq, type AgentCall, type AnswerInput, type AnswerRule, type DryRunResult } from "../../lib/workflow-dry-run";
 
 /** The workflow returns untyped JSON. */
@@ -519,5 +520,16 @@ describe("brand-init: fix rounds", () => {
       items: [expect.objectContaining({ severity: "P0", source: "fence:primitives:feedback", file: "app/components/ui/button.tsx" })],
     });
     expect(byLabel(r, "ship:record-commit-pr")).toEqual([]);
+  });
+});
+
+describe("brand-init: the commit subject it dictates passes the repo's commitlint config", () => {
+  it("names a subject in the list of scopes: the old 'feat(brand)' scope would fail the commit-msg hook and the PR title job", async () => {
+    const { r3 } = await happyPath();
+    const prompt = one(r3, "ship:record-commit-pr").prompt;
+    const subject = prompt.match(/`(feat\([a-z-]+\): [^`]*)`/)?.[1] ?? "";
+    expect(subject).toContain("feat(design): ");
+    expect((await lintTitle(subject)).problems).toEqual([]);
+    expect(prompt).toContain("the PR title is the same line");
   });
 });

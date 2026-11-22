@@ -20,6 +20,10 @@ Dev differs in three ways: `connect-src` adds `ws:` for Vite's reload socket, th
 | `https://github.com`, `https://avatars.githubusercontent.com` | `img-src` | The kitchen-sink demo avatar |
 | `https://challenges.cloudflare.com` | `script-src`, `frame-src` | The Turnstile widget on sign-in and sign-up loads its script from here and renders in a frame from here. `TURNSTILE_ORIGIN` in `app/lib/constants/turnstile.ts`. `frame-src` also keeps `'self'`, which `default-src` allowed before the directive existed. |
 
+## CSP reporting
+
+The policy ends with `report-uri /api/browser-report` and `report-to csp`, and every response carries `Reporting-Endpoints: csp="/api/browser-report"`, both from `workers/security-headers.ts`. The browser posts each violation to that route, which records it as a warning-level error report with source `csp` ([error reporting](agents/error-reporting.md)). The route drops the query string of the page URL and of the blocked URL, caps body size and limits the rate, so it does not log every violation under load.
+
 ## Allow a new host
 
 Example: a browser analytics SDK that loads a script from, and posts to, `https://us.i.posthog.com`.

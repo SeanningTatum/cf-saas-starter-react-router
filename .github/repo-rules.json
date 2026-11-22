@@ -27,7 +27,11 @@
             "required_status_checks": [
               { "context": "Baseline (typecheck + test + harness-check)" },
               { "context": "Build (Cloudflare Workers)" },
-              { "context": "E2E smoke (Playwright)" }
+              { "context": "E2E smoke (Playwright)" },
+              {
+                "context": "PR title (Conventional Commits)",
+                "pending": "apply when v3.0 is on the default branch: until then pull requests into it do not carry pr-title.yml and the check would never report"
+              }
             ]
           }
         }
@@ -76,5 +80,9 @@
       "prevent_self_review": false,
       "deployment_branches": ["~DEFAULT_BRANCH"]
     }
-  ]
+  ],
+  "repository": {
+    "squash_merge_commit_title": "PR_TITLE",
+    "pending": "the owner applies it together with the PR title check, once v3.0 is on the default branch"
+  }
 }

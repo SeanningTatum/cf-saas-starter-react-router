@@ -7,6 +7,7 @@
  */
 
 import { TURNSTILE_ORIGIN } from "@/lib/constants/turnstile";
+import { BROWSER_REPORT_PATH, CSP_REPORT_GROUP } from "@/lib/constants/error-reporting";
 
 /** The allow-list. The ONE place to add a host. Keys are CSP directives. */
 const CSP_SOURCES: Readonly<Record<string, ReadonlyArray<string>>> = {
@@ -54,11 +55,13 @@ const buildCsp = (opts: HeaderOptions): string => {
     return [name, ...sources, ...extra].join(" ");
   });
   if (!opts.dev) directives.push("upgrade-insecure-requests");
+  directives.push(`report-uri ${BROWSER_REPORT_PATH}`, `report-to ${CSP_REPORT_GROUP}`);
   return directives.join("; ");
 };
 
 export const securityHeaders = (opts: HeaderOptions = {}): Record<string, string> => ({
   "Content-Security-Policy": buildCsp(opts),
+  "Reporting-Endpoints": `${CSP_REPORT_GROUP}="${BROWSER_REPORT_PATH}"`,
   // Not in dev: a year-long pin on localhost would break other local
   // projects. No `includeSubDomains`: it would lock a fork out of any
   // http-only subdomain for a year (docs/security-headers.md).

@@ -3,6 +3,7 @@ import path from "node:path";
 import {
   RATE_LIMIT_BINDINGS,
   RATE_LIMIT_PERIOD_SECONDS,
+  RATE_LIMIT_REQUESTS_PER_PERIOD,
   type RateLimitBindingName,
 } from "../../app/lib/constants/rate-limit";
 
@@ -26,10 +27,10 @@ export interface RateLimitBinding {
 }
 
 export const RATE_LIMITS: ReadonlyArray<RateLimitBinding> = [
-  { name: RATE_LIMIT_BINDINGS.signIn, limit: 10, namespaceId: "1001", previewNamespaceId: "2001" },
-  { name: RATE_LIMIT_BINDINGS.signUp, limit: 5, namespaceId: "1002", previewNamespaceId: "2002" },
-  { name: RATE_LIMIT_BINDINGS.authApi, limit: 60, namespaceId: "1003", previewNamespaceId: "2003" },
-  { name: RATE_LIMIT_BINDINGS.upload, limit: 20, namespaceId: "1004", previewNamespaceId: "2004" },
+  { name: RATE_LIMIT_BINDINGS.signIn, limit: RATE_LIMIT_REQUESTS_PER_PERIOD.signIn, namespaceId: "1001", previewNamespaceId: "2001" },
+  { name: RATE_LIMIT_BINDINGS.signUp, limit: RATE_LIMIT_REQUESTS_PER_PERIOD.signUp, namespaceId: "1002", previewNamespaceId: "2002" },
+  { name: RATE_LIMIT_BINDINGS.authApi, limit: RATE_LIMIT_REQUESTS_PER_PERIOD.authApi, namespaceId: "1003", previewNamespaceId: "2003" },
+  { name: RATE_LIMIT_BINDINGS.upload, limit: RATE_LIMIT_REQUESTS_PER_PERIOD.upload, namespaceId: "1004", previewNamespaceId: "2004" },
 ];
 
 const rateLimitBindings = (namespaceIdOf: (binding: RateLimitBinding) => string) =>

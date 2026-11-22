@@ -1,48 +1,30 @@
-import { readFileSync } from "node:fs";
-import path from "node:path";
-import { expect, test } from "@playwright/test";
-import { Schema } from "effect";
-import { RATE_LIMIT_BINDINGS } from "../../app/lib/constants/rate-limit";
-import { JSONC_LINE_COMMENT, MS_PER_SECOND, TIMEOUTS_MS, WRANGLER_CONFIG_FILE } from "./values";
-
-const WranglerRateLimits = Schema.Struct({
-  ratelimits: Schema.Array(
-    Schema.Struct({
-      name: Schema.String,
-      simple: Schema.Struct({ limit: Schema.Number, period: Schema.Number }),
-    }),
-  ),
-});
+import { expect } from "@playwright/test";
+import {
+  MS_PER_SECOND,
+  RATE_LIMIT_PERIOD_SECONDS,
+  RATE_LIMIT_REQUESTS_PER_PERIOD,
+  msLeftInRateLimitWindow,
+} from "../../app/lib/constants/rate-limit";
+import { TIMEOUTS_MS } from "./values";
 
 export interface RateLimitRule {
   readonly limit: number;
   readonly periodSeconds: number;
 }
 
-export const rateLimitFromWrangler = (rule: keyof typeof RATE_LIMIT_BINDINGS): RateLimitRule => {
-  const configFile = test.info().config.configFile;
-  expect(configFile, "no playwright config file to find wrangler.jsonc beside").toBeTruthy();
-  const wranglerPath = path.join(path.dirname(configFile ?? ""), WRANGLER_CONFIG_FILE);
-  const config = Schema.decodeUnknownSync(WranglerRateLimits)(
-    JSON.parse(readFileSync(wranglerPath, "utf8").replace(JSONC_LINE_COMMENT, "")),
-  );
-  const binding = RATE_LIMIT_BINDINGS[rule];
-  const entry = config.ratelimits.find(({ name }) => name === binding);
-  expect(entry, `${WRANGLER_CONFIG_FILE} has no top-level ratelimits entry named ${binding}`).toBeDefined();
-  return { limit: entry?.simple.limit ?? 0, periodSeconds: entry?.simple.period ?? 0 };
-};
-
-const secondsLeftInWindow = (periodSeconds: number) =>
-  periodSeconds - ((Date.now() / MS_PER_SECOND) % periodSeconds);
+export const rateLimitFromWrangler = (rule: keyof typeof RATE_LIMIT_REQUESTS_PER_PERIOD): RateLimitRule => ({
+  limit: RATE_LIMIT_REQUESTS_PER_PERIOD[rule],
+  periodSeconds: RATE_LIMIT_PERIOD_SECONDS,
+});
 
 export const startEarlyInAFixedWindow = async ({ periodSeconds }: RateLimitRule, marginSeconds: number) => {
-  if (secondsLeftInWindow(periodSeconds) >= marginSeconds) return;
-  const windowOf = () => Math.floor(Date.now() / MS_PER_SECOND / periodSeconds);
-  const current = windowOf();
+  const periodMs = periodSeconds * MS_PER_SECOND;
+  const leftAtStart = msLeftInRateLimitWindow(Date.now(), periodMs);
+  if (leftAtStart >= marginSeconds * MS_PER_SECOND) return;
   await expect
-    .poll(windowOf, {
+    .poll(() => msLeftInRateLimitWindow(Date.now(), periodMs), {
       message: "the clock never reached the next rate-limit window",
       timeout: TIMEOUTS_MS.rateLimitWindowWait,
     })
-    .toBeGreaterThan(current);
+    .toBeGreaterThan(leftAtStart);
 };

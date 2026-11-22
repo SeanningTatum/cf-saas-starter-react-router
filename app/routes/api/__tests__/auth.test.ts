@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { Effect, Layer, ManagedRuntime } from "effect";
+import { Cause, Effect, Layer, ManagedRuntime } from "effect";
 import type { AppLoadContext } from "react-router";
 import { action, loader } from "../auth.$";
 import { RateLimiter, type RateLimitRule } from "@/services/rate-limit";
@@ -26,8 +26,9 @@ const contextWith = (layer: Layer.Layer<RateLimiter> | Layer.Layer<never>) => {
   const runtime = ManagedRuntime.make(layer);
   runtimes.push(runtime as ManagedRuntime.ManagedRuntime<never, never>);
   const handler = vi.fn(async (_request: Request) => new Response(HANDLED));
-  const context = { runtime, auth: { handler } } as unknown as AppLoadContext;
-  return { context, handler };
+  const reportError = vi.fn();
+  const context = { runtime, auth: { handler }, reportError } as unknown as AppLoadContext;
+  return { context, handler, reportError };
 };
 
 const limiterLayer = (allow: boolean, seen: Array<[RateLimitRule, string]> = []) =>
@@ -58,7 +59,7 @@ afterEach(async () => {
 describe("/api/auth/* action", () => {
   it("hands a request under the limit to Better Auth, after checking its rule and client key", async () => {
     const seen: Array<[RateLimitRule, string]> = [];
-    const { context, handler } = contextWith(limiterLayer(true, seen));
+    const { context, handler, reportError } = contextWith(limiterLayer(true, seen));
     const request = post("/api/auth/sign-in/email");
 
     const response = await callAction(request, context);
@@ -66,6 +67,7 @@ describe("/api/auth/* action", () => {
     expect(await response.text()).toBe(HANDLED);
     expect(handler).toHaveBeenCalledWith(request);
     expect(seen).toEqual([["signIn", "203.0.113.20"]]);
+    expect(reportError).not.toHaveBeenCalled();
   });
 
   it("answers 429 with Retry-After and never reaches Better Auth once over the limit", async () => {
@@ -79,15 +81,28 @@ describe("/api/auth/* action", () => {
     expect(handler).not.toHaveBeenCalled();
   });
 
-  it("lets the request through to Better Auth and logs, when the gate itself breaks", async () => {
+  it("lets the request through to Better Auth, logs, and reports the fault as an action error, when the gate itself breaks", async () => {
     const logged = vi.spyOn(loggers.auth, "error").mockImplementation(() => {});
-    const { context, handler } = contextWith(Layer.empty);
+    const { context, handler, reportError } = contextWith(Layer.empty);
 
     const response = await callAction(post("/api/auth/sign-in/email"), context);
 
     expect(await response.text()).toBe(HANDLED);
     expect(handler).toHaveBeenCalledOnce();
     expect(logged).toHaveBeenCalledWith(expect.anything(), AUTH_GATE_FAULT_MESSAGE);
+    expect(reportError).toHaveBeenCalledOnce();
+    const [capture] = reportError.mock.calls[0] ?? [];
+    expect(capture.source).toBe("action");
+    expect(Cause.isCause(capture.error)).toBe(true);
+  });
+
+  it("reports nothing when it answers 429, since a limited caller is expected", async () => {
+    const { context, reportError } = contextWith(limiterLayer(false));
+
+    const response = await callAction(post("/api/auth/sign-in/email"), context);
+
+    expect(response.status).toBe(HTTP_TOO_MANY_REQUESTS);
+    expect(reportError).not.toHaveBeenCalled();
   });
 });
 

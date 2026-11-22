@@ -1,46 +1,14 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { envOutsideAnyHook, GIT_IDENTITY as IDENTITY, NO_GLOBAL_CONFIG, useGitSandbox } from "./helpers/git-sandbox";
 
 const SCRIPT = path.join(__dirname, "..", "..", ".github", "scripts", "next-version.sh");
-const IDENTITY = [
-  "-c",
-  "user.name=Test",
-  "-c",
-  "user.email=test@example.invalid",
-  "-c",
-  "commit.gpgsign=false",
-  "-c",
-  "tag.gpgsign=false",
-];
 const LONG_BODY_BYTES = 600_000;
 
-const repos: string[] = [];
-const hookDecoy = { dir: "" };
-
-beforeEach(() => {
-  hookDecoy.dir = fs.mkdtempSync(path.join(os.tmpdir(), "next-version-decoy-"));
-  vi.stubEnv("GIT_DIR", hookDecoy.dir);
-  vi.stubEnv("GIT_WORK_TREE", path.join(hookDecoy.dir, "work"));
-  vi.stubEnv("GIT_INDEX_FILE", path.join(hookDecoy.dir, "index"));
-});
-
-afterEach(() => {
-  const leftInDecoy = fs.readdirSync(hookDecoy.dir);
-  vi.unstubAllEnvs();
-  for (const dir of [...repos.splice(0), hookDecoy.dir]) fs.rmSync(dir, { recursive: true, force: true });
-  expect(leftInDecoy, "a child git process wrote where the hook's GIT_DIR pointed").toEqual([]);
-});
-
-const GIT_ENV_PREFIX = "GIT_";
-const NO_GLOBAL_CONFIG = { GIT_CONFIG_GLOBAL: "/dev/null", GIT_CONFIG_NOSYSTEM: "1" };
-
-const envOutsideAnyHook = (source: NodeJS.ProcessEnv): NodeJS.ProcessEnv => ({
-  ...Object.fromEntries(Object.entries(source).filter(([key]) => !key.startsWith(GIT_ENV_PREFIX))),
-  ...NO_GLOBAL_CONFIG,
-});
+const { repos, hookDecoy } = useGitSandbox("next-version");
 
 const git = (cwd: string, ...args: string[]): string => {
   const result = spawnSync("git", [...IDENTITY, ...args], {

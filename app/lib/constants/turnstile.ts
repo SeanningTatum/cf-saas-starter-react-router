@@ -5,6 +5,9 @@ export const TURNSTILE_PROVIDER = "cloudflare-turnstile";
 export const TURNSTILE_TOKEN_HEADER = "x-captcha-response";
 export const TURNSTILE_PROTECTED_ENDPOINTS = ["/sign-up/email", "/sign-in/email"];
 
+export const TURNSTILE_OFF_WARNING =
+  "Turnstile is off, so sign-in and sign-up run with no bot check. Set TURNSTILE_SITE_KEY and TURNSTILE_SECRET_KEY to turn it on.";
+
 export const TURNSTILE_TEST_SITE_KEY = "1x00000000000000000000AA";
 export const TURNSTILE_TEST_SECRET_KEY = "1x0000000000000000000000000000000AA"; // secret-scan: allow secret-assignment -- public test secret from Cloudflare docs, always passes
 export const TURNSTILE_TEST_TOKEN = "XXXX.DUMMY.TOKEN.XXXX";

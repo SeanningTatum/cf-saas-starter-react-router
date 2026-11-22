@@ -35,7 +35,6 @@ export type SpecFile = keyof typeof CLIENT_IPS;
 
 export const IPV6_DOCUMENTATION_PREFIX = "2001:db8";
 export const IPV6_GROUP_RADIX = 16;
-export const IPV6_GROUP_COUNT = 4;
 export const IPV6_HOST_SUFFIX = "::1";
 
 export const SESSION_COOKIE_FRAGMENT = "session_token";
@@ -50,9 +49,6 @@ export const TURNSTILE_WIDGET_TEST_ID = "turnstile-widget";
 export const TURNSTILE_STATE_ATTRIBUTE = "data-turnstile-state";
 export const TURNSTILE_PROBLEM_TEST_ID = "turnstile-problem";
 export const TURNSTILE_RETRY_TEST_ID = "turnstile-retry";
-
-export const WRANGLER_CONFIG_FILE = "wrangler.jsonc";
-export const JSONC_LINE_COMMENT = /^\s*\/\/.*$/gm;
 
 export const HTTP_STATUS = {
   ok: 200,
@@ -69,4 +65,3 @@ export const TIMEOUTS_MS = {
 } as const;
 
 export const RATE_LIMIT_WINDOW_MARGIN_SECONDS = 20;
-export const MS_PER_SECOND = 1_000;

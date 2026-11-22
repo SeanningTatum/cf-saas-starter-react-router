@@ -13,9 +13,25 @@ import {
 import {
   MAX_UPLOAD_SIZE_BYTES,
   ALLOWED_UPLOAD_CONTENT_TYPES,
+  HTTP_BAD_REQUEST,
+  HTTP_INTERNAL_SERVER_ERROR,
+  HTTP_PAYLOAD_TOO_LARGE,
+  HTTP_SERVICE_UNAVAILABLE,
+  HTTP_UNAUTHORIZED,
   MAGIC_BYTES_SNIFF_LENGTH,
+  UPLOAD_CONTENT_MISMATCH_MESSAGE,
+  UPLOAD_FAILED_LOG,
+  UPLOAD_FAILED_MESSAGE,
+  UPLOAD_NO_FILE_MESSAGE,
+  UPLOAD_NOT_A_FORM_MESSAGE,
+  UPLOAD_TOO_LARGE_MESSAGE,
+  UPLOAD_TYPE_AND_SIZE_MESSAGE,
+  UPLOAD_UNAUTHORIZED_MESSAGE,
+  UPLOAD_UNAVAILABLE_MESSAGE,
+  declaresOversizedUpload,
   matchesMagicBytes,
 } from "@/lib/constants/upload";
+import { ErrorReporter } from "@/services/error-reporter";
 import type { Route } from "./+types/upload-file";
 
 const UploadedFileMeta = Schema.Struct({
@@ -23,14 +39,12 @@ const UploadedFileMeta = Schema.Struct({
   type: Schema.Literal(...ALLOWED_UPLOAD_CONTENT_TYPES),
 });
 
-const typeAndSizeMessage = `File must be one of [${ALLOWED_UPLOAD_CONTENT_TYPES.join(", ")}] and at most ${
-  MAX_UPLOAD_SIZE_BYTES / (1024 * 1024)
-}MB`;
+const refusal = (error: string, status: number, headers?: HeadersInit) =>
+  data({ success: false as const, error }, { status, headers });
+
+const fileField = (message: string) => new ValidationError({ entity: "file", field: "file", message });
 
 export async function action({ request, context }: Route.ActionArgs) {
-  const formData = await request.formData();
-  const file = formData.get("file");
-
   const program = Effect.gen(function* () {
     const session = yield* Effect.tryPromise({
       try: () => context.auth.api.getSession({ headers: request.headers }),
@@ -38,20 +52,23 @@ export async function action({ request, context }: Route.ActionArgs) {
     });
     const signedIn = activeSession(session, new Date(yield* Clock.currentTimeMillis));
     if (!signedIn) {
-      return data({ success: false as const, error: "Unauthorized" }, { status: 401 });
+      return refusal(UPLOAD_UNAUTHORIZED_MESSAGE, HTTP_UNAUTHORIZED);
     }
 
     const limiter = yield* RateLimiter;
     yield* limiter.check("upload", signedIn.user.id);
 
+    if (declaresOversizedUpload(request.headers)) {
+      return refusal(UPLOAD_TOO_LARGE_MESSAGE, HTTP_PAYLOAD_TOO_LARGE);
+    }
+
+    const formData = yield* Effect.tryPromise({
+      try: () => request.formData(),
+      catch: () => fileField(UPLOAD_NOT_A_FORM_MESSAGE),
+    });
+    const file = formData.get("file");
     if (!(file instanceof File)) {
-      return yield* Effect.fail(
-        new ValidationError({
-          entity: "file",
-          field: "file",
-          message: "No file provided",
-        })
-      );
+      return yield* Effect.fail(fileField(UPLOAD_NO_FILE_MESSAGE));
     }
 
     const meta = yield* Schema.decodeUnknown(UploadedFileMeta)(
@@ -59,27 +76,17 @@ export async function action({ request, context }: Route.ActionArgs) {
       { errors: "all" }
     ).pipe(
       Effect.mapError(
-        () =>
-          new BucketValidationError({
-            message: typeAndSizeMessage,
-            field: "file",
-          })
+        () => new BucketValidationError({ message: UPLOAD_TYPE_AND_SIZE_MESSAGE, field: "file" })
       )
     );
 
-    // The declared multipart type is client-controlled — verify the actual
-    // leading bytes match the declared type's signature.
     const head = yield* Effect.tryPromise({
       try: () => file.slice(0, MAGIC_BYTES_SNIFF_LENGTH).arrayBuffer(),
-      catch: (cause) =>
-        new ExternalServiceError({ service: "FileRead", cause }),
+      catch: (cause) => new ExternalServiceError({ service: "FileRead", cause }),
     });
     if (!matchesMagicBytes(meta.type, new Uint8Array(head))) {
       return yield* Effect.fail(
-        new BucketValidationError({
-          message: "File content does not match its declared type",
-          field: "file",
-        })
+        new BucketValidationError({ message: UPLOAD_CONTENT_MISMATCH_MESSAGE, field: "file" })
       );
     }
 
@@ -87,34 +94,21 @@ export async function action({ request, context }: Route.ActionArgs) {
     const key = yield* repo.upload(file);
     return data({ success: true as const, key });
   }).pipe(
-    Effect.tapErrorCause((cause) => Effect.logError("Upload failed", cause)),
+    Effect.catchTag("RateLimitError", (e) =>
+      Effect.succeed(
+        refusal(UPLOAD_RATE_LIMITED_MESSAGE, HTTP_TOO_MANY_REQUESTS, {
+          [RETRY_AFTER_HEADER]: String(e.retryAfterSeconds),
+        })
+      )
+    ),
+    Effect.tapErrorCause((cause) => Effect.logError(UPLOAD_FAILED_LOG, cause)),
     Effect.catchTags({
-      ValidationError: (e) =>
-        Effect.succeed(
-          data({ success: false as const, error: e.message }, { status: 400 })
-        ),
-      BucketValidationError: (e) =>
-        Effect.succeed(
-          data({ success: false as const, error: e.message }, { status: 400 })
-        ),
-      RateLimitError: (e) =>
-        Effect.succeed(
-          data(
-            { success: false as const, error: UPLOAD_RATE_LIMITED_MESSAGE },
-            {
-              status: HTTP_TOO_MANY_REQUESTS,
-              headers: { [RETRY_AFTER_HEADER]: String(e.retryAfterSeconds) },
-            }
-          )
-        ),
-      // Transient upstream failure (Better Auth session lookup, file read) —
-      // 503 so clients can distinguish "retry later" from a real 500.
-      ExternalServiceError: () =>
-        Effect.succeed(
-          data(
-            { success: false as const, error: "Service temporarily unavailable" },
-            { status: 503 }
-          )
+      ValidationError: (e) => Effect.succeed(refusal(e.message, HTTP_BAD_REQUEST)),
+      BucketValidationError: (e) => Effect.succeed(refusal(e.message, HTTP_BAD_REQUEST)),
+      ExternalServiceError: (error) =>
+        Effect.as(
+          Effect.flatMap(ErrorReporter, (reporter) => reporter.capture({ error, source: "upload" })),
+          refusal(UPLOAD_UNAVAILABLE_MESSAGE, HTTP_SERVICE_UNAVAILABLE)
         ),
     })
   );
@@ -122,7 +116,9 @@ export async function action({ request, context }: Route.ActionArgs) {
   const exit = await context.runtime.runPromiseExit(program);
   return Exit.match(exit, {
     onSuccess: (response) => response,
-    onFailure: () =>
-      data({ success: false as const, error: "Internal Server Error" }, { status: 500 }),
+    onFailure: (cause) => {
+      context.reportError({ error: cause, source: "upload" });
+      return refusal(UPLOAD_FAILED_MESSAGE, HTTP_INTERNAL_SERVER_ERROR);
+    },
   });
 }
