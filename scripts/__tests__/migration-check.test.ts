@@ -17,11 +17,7 @@ import {
   type GitResult,
 } from "../migration-check";
 import {
-  CONFIG_OUT_PATTERN,
-  CONFIG_SCHEMA_PATTERN,
-  DEFAULT_OUT_DIR,
   DEFAULT_SCHEMA_PATH,
-  DRIZZLE_CONFIG_FILE,
   DRIZZLE_DIR,
   MIN_REASON_CHARS,
   TEMP_PREFIX,
@@ -346,14 +342,17 @@ describe("run exit codes", () => {
   });
 });
 
+const CONFIG_OUT_PATTERN = /out:\s*"([^"]+)"/;
+const CONFIG_SCHEMA_PATTERN = /schema:\s*"([^"]+)"/;
+
 describe("drizzle.config.ts match", () => {
-  const text = fs.readFileSync(path.join(repoRoot, DRIZZLE_CONFIG_FILE), "utf-8");
+  const text = fs.readFileSync(path.join(repoRoot, "drizzle.config.ts"), "utf-8");
   it("keeps the default schema path equal to the one drizzle.config.ts names", () => {
     expect(CONFIG_SCHEMA_PATTERN.exec(text)?.[1]).toBe(DEFAULT_SCHEMA_PATH);
   });
   it("keeps the default out dir equal to the one drizzle.config.ts names", () => {
-    expect(CONFIG_OUT_PATTERN.exec(text)?.[1]).toBe(DEFAULT_OUT_DIR);
-    expect(path.normalize(DEFAULT_OUT_DIR)).toBe(DRIZZLE_DIR);
+    const out = CONFIG_OUT_PATTERN.exec(text)?.[1] ?? "";
+    expect(path.normalize(out)).toBe(DRIZZLE_DIR);
   });
 });
 
@@ -362,15 +361,6 @@ const migrationsListing = () => fs.readdirSync(path.join(repoRoot, DRIZZLE_DIR))
 const SLOW_TEST_MS = 30000;
 
 describe("drift against real drizzle-kit", () => {
-  it(
-    "finds no drift between the real schema and the real migrations",
-    () => {
-      const probe = generateInTempCopy(repoRoot, DEFAULT_SCHEMA_PATH);
-      expect(decideDrift(probe)).toEqual({ kind: "clean" });
-    },
-    SLOW_TEST_MS,
-  );
-
   it(
     "reports one extra table as drift and leaves no temp dir and no new migration",
     () => {
@@ -385,4 +375,13 @@ describe("drift against real drizzle-kit", () => {
     },
     SLOW_TEST_MS,
   );
+
+  it("returns an unclear probe, not a throw, when the repo has no drizzle folder", () => {
+    const empty = fs.mkdtempSync(path.join(os.tmpdir(), "empty-root-"));
+    const probe = generateInTempCopy(empty, DEFAULT_SCHEMA_PATH);
+    fs.rmSync(empty, { recursive: true, force: true });
+    expect(probe.newFiles).toEqual([]);
+    expect(probe.output).not.toBe("");
+    expect(decideDrift(probe).kind).toBe("unclear");
+  });
 });

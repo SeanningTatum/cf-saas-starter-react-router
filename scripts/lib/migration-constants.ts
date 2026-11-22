@@ -11,8 +11,6 @@ export const MIN_REASON_CHARS = 30;
 export const MAX_DETAIL_CHARS = 100;
 
 export const DEFAULT_SCHEMA_PATH = "./app/db/schema.ts";
-export const DEFAULT_OUT_DIR = "./drizzle";
-export const DRIZZLE_CONFIG_FILE = "drizzle.config.ts";
 export const DRIZZLE_KIT_BIN = "node_modules/.bin/drizzle-kit";
 export const DRIZZLE_DIALECT = "sqlite";
 export const drizzleKitArgs = (schemaPath: string, outDir: string): string[] => [
@@ -77,9 +75,6 @@ export const ALTER_RENAME = /^ALTER\s+TABLE\s+\S+\s+RENAME\b/i;
 export const ALTER_ADD = /^ALTER\s+TABLE\s+\S+\s+ADD\b/i;
 export const NOT_NULL = /\bNOT\s+NULL\b/i;
 export const HAS_DEFAULT = /\bDEFAULT\b/i;
-
-export const CONFIG_OUT_PATTERN = /out:\s*"([^"]+)"/;
-export const CONFIG_SCHEMA_PATTERN = /schema:\s*"([^"]+)"/;
 
 export const FAIL_MARK = "✗";
 export const PASS_MARK = "✓";

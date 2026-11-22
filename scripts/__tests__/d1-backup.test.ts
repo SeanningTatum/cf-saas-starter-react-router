@@ -1,17 +1,15 @@
 import { describe, it, expect } from "vitest";
 import {
   exportArgv,
-  gzipArgv,
   isMigrationPending,
   isValidBucketName,
   listArgv,
   objectKey,
   parseBookmark,
   putArgv,
-  restoreCommand,
   run,
   shortSha,
-  timeTravelInfoArgv,
+  spawnCommand,
   utcStamp,
   type CommandResult,
   type Deps,
@@ -30,8 +28,10 @@ const PACKED = "/tmp-test/d1-export.sql.gz";
 const PENDING_OUTPUT = "Migrations to be applied:\n| 0001_init.sql |\n";
 const NOTHING_OUTPUT = "✅ No migrations to apply!\n";
 const INFO_OUTPUT = `⛅️ wrangler 4.69.0\n${JSON.stringify({ bookmark: BOOKMARK }, null, 2)}\n`;
-const ok = (stdout = ""): CommandResult => ({ status: 0, stdout });
-const failed: CommandResult = { status: 1, stdout: "" };
+const ok = (stdout = ""): CommandResult => ({ status: 0, stdout, timedOut: false });
+const failed: CommandResult = { status: 1, stdout: "", timedOut: false };
+const hung: CommandResult = { status: 1, stdout: "", timedOut: true };
+const MIB = 1_048_576;
 
 type Replies = Partial<Record<"list" | "info" | "export" | "gzip" | "put", CommandResult>>;
 
@@ -43,8 +43,10 @@ function kind(argv: readonly string[]): keyof Replies {
   return "put";
 }
 
-function harness(replies: Replies = {}, env: Record<string, string> = {}) {
+function harness(replies: Replies = {}, env: Record<string, string> = {}, packedSize: number | undefined = MIB) {
   const calls: (readonly string[])[] = [];
+  const limits: number[] = [];
+  const events: string[] = [];
   const logs: string[] = [];
   const appended: string[] = [];
   const removed: string[] = [];
@@ -57,17 +59,23 @@ function harness(replies: Replies = {}, env: Record<string, string> = {}) {
   };
   const deps: Deps = {
     env: { CLOUDFLARE_API_TOKEN: FAKE_TOKEN, DEPLOY_SHA: SHA, GITHUB_STEP_SUMMARY: SUMMARY_FILE, ...env },
-    runCommand: (argv) => {
+    runCommand: (argv, timeoutMs) => {
       calls.push(argv);
+      limits.push(timeoutMs);
+      events.push(`run:${kind(argv)}`);
       return { ...defaults, ...replies }[kind(argv)];
     },
     appendFile: (_file, text) => appended.push(text),
-    removeFile: (file) => removed.push(file),
+    removeFile: (file) => {
+      removed.push(file);
+      events.push(`rm:${file}`);
+    },
+    fileSize: (file) => (file === PACKED ? packedSize : undefined),
     log: (line) => logs.push(line),
     now: () => NOW,
     tempDir: TEMP,
   };
-  return { deps, calls, logs, appended, removed, summary: () => appended.join("") };
+  return { deps, calls, limits, events, logs, appended, removed, summary: () => appended.join("") };
 }
 
 const kinds = (calls: (readonly string[])[]) => calls.map(kind);
@@ -142,16 +150,8 @@ describe("argv builders", () => {
     expect(listArgv()).toEqual(["bunx", "wrangler", "d1", "migrations", "list", "DATABASE", "--remote"]);
   });
 
-  it("passes --json to time-travel info: the bookmark parser needs JSON", () => {
-    expect(timeTravelInfoArgv()).toEqual(["bunx", "wrangler", "d1", "time-travel", "info", "DATABASE", "--json"]);
-  });
-
   it("passes --remote and --output to export", () => {
     expect(exportArgv(DUMP)).toEqual(["bunx", "wrangler", "d1", "export", "DATABASE", "--remote", "--output", DUMP]);
-  });
-
-  it("runs gzip with --force so a leftover .gz from an earlier run cannot stop it", () => {
-    expect(gzipArgv(DUMP)).toEqual(["gzip", "--force", DUMP]);
   });
 
   it("passes --file and --remote to the upload: wrangler 4 writes to local storage without --remote", () => {
@@ -160,10 +160,24 @@ describe("argv builders", () => {
     ]);
   });
 
-  it("prints a restore command that names the bookmark", () => {
-    expect(restoreCommand(BOOKMARK)).toBe(
-      `bunx wrangler d1 time-travel restore DATABASE --bookmark=${BOOKMARK}`,
-    );
+});
+
+describe("spawnCommand", () => {
+  it("reports a missing binary as a failed step instead of throwing: a missing gzip left the dump on disk", () => {
+    const result = spawnCommand(["definitely-not-a-real-binary-d1"], 5000);
+    expect(result.status).not.toBe(0);
+    expect(result.timedOut).toBe(false);
+  });
+
+  it("marks a command that runs past its limit as timed out", () => {
+    const result = spawnCommand([process.execPath, "-e", "setTimeout(function () {}, 10000)"], 200);
+    expect(result.timedOut).toBe(true);
+    expect(result.status).not.toBe(0);
+  });
+
+  it("returns stdout and status 0 for a command that succeeds", () => {
+    const result = spawnCommand([process.execPath, "-e", "console.log('hi')"], 10000);
+    expect(result).toEqual({ status: 0, stdout: "hi\n", timedOut: false });
   });
 });
 
@@ -240,13 +254,13 @@ describe("run", () => {
     const h = harness({}, { D1_BACKUP_BUCKET: " my-bucket ", RUNNER_TEMP: TEMP });
     expect(run(h.deps)).toBe(0);
     expect(h.calls).toEqual([
-      listArgv(),
-      timeTravelInfoArgv(),
-      exportArgv(DUMP),
-      gzipArgv(DUMP),
-      putArgv("my-bucket", KEY, PACKED),
+      ["bunx", "wrangler", "d1", "migrations", "list", "DATABASE", "--remote"],
+      ["bunx", "wrangler", "d1", "time-travel", "info", "DATABASE", "--json"],
+      ["bunx", "wrangler", "d1", "export", "DATABASE", "--remote", "--output", DUMP],
+      ["gzip", "--force", DUMP],
+      ["bunx", "wrangler", "r2", "object", "put", `my-bucket/${KEY}`, "--file", PACKED, "--remote"],
     ]);
-    expect(h.removed.sort()).toEqual([DUMP, PACKED].sort());
+    expect(h.removed).toEqual([DUMP, PACKED, DUMP, PACKED]);
   });
 
   it("falls back to the OS temp dir when RUNNER_TEMP is unset", () => {
@@ -260,7 +274,9 @@ describe("run", () => {
     run(h.deps);
     const text = h.summary();
     expect(text).toContain(KEY);
-    expect(text).toContain("kept for 30 days by the bucket's lifecycle rule");
+    expect(text).toContain("lifecycle rule sets how long it is kept");
+    expect(text).toContain("asks for 30 days");
+    expect(text).not.toContain("kept for 30 days");
     expect(text).not.toContain("my-bucket");
   });
 
@@ -268,7 +284,7 @@ describe("run", () => {
     const h = harness({ export: failed }, { D1_BACKUP_BUCKET: "my-bucket" });
     expect(run(h.deps)).toBe(1);
     expect(kinds(h.calls)).toEqual(["list", "info", "export"]);
-    expect(h.removed.sort()).toEqual([DUMP, PACKED].sort());
+    expect(h.removed).toEqual([DUMP, PACKED, DUMP, PACKED]);
     expect(h.logs.some((l) => l.startsWith("::error::") && l.includes("export the database"))).toBe(true);
   });
 
@@ -276,7 +292,7 @@ describe("run", () => {
     const h = harness({ gzip: failed }, { D1_BACKUP_BUCKET: "my-bucket" });
     expect(run(h.deps)).toBe(1);
     expect(kinds(h.calls)).toEqual(["list", "info", "export", "gzip"]);
-    expect(h.removed.sort()).toEqual([DUMP, PACKED].sort());
+    expect(h.removed).toEqual([DUMP, PACKED, DUMP, PACKED]);
     expect(h.logs.some((l) => l.startsWith("::error::") && l.includes("compress"))).toBe(true);
   });
 
@@ -284,15 +300,91 @@ describe("run", () => {
     const h = harness({ put: failed }, { D1_BACKUP_BUCKET: "my-bucket" });
     expect(run(h.deps)).toBe(1);
     expect(kinds(h.calls)).toEqual(["list", "info", "export", "gzip", "put"]);
-    expect(h.removed.sort()).toEqual([DUMP, PACKED].sort());
+    expect(h.removed).toEqual([DUMP, PACKED, DUMP, PACKED]);
     expect(h.logs.some((l) => l.startsWith("::error::") && l.includes("upload"))).toBe(true);
-    expect(h.summary()).not.toContain("kept for");
+    expect(h.summary()).not.toContain("Database export");
+  });
+
+  it("passes each command its own time limit: a hung export held production blocked until the job was killed", () => {
+    const h = harness({}, { D1_BACKUP_BUCKET: "my-bucket" });
+    run(h.deps);
+    expect(h.limits).toEqual([60_000, 60_000, 300_000, 120_000, 300_000]);
+  });
+
+  it.each([
+    ["list", "list pending migrations", 60],
+    ["info", "restore point", 60],
+    ["export", "export the database", 300],
+    ["gzip", "compress the export", 120],
+    ["put", "upload the export", 300],
+  ] as const)("stops with a timeout line, not an exit code, when %s hangs", (which, _words, seconds) => {
+    const h = harness({ [which]: hung }, { D1_BACKUP_BUCKET: "my-bucket" });
+    expect(run(h.deps)).toBe(1);
+    expect(kinds(h.calls).at(-1)).toBe(which);
+    const lines = h.logs.filter((l) => l.startsWith("::error::"));
+    expect(lines).toHaveLength(1);
+    if (which !== "info") expect(lines[0]).toContain(`timed out after ${seconds} seconds`);
+    if (which !== "list" && which !== "info") expect(h.removed).toEqual([DUMP, PACKED, DUMP, PACKED]);
+  });
+
+  it("removes a stale dump from an earlier killed run before the export starts: it must never be uploaded", () => {
+    const h = harness({}, { D1_BACKUP_BUCKET: "my-bucket" });
+    run(h.deps);
+    const exportAt = h.events.indexOf("run:export");
+    expect(h.events.slice(0, exportAt)).toEqual(
+      expect.arrayContaining(["run:list", "run:info", `rm:${DUMP}`, `rm:${PACKED}`]),
+    );
+    expect(h.events.indexOf(`rm:${DUMP}`)).toBeLessThan(exportAt);
+    expect(h.events.indexOf(`rm:${PACKED}`)).toBeLessThan(exportAt);
+  });
+
+  it("refuses a packed export over 300 MiB with a hint, uploads nothing and removes both files: a too-large export failed with no hint", () => {
+    const h = harness({}, { D1_BACKUP_BUCKET: "my-bucket" }, 301 * MIB);
+    expect(run(h.deps)).toBe(1);
+    expect(kinds(h.calls)).toEqual(["list", "info", "export", "gzip"]);
+    expect(h.removed).toEqual([DUMP, PACKED, DUMP, PACKED]);
+    const line = h.logs.find((l) => l.startsWith("::error::")) ?? "";
+    expect(line).toContain("301 MiB");
+    expect(line).toContain("300 MiB");
+    expect(line).toContain("Unset the D1_BACKUP_BUCKET variable");
+    expect(line).toContain("docs/ci/rollback.md");
+  });
+
+  it("uploads a packed export of exactly 300 MiB: the limit is inclusive", () => {
+    const h = harness({}, { D1_BACKUP_BUCKET: "my-bucket" }, 300 * MIB);
+    expect(run(h.deps)).toBe(0);
+    expect(kinds(h.calls)).toContain("put");
+  });
+
+  it("uploads when the packed size cannot be read: wrangler gives the verdict then", () => {
+    const h = harness({}, { D1_BACKUP_BUCKET: "my-bucket" }, undefined);
+    expect(run(h.deps)).toBe(0);
+  });
+
+  it.each(["abc def", "a;b", "$(x)", "a/b", "a\nb", "x`y`"])(
+    "fails closed on the odd bookmark %j: it must not reach the summary",
+    (bookmark) => {
+      const h = harness({ info: ok(JSON.stringify({ bookmark })) }, { D1_BACKUP_BUCKET: "my-bucket" });
+      expect(run(h.deps)).toBe(1);
+      expect(kinds(h.calls)).toEqual(["list", "info"]);
+      expect(h.summary()).toBe("");
+    },
+  );
+
+  it("prints DEPLOY_SHA in the summary only when it is hex: an odd value must not reach the summary", () => {
+    const odd = harness({}, { DEPLOY_SHA: "abc`rm -rf`" });
+    run(odd.deps);
+    expect(odd.summary()).toContain("Commit: `unknown`");
+    expect(odd.summary()).not.toContain("rm -rf");
+    const hex = harness();
+    run(hex.deps);
+    expect(hex.summary()).toContain(`Commit: \`${SHA}\``);
   });
 
   it("never passes or logs the API token, and never prints command output", () => {
     const secretOutput = `row data ${FAKE_TOKEN}`;
     const cases = [
-      harness({ export: { status: 1, stdout: secretOutput } }, { D1_BACKUP_BUCKET: "my-bucket" }),
+      harness({ export: { status: 1, stdout: secretOutput, timedOut: false } }, { D1_BACKUP_BUCKET: "my-bucket" }),
       harness({}, { D1_BACKUP_BUCKET: "my-bucket" }),
       harness({}, {}),
     ];

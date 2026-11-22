@@ -26,6 +26,8 @@ The `migrations` gate (`bun run scripts/migration-check.ts`, part of `./scripts/
 2. A migration that is already on the base branch and was edited or deleted. The same reason file lifts it. The check is skipped, with a note, when there is no base ref to compare to (a shallow CI clone).
 3. Drift: `app/db/schema.ts` and the migrations disagree. No reason file lifts this. Run `bun run db:generate`, read the new SQL, commit it.
 
+The 30-character floor only proves a reason exists; a reviewer judges whether it is a good one. The gate guards against mistakes. It is not a security boundary: a pull request can change the script.
+
 A good reason says two things: why the statement is safe for the code that is live while it runs, and how to get the data back. For example: "No code reads `user.name` since deploy 2. The column's values are copied in `display_name`; the deploy's restore point holds the old column."
 
 ## What the deploy saves before a migration
@@ -42,12 +44,15 @@ The two layers:
 
 Why R2 and not a GitHub Actions artifact: this repo is public, so anyone who can see the runs can read an artifact. The dump holds user rows, password hashes and session tokens. It goes to a private R2 bucket in your own Cloudflare account, not the app's bucket.
 
+The 30 days hold only after owner step 3 below. Until you add the rule, exports stay until you delete them.
+
 Limits:
 
-- An export blocks other requests to the database while it runs ([import and export](https://developers.cloudflare.com/d1/best-practices/import-export-data/)).
+- An export blocks other requests to the database while it runs ([import and export](https://developers.cloudflare.com/d1/best-practices/import-export-data/)). That is production downtime, and it grows with the size of the database. Time one export on your own database before you rely on it. The step stops an export after 5 minutes and fails the deploy; the migration does not run.
+- The 300 MiB limit of `wrangler r2 object put` is on the gzipped file. The step checks the size before it uploads. Over the limit, the deploy fails with a message that names the size. Where the limit trips depends on how well the dump compresses. The way out: unset `D1_BACKUP_BUCKET` to deploy with the Time Travel restore point alone, or move the export to another route (the [Time Travel page](https://developers.cloudflare.com/d1/reference/time-travel/) points to an export to R2 through Workflows for long-term copies).
 - An export does not support virtual tables (FTS5).
-- `wrangler r2 object put` takes files up to 300 MiB. A larger database needs another route; the step does not have one, and it will fail the deploy.
-- Rows written between the export and the migration are in the bookmark but not in the export.
+- The bookmark is read first, then the export runs, then the migration. Rows written in between are in a later bookmark (restore by `--timestamp`) but not in the export.
+- On a self-hosted runner, a killed job can leave the dump in the runner's temp folder. The step deletes it on every path it controls, and again at its next start. GitHub-hosted runners (a fresh VM per job) are what this was built for.
 
 ## Owner steps to turn the export on
 
@@ -68,7 +73,7 @@ Run these once, by hand. The workflow never creates them.
    ```
 
 4. Set the repo variable `D1_BACKUP_BUCKET` to `<name>` (Settings, Secrets and variables, Actions, Variables).
-5. Give the production API token R2 write rights. The lifecycle docs name the permission group "Workers R2 Storage Write". If the upload fails with an authentication error, add it to the token.
+5. Give the production API token R2 write rights for this bucket only. The lifecycle docs name the permission group "Workers R2 Storage Write". When you create or edit the token, add that permission and limit it to the backup bucket if the token form lets you scope it to buckets; otherwise know that the token can write to every bucket in the account. `D1_BACKUP_BUCKET` must never name the app's own bucket (the one in `wrangler.jsonc`). If the upload fails with an authentication error, add the permission to the token.
 
 ## Case A: the new code is bad, the migration is fine
 

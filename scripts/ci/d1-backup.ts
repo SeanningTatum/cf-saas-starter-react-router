@@ -1,10 +1,11 @@
 #!/usr/bin/env bun
 import { Either, Schema } from "effect";
+import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import {
-  BACKUP_RETENTION_DAYS,
+  BOOKMARK_RULE,
   BUCKET_NAME_RULE,
   CLOSE_BRACE,
   COLON,
@@ -15,52 +16,73 @@ import {
   ENV_SUMMARY,
   ERROR_BAD_BUCKET,
   ERROR_NO_RESTORE_POINT,
+  EXIT_FAIL,
+  EXIT_OK,
   EXPORT_FILE_NAME,
+  EXPORT_TIMEOUT_MS,
   FILE_FLAG,
   GZIP_COMMAND,
   GZIP_FORCE_FLAG,
   GZIP_SUFFIX,
+  GZIP_TIMEOUT_MS,
   HEX_ONLY,
+  INFO_TIMEOUT_MS,
   ISO_FRACTION,
   JSON_FLAG,
   KEY_PREFIX,
   KEY_SUFFIX,
+  LIST_TIMEOUT_MS,
   LOG_NO_MIGRATION,
+  MAX_UPLOAD_BYTES,
   NO_MIGRATIONS_MARKER,
   OPEN_BRACE,
   OUTPUT_FLAG,
   REMOTE_FLAG,
-  ROLLBACK_DOC,
   SHA_PREFIX_LENGTH,
   STEP_COMPRESS,
   STEP_EXPORT,
+  STEP_LIST,
   STEP_UPLOAD,
+  SUCCESS_STATUS,
   SUMMARY_HEADING,
+  SUMMARY_SEE,
+  TIMEOUT_CODE,
   UNKNOWN_SHA,
+  UPLOAD_TIMEOUT_MS,
   WARNING_NO_BUCKET,
   WRANGLER_COMMAND,
   bookmarkLine,
-  listFailed,
+  exportTooLarge,
   stepFailed,
+  stepTimedOut,
+  summaryBookmark,
+  summaryCommit,
+  summaryExport,
+  summaryRestore,
+  summaryTime,
   uploadedLine,
 } from "../lib/d1-backup-constants";
 
 export interface CommandResult {
   status: number;
   stdout: string;
+  timedOut: boolean;
 }
 
 export interface Deps {
   env: Record<string, string | undefined>;
-  runCommand: (argv: readonly string[]) => CommandResult;
+  runCommand: (argv: readonly string[], timeoutMs: number) => CommandResult;
   appendFile: (file: string, text: string) => void;
   removeFile: (file: string) => void;
+  fileSize: (file: string) => number | undefined;
   log: (line: string) => void;
   now: () => Date;
   tempDir: string;
 }
 
-const Bookmark = Schema.parseJson(Schema.Struct({ bookmark: Schema.NonEmptyString }));
+const Bookmark = Schema.parseJson(
+  Schema.Struct({ bookmark: Schema.String.pipe(Schema.pattern(BOOKMARK_RULE)) }),
+);
 const decodeBookmark = Schema.decodeUnknownEither(Bookmark);
 
 export function isMigrationPending(listOutput: string): boolean {
@@ -68,16 +90,11 @@ export function isMigrationPending(listOutput: string): boolean {
 }
 
 export function parseBookmark(stdout: string): string | undefined {
-  const starts = [...stdout.matchAll(OPEN_BRACE)].map((m) => m.index);
-  const ends = [...stdout.matchAll(CLOSE_BRACE)].map((m) => m.index);
-  for (const start of starts) {
-    for (const end of ends) {
-      if (end < start) continue;
-      const parsed = decodeBookmark(stdout.slice(start, end + 1));
-      if (Either.isRight(parsed)) return parsed.right.bookmark;
-    }
-  }
-  return undefined;
+  const first = stdout.indexOf(OPEN_BRACE);
+  const last = stdout.lastIndexOf(CLOSE_BRACE);
+  if (first < 0 || last < first) return undefined;
+  const parsed = decodeBookmark(stdout.slice(first, last + 1));
+  return Either.isRight(parsed) ? parsed.right.bookmark : undefined;
 }
 
 export function isValidBucketName(name: string): boolean {
@@ -88,9 +105,14 @@ export function utcStamp(date: Date): string {
   return date.toISOString().replace(ISO_FRACTION, "Z").replace(COLON, "-");
 }
 
-export function shortSha(sha: string | undefined): string {
+function hexOrUnknown(sha: string | undefined): string {
   const trimmed = (sha ?? "").trim();
-  return HEX_ONLY.test(trimmed) ? trimmed.slice(0, SHA_PREFIX_LENGTH).toLowerCase() : UNKNOWN_SHA;
+  return HEX_ONLY.test(trimmed) ? trimmed.toLowerCase() : UNKNOWN_SHA;
+}
+
+export function shortSha(sha: string | undefined): string {
+  const hex = hexOrUnknown(sha);
+  return hex === UNKNOWN_SHA ? hex : hex.slice(0, SHA_PREFIX_LENGTH);
 }
 
 export function objectKey(date: Date, sha: string | undefined): string {
@@ -128,12 +150,42 @@ function recordRestorePoint(bookmark: string, deps: Deps): void {
   appendSummary(deps, [
     SUMMARY_HEADING,
     "",
-    `- Bookmark: \`${bookmark}\``,
-    `- Time (UTC): ${deps.now().toISOString()}`,
-    `- Commit: \`${(deps.env[ENV_SHA] ?? "").trim() || UNKNOWN_SHA}\``,
-    `- Restore: \`${restoreCommand(bookmark)}\``,
-    `- See ${ROLLBACK_DOC}`,
+    summaryBookmark(bookmark),
+    summaryTime(deps.now().toISOString()),
+    summaryCommit(hexOrUnknown(deps.env[ENV_SHA])),
+    summaryRestore(restoreCommand(bookmark)),
+    SUMMARY_SEE,
   ]);
+}
+
+function runStep(
+  deps: Deps,
+  step: string,
+  argv: readonly string[],
+  timeoutMs: number,
+): CommandResult | undefined {
+  const result = deps.runCommand(argv, timeoutMs);
+  if (result.timedOut) {
+    deps.log(stepTimedOut(step, timeoutMs));
+    return undefined;
+  }
+  if (result.status !== SUCCESS_STATUS) {
+    deps.log(stepFailed(step, result.status));
+    return undefined;
+  }
+  return result;
+}
+
+function exportSteps(bucket: string, key: string, dump: string, packed: string, deps: Deps): number {
+  if (!runStep(deps, STEP_EXPORT, exportArgv(dump), EXPORT_TIMEOUT_MS)) return EXIT_FAIL;
+  if (!runStep(deps, STEP_COMPRESS, gzipArgv(dump), GZIP_TIMEOUT_MS)) return EXIT_FAIL;
+  const size = deps.fileSize(packed);
+  if (size !== undefined && size > MAX_UPLOAD_BYTES) {
+    deps.log(exportTooLarge(size));
+    return EXIT_FAIL;
+  }
+  const uploaded = runStep(deps, STEP_UPLOAD, putArgv(bucket, key, packed), UPLOAD_TIMEOUT_MS);
+  return uploaded ? EXIT_OK : EXIT_FAIL;
 }
 
 function exportAndUpload(bucket: string, deps: Deps): number {
@@ -141,72 +193,76 @@ function exportAndUpload(bucket: string, deps: Deps): number {
   const dump = path.join(dir, EXPORT_FILE_NAME);
   const packed = `${dump}${GZIP_SUFFIX}`;
   const key = objectKey(deps.now(), deps.env[ENV_SHA]);
-  const steps: [string, string[]][] = [
-    [STEP_EXPORT, exportArgv(dump)],
-    [STEP_COMPRESS, gzipArgv(dump)],
-    [STEP_UPLOAD, putArgv(bucket, key, packed)],
-  ];
-  let code = 0;
-  for (const [step, argv] of steps) {
-    const result = deps.runCommand(argv);
-    if (result.status !== 0) {
-      deps.log(stepFailed(step, result.status));
-      code = 1;
-      break;
-    }
-  }
-  deps.removeFile(dump);
-  deps.removeFile(packed);
-  if (code === 0) {
+  const clean = () => {
+    deps.removeFile(dump);
+    deps.removeFile(packed);
+  };
+  clean();
+  const code = exportSteps(bucket, key, dump, packed, deps);
+  clean();
+  if (code === EXIT_OK) {
     deps.log(uploadedLine(key));
-    appendSummary(deps, [
-      "",
-      `Database export: \`${key}\`, kept for ${BACKUP_RETENTION_DAYS} days by the bucket's lifecycle rule.`,
-    ]);
+    appendSummary(deps, ["", summaryExport(key)]);
   }
   return code;
 }
 
 export function run(deps: Deps): number {
-  const listed = deps.runCommand(listArgv());
-  if (listed.status !== 0) {
-    deps.log(listFailed(listed.status));
-    return 1;
-  }
+  const listed = runStep(deps, STEP_LIST, listArgv(), LIST_TIMEOUT_MS);
+  if (!listed) return EXIT_FAIL;
   if (!isMigrationPending(listed.stdout)) {
     deps.log(LOG_NO_MIGRATION);
-    return 0;
+    return EXIT_OK;
   }
+  return recordAndExport(deps);
+}
 
-  const info = deps.runCommand(timeTravelInfoArgv());
-  const bookmark = info.status === 0 ? parseBookmark(info.stdout) : undefined;
+function recordAndExport(deps: Deps): number {
+  const info = deps.runCommand(timeTravelInfoArgv(), INFO_TIMEOUT_MS);
+  const ok = !info.timedOut && info.status === SUCCESS_STATUS;
+  const bookmark = ok ? parseBookmark(info.stdout) : undefined;
   if (bookmark === undefined) {
     deps.log(ERROR_NO_RESTORE_POINT);
-    return 1;
+    return EXIT_FAIL;
   }
   recordRestorePoint(bookmark, deps);
 
   const bucket = (deps.env[ENV_BUCKET] ?? "").trim();
   if (bucket === "") {
     deps.log(WARNING_NO_BUCKET);
-    return 0;
+    return EXIT_OK;
   }
   if (!isValidBucketName(bucket)) {
     deps.log(ERROR_BAD_BUCKET);
-    return 1;
+    return EXIT_FAIL;
   }
   return exportAndUpload(bucket, deps);
+}
+
+export function spawnCommand(argv: readonly string[], timeoutMs: number): CommandResult {
+  const [file, ...args] = argv;
+  if (file === undefined) return { status: EXIT_FAIL, stdout: "", timedOut: false };
+  const result = spawnSync(file, args, {
+    timeout: timeoutMs,
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "inherit"],
+  });
+  const error = result.error;
+  const timedOut = error !== undefined && "code" in error && error.code === TIMEOUT_CODE;
+  return {
+    status: result.status ?? EXIT_FAIL,
+    stdout: typeof result.stdout === "string" ? result.stdout : "",
+    timedOut,
+  };
 }
 
 function realDeps(): Deps {
   return {
     env: Bun.env,
-    runCommand: (argv) => {
-      const result = Bun.spawnSync([...argv], { stdout: "pipe", stderr: "inherit" });
-      return { status: result.exitCode ?? 1, stdout: result.stdout.toString() };
-    },
+    runCommand: spawnCommand,
     appendFile: (file, text) => fs.appendFileSync(file, text),
     removeFile: (file) => fs.rmSync(file, { force: true }),
+    fileSize: (file) => fs.statSync(file, { throwIfNoEntry: false })?.size,
     log: (line) => console.log(line),
     now: () => new Date(),
     tempDir: os.tmpdir(),

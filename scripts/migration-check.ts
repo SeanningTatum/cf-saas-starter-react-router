@@ -220,13 +220,18 @@ function generateIn(repoRoot: string, schemaPath: string, tempDir: string): Drif
   return { newFiles, output };
 }
 
+const failedProbe = (error: unknown): DriftProbe => ({
+  newFiles: [],
+  output: error instanceof Error ? error.message : String(error),
+});
+
 export function generateInTempCopy(repoRoot: string, schemaPath: string): DriftProbe {
   return Effect.runSync(
     Effect.acquireUseRelease(
-      Effect.sync(() => fs.mkdtempSync(path.join(os.tmpdir(), TEMP_PREFIX))),
-      (tempDir) => Effect.sync(() => generateIn(repoRoot, schemaPath, tempDir)),
+      Effect.try(() => fs.mkdtempSync(path.join(os.tmpdir(), TEMP_PREFIX))),
+      (tempDir) => Effect.try(() => generateIn(repoRoot, schemaPath, tempDir)),
       (tempDir) => Effect.sync(() => fs.rmSync(tempDir, { recursive: true, force: true })),
-    ),
+    ).pipe(Effect.catchAll((error) => Effect.succeed(failedProbe(error.cause)))),
   );
 }
 

@@ -7,7 +7,7 @@ Four workflows live in `.github/workflows/`. Deploy and preview stay off until y
 | Workflow | Runs on | What it does |
 |----------|---------|--------------|
 | `ci.yml` | every push to `main`, every pull request | typecheck, tests, build, e2e smoke |
-| `deploy.yml` (Deploy Production) | CI finished green on a push to `main` | when a migration is pending, records a D1 restore point and exports the database ([rollback](rollback.md)); then migrates the production D1 database, builds, runs `wrangler deploy` |
+| `deploy.yml` (Deploy Production) | CI finished green on a push to `main` | migrates the production D1 database (first saving a [restore point](rollback.md)), builds, runs `wrangler deploy` |
 | `preview.yml` (Preview Deploy) | a pull request opened, updated or reopened | gives the PR its own D1 database, seeds it, uploads a Worker version, comments the URL |
 | `preview-cleanup.yml` (Preview Cleanup) | a pull request closed | deletes the PR's D1 database |
 
@@ -15,7 +15,7 @@ Each of the three Cloudflare workflows starts with a `readiness` job that holds 
 
 The gate also warns (the run still passes) when a repo-level `CLOUDFLARE_API_TOKEN` secret exists: pull-request jobs can read repo-level secrets. Move it to the `production` environment and delete the repo-level one.
 
-The `migrations` gate is part of `./scripts/verify.sh`. It checks the SQL in `drizzle/` for unsafe statements, edits to merged migrations, and drift from `app/db/schema.ts`. The rule and the gate are in [Rolling back](rollback.md#what-the-gate-checks).
+The `migrations` gate in `./scripts/verify.sh` checks new migrations; see [Rolling back](rollback.md#what-the-gate-checks).
 
 A run that is set up but fails is a real failure. The usual cause is a token without D1 rights: the log says `Authentication error`, and the workflow adds a line naming the fix.
 
@@ -48,7 +48,7 @@ The preview jobs never read `CLOUDFLARE_API_TOKEN`. The preview `readiness` job 
 5. Add it as the secret `CLOUDFLARE_API_TOKEN` in the `production` environment (Settings, Environments, production). `bun run setup` can do steps 2 and 5 when the GitHub CLI is available; it asks you to protect the environment first. It never replaces an environment that already exists.
 6. Optional, for a repo that keeps placeholder ids committed: set the repo variable `CLOUDFLARE_D1_DATABASE_ID` to your production database id. The deploy job writes it into the checkout; the file in git does not change.
 7. Delete any old repo-level `CLOUDFLARE_API_TOKEN` secret.
-8. Optional: turn on the pre-migration database export. Follow the owner steps in [Rolling back](rollback.md#owner-steps-to-turn-the-export-on). Without it, the deploy still records a Time Travel bookmark.
+8. Optional: turn on the pre-migration export ([owner steps](rollback.md#owner-steps-to-turn-the-export-on)).
 9. Push to `main`. After CI passes, Deploy Production runs.
 
 ## Turn on previews
