@@ -3,7 +3,6 @@ import { CloudflareEnvLive } from "@/services/cloudflare";
 import { DatabaseLive, type Database } from "@/services/database";
 import { BucketLive, type Bucket } from "@/services/bucket";
 import { AuthApiLive, type AuthApi as AuthApiTag } from "@/services/auth";
-import { WorkflowsLive, type Workflows } from "@/services/workflows";
 import { LoggerLive, MinLogLevelLive } from "@/services/logger";
 import { AnalyticsLive, type Analytics } from "@/services/analytics";
 import { TracingLayer, type FetchLike } from "@/services/tracing";
@@ -17,7 +16,6 @@ export type AppServices =
   | Database
   | Bucket
   | AuthApiTag
-  | Workflows
   | Analytics
   | UserRepository
   | AnalyticsRepository
@@ -93,7 +91,6 @@ export const makeAppRuntime = (
     DatabaseLive,
     BucketLive,
     AuthApiLive(baseURL),
-    WorkflowsLive,
     AnalyticsLive
   );
   const reposLayer = Layer.mergeAll(
