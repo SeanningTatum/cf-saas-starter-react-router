@@ -22,6 +22,7 @@ import { StackBadge } from "@/components/stack-badge";
 import { LanguageSwitcher } from "@/components/language-switcher";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { FeatureCard } from "@/components/feature-card";
+import { ROUTES } from "@/lib/constants/routes";
 
 export const handle = { i18n: ["dashboard"] };
 
@@ -49,7 +50,7 @@ export default function DashboardIndex() {
         <div className="flex flex-wrap items-center gap-2">
           {isAdmin && (
             <Button asChild variant="outline" size="sm" data-testid="dashboard-go-admin">
-              <Link to="/admin">
+              <Link to={ROUTES.admin}>
                 <IconLayoutDashboard className="size-4" />
                 {t("actions.open_admin")}
               </Link>
@@ -83,7 +84,7 @@ export default function DashboardIndex() {
             title={t("explore.cards.auth.title")}
             description={t("explore.cards.auth.description")}
             badges={["Better Auth", "D1"]}
-            to="/admin/users"
+            to={ROUTES.adminUsers}
             disabled={!isAdmin}
             disabledHint={t("explore.cards.auth.admin_only")}
             cta={t("explore.cards.auth.cta")}
@@ -94,7 +95,7 @@ export default function DashboardIndex() {
             title={t("explore.cards.admin.title")}
             description={t("explore.cards.admin.description")}
             badges={["tRPC", "Drizzle"]}
-            to="/admin"
+            to={ROUTES.admin}
             disabled={!isAdmin}
             disabledHint={t("explore.cards.admin.admin_only")}
             cta={t("explore.cards.admin.cta")}
@@ -105,7 +106,7 @@ export default function DashboardIndex() {
             title={t("explore.cards.upload.title")}
             description={t("explore.cards.upload.description")}
             badges={["R2", "Workers"]}
-            to="/admin/kitchen-sink"
+            to={ROUTES.adminKitchenSink}
             disabled={!isAdmin}
             disabledHint={t("explore.cards.upload.admin_only")}
             cta={t("explore.cards.upload.cta")}
@@ -116,7 +117,7 @@ export default function DashboardIndex() {
             title={t("explore.cards.effect.title")}
             description={t("explore.cards.effect.description")}
             badges={["Effect TS", "Schema"]}
-            to="/admin/kitchen-sink"
+            to={ROUTES.adminKitchenSink}
             disabled={!isAdmin}
             disabledHint={t("explore.cards.effect.admin_only")}
             cta={t("explore.cards.effect.cta")}

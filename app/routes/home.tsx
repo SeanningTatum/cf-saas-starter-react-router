@@ -29,6 +29,7 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import { LanguageSwitcher } from "@/components/language-switcher";
 import { FeatureCard } from "@/components/feature-card";
 import { redirectIfAuthenticated } from "@/lib/session";
+import { ROUTES } from "@/lib/constants/routes";
 
 export const handle = { i18n: ["home"] };
 
@@ -84,13 +85,13 @@ export default function Home() {
 
           <div className="flex flex-wrap items-center gap-3">
             <Button asChild size="lg" data-testid="hero-sign-up">
-              <Link to="/sign-up">
+              <Link to={ROUTES.signUp}>
                 {t("hero.cta_primary")}
                 <IconArrowRight className="ml-1 size-4" />
               </Link>
             </Button>
             <Button asChild size="lg" variant="outline" data-testid="hero-sign-in">
-              <Link to="/login">{t("hero.cta_secondary")}</Link>
+              <Link to={ROUTES.login}>{t("hero.cta_secondary")}</Link>
             </Button>
           </div>
 
@@ -118,7 +119,7 @@ export default function Home() {
               title={t("wired.cards.auth.title")}
               description={t("wired.cards.auth.description")}
               badges={["Better Auth", "D1"]}
-              to="/login"
+              to={ROUTES.login}
               cta={t("wired.cards.auth.cta")}
               testId="card-auth"
             />
@@ -127,7 +128,7 @@ export default function Home() {
               title={t("wired.cards.admin.title")}
               description={t("wired.cards.admin.description")}
               badges={["tRPC", "Drizzle"]}
-              to="/admin"
+              to={ROUTES.admin}
               cta={t("wired.cards.admin.cta")}
               testId="card-admin"
             />
@@ -136,7 +137,7 @@ export default function Home() {
               title={t("wired.cards.upload.title")}
               description={t("wired.cards.upload.description")}
               badges={["R2", "Workers"]}
-              to="/dashboard"
+              to={ROUTES.dashboard}
               cta={t("wired.cards.upload.cta")}
               testId="card-upload"
             />
@@ -145,7 +146,7 @@ export default function Home() {
               title={t("wired.cards.analytics.title")}
               description={t("wired.cards.analytics.description")}
               badges={["tRPC", "Drizzle"]}
-              to="/admin"
+              to={ROUTES.admin}
               cta={t("wired.cards.analytics.cta")}
               testId="card-analytics"
             />
@@ -154,7 +155,7 @@ export default function Home() {
               title={t("wired.cards.effect.title")}
               description={t("wired.cards.effect.description")}
               badges={["Effect TS", "Schema"]}
-              to="/admin/kitchen-sink"
+              to={ROUTES.adminKitchenSink}
               cta={t("wired.cards.effect.cta")}
               testId="card-effect"
             />
@@ -163,7 +164,7 @@ export default function Home() {
               title={t("wired.cards.i18n.title")}
               description={t("wired.cards.i18n.description")}
               badges={["remix-i18next"]}
-              to="/dashboard"
+              to={ROUTES.dashboard}
               cta={t("wired.cards.i18n.cta")}
               testId="card-i18n"
             />
@@ -251,7 +252,7 @@ export default function Home() {
                 </a>
               </Button>
               <Button asChild variant="outline" data-testid="quickstart-docs">
-                <a href="/admin/kitchen-sink">
+                <a href={ROUTES.adminKitchenSink}>
                   <IconBook className="size-4" />
                   {t("quickstart.docs")}
                 </a>
@@ -318,10 +319,10 @@ function TopBar() {
             </a>
           </Button>
           <Button asChild variant="ghost" size="sm" data-testid="topbar-sign-in">
-            <Link to="/login">{t("topbar.sign_in")}</Link>
+            <Link to={ROUTES.login}>{t("topbar.sign_in")}</Link>
           </Button>
           <Button asChild size="sm" data-testid="topbar-sign-up">
-            <Link to="/sign-up">{t("topbar.sign_up")}</Link>
+            <Link to={ROUTES.signUp}>{t("topbar.sign_up")}</Link>
           </Button>
           <LanguageSwitcher compact />
           <ThemeToggle />

@@ -1,8 +1,9 @@
 import { Effect, Schema } from "effect";
 import { BucketValidationError } from "@/models/errors/bucket";
 import { ExternalServiceError } from "@/models/errors/repository";
+import { API_ROUTES } from "@/lib/constants/routes";
 
-export const UPLOAD_ENDPOINT = "/api/upload-file";
+export const UPLOAD_ENDPOINT = API_ROUTES.uploadFile;
 
 // What app/routes/api/upload-file.ts returns on every branch, 4xx/5xx included.
 const UploadReply = Schema.Union(

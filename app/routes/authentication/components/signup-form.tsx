@@ -28,6 +28,7 @@ import { useHydrated } from "@/hooks/use-hydrated"
 import { ProblemBox, TurnstileWidget, useTurnstile } from "@/components/turnstile-widget"
 import { captchaFetchOptions } from "@/lib/turnstile-client"
 import { authRefusalFor } from "@/lib/auth-errors"
+import { ROUTES } from "@/lib/constants/routes"
 
 interface SignupFormProps extends React.ComponentProps<"div"> {
   turnstileSiteKey?: string | null
@@ -70,7 +71,7 @@ export function SignupForm({ className, turnstileSiteKey = null, ...props }: Sig
         return
       }
 
-      navigate("/dashboard")
+      navigate(ROUTES.dashboard)
     } catch (err) {
       turnstile.reset()
       setAuthError(err instanceof Error ? err.message : t("signup.error_failed"))
@@ -182,7 +183,7 @@ export function SignupForm({ className, turnstileSiteKey = null, ...props }: Sig
                 </Button>
                 <p className="text-center text-sm text-muted-foreground">
                   {t("signup.has_account")}{" "}
-                  <Link to="/login" className="underline underline-offset-4">
+                  <Link to={ROUTES.login} className="underline underline-offset-4">
                     {t("signup.login_link")}
                   </Link>
                 </p>

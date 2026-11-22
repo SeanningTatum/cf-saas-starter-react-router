@@ -32,6 +32,7 @@ import {
 } from "@/components/ui/sidebar"
 import { Link } from "react-router"
 import { useTranslation } from "react-i18next"
+import { ROUTES } from "@/lib/constants/routes"
 
 interface AppSidebarProps extends React.ComponentProps<typeof Sidebar> {
   user: {
@@ -49,17 +50,17 @@ export function AppSidebar({ user, ...props }: AppSidebarProps) {
     navMain: [
       {
         title: t("nav.home"),
-        url: "/admin/",
+        url: `${ROUTES.admin}/`,
         icon: IconDashboard,
       },
       {
         title: t("nav.users"),
-        url: "/admin/users",
+        url: ROUTES.adminUsers,
         icon: IconUsers,
       },
       {
         title: t("nav.kitchen_sink"),
-        url: "/admin/kitchen-sink",
+        url: ROUTES.adminKitchenSink,
         icon: IconSettings,
       },
     ],
@@ -156,7 +157,7 @@ export function AppSidebar({ user, ...props }: AppSidebarProps) {
               asChild
               className="data-[slot=sidebar-menu-button]:p-1.5!"
             >
-              <Link to="/admin/">
+              <Link to={`${ROUTES.admin}/`}>
                 <IconInnerShadowTop className="size-5!" />
                 <span className="text-base font-semibold">{t("company_name")}</span>
               </Link>

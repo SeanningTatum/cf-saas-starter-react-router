@@ -23,7 +23,6 @@
       "app/lib/request-context.ts": 3,
       "app/lib/schemas/auth.ts": 1,
       "app/lib/schemas/user.ts": 1,
-      "app/lib/upload-client.ts": 1,
       "app/routes/admin/components/data-table.tsx": 2,
       "app/routes/home.tsx": 1,
       "app/services/tracing-otlp.ts": 1,
@@ -192,19 +191,7 @@
       "workers/app.ts": 1
     },
     "no-zod": {},
-    "route-paths": {
-      "app/auth/client.ts": 1,
-      "app/components/language-switcher.tsx": 1,
-      "app/lib/session.ts": 3,
-      "app/lib/upload-client.ts": 1,
-      "app/routes/admin/layout/app-sidebar.tsx": 4,
-      "app/routes/admin/layout/nav-user.tsx": 1,
-      "app/routes/api/trpc.$.ts": 1,
-      "app/routes/authentication/components/login-form.tsx": 2,
-      "app/routes/authentication/components/signup-form.tsx": 2,
-      "app/routes/dashboard/_index.tsx": 5,
-      "app/routes/home.tsx": 11
-    },
+    "route-paths": {},
     "procedure-span": {},
     "tagged-error-mapped": {},
     "test-map": {

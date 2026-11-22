@@ -9,6 +9,7 @@ import { useTranslation } from "react-i18next";
 import { useFetcher } from "react-router";
 import { supportedLngs } from "@/i18n";
 import { cn } from "@/lib/utils";
+import { API_ROUTES } from "@/lib/constants/routes";
 
 const languageLabels: Record<string, string> = {
   en: "English",
@@ -47,7 +48,7 @@ export function LanguageSwitcher({
     if (newLng === i18n.language || pending) return;
     fetcher.submit(
       { lng: newLng },
-      { method: "post", action: "/api/set-locale" },
+      { method: "post", action: API_ROUTES.setLocale },
     );
   }
 

@@ -1,6 +1,7 @@
 import { createTRPCContext } from "@/trpc";
 import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
 import { appRouter } from "@/trpc/router";
+import { API_ROUTES } from "@/lib/constants/routes";
 
 import type { Route } from "./+types/trpc.$";
 
@@ -8,7 +9,7 @@ import type { AppLoadContext } from "react-router";
 
 const handler = async (req: Request, context: AppLoadContext) => {
   return fetchRequestHandler({
-    endpoint: "/api/trpc",
+    endpoint: API_ROUTES.trpc,
     router: appRouter,
     req,
     createContext: () =>
