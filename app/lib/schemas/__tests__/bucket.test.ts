@@ -17,6 +17,34 @@ describe("UploadOptions", () => {
   });
 });
 
+// Catches: a cap dropped or loosened, passing R2 a key it refuses or a
+// content type of any size. `key` and `prefix` share R2Key, so one row.
+describe("caps: at the cap decodes, one over fails", () => {
+  const s = (n: number) => "a".repeat(n);
+  const cases: ReadonlyArray<
+    [
+      string,
+      (u: unknown) => { readonly _tag: "Left" | "Right" },
+      number,
+      (n: number) => unknown,
+    ]
+  > = [
+    ["UploadOptions.key", decode(UploadOptions), 1024, (n) => ({ key: s(n) })],
+    [
+      "UploadOptions.contentType",
+      decode(UploadOptions),
+      255,
+      (n) => ({ contentType: s(n) }),
+    ],
+  ];
+  for (const [name, check, cap, build] of cases) {
+    it(`${name}: ${cap} decodes, ${cap + 1} fails`, () => {
+      expect(check(build(cap))._tag).toBe("Right");
+      expect(check(build(cap + 1))._tag).toBe("Left");
+    });
+  }
+});
+
 describe("ListR2Input", () => {
   it("defaults limit to 1000", () => {
     const result = Schema.decodeUnknownSync(ListR2Input)({});

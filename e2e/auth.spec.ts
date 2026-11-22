@@ -98,6 +98,29 @@ test.describe("Authentication", () => {
   });
 });
 
+/**
+ * Catches issue #69: a banned account signs in. Fails if the ban guard on
+ * session create is lost, or if the seeded `banned@preview.local` fixture
+ * (scripts/seed-preview.ts) is no longer banned. Asserts on the ban message,
+ * so a wrong-password error cannot pass it by accident.
+ */
+test.describe("Banned account", () => {
+  test("banned account is refused at login", { tag: "@error" }, async ({ page }) => {
+    await page.goto("/login");
+    await waitForHydration(page, "login-submit");
+    await page.getByTestId("login-email").fill("banned@preview.local");
+    await page.getByTestId("login-password").fill("Password123!");
+    await page.getByTestId("login-submit").click();
+
+    await expect(page.getByRole("alert")).toContainText(/banned/i);
+    await expect(page).toHaveURL(/\/login$/);
+
+    // No session was made: the dashboard sends the visitor back to /login.
+    await page.goto("/dashboard");
+    await expect(page).toHaveURL(/\/login$/);
+  });
+});
+
 // Catches issue #49: a submit before hydration must never put a field in the URL.
 test.describe("Auth forms before hydration", () => {
   const forms = [
