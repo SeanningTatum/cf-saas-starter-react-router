@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 // Hermetic + offline: node:child_process is fully mocked, so nothing ever
@@ -345,5 +346,12 @@ describe("offerRepoRules", () => {
     log.mockRestore();
     expect(printed).toContain("error: POST failed");
     expect(printed).not.toContain("✓ Repo rules applied");
+  });
+});
+
+describe("runDatabaseMigrations", () => {
+  it("never runs drizzle-kit generate: the wizard once wrote a migration no one reviewed and applied it to production", () => {
+    const source = readFileSync(new URL("../first-time-setup.ts", import.meta.url), "utf-8");
+    expect(source).not.toMatch(/drizzle-kit\s+generate/);
   });
 });
