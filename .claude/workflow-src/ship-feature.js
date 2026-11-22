@@ -1178,7 +1178,7 @@ else if (ROLLUP_ROUNDS === 0) log("Roll-up Greptile: skipped (rollupRounds 0)");
 else {
   const allDeclined = [...localDeclined.values()].flat();
   const seen = new Set();
-  const trig = await sh(`\`gh pr comment ${target.number} --body "${cfg.reviewBot.trigger}"\`. Return ok and failed_command.`, { label: "rollup-greptile:trigger", phase: "Roll-up Greptile", schema: obj({ ok: BOOL, failed_command: STR }) });
+  const trig = await sh(`\`gh pr comment ${target.number} --body ${shq(cfg.reviewBot.trigger)}\`. Return ok and failed_command.`, { label: "rollup-greptile:trigger", phase: "Roll-up Greptile", schema: obj({ ok: BOOL, failed_command: STR }) });
   if (!trig || !trig.ok) rollupReview.status = "trigger failed";
   let head = "";
   for (let round = 1; trig && trig.ok && round <= ROLLUP_ROUNDS; round++) {
@@ -1237,7 +1237,7 @@ ${allDeclined.length ? `The local review declined these; answer a repeat the sam
 ${fence("replies json", JSON.stringify(entry.replies.map((r) => ({ id: r.id, reply: r.reply }))))}
   2. ${fixed ? `\`git push origin ${target.branch}\` (a fast-forward; never --force).` : "Nothing to push."}
   3. For each entry: write its reply to a temp file, then \`gh api repos/{owner}/{repo}/pulls/${target.number}/comments/<id>/replies -F body=@<temp file>\`.
-  4. ${fixed && !last ? `\`gh pr comment ${target.number} --body "${cfg.reviewBot.trigger}"\`.` : "No re-trigger."}
+  4. ${fixed && !last ? `\`gh pr comment ${target.number} --body ${shq(cfg.reviewBot.trigger)}\`.` : "No re-trigger."}
 Return ok, failed_command, and head = \`git rev-parse ${target.branch}\`.`,
       { label: `rollup-greptile:write:${round}`, phase: "Roll-up Greptile", schema: obj({ ok: BOOL, failed_command: STR, head: STR }, ["ok", "failed_command"]) }
     );

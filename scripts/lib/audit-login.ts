@@ -1,8 +1,5 @@
 import type { SeedLogin } from "./harness-config";
-
-const CREDENTIAL_SEPARATOR = ":";
-const NAME_LIST_SEPARATOR = ", ";
-const NO_LOGINS_TEXT = "none are set in harness.config.json";
+import { CREDENTIAL_SEPARATOR, NAME_LIST_SEPARATOR, NO_LOGINS_TEXT } from "./harness-config-constants";
 
 export function resolveLogin(raw: string, seedLogins: Record<string, SeedLogin>): SeedLogin | { error: string } {
   const at = raw.indexOf(CREDENTIAL_SEPARATOR);

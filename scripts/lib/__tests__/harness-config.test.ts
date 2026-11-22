@@ -16,6 +16,16 @@ describe("loadHarnessConfig", () => {
     expect(Either.isRight(loaded) && loaded.right.reviewBot).toEqual(HARNESS_DEFAULTS.reviewBot);
   });
 
+  it("holds baseBranch to a plain branch name: it is written into git and gh command lines, so an option-like or dotted value must not load", () => {
+    for (const good of ["staging", "release/v3.0", "v3/wave-1"]) {
+      const loaded = load(JSON.stringify({ baseBranch: good }));
+      expect(Either.isRight(loaded) && loaded.right.baseBranch, good).toBe(good);
+    }
+    for (const bad of ["--upload-pack=x", "a b", "a..b", "-x", "a;b", ""]) {
+      expect(Either.isLeft(load(JSON.stringify({ baseBranch: bad }))), bad).toBe(true);
+    }
+  });
+
   it("refuses an unknown key inside ship, brandInit and a brandInit lane: a typo must not pass in silence", () => {
     for (const text of [
       '{"ship":{"sharedFile":[]}}',

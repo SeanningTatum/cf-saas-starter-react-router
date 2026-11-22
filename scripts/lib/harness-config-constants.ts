@@ -18,6 +18,10 @@ export const GATE_BASELINE_YES = "y";
 export const GATE_BASELINE_NO = "n";
 export const GATE_FORBIDDEN_CHARACTERS = /[|\n\r]/;
 export const NOT_FOUND_CODE = "ENOENT";
+export const SAFE_BRANCH_PATTERN = /^(?!.*\.\.)[A-Za-z0-9][A-Za-z0-9._/-]*$/;
+export const CREDENTIAL_SEPARATOR = ":";
+export const NAME_LIST_SEPARATOR = ", ";
+export const NO_LOGINS_TEXT = "none are set in harness.config.json";
 
 export const DEFAULT_COAUTHOR = "Co-Authored-By: Claude Fable 5.2 <noreply@anthropic.com>";
 export const DEFAULT_SCRATCH_DIRS = [".verify/", "tmp/"] as const;

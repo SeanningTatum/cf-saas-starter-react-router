@@ -17,6 +17,7 @@ import {
   KEY_SEPARATOR,
   MESSAGE_PREFIX,
   NOT_FOUND_CODE,
+  SAFE_BRANCH_PATTERN,
 } from "./harness-config-constants";
 import { ledgerChecksum } from "./run-telemetry";
 
@@ -101,7 +102,7 @@ const BrandInitSchema = Schema.Struct({
 
 const ConfigFileSchema = Schema.Struct({
   version: Schema.optional(Schema.Literal(CONFIG_VERSION)),
-  baseBranch: Schema.optional(Schema.NullOr(Schema.String)),
+  baseBranch: Schema.optional(Schema.NullOr(Schema.String.pipe(Schema.pattern(SAFE_BRANCH_PATTERN)))),
   coauthor: Schema.optional(Schema.String),
   scratchDirs: Schema.optional(Schema.Array(Schema.String)),
   gates: Schema.optional(Schema.Array(GateSchema)),
