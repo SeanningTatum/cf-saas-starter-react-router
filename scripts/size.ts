@@ -4,7 +4,7 @@ import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { gzipSync } from "node:zlib";
 import { addWorktree, realShell, removeWorktree, resolveCommit, step, type Shell } from "./lib/shell";
-import { BUILD_ARGS, BUN_BIN, EXIT_FAIL, EXIT_OK, EXIT_USAGE, GIT_BIN, INSTALL_ARGS } from "./lib/shell-constants";
+import { BUILD_ARGS, BUN_BIN, CI_ENV, EXIT_FAIL, EXIT_OK, EXIT_USAGE, GIT_BIN, INSTALL_ARGS } from "./lib/shell-constants";
 import { ASSET_URL_PREFIX, CACHE_DIR, CLIENT_ASSETS_DIR, DRY_RUN_ARGS, JSON_SUFFIX, MANIFEST_PREFIX, USAGE, WORKTREE_PREFIX } from "./lib/size-constants";
 import {
   compare,
@@ -111,7 +111,7 @@ export function run(argv: string[], deps: Deps): number {
 }
 
 export const realDeps = (): Deps => ({
-  ...realShell(),
+  ...realShell(CI_ENV),
   list: (dir) => (existsSync(dir) ? readdirSync(dir) : []),
   gzipSize: (path) => gzipSync(readFileSync(path)).length,
 });

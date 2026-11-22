@@ -6,7 +6,6 @@ import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 import {
-  CI_ENV,
   DEV_VARS_FILE,
   HEAD_REF,
   LIGHTHOUSE_CLI,
@@ -33,7 +32,7 @@ import {
 } from "./lib/lighthouse-constants";
 import { breaches, metricsOf, parseLimits, renderLighthouse, summarize, type Metrics, type PageResult, type RefResult } from "./lib/lighthouse-report";
 import { addWorktree, childEnv, realShell, removeWorktree, resolveCommit, step, type Shell } from "./lib/shell";
-import { BUILD_ARGS, BUN_BIN, EXIT_FAIL, EXIT_OK, EXIT_USAGE, INSTALL_ARGS } from "./lib/shell-constants";
+import { BUILD_ARGS, BUN_BIN, CI_ENV, EXIT_FAIL, EXIT_OK, EXIT_USAGE, INSTALL_ARGS } from "./lib/shell-constants";
 
 export interface Deps extends Shell {
   start: (command: string, args: string[], cwd: string) => { stop: () => Promise<void> };
@@ -85,7 +84,7 @@ export async function measurePages(deps: Deps, options: Options, label: string, 
     for (let i = 1; i <= RUNS; i++) {
       const output = join(reports, `${label}-${pageSlug(page)}-${i}`);
       const ran = step(deps, BUN_BIN, lighthouseArgs(cli, `${origin}${page}`, output, header), deps.cwd);
-      const metrics = Either.flatMap(ran, () => metricsOf(deps.read(`${output}${REPORT_JSON_SUFFIX}`) ?? ""));
+      const metrics = Either.flatMap(ran, () => metricsOf(deps.read(`${output}${REPORT_JSON_SUFFIX}`) ?? "", `${origin}${page}`));
       if (Either.isLeft(metrics)) return Either.left(`${page}, run ${i}: ${metrics.left}`);
       runs.push(metrics.right);
     }

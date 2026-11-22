@@ -5,7 +5,6 @@ export const HEAD_REF = "HEAD";
 export const LIMITS_FILE = ".github/lighthouse-limits.json";
 export const WORKTREE_PREFIX = "lighthouse-";
 export const LOCAL_HOST = "http://localhost";
-export const CI_ENV = { CI: "1" };
 
 export const PUBLIC_PAGES = ["/", "/login", "/sign-up"];
 export const SIGNED_IN_PAGES = ["/dashboard"];

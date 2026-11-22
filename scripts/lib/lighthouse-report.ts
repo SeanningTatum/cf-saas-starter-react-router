@@ -5,6 +5,7 @@ import { NUMBER_LOCALE } from "./shell-constants";
 const Audit = Schema.Struct({ numericValue: Schema.Number });
 
 const LhrSchema = Schema.Struct({
+  finalDisplayedUrl: Schema.String,
   categories: Schema.Struct({ [SCORE_AUDIT]: Schema.Struct({ score: Schema.Number }) }),
   audits: Schema.Struct({ [LCP_AUDIT]: Audit, [TBT_AUDIT]: Audit, [CLS_AUDIT]: Audit }),
 });
@@ -23,15 +24,26 @@ export type RefResult = typeof RefSchema.Type;
 
 const firstLine = (error: Error): string => error.message.split("\n")[0] ?? "";
 
-export const metricsOf = (text: string): Either.Either<Metrics, string> =>
-  Either.mapLeft(
-    Either.map(Schema.decodeUnknownEither(Schema.parseJson(LhrSchema))(text), (lhr) => ({
-      score: Math.round(lhr.categories[SCORE_AUDIT].score * 100),
-      lcp: lhr.audits[LCP_AUDIT].numericValue,
-      tbt: lhr.audits[TBT_AUDIT].numericValue,
-      cls: lhr.audits[CLS_AUDIT].numericValue,
-    })),
-    (error) => `cannot read the Lighthouse report: ${firstLine(error)}`,
+export const samePage = (a: string, b: string): boolean => {
+  const path = (url: string): string => {
+    const parsed = URL.parse(url);
+    return parsed === null ? url : `${parsed.origin}${parsed.pathname.replace(/(.)\/+$/, "$1")}`;
+  };
+  return path(a) === path(b);
+};
+
+export const metricsOf = (text: string, requested: string): Either.Either<Metrics, string> =>
+  Either.flatMap(
+    Either.mapLeft(Schema.decodeUnknownEither(Schema.parseJson(LhrSchema))(text), (error) => `cannot read the Lighthouse report: ${firstLine(error)}`),
+    (lhr) =>
+      samePage(lhr.finalDisplayedUrl, requested)
+        ? Either.right({
+            score: Math.round(lhr.categories[SCORE_AUDIT].score * 100),
+            lcp: lhr.audits[LCP_AUDIT].numericValue,
+            tbt: lhr.audits[TBT_AUDIT].numericValue,
+            cls: lhr.audits[CLS_AUDIT].numericValue,
+          })
+        : Either.left(`Lighthouse asked for ${requested} but ended on ${lhr.finalDisplayedUrl}, so its numbers are not that page's`),
   );
 
 export const parseLimits = (text: string): Either.Either<Limits, string> =>

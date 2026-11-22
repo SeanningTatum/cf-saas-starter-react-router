@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { TABLE_ROW_PATTERN, WORKER_LABEL, routeKey, routeLabel } from "../size-constants";
+import { WORKER_LABEL, WORKER_ROW_PATTERN, routeKey, routeLabel } from "../size-constants";
 
 describe("size-constants", () => {
   it("keys a route row by its id and kind, so a row keeps its place when the page's path changes", () => {
@@ -13,6 +13,8 @@ describe("size-constants", () => {
   });
 
   it("the PR body check looks for the same Worker label the table prints: renaming one without the other fails every PR", () => {
-    expect(TABLE_ROW_PATTERN.test(`| ${WORKER_LABEL} | 1 | 2 | +1 |`)).toBe(true);
+    expect(WORKER_ROW_PATTERN.test(`| ${WORKER_LABEL} | 1,024 | 2,048 | +1,024 (+100.0%) |`)).toBe(true);
+    expect(WORKER_ROW_PATTERN.test(`| ${WORKER_LABEL} | 2,048 | 1,024 | -1,024 (-50.0%) |`)).toBe(true);
+    expect(WORKER_ROW_PATTERN.test(`| ${WORKER_LABEL} | 1 | 1 | 0 |`)).toBe(true);
   });
 });

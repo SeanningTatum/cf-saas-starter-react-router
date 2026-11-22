@@ -19,8 +19,12 @@ import {
   SIZE_HEADING,
   SLOW_LINK_KBITS_PER_SECOND,
   SLOW_LINK_NAME,
-  TABLE_ROW_PATTERN,
+  COMPARISON_HEADER_PATTERN,
+  FENCED_BLOCK_PATTERN,
+  TEST_PATH_PATTERN,
+  WORKER_ROW_PATTERN,
   UNCHANGED_CELL,
+  UNMATCHED_PAGES_LEAD,
   UNIT_BYTES,
   WORKER_GZIP_PATTERN,
   WORKER_KEY,
@@ -171,26 +175,46 @@ export const extraMilliseconds = (bytes: number): number => (bytes * 8) / SLOW_L
 
 const routeOf = (key: string): string | undefined => key.match(/^route:(.+):(js|css)$/)?.[1];
 
+const pageLabel = (row: ComparedRow, id: string): string => row.label.split(" ")[0] ?? id;
+
+function unmatchedPages(rows: ComparedRow[]): string {
+  const pages = new Map<string, string>();
+  for (const row of rows) {
+    const id = routeOf(row.key);
+    if (id === undefined || (row.base !== undefined && row.head !== undefined)) continue;
+    pages.set(id, `${pageLabel(row, id)} (${row.base === undefined ? NEW_CELL : REMOVED_CELL})`);
+  }
+  if (pages.size === 0) return "";
+  return ` ${UNMATCHED_PAGES_LEAD} ${[...pages.values()].join(", ")}.`;
+}
+
 export function loadTimeLine(rows: ComparedRow[]): string {
   const byRoute = new Map<string, { label: string; delta: number }>();
   for (const row of rows) {
     const id = routeOf(row.key);
     if (id === undefined || row.base === undefined || row.head === undefined) continue;
     const seen = byRoute.get(id);
-    const label = row.label.split(" ")[0] ?? id;
-    byRoute.set(id, { label, delta: (seen?.delta ?? 0) + row.head - row.base });
+    byRoute.set(id, { label: pageLabel(row, id), delta: (seen?.delta ?? 0) + row.head - row.base });
   }
   const largest = [...byRoute.values()].sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta))[0];
+  const unmatched = unmatchedPages(rows);
   if (!largest || largest.delta === 0) {
-    return `Load time: no page's first-load JS or CSS changed, so no extra transfer time on ${SLOW_LINK_NAME}.`;
+    return `Load time: no page on both sides changed its first-load JS or CSS, so no extra transfer time on ${SLOW_LINK_NAME}.${unmatched}`;
   }
   const ms = extraMilliseconds(Math.abs(largest.delta));
   const bytes = signed(largest.delta, formatBytes(Math.abs(largest.delta)));
-  return `Load time: the largest first-load change is ${largest.label}, ${bytes} bytes gzip, about ${signed(largest.delta, ms.toFixed(1))} ms on ${SLOW_LINK_NAME}; ${LOAD_FORMULA}.`;
+  return `Load time: the largest first-load change is ${largest.label}, ${bytes} bytes gzip, about ${signed(largest.delta, ms.toFixed(1))} ms on ${SLOW_LINK_NAME}; ${LOAD_FORMULA}.${unmatched}`;
 }
 
 export const touchesShippedCode = (paths: string[]): string[] =>
-  paths.filter((path) => SHIPPED_PREFIXES.some((prefix) => path.startsWith(prefix)) || SHIPPED_FILES.includes(path));
+  paths.filter(
+    (path) => SHIPPED_FILES.includes(path) || (SHIPPED_PREFIXES.some((prefix) => path.startsWith(prefix)) && !TEST_PATH_PATTERN.test(path)),
+  );
+
+export const carriesTable = (body: string): boolean => {
+  const prose = body.replace(FENCED_BLOCK_PATTERN, "");
+  return COMPARISON_HEADER_PATTERN.test(prose) && WORKER_ROW_PATTERN.test(prose);
+};
 
 export function prSection(changedPaths: string[], rows: ComparedRow[]): string {
   if (touchesShippedCode(changedPaths).length === 0) return `${SIZE_HEADING}\n\n${NO_SHIPPED_CODE}`;
@@ -200,7 +224,7 @@ export function prSection(changedPaths: string[], rows: ComparedRow[]): string {
 export function checkBody(body: string, changedPaths: string[]): Either.Either<string, string> {
   const shipped = touchesShippedCode(changedPaths);
   if (shipped.length === 0) return Either.right("no shipped code changed, so no size table is needed");
-  if (TABLE_ROW_PATTERN.test(body)) return Either.right("the body carries the size table");
+  if (carriesTable(body)) return Either.right("the body carries the size table");
   const named = shipped.slice(0, 3).join(", ");
   const claim = NO_SHIPPED_PATTERN.test(body) ? ` The body says "${NO_SHIPPED_CODE}", but it changes ${named}.` : "";
   return Either.left(

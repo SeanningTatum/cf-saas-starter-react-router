@@ -5,8 +5,9 @@ import { pageSlug, parseArgs, run, type Deps } from "../lighthouse";
 const CWD = "/repo";
 const LIMITS = JSON.stringify({ minScore: 90, maxLcpMs: 2500, maxTbtMs: 200, maxCls: 0.1 });
 
-const report = (score: number): string =>
+const report = (score: number, finalDisplayedUrl: string): string =>
   JSON.stringify({
+    finalDisplayedUrl,
     categories: { performance: { score } },
     audits: {
       "largest-contentful-paint": { numericValue: 1000 },
@@ -15,7 +16,7 @@ const report = (score: number): string =>
     },
   });
 
-function fake(options: { fail?: RegExp; signIn?: Either.Either<string, string>; ready?: boolean } = {}) {
+function fake(options: { fail?: RegExp; signIn?: Either.Either<string, string>; ready?: boolean; landOn?: (url: string) => string } = {}) {
   const events: string[] = [];
   const files = new Map<string, string>([[`${CWD}/.github/lighthouse-limits.json`, LIMITS]]);
   const err: string[] = [];
@@ -33,7 +34,7 @@ function fake(options: { fail?: RegExp; signIn?: Either.Either<string, string>; 
       if (output) {
         const cookie = args.find((arg) => arg.startsWith("--extra-headers="));
         events.push(`lighthouse ${args[1]}${cookie ? " with cookie" : ""}`);
-        files.set(`${output}.report.json`, report(0.95));
+        files.set(`${output}.report.json`, report(0.95, (options.landOn ?? ((url: string) => url))(args[1] ?? "")));
       } else events.push(line);
       return { code: 0, stdout: args[0] === "rev-parse" ? "abc\n" : "", stderr: "" };
     },
@@ -126,6 +127,13 @@ describe("bun run lighthouse", () => {
     expect(f.events).toContain("stop /tmp/lh-1");
     expect(f.events.some((event) => event.startsWith("lighthouse"))).toBe(false);
     expect(f.err[0]).toBe("signing in as the seeded user returned 500");
+  });
+
+  it("a /dashboard run that lands on /login fails the run instead of reporting the login page as the dashboard", async () => {
+    const f = fake({ landOn: (url) => url.replace("/dashboard", "/login") });
+    expect(await run([], f.deps)).toBe(1);
+    expect(f.err[0]).toBe("/dashboard, run 1: Lighthouse asked for http://localhost:4173/dashboard but ended on http://localhost:4173/login, so its numbers are not that page's");
+    expect(f.events).toContain("stop /tmp/lh-1");
   });
 
   it("a server that never answers fails with the URL it waited on", async () => {

@@ -1,6 +1,7 @@
 import { Either } from "effect";
-import { describe, expect, it } from "vitest";
-import { parseArgs, run, type Deps, type RunResult } from "../size";
+import { afterEach, describe, expect, it } from "vitest";
+import { parseArgs, realDeps, run, type Deps } from "../size";
+import type { RunResult } from "../lib/shell";
 
 const CWD = "/repo";
 const BASE_DIR = "/tmp/size-base-1";
@@ -137,5 +138,18 @@ describe("bun run size", () => {
     const f = fake();
     expect(run(["--nope"], f.deps)).toBe(2);
     expect(f.calls).toEqual([]);
+  });
+});
+
+describe("realDeps", () => {
+  const saved = process.env.CI;
+  afterEach(() => {
+    if (saved === undefined) delete process.env.CI;
+    else process.env.CI = saved;
+  });
+
+  it("runs the build with CI=1, so vite.config.ts opens no remote-bindings session and a machine with no Cloudflare login can measure", () => {
+    delete process.env.CI;
+    expect(realDeps().run("sh", ["-c", 'printf "%s" "$CI"'], process.cwd()).stdout).toBe("1");
   });
 });

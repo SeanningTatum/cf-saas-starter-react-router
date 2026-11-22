@@ -151,11 +151,26 @@ describe("the load-time line", () => {
 
   it("says nothing changed when no page's first load moved, even if the Worker did (the Worker is not sent to the browser)", () => {
     const rows = compare(report(["worker", "W", 1], ["route:a:js", "A", 5]), report(["worker", "W", 2], ["route:a:js", "A", 5]));
-    expect(loadTimeLine(rows)).toBe("Load time: no page's first-load JS or CSS changed, so no extra transfer time on Lighthouse's slow 4G link (1,638.4 kbit/s).");
+    expect(loadTimeLine(rows)).toBe("Load time: no page on both sides changed its first-load JS or CSS, so no extra transfer time on Lighthouse's slow 4G link (1,638.4 kbit/s).");
+  });
+
+  it("names a page that was added or removed instead of reading it as unchanged: it has no base to compare", () => {
+    const base = report(["route:a:js", "`/a` first-load JS, gzip", 5], ["route:gone:js", "`/gone` first-load JS, gzip", 9], ["route:gone:css", "`/gone` first-load CSS, gzip", 1]);
+    const head = report(["route:a:js", "`/a` first-load JS, gzip", 5], ["route:new:js", "`/new` first-load JS, gzip", 7], ["route:new:css", "`/new` first-load CSS, gzip", 1]);
+    expect(loadTimeLine(compare(base, head))).toBe(
+      "Load time: no page on both sides changed its first-load JS or CSS, so no extra transfer time on Lighthouse's slow 4G link (1,638.4 kbit/s). A page on one side only has no base to compare, so its load time is not counted: `/new` (new), `/gone` (removed).",
+    );
+    const grew = report(["route:a:js", "`/a` first-load JS, gzip", 1643.4], ["route:new:js", "`/new` first-load JS, gzip", 7]);
+    expect(loadTimeLine(compare(base, grew))).toMatch(/is `\/a`, \+1,638\.4 bytes gzip, about \+8\.0 ms .* not counted: `\/new` \(new\), `\/gone` \(removed\)\.$/);
   });
 });
 
 describe("which PRs need the table", () => {
+  it("does not count tests inside app/ or workers/ as shipped code, so a tests-only PR needs no table", () => {
+    expect(touchesShippedCode(["app/lib/__tests__/a.test.ts", "app/components/b.test.tsx", "workers/__tests__/helpers.ts", "app/lib/c.ts"])).toEqual(["app/lib/c.ts"]);
+    expect(prSection(["app/lib/__tests__/a.test.ts"], [])).toBe("## Size\n\nNo shipped code changed.");
+  });
+
   it("counts app/, workers/, package.json and bun.lock as shipped code; docs, scripts and workflows are not", () => {
     expect(touchesShippedCode(["app/root.tsx", "workers/app.ts", "package.json", "bun.lock", "docs/x.md", "scripts/size.ts", ".github/workflows/ci.yml", "apps/x"])).toEqual([
       "app/root.tsx",
@@ -193,6 +208,20 @@ describe("checkBody, the CI check on the PR body", () => {
   it("fails a PR that changes shipped code but claims it does not: the sentence is only true of a PR with none", () => {
     const result = checkBody("No shipped code changed.", ["app/a.ts", "app/b.ts", "app/c.ts", "app/d.ts"]);
     expect(Either.isLeft(result) && result.left).toContain('says "No shipped code changed.", but it changes app/a.ts, app/b.ts, app/c.ts.');
+  });
+
+  it("passes the table the script prints, so the check and the printer cannot drift apart", () => {
+    const rows = compare(report(["worker", "Worker upload, gzip", 1000]), report(["worker", "Worker upload, gzip", 1100]));
+    expect(Either.isRight(checkBody(prSection(["app/a.ts"], rows), ["app/a.ts"]))).toBe(true);
+  });
+
+  it("fails a row with empty cells, a row with no comparison header, and a table that sits only in a code fence (an example is not this PR's numbers)", () => {
+    const header = "| | base | This PR | Change |\n|---|---:|---:|---:|";
+    expect(Either.isLeft(checkBody(`${header}\n| Worker upload, gzip | | | |`, ["app/a.ts"]))).toBe(true);
+    expect(Either.isLeft(checkBody("| | This PR |\n|---|---:|\n| Worker upload, gzip | 1 |", ["app/a.ts"]))).toBe(true);
+    expect(Either.isLeft(checkBody(`Paste this:\n\n\`\`\`md\n${table.split("\n\n")[1]}\n\`\`\``, ["app/a.ts"]))).toBe(true);
+    expect(Either.isLeft(checkBody(`~~~\n${table}\n~~~`, ["app/a.ts"]))).toBe(true);
+    expect(Either.isRight(checkBody(`\`\`\`\nexample\n\`\`\`\n\n${table}`, ["app/a.ts"]))).toBe(true);
   });
 
   it("does not take the label in running text for the table: only a table row counts", () => {

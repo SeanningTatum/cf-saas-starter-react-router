@@ -4,8 +4,10 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { breaches, median, metricsOf, parseLimits, renderLighthouse, summarize, widestSpread, type Limits, type RefResult } from "../lighthouse-report";
 
-const lhr = (score: number, lcp: number, tbt: number, cls: number): string =>
+const URL_HOME = "http://localhost:4173/";
+const lhr = (score: number, lcp: number, tbt: number, cls: number, finalDisplayedUrl = URL_HOME): string =>
   JSON.stringify({
+    finalDisplayedUrl,
     categories: { performance: { score } },
     audits: {
       "largest-contentful-paint": { numericValue: lcp },
@@ -19,12 +21,19 @@ const m = (score: number, lcp: number, tbt: number, cls: number) => ({ score, lc
 
 describe("reading a Lighthouse report", () => {
   it("takes the performance score as 0 to 100 and LCP, TBT and CLS from their audits", () => {
-    expect(metricsOf(lhr(0.976, 1816.7, 12.4, 0.0021))).toEqual(Either.right(m(98, 1816.7, 12.4, 0.0021)));
+    expect(metricsOf(lhr(0.976, 1816.7, 12.4, 0.0021), URL_HOME)).toEqual(Either.right(m(98, 1816.7, 12.4, 0.0021)));
+  });
+
+  it("refuses a run that ended on another page: a /dashboard that redirects to /login must not report the login page's score", () => {
+    const redirected = metricsOf(lhr(0.98, 1800, 0, 0, "http://localhost:4173/login"), "http://localhost:4173/dashboard");
+    expect(redirected).toEqual(Either.left("Lighthouse asked for http://localhost:4173/dashboard but ended on http://localhost:4173/login, so its numbers are not that page's"));
+    expect(Either.isRight(metricsOf(lhr(0.98, 1800, 0, 0, "http://localhost:4173/dashboard/"), "http://localhost:4173/dashboard"))).toBe(true);
+    expect(Either.isRight(metricsOf(lhr(0.98, 1800, 0, 0, "http://localhost:4173/login?next=1"), "http://localhost:4173/login"))).toBe(true);
   });
 
   it("refuses a report with no performance category: a runtime error report must not read as score 0", () => {
-    expect(Either.isLeft(metricsOf(JSON.stringify({ categories: {}, audits: {} })))).toBe(true);
-    expect(Either.isLeft(metricsOf(""))).toBe(true);
+    expect(Either.isLeft(metricsOf(JSON.stringify({ finalDisplayedUrl: URL_HOME, categories: {}, audits: {} }), URL_HOME))).toBe(true);
+    expect(Either.isLeft(metricsOf("", URL_HOME))).toBe(true);
   });
 
   it("reads the checked-in limits file", () => {

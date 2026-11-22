@@ -43,7 +43,7 @@ A stacked PR is one whose base is neither the default branch nor `production`: a
 
 ## Reading the size table
 
-Every PR that changes shipped code (`app/`, `workers/`, `package.json` or `bun.lock`) carries a size table in its body; one that changes none says "No shipped code changed." `ship-feature` writes it when it opens a PR. By hand:
+Every PR that changes shipped code (`app/` or `workers/` outside `__tests__/` and `*.test.ts(x)` files, `package.json` or `bun.lock`) carries a size table in its body; one that changes none says "No shipped code changed." `ship-feature` writes it when it opens a PR. By hand:
 
 ```bash
 bun run size                                  # this checkout: one build, one column
@@ -58,9 +58,9 @@ bun run size --json size.json                 # save a report; pass it later as 
 - **entry.client and root chunks**: the JavaScript every page loads.
 - **`/path` first-load JS and CSS**: everything the browser fetches before that page can run: the entry, each route from the root down, and their imports, each file counted once. Read from the React Router manifest in `build/client/assets/manifest-*.js`.
 
-The line under the table turns the largest first-load change into time: the extra bytes over Lighthouse's slow 4G link (1,638.4 kbit/s), `ms = bytes × 8 ÷ 1,638.4`. 10 KB is about 49 ms. It is transfer time alone, before the browser parses and runs the code.
+The line under the table turns the largest first-load change into time: the extra bytes over Lighthouse's slow 4G link (1,638.4 kbit/s), `ms = bytes × 8 ÷ 1,638.4`. 10 KB is about 49 ms. It is transfer time alone, before the browser parses and runs the code. A page that exists on one side only has nothing to compare with, so the line names it as new or removed instead of counting it. `bun run size` builds with `CI=1`, so it opens no remote-bindings session and needs no Cloudflare login.
 
-`PR body (size table)` fails a PR that changes shipped code with no table, and one whose body claims "No shipped code changed." when it does. It reads the body and the list of changed files, so it re-runs in seconds when you edit the body.
+`PR body (size table)` fails a PR that changes shipped code with no filled comparison table (the header row and a Worker row with numbers; a table inside a code fence does not count), and one whose body claims "No shipped code changed." when it does. It reads the body and the list of changed files, so it re-runs in seconds when you edit the body.
 
 On a PR into `staging` or `production`, CI measures the size itself against the base branch and runs Lighthouse (`bun run lighthouse --base <ref>`): each ref is built in its own worktree with a seeded local D1 and a `.dev.vars` holding `BETTER_AUTH_URL=http://localhost:4173` and a throwaway secret, served with `vite preview`, and measured with mobile settings on `/`, `/login`, `/sign-up` and `/dashboard` (signed in as the seeded user), three runs each, the median of each number. One comment on the PR holds both tables and is edited on each push. The limits in `.github/lighthouse-limits.json` only warn for now. The HTML and JSON reports are in the run's `lighthouse` artifact for 14 days; nothing is uploaded anywhere else.
 
