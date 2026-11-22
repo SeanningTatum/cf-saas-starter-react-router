@@ -1,3 +1,5 @@
+import { BROWSER_REPORT_PATH } from "./error-reporting";
+
 export const ROUTES = {
   home: "/",
   login: "/login",
@@ -9,6 +11,7 @@ export const ROUTES = {
 } as const;
 
 export const API_ROUTES = {
+  browserReport: BROWSER_REPORT_PATH,
   trpc: "/api/trpc",
   auth: "/api/auth",
   uploadFile: "/api/upload-file",

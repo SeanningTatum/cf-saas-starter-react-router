@@ -65,7 +65,7 @@ function weighByRuleAndFile(run: RunResult): Map<string, number> {
   const counts = new Map<string, number>();
   for (const found of run.findings) {
     const place = key(found.rule, found.file);
-    counts.set(place, (counts.get(place) ?? 0) + (found.weight ?? 1));
+    counts.set(place, (counts.get(place) ?? 0) + Math.max(1, Math.ceil(found.weight ?? 1)));
   }
   return counts;
 }

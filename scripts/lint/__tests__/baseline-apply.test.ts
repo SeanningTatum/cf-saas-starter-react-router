@@ -174,6 +174,12 @@ describe("applyBaseline: a finding that weighs more than one", () => {
     expect(found[0]?.message).toContain("this file counts 1010, the baseline allows 1000");
   });
 
+  it("counts a weight below one as one, so no rule can cancel another finding with a zero or negative weight", () => {
+    const run = ran([{ ...finding("no-bad", "app/long.ts"), weight: -5 }, { ...finding("no-bad", "app/long.ts"), weight: 0 }]);
+
+    expect(rulesOf(applyBaseline(allows(1), run, ruleIds()))).toEqual(["no-bad", "no-bad"]);
+  });
+
   it("excuses the file at exactly its recorded weight", () => {
     expect(applyBaseline(allows(1000), longFile(1000), ruleIds())).toEqual([]);
   });

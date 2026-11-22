@@ -36,7 +36,9 @@ export function routePaths(source: Source): Map<string, string[]> {
       }
       if (helper === "prefix") visit(children(call), joinPath(base, literal(first) ?? ""));
       if (helper === "route") {
-        const path = joinPath(base, literal(first) ?? "");
+        const own = literal(first);
+        if (own === undefined) continue;
+        const path = joinPath(base, own);
         add(literal(second), path);
         visit(children(call), path);
       }
