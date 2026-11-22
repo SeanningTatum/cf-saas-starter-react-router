@@ -2,7 +2,7 @@
 
 <!-- impeccable:product-schema 1 -->
 
-This file describes the starter itself. A fork runs `brand-init`, which asks about the fork's own product and rewrites this file with the answers.
+This file describes the starter itself. In a fork, replace these answers or delete this file before you run `brand-init`: it takes an existing `PRODUCT.md` as settled and asks nothing.
 
 ## Platform
 
