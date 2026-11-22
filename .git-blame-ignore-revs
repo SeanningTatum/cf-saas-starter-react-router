@@ -1,0 +1,10 @@
+# Commits that only change layout. `git blame` skips them after
+#   git config blame.ignoreRevsFile .git-blame-ignore-revs
+# GitHub's blame view reads this file on its own.
+#
+# A squash merge gives a commit a new SHA. If the branch holding a commit listed here is
+# squashed, replace its line with the SHA of the squash commit only if that commit is
+# still nothing but layout; otherwise delete the line.
+
+# style: format the repo with Biome (#79)
+32a20972458a1c73c55e44a13987a6036cd2aad2
