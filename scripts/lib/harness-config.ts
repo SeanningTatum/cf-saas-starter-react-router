@@ -69,9 +69,35 @@ const PathsSchema = Schema.Struct({
   schemas: Schema.String,
   analytics: Schema.String,
   analyticsEvents: Schema.String,
+  appRoot: Schema.String,
+  hooks: Schema.String,
+  routeTable: Schema.String,
+  trpc: Schema.String,
+  repositories: Schema.String,
 });
 
-const OpenRecordSchema = Schema.Record({ key: Schema.String, value: Schema.Unknown });
+const SharedFileSchema = Schema.Struct({ path: Schema.String, owner: Schema.String });
+
+const ShipSchema = Schema.Struct({ sharedFiles: Schema.Array(SharedFileSchema) });
+
+const PrimitiveLaneSchema = Schema.Struct({
+  name: Schema.String,
+  motion: Schema.Boolean,
+  files: Schema.Array(Schema.String),
+});
+
+const LaneSchema = Schema.Struct({
+  name: Schema.String,
+  motion: Schema.Boolean,
+  owns: Schema.Array(Schema.String),
+});
+
+const BrandInitSchema = Schema.Struct({
+  contractFence: Schema.Array(Schema.String),
+  primitiveLanes: Schema.Array(PrimitiveLaneSchema),
+  sharedLanes: Schema.Array(LaneSchema),
+  homeLane: LaneSchema,
+});
 
 const ConfigFileSchema = Schema.Struct({
   version: Schema.optional(Schema.Literal(CONFIG_VERSION)),
@@ -85,8 +111,8 @@ const ConfigFileSchema = Schema.Struct({
   loginForm: Schema.optional(Schema.partial(LoginFormSchema)),
   seedLogins: Schema.optional(Schema.Record({ key: Schema.String, value: SeedLoginSchema })),
   paths: Schema.optional(Schema.partial(PathsSchema)),
-  ship: Schema.optional(OpenRecordSchema),
-  brandInit: Schema.optional(OpenRecordSchema),
+  ship: Schema.optional(Schema.partial(ShipSchema)),
+  brandInit: Schema.optional(Schema.partial(BrandInitSchema)),
 });
 
 export type Gate = typeof GateSchema.Type;
@@ -107,8 +133,8 @@ export interface HarnessConfig {
   loginForm: LoginForm;
   seedLogins: Record<string, SeedLogin>;
   paths: Paths;
-  ship: Record<string, unknown>;
-  brandInit: Record<string, unknown>;
+  ship: Partial<typeof ShipSchema.Type>;
+  brandInit: Partial<typeof BrandInitSchema.Type>;
 }
 
 export const CONFIG_KEYS = Object.keys(ConfigFileSchema.fields);
@@ -118,6 +144,11 @@ export const NESTED_KEYS = {
   docs: Object.keys(DocsSchema.fields),
   loginForm: Object.keys(LoginFormSchema.fields),
   paths: Object.keys(PathsSchema.fields),
+  ship: Object.keys(ShipSchema.fields),
+  sharedFile: Object.keys(SharedFileSchema.fields),
+  brandInit: Object.keys(BrandInitSchema.fields),
+  primitiveLane: Object.keys(PrimitiveLaneSchema.fields),
+  lane: Object.keys(LaneSchema.fields),
   gates: Object.keys(GateSchema.fields),
 };
 

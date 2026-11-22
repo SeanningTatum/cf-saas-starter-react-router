@@ -15,6 +15,7 @@
 import { appendFileSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { configChecksum, loadHarnessConfigFromDisk, type HarnessConfig } from "./harness-config";
 import { parseLedger, type LedgerCall } from "./run-telemetry";
 
 export interface AgentOpts {
@@ -280,3 +281,8 @@ export function ledgerAt(result: DryRunResult, label: string) {
   if (!call) throw new Error(`no call labelled ${label}; got ${labels(result.calls).join(", ")}`);
   return { at, ...ledgerOf(call.prompt) };
 }
+
+export const configLine = (change: (config: HarnessConfig) => HarnessConfig = (config) => config): string => {
+  const config = change(loadHarnessConfigFromDisk());
+  return JSON.stringify({ config, check: configChecksum(config) });
+};

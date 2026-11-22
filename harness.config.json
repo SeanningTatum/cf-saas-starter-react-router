@@ -4,23 +4,29 @@
   "coauthor": "Co-Authored-By: Claude Fable 5.2 <noreply@anthropic.com>",
   "scratchDirs": [".verify/", "tmp/"],
   "gates": [
-    { "name": "typecheck", "run": "bun run typecheck", "baseline": true, "limitSeconds": 600 },
-    { "name": "test", "run": "bun run test", "baseline": true, "limitSeconds": 600 },
-    { "name": "non-negotiables-selftest", "run": "bun run scripts/check-non-negotiables.ts --selftest", "baseline": true, "limitSeconds": 300 },
-    { "name": "non-negotiables", "run": "bun run scripts/check-non-negotiables.ts", "baseline": true, "limitSeconds": 300 },
-    { "name": "migrations", "run": "bun run scripts/migration-check.ts", "baseline": true, "limitSeconds": 120 },
-    { "name": "harness", "run": "./scripts/harness-check.sh", "baseline": true, "limitSeconds": 300 },
-    { "name": "secrets", "run": "bun run scripts/secret-scan.ts", "baseline": true, "limitSeconds": 120 },
-    { "name": "audit", "run": "bun run scripts/package-audit.ts", "baseline": true, "limitSeconds": 120 },
-    { "name": "build", "run": "bun run build", "baseline": false, "limitSeconds": 900 },
-    { "name": "e2e", "run": "CI=1 bun run test:e2e", "baseline": false, "limitSeconds": 900 }
+    {"name": "typecheck", "run": "bun run typecheck", "baseline": true, "limitSeconds": 600},
+    {"name": "test", "run": "bun run test", "baseline": true, "limitSeconds": 600},
+    {
+      "name": "non-negotiables-selftest",
+      "run": "bun run scripts/check-non-negotiables.ts --selftest",
+      "baseline": true,
+      "limitSeconds": 300
+    },
+    {
+      "name": "non-negotiables",
+      "run": "bun run scripts/check-non-negotiables.ts",
+      "baseline": true,
+      "limitSeconds": 300
+    },
+    {"name": "migrations", "run": "bun run scripts/migration-check.ts", "baseline": true, "limitSeconds": 120},
+    {"name": "harness", "run": "./scripts/harness-check.sh", "baseline": true, "limitSeconds": 300},
+    {"name": "secrets", "run": "bun run scripts/secret-scan.ts", "baseline": true, "limitSeconds": 120},
+    {"name": "audit", "run": "bun run scripts/package-audit.ts", "baseline": true, "limitSeconds": 120},
+    {"name": "build", "run": "bun run build", "baseline": false, "limitSeconds": 900},
+    {"name": "e2e", "run": "CI=1 bun run test:e2e", "baseline": false, "limitSeconds": 900}
   ],
-  "tracker": { "readyLabel": "ready-for-agent" },
-  "reviewBot": {
-    "login": "greptile-apps",
-    "summaryMarker": "<!-- greptile_summary -->",
-    "trigger": "@greptileai review"
-  },
+  "tracker": {"readyLabel": "ready-for-agent"},
+  "reviewBot": {"login": "greptile-apps", "summaryMarker": "<!-- greptile_summary -->", "trigger": "@greptileai review"},
   "docs": {
     "product": "PRODUCT.md",
     "design": "DESIGN.md",
@@ -28,16 +34,11 @@
     "adr": "docs/adr",
     "features": "docs/features"
   },
-  "loginForm": {
-    "path": "/login",
-    "emailTestId": "login-email",
-    "passwordTestId": "login-password",
-    "submitTestId": "login-submit"
-  },
+  "loginForm": {"path": "/login", "emailTestId": "login-email", "passwordTestId": "login-password", "submitTestId": "login-submit"},
   "seedLogins": {
-    "admin": { "email": "admin@preview.local", "password": "Password123!" },
-    "user": { "email": "user@preview.local", "password": "Password123!" },
-    "banned": { "email": "banned@preview.local", "password": "Password123!" }
+    "admin": {"email": "admin@preview.local", "password": "Password123!"},
+    "user": {"email": "user@preview.local", "password": "Password123!"},
+    "banned": {"email": "banned@preview.local", "password": "Password123!"}
   },
   "paths": {
     "sourceRoots": ["app/", "workers/"],
@@ -50,6 +51,91 @@
     "locales": "app/locales",
     "schemas": "app/lib/schemas",
     "analytics": "app/services/analytics.ts",
-    "analyticsEvents": "app/lib/analytics/events.ts"
+    "analyticsEvents": "app/lib/analytics/events.ts",
+    "appRoot": "app/",
+    "hooks": "app/hooks",
+    "routeTable": "app/routes.ts",
+    "trpc": "app/trpc",
+    "repositories": "app/repositories"
+  },
+  "ship": {
+    "sharedFiles": [
+      {"path": "drizzle/", "owner": "^app/db/"},
+      {"path": "scripts/seed-preview.ts", "owner": "^app/db/"},
+      {"path": "app/models/errors/", "owner": "^app/(trpc|repositories)/"},
+      {"path": "app/models/errors/index.ts", "owner": "^app/(models/errors|trpc|repositories)/"},
+      {"path": "app/lib/effect-trpc.ts", "owner": "^app/trpc/"},
+      {"path": "app/trpc/router.ts", "owner": "^app/trpc/"},
+      {"path": "app/routes.ts", "owner": "^app/(routes|components)/"},
+      {"path": "app/locales/", "owner": "^app/(routes|components)/"},
+      {"path": "app/lib/analytics/events.ts", "owner": "^app/trpc/"}
+    ]
+  },
+  "brandInit": {
+    "contractFence": ["app/app.css", "app/root.tsx"],
+    "primitiveLanes": [
+      {
+        "name": "primitives:buttons-toggles",
+        "motion": true,
+        "files": ["button", "button-group", "toggle", "toggle-group", "switch"]
+      },
+      {
+        "name": "primitives:text-fields",
+        "motion": false,
+        "files": ["input", "input-group", "input-otp", "textarea", "label", "form"]
+      },
+      {
+        "name": "primitives:choice-pickers",
+        "motion": true,
+        "files": ["checkbox", "radio-group", "slider", "select", "native-select", "calendar"]
+      },
+      {"name": "primitives:dialogs-sheets", "motion": true, "files": ["dialog", "alert-dialog", "sheet", "drawer"]},
+      {
+        "name": "primitives:menus-popovers",
+        "motion": true,
+        "files": ["popover", "hover-card", "tooltip", "dropdown-menu", "context-menu", "menubar", "command"]
+      },
+      {
+        "name": "primitives:feedback",
+        "motion": true,
+        "files": ["alert", "progress", "skeleton", "spinner", "empty", "sonner"]
+      },
+      {
+        "name": "primitives:disclosure-nav",
+        "motion": true,
+        "files": ["accordion", "collapsible", "tabs", "breadcrumb", "pagination"]
+      },
+      {
+        "name": "primitives:layout",
+        "motion": true,
+        "files": ["sidebar", "separator", "scroll-area", "aspect-ratio", "card"]
+      },
+      {"name": "primitives:data-display", "motion": false, "files": ["table", "chart", "avatar", "badge", "carousel"]}
+    ],
+    "sharedLanes": [
+      {
+        "name": "shared",
+        "motion": true,
+        "owns": [
+          "app/components/feature-card.tsx",
+          "app/components/file-upload.tsx",
+          "app/components/language-switcher.tsx",
+          "app/components/stack-badge.tsx",
+          "app/components/theme-toggle.tsx",
+          "app/components/brand/**"
+        ]
+      },
+      {
+        "name": "shell",
+        "motion": false,
+        "owns": [
+          "app/routes/admin/layout/**",
+          "app/routes/authentication/components/auth-shell.tsx",
+          "app/locales/en/**",
+          "app/locales/zh/**"
+        ]
+      }
+    ],
+    "homeLane": {"name": "home", "motion": true, "owns": ["app/routes/home.tsx"]}
   }
 }

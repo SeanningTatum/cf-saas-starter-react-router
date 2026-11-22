@@ -8,7 +8,8 @@ The one file of values that belong to a project, not to the harness. Scripts and
 
 - A project with no file gets the defaults below. They name no path under `app/` and nothing about this starter's product.
 - An unknown key anywhere in the file is an error, so a typo cannot pass in silence.
-- A workflow script cannot read a file. Its Preflight step runs `bun scripts/harness-config.ts show` and checks the checksum that command prints. The build never pastes config values into `.claude/workflows/*.js`.
+- A workflow script cannot read a file. Its Preflight step runs `bun scripts/harness-config.ts show` from the checkout and returns the one line it prints as `config_json`, a string. The script calls `readConfig` (in `.claude/workflow-src/lib.js`): it parses the line, recomputes the checksum over the stable JSON of `config` and compares it with `check`. A line the runner garbled stops the run at Preflight with "the config copy did not verify; run the workflow again". The script then reads every project value as `cfg.<key>`; a key the workflow needs and the file lacks stops it with `harness-config: set <key> in harness.config.json`. `ship-feature` reads the config in a step of its own before its Preflight, because the base branch it fetches comes from the config. The build never pastes config values into `.claude/workflows/*.js`.
+- A grep gate keeps the harness code free of project paths: check N in `scripts/harness-check.sh` fails when a harness code file holds a literal path that starts with `app/`. It does not cover this file, tests and fixtures, the agent briefs in `.claude/agents/`, or the app's own scripts (seeding, first-time setup, teardown, CI helpers, the linters).
 - The file is JSON and has no comments. The notes that once sat beside the gate list are here: the e2e gate starts with `CI=1` because, without it, the dev server opens a remote-bindings session that needs a Cloudflare login, so the gate is red on any machine that is not logged in (`vite.config.ts`, `remoteBindings`).
 
 ## Keys
@@ -28,10 +29,8 @@ A key with no default is empty. A consumer that needs it fails with a line that 
 | `loginForm` | object | see below | `scripts/design-audit.ts` |
 | `seedLogins` | map of name to `{ email, password }` | none | `scripts/design-audit.ts` |
 | `paths` | object | none | the workflows, `scripts/harness-check.sh` |
-| `ship` | open object | none | `ship-feature` (the workflow lane fills it) |
-| `brandInit` | open object | none | `brand-init` (the workflow lane fills it) |
-
-`ship` and `brandInit` are open objects for now: the schema accepts any keys inside them. The workflow lane names their keys and tightens the schema.
+| `ship` | object | none | `ship-feature` |
+| `brandInit` | object | none | `brand-init` |
 
 ### `gates`
 
@@ -96,6 +95,30 @@ All optional. Each is a path from the repo root.
 | `schemas` | string | Effect Schema files |
 | `analytics` | string | The analytics service |
 | `analyticsEvents` | string | The analytics event list |
+| `appRoot` | string | The folder of app code: `brand-init` edits only under it, and `ship-feature` names it in its prompts |
+| `hooks` | string | React hooks (a UI path to `ship-feature`) |
+| `routeTable` | string | The route table file (a UI path to `ship-feature`) |
+| `trpc` | string | tRPC procedures |
+| `repositories` | string | Repositories |
+
+### `ship`
+
+| Key | Type | Meaning |
+|---|---|---|
+| `sharedFiles` | list of `{ path, owner }` | A file or folder every feature may touch, and the lane that owns it when no PR's fence names it |
+
+`path` is a repo path. `owner` is a regular expression source: the shared file goes to the first PR whose fence holds a path that matches it.
+
+### `brandInit`
+
+| Key | Type | Meaning |
+|---|---|---|
+| `contractFence` | list of strings | The files the contract lane writes (tokens file, root layout) |
+| `primitiveLanes` | list of `{ name, motion, files }` | The primitive lanes. `files` are names under `paths.primitives` without `.tsx`; `motion` is true when the lane owns something that moves. Every primitive file is in exactly one lane (`harness-check.sh`, check I2) |
+| `sharedLanes` | list of `{ name, motion, owns }` | Lanes that own named files or `folder/**` globs, in run order |
+| `homeLane` | `{ name, motion, owns }` | The lane that runs only when the home page is rebuilt |
+
+`owns` is a list of repo paths; a path ending in `/**` owns the folder.
 
 ## Commands
 

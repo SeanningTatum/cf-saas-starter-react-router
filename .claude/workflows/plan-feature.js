@@ -5,7 +5,7 @@ export const meta = {
   whenToUse:
     "A feature you want planned before any code: a GitHub issue (args.ticket) or a raw idea (args.idea). Not for building it (ship-feature does that), not for a typo or a one-file change.",
   phases: [
-    { title: "Preflight", detail: "root, date, gh auth, tracker backend, PRODUCT.md and DESIGN.md; reads the ticket (runner)" },
+    { title: "Preflight", detail: "root, date, gh auth, tracker backend, product and design docs, the harness config; reads the ticket (runner)" },
     { title: "Product", detail: "only when PRODUCT.md is missing: stops and asks you the product interview in chat" },
     { title: "Intake", detail: "normalise the ticket or idea into one input record" },
     { title: "Context", detail: "context-scout: memory, related features, settled decisions, code paths, prior issues and PRs" },
@@ -109,8 +109,6 @@ const CHECKLIST_IDS = ["problem", "user", "fit", "duplicate", "acceptance", "non
 const isP0P1 = (f) => f.severity === "P0" || f.severity === "P1";
 
 // ---- Prompt pieces ------------------------------------------------------------------------------
-/** The trailer on every commit a workflow asks an agent to make. Written here and nowhere else. */
-const COAUTHOR = "Co-Authored-By: Claude Fable 5.2 <noreply@anthropic.com>";
 /** Makes a `fence(label, text)` that wraps untrusted text in DATA markers; `note` goes after the label on the opening marker. */
 const makeFence = (note = "") => (label, text) => `----- DATA: ${label}${note} -----\n${text}\n----- END DATA: ${label} -----`;
 /** The preflight step that names the checkout: the caller's `args.root`, else the launch directory's git root. */
@@ -209,6 +207,50 @@ function runRecordCommand(workflow, slug, calls) {
 /** The sentence a stop that returns a `review` page adds to its `next`: the page shows the run's numbers too. */
 const runSummaryNote = (slug, workflow) =>
   `The page also shows the run summary: the output of \`bun scripts/run-telemetry.ts summary ${slug}\`, run from ROOT. Tokens and seconds read n/a until \`bun scripts/run-telemetry.ts ingest ${slug} ${workflow} <this run's transcript directory>\` has run; run it first when you have the directory.`;
+
+// ---- Project config -----------------------------------------------------------------------------------
+/** JSON with object keys sorted at every depth and no whitespace. scripts/lib/harness-config.ts computes the same text. */
+function stableJson(value) {
+  if (Array.isArray(value)) return `[${value.map(stableJson).join(",")}]`;
+  if (typeof value === "object" && value !== null) {
+    return `{${Object.keys(value).sort().map((k) => `${JSON.stringify(k)}:${stableJson(value[k])}`).join(",")}}`;
+  }
+  const text = JSON.stringify(value);
+  return text === undefined ? "null" : text;
+}
+
+/** The sentence a run stops with when the config line a runner copied does not check out. */
+const CONFIG_COPY_FAULT = "the config copy did not verify; run the workflow again";
+
+/**
+ * Parses the one line `bun scripts/harness-config.ts show` prints ({ config, check }) and verifies it: the
+ * checksum is recomputed over the stable JSON of `config`, so a runner that garbled the copy is caught.
+ * `need` lists dotted keys the workflow cannot run without. Returns { config } or { error }.
+ */
+function readConfig(configJson, need) {
+  let parsed;
+  try {
+    parsed = JSON.parse(configJson);
+  } catch {
+    return { error: `${CONFIG_COPY_FAULT} (not JSON)` };
+  }
+  if (!parsed || typeof parsed !== "object" || !parsed.config || typeof parsed.config !== "object" || typeof parsed.check !== "string") {
+    return { error: `${CONFIG_COPY_FAULT} (no config or check)` };
+  }
+  if (ledgerChecksum(stableJson(parsed.config)) !== parsed.check) return { error: `${CONFIG_COPY_FAULT} (checksum differs)` };
+  for (const key of need || []) {
+    const value = key.split(".").reduce((o, k) => (o && typeof o === "object" ? o[k] : undefined), parsed.config);
+    if (value === undefined || value === null || value === "" || (Array.isArray(value) && value.length === 0)) {
+      return { error: `harness-config: set ${key} in harness.config.json` };
+    }
+  }
+  return { config: parsed.config };
+}
+
+/** "a", "a and b", "a, b and c". */
+const andList = (items) => (items.length < 2 ? items.join("") : `${items.slice(0, -1).join(", ")} and ${items[items.length - 1]}`);
+/** A string as a regular expression's source, matched literally. */
+const reEscape = (text) => text.replace(/[.*+?^${}()|[\]\\/]/g, "\\$&");
 
 // ---- Helpers that need the runtime ----------------------------------------------------------------
 function workflowLib({ agent, log, name }) {
@@ -502,7 +544,7 @@ const trackerLine = input.ticket
 const pre = await tracked(
   `Pre-flight for plan-feature. Check each item in order and stop at the first failure. Change nothing.
 
-  0. Root. ${rootClause(input.root)} ROOT must be absolute. \`cd\` to ROOT: items 1 to 6 run there. Return it in \`root\`.
+  0. Root. ${rootClause(input.root)} ROOT must be absolute. \`cd\` to ROOT: items 1 to 7 run there. Return it in \`root\`.
   1. Date. \`date +%F\` -> \`date\`.
   2. GitHub. \`gh auth status\` must succeed, else fail with its message.
   3. Tracker backend. Default is gh (docs/agents/issue-tracker.md). If that file, AGENTS.md or scripts/tracker.ts
@@ -512,6 +554,7 @@ const pre = await tracked(
   4. PRODUCT.md. Does ROOT/PRODUCT.md exist? -> has_product.
   5. DESIGN.md. Does ROOT/DESIGN.md exist? -> has_design. Does ROOT/.claude/skills/to-spec/SKILL.md exist? -> has_to_spec.
 ${trackerLine}
+  7. Config. Run \`bun scripts/harness-config.ts show\` from ROOT and return its one line of output exactly as \`config_json\`: copy it character for character, change nothing.
 Return ok=false with a one-line reason for the first failure, else ok=true. Always return root when you found it.`,
   {
     label: "preflight",
@@ -519,13 +562,20 @@ Return ok=false with a one-line reason for the first failure, else ok=true. Alwa
     agentType: "runner",
     effort: "low",
     schema: obj(
-      { ok: BOOL, reason: STR, root: STR, date: STR, backend: STR, has_product: BOOL, has_design: BOOL, has_to_spec: BOOL, issue: { type: ["object", "null"], additionalProperties: true } },
-      ["ok", "reason", "root", "date", "backend", "has_product", "has_design", "has_to_spec"]
+      { ok: BOOL, reason: STR, root: STR, date: STR, backend: STR, has_product: BOOL, has_design: BOOL, has_to_spec: BOOL, config_json: STR, issue: { type: ["object", "null"], additionalProperties: true } },
+      ["ok", "reason", "root", "date", "backend", "has_product", "has_design", "has_to_spec", "config_json"]
     ),
   }
 );
 const fault = preflightFault(pre);
 if (fault) return { stopped: "Preflight", reason: fault };
+const conf = readConfig(pre.config_json, ["paths.tokens", "paths.home"]);
+if (conf.error) {
+  log(`Pre-flight: ${conf.error}. Nothing ran.`);
+  return { stopped: "Preflight", reason: conf.error };
+}
+const cfg = conf.config;
+const BASE = cfg.baseBranch || "main";
 if (!/^\d{4}-\d{2}-\d{2}$/.test(pre.date)) {
   log(`Pre-flight returned a bad date (${JSON.stringify(pre.date)}). Nothing ran.`);
   return { stopped: "Preflight", reason: "preflight did not return an ISO date" };
@@ -571,10 +621,10 @@ if (!pre.has_product) {
   phase("Product");
   // The interview is drafted from the repo and asked in chat; the run stops when a draft is only a guess.
   const interview = await ask(
-    `PRODUCT.md is missing, and planning a feature needs it. Prepare the impeccable \`init\` interview. Do NOT write any file and do NOT ask the user anything: you cannot reach them. Draft the answers instead.
+    `${cfg.docs.product} is missing, and planning a feature needs it. Prepare the impeccable \`init\` interview. Do NOT write any file and do NOT ask the user anything: you cannot reach them. Draft the answers instead.
 
 Load \`impeccable\` and read its \`init\` instructions for the questions it asks about the product, the users and the tone.
-Draft an answer to each from the repo (${ROOT}): README.md, AGENTS.md, package.json, app/routes/home.tsx, the i18n locale files.
+Draft an answer to each from the repo (${ROOT}): README.md, AGENTS.md, package.json, ${cfg.paths.home}, the i18n locale files.
 ${input.idea ? `\nThe idea behind this run, as context only:\n${fence("idea", input.idea)}\n${DATA_FENCE}\n` : ""}
 Return every question with a short stable id, the question text, your draft answer, and confident: true only when the repo states the answer outright. Mark a guess confident=false: the user will be asked about those.`,
     {
@@ -595,7 +645,7 @@ Return every question with a short stable id, the question text, your draft answ
     await stop(
       "needs-input:product",
       "Product",
-      "Product phase, status needs-input. PRODUCT.md is not written yet",
+      `Product phase, status needs-input. ${cfg.docs.product} is not written yet`,
       `the user's answers to ${open.length} product interview question(s), ids ${open.map((q) => q.id).join(", ")}`,
       `${resumeHow('product: { <id>: "<answer>" }')}`,
       {
@@ -607,21 +657,21 @@ Return every question with a short stable id, the question text, your draft answ
     );
   }
   const wrote = await ask(
-    `Write ${ROOT}/PRODUCT.md from these interview answers, in the format impeccable \`init\` writes. The user settled them; do not change an answer. Write nothing else.
+    `Write ${ROOT}/${cfg.docs.product} from these interview answers, in the format impeccable \`init\` writes. The user settled them; do not change an answer. Write nothing else.
 ${DATA_FENCE}
 ${fence("answers", JSON.stringify(interview.questions.map((q) => ({ id: q.id, question: q.question, answer: given && typeof given[q.id] === "string" ? given[q.id] : q.draft })), null, 1))}
-Return written=true once PRODUCT.md exists.`,
+Return written=true once ${cfg.docs.product} exists.`,
     { label: "product:write", phase: "Product", agentType: "docs-writer", schema: obj({ written: BOOL, note: STR }) }
   );
   if (!wrote || !wrote.written) {
-    log("Stopped at Product: PRODUCT.md was not written");
-    return { stopped: "Product", reason: wrote ? `PRODUCT.md not written (${wrote.note})` : "product writer returned nothing" };
+    log(`Stopped at Product: ${cfg.docs.product} was not written`);
+    return { stopped: "Product", reason: wrote ? `${cfg.docs.product} not written (${wrote.note})` : "product writer returned nothing" };
   }
 } else {
-  log("Product: PRODUCT.md exists — interview skipped");
+  log(`Product: ${cfg.docs.product} exists — interview skipped`);
 }
 if (!pre.has_to_spec) log("to-spec skill is missing (.claude/skills/to-spec/SKILL.md) — the issue body keeps the plain amended-ticket format");
-if (!pre.has_design) log("DESIGN.md is missing — UX planning runs without a brand file; the plan page will say so");
+if (!pre.has_design) log(`${cfg.docs.design} is missing — UX planning runs without a brand file; the plan page will say so`);
 
 // =============================================================================================
 phase("Intake");
@@ -680,7 +730,7 @@ ${DATA_FENCE}
 
 ${briefData()}
 ${fence("context", JSON.stringify(rec.context, null, 1))}
-Read ${ROOT}/PRODUCT.md. ${research ? "RESEARCH IS ON: load the `deep-research` skill (`anthropic-skills:deep-research` if the plain name is unknown) and find how comparable products solve this; return each finding in `prior_art` with its source URL, and let it inform the options in your decisions." : "Research is off: return `prior_art` as an empty list."} Return the object your schema asks for.`;
+Read ${ROOT}/${cfg.docs.product}. ${research ? "RESEARCH IS ON: load the `deep-research` skill (`anthropic-skills:deep-research` if the plain name is unknown) and find how comparable products solve this; return each finding in `prior_art` with its source URL, and let it inform the options in your decisions." : "Research is off: return `prior_art` as an empty list."} Return the object your schema asks for.`;
     case "ux":
       return `Plan the UX for feature "${slug}".
 ${DATA_FENCE}
@@ -688,7 +738,7 @@ ${DATA_FENCE}
 ${briefData()}
 ${fence("fit", JSON.stringify(rec.fit, null, 1))}
 Return exactly 3 genuinely different \`directions\` (ids a, b, c; exactly one recommended; layout, hierarchy or how the user learns the save worked differ, not colours); your states and flow describe the recommended one. Set \`surface\` to "app" (dashboard, settings, admin, forms) or "public" (landing, marketing, pricing), and \`motion\` true on a direction only when motion carries its meaning.
-Read ${ROOT}/PRODUCT.md${pre.has_design ? ` and ${ROOT}/DESIGN.md` : " (DESIGN.md does not exist yet; say so in wireframe_notes and use the tokens in app/app.css)"}. Return the object your schema asks for.`;
+Read ${ROOT}/${cfg.docs.product}${pre.has_design ? ` and ${ROOT}/${cfg.docs.design}` : ` (${cfg.docs.design} does not exist yet; say so in wireframe_notes and use the tokens in ${cfg.paths.tokens})`}. Return the object your schema asks for.`;
     case "architect":
       return `Plan the architecture for feature "${slug}". Fences must be disjoint by lane (docs, data, api, ui). Set \`ai\` true when the feature adds or changes a prompt, a model call or an agent; then fill \`prompt_contracts\` and \`eval_plan\` (empty list and empty string when \`ai\` is false).
 ${DATA_FENCE}
@@ -698,7 +748,7 @@ ${fence("fit", JSON.stringify(rec.fit, null, 1))}
 ${fence("context", JSON.stringify(rec.context, null, 1))}
 Return the object your schema asks for.`;
     case "stack":
-      return `Plan the PR stack for feature "${slug}". PR 1 targets main; each later PR's base is the previous PR's branch. Fences must not overlap.
+      return `Plan the PR stack for feature "${slug}". PR 1 targets ${BASE}; each later PR's base is the previous PR's branch. Fences must not overlap.
 ${DATA_FENCE}
 
 ${fence("architect", JSON.stringify(rec.architect, null, 1))}
@@ -1105,7 +1155,7 @@ ${fence("direction", JSON.stringify(d, null, 1))}
 ${fence("ux plan", JSON.stringify({ flow_mermaid: rec.ux.flow_mermaid, screens: rec.ux.screens, states: rec.ux.states, wireframe_notes: rec.ux.wireframe_notes }, null, 1))}
 ${briefData()}
 Surface: ${rec.ux.surface}. ${d.motion ? "This direction has motion." : ""}
-Read ${ROOT}/PRODUCT.md${pre.has_design ? ` and ${ROOT}/DESIGN.md` : ""} and the tokens in ${ROOT}/app/app.css.
+Read ${ROOT}/${cfg.docs.product}${pre.has_design ? ` and ${ROOT}/${cfg.docs.design}` : ""} and the tokens in ${ROOT}/${cfg.paths.tokens}.
 Write the file once, check it against the rules in your agent file, and return; the critic reviews the render, so do not screenshot or iterate on it yourself.
 Return id, file (absolute path) and summary.${extra || ""}`;
 const runProto = (d, mode, extra) =>
@@ -1213,14 +1263,14 @@ const protoBlock = () =>
     : "";
 
 const draft = `${outDir()}/record.md`;
-const FORMAT = `FORMAT (see ${ROOT}/docs/features/FORMAT.md if it exists; the checker is the authority):
-  --- frontmatter: slug, title, ticket (the issue URL or none), date, ui (true|false), base (main) ---
+const FORMAT = `FORMAT (see ${ROOT}/${cfg.docs.features}/FORMAT.md if it exists; the checker is the authority):
+  --- frontmatter: slug, title, ticket (the issue URL or none), date, ui (true|false), base (${BASE}) ---
   # <title>, then H2 sections IN THIS ORDER: Summary, Context, User and job, Fit, Success metric, Non-goals,
   ${hasUi ? "UX (a ```mermaid block, then a table with columns Screen | Empty | Loading | Error | Success), " : "(no UX section: the feature has no UI, set ui: false), "}Architecture, Decisions, Flow (a \`\`\`mermaid block), PR stack, Contract (a \`\`\`ts block), Open questions.
   Context: one bullet per finding, each ending " — source: <ref>".
   Non-goals: "- <item> — <why>".
   Decisions: "### D1 — <question>" then bullets **Area:** product|ux|backend, **Chosen:**, **Rejected:** <option> — <why> (at least one), **Why:**, **Decided by:** user|agent. Collect the decisions from fit, ux and architect, renumber D1.. in order, and add one decision per brief answer the human gave (Decided by: user).
-  PR stack: table | # | Branch | Base | Fence | Size | Greptile focus |, fence paths in backticks; PR 1 base is main; later bases are the previous branch.
+  PR stack: table | # | Branch | Base | Fence | Size | Greptile focus |, fence paths in backticks; PR 1 base is ${BASE}; later bases are the previous branch.
   Open questions: every unknown from the context, and${writebackNote ? ` THIS TRACKER CONFLICT (first item; say whether the write was skipped or landed, and label any text as a diff): ${writebackNote}` : " anything the agents flagged"}.`;
 
 const assemble = async (extra) => {
@@ -1231,7 +1281,7 @@ const assemble = async (extra) => {
 const assembleOnce = (extra) =>
   ask(
     `Assemble the decision record for feature "${slug}" at ${draft} (mkdir -p its directory), then run \`bun run scripts/check-feature-doc.ts "${draft}"\` and report the result.
-Use only the agent outputs below; invent nothing. Frontmatter: slug ${slug}; title ${JSON.stringify(finalTicket.title)}; ticket ${source.kind === "ticket" || writeback.issue_url ? writeback.issue_url : "none"}; date ${DATE}; ui ${hasUi}; base main.
+Use only the agent outputs below; invent nothing. Frontmatter: slug ${slug}; title ${JSON.stringify(finalTicket.title)}; ticket ${source.kind === "ticket" || writeback.issue_url ? writeback.issue_url : "none"}; date ${DATE}; ui ${hasUi}; base ${BASE}.
 ${FORMAT}
 ${DATA_FENCE}
 
@@ -1386,7 +1436,7 @@ for (let round = 1; round <= maxRounds; round++) {
         tracker: writebackNote || null,
         noDesignFile: !pre.has_design,
         changedSinceLastRound: lastChanges.map((c) => `[${c.target}] ${c.text}`),
-        next: `Write the review page at ${planPage} (run \`npx -y lavish-axi playbook comparison\` and \`playbook input\` first; style it with the app's tokens from app/app.css). Read the record at ${draft}; show it, do not rewrite it. ${round > 1 ? `This is round ${round}: say at the top what changed (changedSinceLastRound). ` : ""}Sections: summary, fit verdict and success metric; every decision (D1..) with the chosen option marked, the rejected options with reasons, and who decided; ${hasUi ? "the UX flow and state table, and the Flow diagram, mermaid drawn with the mermaid library from cdnjs (pinned version); " : "no UI (say so in one line); the Flow diagram; "}the PR stack as a table; open questions.${hasUi ? ` PROTOTYPES: copy each surviving prototype (${protos.filter((p) => !p.failed).map((p) => p.file).join(", ") || "none"}) into ${outDir()}/ and show it in an <iframe src="proto-<id>.html"> (relative src, never a leading /), side by side on wide screens and stacked on narrow, each with its name, idea and layout line and a "Known issues" list from knownIssues ("No known issues" when empty).${survivors().length < 3 ? ` Banner: only ${survivors().length} of 3 prototypes survived (${protos.filter((p) => p.failed).map((p) => p.id).join(", ") || "none ran"} failed); draw no frame for them.` : ""} PICK: one radio per surviving direction, ${chosen} preselected as the recommendation, with one sentence on why.` : ""}${writebackNote ? ` Banner at the top: ${writebackNote} Say plainly which happened, show the text as a diff, and ask what to do about it.` : ""}${!pre.has_design ? " Note at the top that DESIGN.md does not exist, so the UX section uses the app tokens only." : ""} ${runSummaryNote(memSlug(), "plan-feature")} End with ONE form: "Approve the plan" or "Request changes" with a text field per area (fit, ux, architect, stack, other); one submit that calls window.lavish.queuePrompt once with data { approved, pick, changes: [{ target, text }] }. Open it with \`npx -y lavish-axi ${planPage}\`, tell the user it is open, then run \`npx -y lavish-axi poll ${planPage}\` in the foreground and re-run it if it times out. Read the answer, post \`npx -y lavish-axi reply ${planPage} --agent-reply "<what happens next>"\`, then ${resumeHow(`plans: { ...earlier rounds, "${round}": { approved: true|false, pick: "<prototype id>", changes: [{ target: "fit"|"ux"|"architect"|"stack"|"other", text }] } }`)} If lavish will not start, show the same content in chat and ask there.`,
+        next: `Write the review page at ${planPage} (run \`npx -y lavish-axi playbook comparison\` and \`playbook input\` first; style it with the app's tokens from ${cfg.paths.tokens}). Read the record at ${draft}; show it, do not rewrite it. ${round > 1 ? `This is round ${round}: say at the top what changed (changedSinceLastRound). ` : ""}Sections: summary, fit verdict and success metric; every decision (D1..) with the chosen option marked, the rejected options with reasons, and who decided; ${hasUi ? "the UX flow and state table, and the Flow diagram, mermaid drawn with the mermaid library from cdnjs (pinned version); " : "no UI (say so in one line); the Flow diagram; "}the PR stack as a table; open questions.${hasUi ? ` PROTOTYPES: copy each surviving prototype (${protos.filter((p) => !p.failed).map((p) => p.file).join(", ") || "none"}) into ${outDir()}/ and show it in an <iframe src="proto-<id>.html"> (relative src, never a leading /), side by side on wide screens and stacked on narrow, each with its name, idea and layout line and a "Known issues" list from knownIssues ("No known issues" when empty).${survivors().length < 3 ? ` Banner: only ${survivors().length} of 3 prototypes survived (${protos.filter((p) => p.failed).map((p) => p.id).join(", ") || "none ran"} failed); draw no frame for them.` : ""} PICK: one radio per surviving direction, ${chosen} preselected as the recommendation, with one sentence on why.` : ""}${writebackNote ? ` Banner at the top: ${writebackNote} Say plainly which happened, show the text as a diff, and ask what to do about it.` : ""}${!pre.has_design ? ` Note at the top that ${cfg.docs.design} does not exist, so the UX section uses the app tokens only.` : ""} ${runSummaryNote(memSlug(), "plan-feature")} End with ONE form: "Approve the plan" or "Request changes" with a text field per area (fit, ux, architect, stack, other); one submit that calls window.lavish.queuePrompt once with data { approved, pick, changes: [{ target, text }] }. Open it with \`npx -y lavish-axi ${planPage}\`, tell the user it is open, then run \`npx -y lavish-axi poll ${planPage}\` in the foreground and re-run it if it times out. Read the answer, post \`npx -y lavish-axi reply ${planPage} --agent-reply "<what happens next>"\`, then ${resumeHow(`plans: { ...earlier rounds, "${round}": { approved: true|false, pick: "<prototype id>", changes: [{ target: "fit"|"ux"|"architect"|"stack"|"other", text }] } }`)} If lavish will not start, show the same content in chat and ask there.`,
       }
     );
   }
@@ -1523,7 +1573,7 @@ if (hasUi && chosen) {
           items: seriousOpen,
           prototype: protoRel(chosen),
           review: sfile,
-          next: `Write the review page at ${sfile} (run \`npx -y lavish-axi playbook table\` and \`playbook input\` first; style it with the app's tokens from app/app.css). Copy ${protoRel(chosen)} into ${outDir()}/ and show it in an <iframe src="proto-${chosen}.html"> (relative src), list the findings. ${runSummaryNote(memSlug(), "plan-feature")} End with ONE form: "Accept and publish (the findings go into the record's Open questions)" or "Stop", one submit that calls window.lavish.queuePrompt once with data { accept: true|false }. Open it with \`npx -y lavish-axi ${sfile}\`, tell the user it is open, run \`npx -y lavish-axi poll ${sfile}\` in the foreground (re-run on timeout), post \`npx -y lavish-axi reply ${sfile} --agent-reply "<what happens next>"\`, then ${resumeHow("accept: { states: true|false }")} If lavish will not start, ask in chat.`,
+          next: `Write the review page at ${sfile} (run \`npx -y lavish-axi playbook table\` and \`playbook input\` first; style it with the app's tokens from ${cfg.paths.tokens}). Copy ${protoRel(chosen)} into ${outDir()}/ and show it in an <iframe src="proto-${chosen}.html"> (relative src), list the findings. ${runSummaryNote(memSlug(), "plan-feature")} End with ONE form: "Accept and publish (the findings go into the record's Open questions)" or "Stop", one submit that calls window.lavish.queuePrompt once with data { accept: true|false }. Open it with \`npx -y lavish-axi ${sfile}\`, tell the user it is open, run \`npx -y lavish-axi poll ${sfile}\` in the foreground (re-run on timeout), post \`npx -y lavish-axi reply ${sfile} --agent-reply "<what happens next>"\`, then ${resumeHow("accept: { states: true|false }")} If lavish will not start, ask in chat.`,
         }
       );
     }

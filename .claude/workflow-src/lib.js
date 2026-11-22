@@ -28,8 +28,6 @@ export const CHECKLIST_IDS = ["problem", "user", "fit", "duplicate", "acceptance
 export const isP0P1 = (f) => f.severity === "P0" || f.severity === "P1";
 
 // ---- Prompt pieces ------------------------------------------------------------------------------
-/** The trailer on every commit a workflow asks an agent to make. Written here and nowhere else. */
-export const COAUTHOR = "Co-Authored-By: Claude Fable 5.2 <noreply@anthropic.com>";
 /** Makes a `fence(label, text)` that wraps untrusted text in DATA markers; `note` goes after the label on the opening marker. */
 export const makeFence = (note = "") => (label, text) => `----- DATA: ${label}${note} -----\n${text}\n----- END DATA: ${label} -----`;
 /** The preflight step that names the checkout: the caller's `args.root`, else the launch directory's git root. */
@@ -128,6 +126,50 @@ export function runRecordCommand(workflow, slug, calls) {
 /** The sentence a stop that returns a `review` page adds to its `next`: the page shows the run's numbers too. */
 export const runSummaryNote = (slug, workflow) =>
   `The page also shows the run summary: the output of \`bun scripts/run-telemetry.ts summary ${slug}\`, run from ROOT. Tokens and seconds read n/a until \`bun scripts/run-telemetry.ts ingest ${slug} ${workflow} <this run's transcript directory>\` has run; run it first when you have the directory.`;
+
+// ---- Project config -----------------------------------------------------------------------------------
+/** JSON with object keys sorted at every depth and no whitespace. scripts/lib/harness-config.ts computes the same text. */
+export function stableJson(value) {
+  if (Array.isArray(value)) return `[${value.map(stableJson).join(",")}]`;
+  if (typeof value === "object" && value !== null) {
+    return `{${Object.keys(value).sort().map((k) => `${JSON.stringify(k)}:${stableJson(value[k])}`).join(",")}}`;
+  }
+  const text = JSON.stringify(value);
+  return text === undefined ? "null" : text;
+}
+
+/** The sentence a run stops with when the config line a runner copied does not check out. */
+export const CONFIG_COPY_FAULT = "the config copy did not verify; run the workflow again";
+
+/**
+ * Parses the one line `bun scripts/harness-config.ts show` prints ({ config, check }) and verifies it: the
+ * checksum is recomputed over the stable JSON of `config`, so a runner that garbled the copy is caught.
+ * `need` lists dotted keys the workflow cannot run without. Returns { config } or { error }.
+ */
+export function readConfig(configJson, need) {
+  let parsed;
+  try {
+    parsed = JSON.parse(configJson);
+  } catch {
+    return { error: `${CONFIG_COPY_FAULT} (not JSON)` };
+  }
+  if (!parsed || typeof parsed !== "object" || !parsed.config || typeof parsed.config !== "object" || typeof parsed.check !== "string") {
+    return { error: `${CONFIG_COPY_FAULT} (no config or check)` };
+  }
+  if (ledgerChecksum(stableJson(parsed.config)) !== parsed.check) return { error: `${CONFIG_COPY_FAULT} (checksum differs)` };
+  for (const key of need || []) {
+    const value = key.split(".").reduce((o, k) => (o && typeof o === "object" ? o[k] : undefined), parsed.config);
+    if (value === undefined || value === null || value === "" || (Array.isArray(value) && value.length === 0)) {
+      return { error: `harness-config: set ${key} in harness.config.json` };
+    }
+  }
+  return { config: parsed.config };
+}
+
+/** "a", "a and b", "a, b and c". */
+export const andList = (items) => (items.length < 2 ? items.join("") : `${items.slice(0, -1).join(", ")} and ${items[items.length - 1]}`);
+/** A string as a regular expression's source, matched literally. */
+export const reEscape = (text) => text.replace(/[.*+?^${}()|[\]\\/]/g, "\\$&");
 
 // ---- Helpers that need the runtime ----------------------------------------------------------------
 export function workflowLib({ agent, log, name }) {
