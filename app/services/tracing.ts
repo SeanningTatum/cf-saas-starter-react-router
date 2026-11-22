@@ -11,40 +11,17 @@ import { randomHex, type RequestContext } from "@/lib/request-context";
 import { MAX_BUFFERED_SPANS } from "@/lib/constants/tracing";
 import { buildOtlpPayload, isErrorSpan } from "./tracing-otlp";
 
-/**
- * Env-driven OTLP span export for Effect's tracer.
- *
- * When `OTEL_EXPORTER_OTLP_ENDPOINT` is unset the layer is `Layer.empty` —
- * Effect's default in-memory tracer still runs (so logs keep traceId
- * correlation) but nothing is exported. When set, a custom `Tracer` buffers
- * every ended span and a scope finalizer flushes them as one OTLP/HTTP JSON
- * request when the request-scoped runtime is disposed (the worker wraps
- * `runtime.dispose()` in `ctx.waitUntil`, so the flush never blocks the
- * response).
- *
- * Backend-agnostic: any OTLP-compatible collector works (Jaeger, Grafana,
- * Honeycomb, Axiom, Logfire, otel-tui).
- */
-
 export interface TracingConfig {
-  /** Full OTLP traces URL — `/v1/traces` appended when missing. */
   readonly url: string;
   readonly headers: Record<string, string>;
   readonly serviceName: string;
 }
 
-// The OTEL_* vars are optional secrets — they never appear in the generated
-// `Env` type unless the deployer sets them, so they're read defensively off
-// the env object rather than typed on it.
 const readEnvString = (env: object, key: string): string | undefined => {
   const value = (env as Record<string, unknown>)[key];
   return typeof value === "string" && value.length > 0 ? value : undefined;
 };
 
-/**
- * W3C correlation-context format: `key=value,key2=value2`, values may be
- * percent-encoded (`Authorization=Bearer%20abc`).
- */
 export const parseOtlpHeaders = (
   raw: string | undefined
 ): Record<string, string> => {
@@ -81,8 +58,6 @@ export const readTracingConfig = (env: object): TracingConfig | null => {
     serviceName: readEnvString(env, "OTEL_SERVICE_NAME") ?? "cf-saas-starter",
   };
 };
-
-// --- Span implementation -----------------------------------------------------
 
 interface SpanEvent {
   readonly name: string;
@@ -157,13 +132,6 @@ export class OtlpSpan implements Tracer.Span {
   }
 }
 
-/**
- * With a `request`, every span carries `request.id`, and `user.id` once the
- * session has resolved. The request object is read when each span starts: it
- * is the one `setRequestUser` updates, so spans started after sign-in resolves
- * carry the user. (The tracer's own `context` argument is `SpanOptions.context`,
- * not the fiber's, so the request is handed in here instead.)
- */
 export const makeOtlpTracer = (
   buffer: SpanBuffer,
   request?: RequestContext
@@ -182,8 +150,6 @@ export const makeOtlpTracer = (
     context: (f) => f(),
   });
 
-// --- Export + layer -----------------------------------------------------------
-
 export type FetchLike = (
   url: string,
   init: {
@@ -198,10 +164,6 @@ const forcedExportBudget = makeReportBudget({
   windowMs: FORCED_TRACE_EXPORT_WINDOW_MS,
 });
 
-/**
- * Drains the buffer and POSTs one OTLP request. Export failures are logged
- * (`tracing.export_failed`) and swallowed — tracing must never fail the app.
- */
 export const flushSpans = (
   config: TracingConfig,
   buffer: SpanBuffer,
@@ -255,12 +217,6 @@ export const flushSpans = (
     );
   });
 
-/**
- * `Layer.empty` when `OTEL_EXPORTER_OTLP_ENDPOINT` is unset. Otherwise sets
- * the OTLP-buffering tracer and registers a flush finalizer that runs on
- * `runtime.dispose()`. `request` stamps the request's ids on every span; see
- * `makeOtlpTracer`.
- */
 export const TracingLayer = (
   env: object,
   fetchFn?: FetchLike,

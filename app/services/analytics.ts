@@ -8,9 +8,7 @@ import { posthogAdapter } from "@/lib/analytics/adapters/posthog";
 import { loggers } from "@/lib/logger";
 
 export interface AnalyticsShape {
-  /** Buffers the event. Never fails, never waits on the network. */
   readonly capture: (event: AnalyticsEvent) => Effect.Effect<void>;
-  /** Buffers a provider-side update of a person's traits. Never fails. */
   readonly identify: (
     distinctId: string,
     traits: Record<string, unknown>
@@ -22,7 +20,6 @@ export class Analytics extends Context.Tag("app/Analytics")<
   AnalyticsShape
 >() {}
 
-/** Unknown provider names, and `posthog` with no key, fall back to no-op so a bad config cannot break requests. */
 export const selectAdapter = (env: Partial<Env>): AnalyticsAdapter => {
   switch (env.ANALYTICS_PROVIDER) {
     case "console":
@@ -42,10 +39,6 @@ const stamp = (event: Omit<CapturedEvent, "timestamp">) =>
     (ms): CapturedEvent => ({ ...event, timestamp: new Date(ms).toISOString() })
   );
 
-/**
- * Events buffer for the life of the per-request runtime and go out as one
- * batch when it is disposed, which workers/app.ts runs under `ctx.waitUntil`.
- */
 export const AnalyticsFrom = (adapter: AnalyticsAdapter) =>
   Layer.scoped(
     Analytics,

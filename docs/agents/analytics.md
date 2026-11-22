@@ -22,3 +22,8 @@ Example: `user_banned` in `app/trpc/routes/admin.ts`.
 | `ANALYTICS_PROVIDER` | `none` (default), `console` or `posthog`. |
 | `POSTHOG_API_KEY` | PostHog project key. A secret: `.dev.vars` locally, `wrangler secret put` in production. With `posthog` and no key, analytics is off. |
 | `POSTHOG_HOST` | Default `https://us.i.posthog.com`. |
+
+## Why
+
+- **A bad config turns analytics off, never the app.** `selectAdapter` falls back to the no-op adapter for an unknown `ANALYTICS_PROVIDER` and for `posthog` with no key, so a typo in the env cannot break a request.
+- **`capture` and `identify` only buffer.** Neither fails nor waits on the network; the batch goes out when the per-request runtime is disposed. An `AnalyticsDeliveryError` never reaches a client: `Analytics` logs it and drops the batch.
