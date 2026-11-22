@@ -4,6 +4,8 @@
 // generated Env) so typecheck doesn't depend on local secret files.
 interface Env {
   BETTER_AUTH_SECRET: string;
+  BETTER_AUTH_URL?: string;
+  AUTH_TRUSTED_ORIGINS?: string;
   ANALYTICS_PROVIDER?: "none" | "console" | "posthog";
   POSTHOG_API_KEY?: string;
   POSTHOG_HOST?: string;

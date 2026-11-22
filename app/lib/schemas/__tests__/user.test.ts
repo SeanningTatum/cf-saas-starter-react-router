@@ -139,6 +139,28 @@ describe("BanUserInput", () => {
   });
 });
 
+describe("ban expiry fields refuse an Invalid Date", () => {
+  const INVALID = new Date("not a date");
+  const VALID = new Date("2999-01-01T00:00:00Z");
+  const fields: ReadonlyArray<
+    [string, (u: unknown) => { readonly _tag: "Left" | "Right" }, (d: Date) => unknown]
+  > = [
+    ["UpdateUserData.banExpires", decode(UpdateUserData), (d) => ({ banExpires: d })],
+    ["BanUserInput.expiresAt", decode(BanUserInput), (d) => ({ userId: "u1", expiresAt: d })],
+    [
+      "BulkBanUsersInput.expiresAt",
+      decode(BulkBanUsersInput),
+      (d) => ({ userIds: ["u1"], expiresAt: d }),
+    ],
+  ];
+  for (const [name, check, build] of fields) {
+    it(`${name}: an Invalid Date fails, a real date decodes`, () => {
+      expect(check(build(INVALID))._tag).toBe("Left");
+      expect(check(build(VALID))._tag).toBe("Right");
+    });
+  }
+});
+
 describe("UnbanUserInput", () => {
   it("decodes a valid userId", () => {
     expect(decode(UnbanUserInput)({ userId: "u1" })._tag).toBe("Right");

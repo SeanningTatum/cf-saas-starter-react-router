@@ -3,6 +3,7 @@ import { CloudflareEnvLive } from "@/services/cloudflare";
 import { DatabaseLive, type Database } from "@/services/database";
 import { BucketLive, type Bucket } from "@/services/bucket";
 import { AuthApiLive, type AuthApi as AuthApiTag } from "@/services/auth";
+import type { AuthRuntimeOptions } from "@/auth/config";
 import { LoggerLive, MinLogLevelLive } from "@/services/logger";
 import { AnalyticsLive, type Analytics } from "@/services/analytics";
 import {
@@ -85,20 +86,16 @@ export const observabilityLayer = (
   return request ? requestLayer(request).pipe(Layer.provideMerge(base)) : base;
 };
 
-// `baseURL` is the request's own origin — threaded through to Better Auth
-// via `AuthApiLive(baseURL)` so the single construction path (Effect.try →
-// ExternalServiceError, unit-tested in services/__tests__/auth.test.ts) is
-// used in production too. No more raw `createAuth(...)` call outside Effect.
 export const makeAppRuntime = (
   env: Env,
-  baseURL?: string,
+  auth: AuthRuntimeOptions,
   request?: RequestContext,
   errorReporter: ErrorReporterShape = requestErrorReporter(env, request)
 ) => {
   const baseLayer = Layer.mergeAll(
     DatabaseLive,
     BucketLive,
-    AuthApiLive(baseURL),
+    AuthApiLive(auth),
     AnalyticsLive,
     ErrorReporterFrom(errorReporter)
   );

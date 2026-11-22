@@ -7,7 +7,36 @@
 #
 #   cp .dev.vars.example .dev.vars
 
-BETTER_AUTH_SECRET=change-me-openssl-rand-hex-16
+# Session signing secret, at least 32 characters. Make one with
+# `openssl rand -hex 32` (64 characters) and paste it over the placeholder,
+# which is too short on purpose so a build outside dev refuses it.
+BETTER_AUTH_SECRET=paste-openssl-rand-hex-32
+
+# Better Auth base URL: the origin the app is served from. Auth links, the
+# origin check and Secure cookies all hang off it.
+# - A dev build (`bun run dev`) follows each request's own origin, so you can
+#   leave this unset. It also falls back to a dev-only secret when
+#   BETTER_AUTH_SECRET is unset.
+# - Any other build (preview, staging, production, or `bun run preview`
+#   locally) never trusts the request's Host: every request fails with a 500
+#   unless BETTER_AUTH_URL is set and BETTER_AUTH_SECRET is at least 32
+#   characters (and not the dev-only fallback). BETTER_AUTH_URL must be
+#   https://, or http://localhost / http://127.0.0.1 with any port.
+#   Deployed environments set both per env in wrangler (a var for the URL,
+#   `wrangler secret put` for the secret).
+# An https:// URL turns on Secure, __Secure- prefixed session cookies.
+# Running a production build locally (`bun run preview` serves on 4173):
+# BETTER_AUTH_URL=http://localhost:4173
+
+# Optional — extra origins allowed to send cookie-carrying requests to the
+# auth API (the base URL's own origin is always trusted). Comma-separated.
+# - An exact entry is a bare origin: https://admin.example.com
+# - A wildcard entry is https:// (http:// only in a dev build), then a host
+#   that starts with `*.` or `*-` followed by a domain you own of at least
+#   two labels. The `*` is the only one and matches any run of characters.
+#   A bare shared suffix (`*.workers.dev`, `*.pages.dev`) is refused. Workers
+#   per-PR previews: https://*-<worker>-preview.<subdomain>.workers.dev
+# AUTH_TRUSTED_ORIGINS=https://admin.example.com,https://*-my-app-preview.my-team.workers.dev
 
 # Optional — OTLP trace export.
 # Unset = tracing export off (logs still carry traceId). Local viewer:

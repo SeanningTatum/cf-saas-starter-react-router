@@ -1,6 +1,7 @@
-import { Effect, Exit, Schema } from "effect";
+import { Clock, Effect, Exit, Schema } from "effect";
 import { data } from "react-router";
 import { BucketRepository } from "@/repositories/bucket";
+import { activeSession } from "@/auth/ban";
 import { ExternalServiceError, ValidationError } from "@/models/errors/repository";
 import { BucketValidationError } from "@/models/errors/bucket";
 import {
@@ -29,7 +30,7 @@ export async function action({ request, context }: Route.ActionArgs) {
       try: () => context.auth.api.getSession({ headers: request.headers }),
       catch: (cause) => new ExternalServiceError({ service: "BetterAuth", cause }),
     });
-    if (!session) {
+    if (!activeSession(session, new Date(yield* Clock.currentTimeMillis))) {
       return data({ success: false as const, error: "Unauthorized" }, { status: 401 });
     }
 

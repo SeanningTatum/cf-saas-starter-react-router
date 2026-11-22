@@ -130,7 +130,7 @@ describe("makeAppRuntime", () => {
         BUCKET: {} as R2Bucket,
         BETTER_AUTH_SECRET: "fake-secret-for-tests",
       } as Env,
-      "https://app.example.com",
+      { dev: true, requestOrigin: "https://app.example.com" },
       request(),
       reporter
     );

@@ -25,7 +25,8 @@ const fakeEnv = (over: Partial<Env> = {}): Env =>
   ({
     DATABASE: {} as D1Database,
     BUCKET: {} as R2Bucket,
-    BETTER_AUTH_SECRET: "fake-secret-for-tests",
+    BETTER_AUTH_SECRET: "fake-secret-for-tests-0123456789abcdef-not-real",
+    BETTER_AUTH_URL: "https://app.example.com",
     ...over,
   }) as Env;
 

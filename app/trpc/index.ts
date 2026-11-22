@@ -6,6 +6,7 @@ import type { AppRuntime } from "@/runtime";
 import { loggers } from "@/lib/logger";
 import { isDev } from "@/lib/log-format";
 import { setRequestUser } from "@/lib/request-context";
+import { hasAdminRole } from "@/auth/protected-user";
 
 // Decision (fix 5): wire the already-tested `Session`/`SessionLive` service
 // in as the single source of truth for session resolution, rather than
@@ -164,7 +165,7 @@ export const protectedProcedure = t.procedure
   });
 
 export const adminProcedure = protectedProcedure.use(({ ctx, next }) => {
-  if (ctx.auth.user.role !== "admin") {
+  if (!hasAdminRole(ctx.auth.user.role)) {
     throw new TRPCError({
       code: "FORBIDDEN",
       message: "Admin access required",

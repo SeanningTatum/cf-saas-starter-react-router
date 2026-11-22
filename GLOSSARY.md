@@ -12,3 +12,4 @@
 - **Defect**: an error report with `kind: "defect"`: a bug, such as a thrown `Error`, an Effect `die`, an interruption or a 5xx response.
 - **Error reporter**: the per-request capture path in `app/services/error-reporter.ts`. Plain code calls `context.reportError`; `ErrorReporter` (the Effect service in the same file) offers `capture` to Effect code. Both send one report to the adapter under `ctx.waitUntil`.
 - **Browser report endpoint**: `POST /api/browser-report` (`app/routes/api/browser-report.ts`). It takes browser errors and CSP violation reports, applies a size cap and a per-isolate budget, and passes them to the error reporter.
+- **Protected user**: a user an admin may not change through the app or Better Auth's admin endpoints: any user whose `role` list holds `admin`, and the caller themself. `isProtectedUser` in `app/auth/protected-user.ts`; see [`docs/auth.md`](docs/auth.md).

@@ -19,6 +19,8 @@ const BulkUserIds = Schema.Array(UserId).pipe(
 
 const BanReason = Schema.String.pipe(Schema.maxLength(500));
 
+const BanExpiry = Schema.ValidDateFromSelf;
+
 export const GetUsersInput = Schema.Struct({
   page: Schema.Number.pipe(
     Schema.int(),
@@ -48,7 +50,7 @@ export const UpdateUserData = Schema.Struct({
   role: Schema.optional(Role),
   banned: Schema.optional(Schema.Boolean),
   banReason: Schema.optional(BanReason),
-  banExpires: Schema.optional(Schema.DateFromSelf),
+  banExpires: Schema.optional(BanExpiry),
   verified: Schema.optional(Schema.Boolean),
 });
 export type UpdateUserData = typeof UpdateUserData.Type;
@@ -62,7 +64,7 @@ export type UpdateUserInput = typeof UpdateUserInput.Type;
 export const BanUserInput = Schema.Struct({
   userId: UserId,
   reason: Schema.optional(BanReason),
-  expiresAt: Schema.optional(Schema.DateFromSelf),
+  expiresAt: Schema.optional(BanExpiry),
 });
 export type BanUserInput = typeof BanUserInput.Type;
 
@@ -79,7 +81,7 @@ export type DeleteUserInput = typeof DeleteUserInput.Type;
 export const BulkBanUsersInput = Schema.Struct({
   userIds: BulkUserIds,
   reason: Schema.optional(BanReason),
-  expiresAt: Schema.optional(Schema.DateFromSelf),
+  expiresAt: Schema.optional(BanExpiry),
 });
 export type BulkBanUsersInput = typeof BulkBanUsersInput.Type;
 
