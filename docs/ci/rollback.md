@@ -10,14 +10,16 @@ Four steps, each in its own deploy: add, backfill, switch reads and writes, drop
 
 Why: the deploy job migrates the database first, then deploys the Worker. For a while, old code runs on the new schema; if the Worker deploy fails, it keeps running there. And a Worker rollback never rolls the database back. If a migration breaks the code that is live, no rollback of the Worker fixes it.
 
-Example, renaming `user.name` to `user.display_name`, in four deploys:
+Example, renaming `user.image` to `user.avatar_url`, in four deploys:
 
-1. **Deploy 1, add.** The migration adds `display_name` (nullable, or with a default). The code writes both columns and still reads `name`.
-2. **Deploy 2, backfill.** The migration copies the old values: `UPDATE user SET display_name = name WHERE display_name IS NULL`. It runs while deploy 1's code is live, so every new write already fills both columns and no row is missed. The code does not change. Before you go on, check that no row is left: `SELECT count(*) FROM user WHERE display_name IS NULL` gives 0.
-3. **Deploy 3, switch reads and writes.** The code reads `display_name` and no longer reads or writes `name`. No migration. After this deploy no live code touches the old column. If you may need to roll this deploy back, split it in two: first read `display_name` while still writing both, then stop writing `name`; that way the older code always finds `name` current.
-4. **Deploy 4, drop.** The migration drops `name`. It needs `drizzle/<name>.reason.md` (below). Because deploy 3 already runs, the code that is live while the drop happens does not write the column, and a failed Worker deploy leaves working code behind.
+1. **Deploy 1, add.** The migration adds `avatar_url` (nullable, or with a default). The code writes both columns and still reads `image`.
+2. **Deploy 2, backfill.** The migration copies the old values: `UPDATE user SET avatar_url = image WHERE avatar_url IS NULL`. It runs while deploy 1's code is live, so every new write already fills both columns and no row is missed. The code does not change. Before you go on, check that no row is left: `SELECT count(*) FROM user WHERE image IS NOT NULL AND avatar_url IS NULL` gives 0.
+3. **Deploy 3, switch reads and writes.** The code reads `avatar_url` and no longer reads or writes `image`. No migration. `image` is nullable, so an insert that leaves it out still works. After this deploy no live code touches the old column. If you may need to roll this deploy back, split it in two: first read `avatar_url` while still writing both, then stop writing `image`; that way the older code always finds `image` current.
+4. **Deploy 4, drop.** The migration drops `image`. It needs `drizzle/<name>.reason.md` (below). Because deploy 3 already runs, the code that is live while the drop happens does not write the column, and a failed Worker deploy leaves working code behind.
 
-Two mistakes this order prevents. Switching reads without a backfill: rows written before deploy 1 have no `display_name`, read as blank, and lose their value when `name` is dropped. Dropping in the same deploy that stops the writes: the migration runs first, so the old code's writes to `name` fail until the new Worker is live, and keep failing if that deploy fails.
+A `NOT NULL` column with no default needs one more step. `user.name` is one: if the code stopped writing it, every insert would fail until the column is gone. Before the deploy that stops the writes, ship a migration that makes the old column nullable or gives it a default, while the code still writes both. In SQLite that change is a table rebuild (Drizzle writes a `__new_user` table, copies the rows, drops the old table and renames the new one), so the gate flags it as a `DROP` and a `RENAME` and it needs its own reason file.
+
+Three mistakes this order prevents. Switching reads without a backfill: rows written before deploy 1 have no `avatar_url`, read as blank, and lose their value when `image` is dropped. Dropping in the same deploy that stops the writes: the migration runs first, so the old code's writes to `image` fail until the new Worker is live, and keep failing if that deploy fails. Stopping the writes to a required column: inserts fail until the column is dropped.
 
 Never rename or drop in one step. Never edit a migration that is already on the base branch: fix forward with a new one.
 
@@ -31,7 +33,7 @@ The `migrations` gate (`bun run scripts/migration-check.ts`, part of `./scripts/
 
 The 30-character floor only proves a reason exists; a reviewer judges whether it is a good one. The gate guards against mistakes. It is not a security boundary: a pull request can change the script.
 
-A good reason says two things: why the statement is safe for the code that is live while it runs, and how to get the data back. For example: "No code reads or writes `user.name` since deploy 3. Deploy 2 copied every value to `display_name` (0 rows left with a null). The deploy's restore point holds the old column."
+A good reason says two things: why the statement is safe for the code that is live while it runs, and how to get the data back. For example: "No code reads or writes `user.image` since deploy 3. Deploy 2 copied every value to `avatar_url` (0 rows left to copy). The deploy's restore point holds the old column."
 
 ## What the deploy saves before a migration
 
