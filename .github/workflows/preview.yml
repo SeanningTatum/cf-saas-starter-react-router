@@ -99,8 +99,9 @@ jobs:
         id: upload
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_PREVIEW_API_TOKEN }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
-          OUT=$(bunx wrangler versions upload --preview-alias "pr-$PR_NUMBER" 2>&1)
+          OUT=$(bunx wrangler versions upload --preview-alias "pr-$PR_NUMBER" --var "RELEASE_VERSION:$HEAD_SHA" --var ENVIRONMENT:preview 2>&1)
           echo "$OUT"
           ALIAS_URL=$(printf '%s' "$OUT" | grep -oE 'Version Preview Alias URL: https://\S+' | awk '{print $NF}')
           VERSION_URL=$(printf '%s' "$OUT" | grep -oE 'Version Preview URL: https://\S+' | awk '{print $NF}')
