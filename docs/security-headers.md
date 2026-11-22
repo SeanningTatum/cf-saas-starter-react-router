@@ -9,7 +9,7 @@ Dev differs in three ways: `connect-src` adds `ws:` for Vite's reload socket, th
 
 ## The nonce
 
-`workers/app.ts` makes a fresh nonce for each request and puts it in `script-src`. An inline `<script>` runs only if it carries that nonce: take it from `useNonce()` (`app/lib/csp-nonce.ts`), as `app/root.tsx` does. Styles need no nonce, and must not get one: a nonce in `style-src` would switch `'unsafe-inline'` off.
+`workers/app.ts` makes a fresh nonce for each request and puts it in `script-src`. An inline `<script>` runs only if it carries that nonce: take it from `useNonce()` (`app/lib/csp-nonce.ts`), as `app/root.tsx` does. Styles need no nonce, and must not get one: a nonce in `style-src` would switch `'unsafe-inline'` off. In the browser `useNonce()` returns `undefined`: the browser hides nonce attributes once it has parsed them, and the context has no made-up default (`app/lib/__tests__/csp-nonce.test.ts`).
 
 ## Hosts outside the app's own origin
 
@@ -39,3 +39,13 @@ A call the Worker makes itself needs no change: the CSP governs the browser only
 - **HSTS** is `max-age=31536000` with no `includeSubDomains`. Add `includeSubDomains` once every subdomain serves https; browsers hold the pin for a year.
 - **Caching.** The nonce is per request. Do not let a shared cache store HTML (a Cache Rule, or `Cache-Control: public` on a page): every visitor would get the same nonce.
 - **User content.** `script-src 'self'` trusts every script URL on the app's origin. Serve uploaded files from another origin, or with `Content-Disposition: attachment`.
+
+## Why
+
+Each rule below has a test whose title states it.
+
+- **One place applies the headers.** The `fetch` export in `workers/app.ts` wraps the response of every path out of `handle`, both 500s included (a handler that throws, a runtime that cannot be built), and sets `x-request-id` on it. `workers/__tests__/security-headers-on-errors.test.ts`.
+- **The response is copied first.** `withSecurityHeaders` builds a new `Response` before it sets headers, because some responses (a `Response.redirect`, for one) have immutable headers. The copy's headers can take `x-request-id` too. `workers/__tests__/security-headers.test.ts`.
+- **`img-src` names its hosts.** A bare `https:` would let an injected script send data to any host through an image URL, which is what `connect-src 'self'` is there to stop. `workers/__tests__/security-headers-rules.test.ts`.
+- **`style-src` keeps `'unsafe-inline'` and never takes the nonce.** `style` attributes and `<style>` tags from Radix, the charts and Vite dev cannot carry a nonce, and a nonce in the directive turns `'unsafe-inline'` off. `workers/__tests__/security-headers-rules.test.ts`.
+- **No HSTS in dev.** A year-long pin on `localhost` would break the developer's other local projects. No `includeSubDomains` in any build: it would lock a fork out of an http-only subdomain for a year. `workers/__tests__/security-headers.test.ts`, `workers/__tests__/security-headers-rules.test.ts`.

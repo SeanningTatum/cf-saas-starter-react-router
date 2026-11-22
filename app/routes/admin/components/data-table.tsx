@@ -51,10 +51,13 @@ import { Area, AreaChart, CartesianGrid, XAxis } from "recharts"
 import { toast } from "sonner"
 
 import { useIsMobile } from "@/hooks/use-mobile"
+import {
+  DATA_TABLE_DEMO_CHART_CONFIG,
+  DATA_TABLE_DEMO_CHART_DATA,
+} from "@/lib/constants/charts"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
-  type ChartConfig,
   ChartContainer,
   ChartTooltip,
   ChartTooltipContent,
@@ -113,7 +116,6 @@ export interface DataTableItem {
   reviewer: string
 }
 
-// Create a separate component for the drag handle
 function DragHandle({ id }: { id: number }) {
   const { attributes, listeners } = useSortable({
     id,
@@ -624,26 +626,6 @@ export function DataTable({
   )
 }
 
-const chartData = [
-  { month: "January", desktop: 186, mobile: 80 },
-  { month: "February", desktop: 305, mobile: 200 },
-  { month: "March", desktop: 237, mobile: 120 },
-  { month: "April", desktop: 73, mobile: 190 },
-  { month: "May", desktop: 209, mobile: 130 },
-  { month: "June", desktop: 214, mobile: 140 },
-]
-
-const chartConfig = {
-  desktop: {
-    label: "Desktop",
-    color: "var(--primary)",
-  },
-  mobile: {
-    label: "Mobile",
-    color: "var(--primary)",
-  },
-} satisfies ChartConfig
-
 function TableCellViewer({ item }: { item: DataTableItem }) {
   const isMobile = useIsMobile()
 
@@ -664,10 +646,10 @@ function TableCellViewer({ item }: { item: DataTableItem }) {
         <div className="flex flex-col gap-4 overflow-y-auto px-4 text-sm">
           {!isMobile && (
             <>
-              <ChartContainer config={chartConfig}>
+              <ChartContainer config={DATA_TABLE_DEMO_CHART_CONFIG}>
                 <AreaChart
                   accessibilityLayer
-                  data={chartData}
+                  data={DATA_TABLE_DEMO_CHART_DATA}
                   margin={{
                     left: 0,
                     right: 10,

@@ -10,18 +10,13 @@ import {
 import { cn } from "@/lib/utils";
 
 export interface Insight {
-  /** The insight text */
   text: string;
-  /** Type affects styling: positive (green), negative (red), neutral (default) */
   type?: "positive" | "negative" | "neutral";
 }
 
 export interface InsightsCardProps {
-  /** Card title */
   title?: string;
-  /** Card description */
   description?: string;
-  /** Array of insights to display */
   insights: Insight[];
 }
 

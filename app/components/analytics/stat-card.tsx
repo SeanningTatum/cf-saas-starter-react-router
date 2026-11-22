@@ -13,17 +13,11 @@ import {
 import { cn } from "@/lib/utils";
 
 export interface StatCardProps {
-  /** Label shown above the value */
   label: string;
-  /** The main value to display */
   value: string | number;
-  /** Percentage change (positive or negative) */
   change?: number;
-  /** Description shown in footer */
   description?: string;
-  /** Secondary description shown below the main description */
   secondaryDescription?: string;
-  /** Optional icon component */
   icon?: LucideIcon;
 }
 
@@ -77,7 +71,6 @@ export function StatCard({
 
 export interface StatCardGridProps {
   children: React.ReactNode;
-  /** Number of columns on large screens (default: 4) */
   columns?: 2 | 3 | 4;
 }
 

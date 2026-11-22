@@ -2,13 +2,8 @@ import { redirect, type AppLoadContext } from "react-router";
 import { getSession } from "@/services/session";
 import { activeSession } from "@/auth/ban";
 import { hasAdminRole } from "@/auth/protected-user";
+import { ROUTES } from "@/lib/constants/routes";
 
-/**
- * The non-null shape returned by `context.auth.api.getSession(...)` once a
- * session exists. `AppLoadContext["auth"]` is Better Auth's `Auth` instance
- * (see `workers/app.ts`), so this type tracks whatever `createAuth` returns
- * without redeclaring it.
- */
 export type Session = NonNullable<
   Awaited<ReturnType<AppLoadContext["auth"]["api"]["getSession"]>>
 >;
@@ -29,7 +24,7 @@ export async function requireSession(
   context: AppLoadContext
 ): Promise<Session> {
   const session = await readActiveSession(request, context);
-  if (!session) throw redirect("/login");
+  if (!session) throw redirect(ROUTES.login);
   return session;
 }
 
@@ -38,14 +33,14 @@ export async function requireAdmin(
   context: AppLoadContext
 ): Promise<Session> {
   const session = await requireSession(request, context);
-  if (!hasAdminRole(session.user.role)) throw redirect("/dashboard");
+  if (!hasAdminRole(session.user.role)) throw redirect(ROUTES.dashboard);
   return session;
 }
 
 export async function redirectIfAuthenticated(
   request: Request,
   context: AppLoadContext,
-  to = "/dashboard"
+  to: string = ROUTES.dashboard
 ): Promise<void> {
   const session = await readActiveSession(request, context);
   if (session) throw redirect(to);

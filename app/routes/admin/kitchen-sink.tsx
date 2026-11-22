@@ -192,8 +192,6 @@ import { SiteHeader } from "./layout/site-header";
 import { FileUpload } from "@/components/file-upload";
 import { ALLOWED_UPLOAD_CONTENT_TYPES } from "@/lib/constants/upload";
 
-// SiteHeader (rendered below) uses the "admin" namespace (GitHub link text);
-// declare it here so it's loaded on a direct/hard navigation to this route.
 export const handle = { i18n: ["admin", "upload"] };
 
 export default function KitchenSink() {
@@ -211,7 +209,6 @@ export default function KitchenSink() {
     <div>
       <SiteHeader title="Kitchen Sink" />
       <div className="space-y-12 p-6">
-        {/* Layout Section */}
         <div className="space-y-4">
           <h2 className="text-xl font-semibold">Layout Components</h2>
           <div className="grid gap-4 md:grid-cols-2">
@@ -288,7 +285,6 @@ export default function KitchenSink() {
           </div>
         </div>
 
-        {/* Forms Section */}
         <div className="space-y-4">
           <h2 className="text-xl font-semibold">Form Components</h2>
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
@@ -495,7 +491,6 @@ export default function KitchenSink() {
           </div>
         </div>
 
-        {/* File Upload Section — e2e/file-upload.paths.spec.ts drives this one */}
         <div className="space-y-4" id="upload">
           <h2 className="text-xl font-semibold">File Upload</h2>
           <div className="max-w-xl">
@@ -503,7 +498,6 @@ export default function KitchenSink() {
           </div>
         </div>
 
-        {/* Feedback Section */}
         <div className="space-y-4">
           <h2 className="text-xl font-semibold">Feedback Components</h2>
           <div className="grid gap-4 md:grid-cols-2">
@@ -573,7 +567,6 @@ export default function KitchenSink() {
           </div>
         </div>
 
-        {/* Data Display Section */}
         <div className="space-y-4">
           <h2 className="text-xl font-semibold">Data Display</h2>
           <div className="grid gap-4 md:grid-cols-2">
@@ -624,7 +617,6 @@ export default function KitchenSink() {
           </div>
         </div>
 
-        {/* Overlays Section */}
         <div className="space-y-4">
           <h2 className="text-xl font-semibold">Overlays</h2>
           <div className="grid gap-4 md:grid-cols-2">

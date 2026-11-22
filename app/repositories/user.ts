@@ -1,5 +1,5 @@
 import { Effect } from "effect";
-import { eq, inArray, count, desc, or, and, sql, type SQL } from "drizzle-orm";
+import { eq, inArray, count, desc, or, and, sql, type SQL, type SQLWrapper } from "drizzle-orm";
 import { session, user } from "@/db/schema";
 import { Database } from "@/services/database";
 import { tryQuery, tryUpdate, tryDelete, requireFound } from "@/lib/effect-utils";
@@ -30,16 +30,17 @@ export const emailVerifiedAfterUpdate = (
 ): boolean | undefined =>
   isEmailChange(storedEmail, data.email) ? false : data.verified;
 
+const containsLiterally = (column: SQLWrapper, term: string): SQL =>
+  sql`instr(lower(${column}), lower(${term})) > 0`;
+
 export const buildUserConditions = (
   input: GetUsersInput
 ): SQL | undefined => {
   const conditions: SQL[] = [];
   if (input.search) {
-    // instr, not LIKE: `%` and `_` in the term stay literal, and D1 refuses
-    // any LIKE pattern over 50 bytes.
     const cond = or(
-      sql`instr(lower(${user.name}), lower(${input.search})) > 0`,
-      sql`instr(lower(${user.email}), lower(${input.search})) > 0`
+      containsLiterally(user.name, input.search),
+      containsLiterally(user.email, input.search)
     );
     if (cond) conditions.push(cond);
   }

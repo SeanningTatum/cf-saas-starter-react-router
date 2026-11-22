@@ -7,6 +7,7 @@ import { useTranslation } from "react-i18next"
 import { authClient } from "@/auth/client"
 import { getInitials } from "@/lib/utils"
 import { themeItems } from "@/components/theme-toggle"
+import { ROUTES } from "@/lib/constants/routes"
 import {
   Avatar,
   AvatarFallback,
@@ -47,7 +48,7 @@ export function NavUser({
 
   const handleLogout = async () => {
     await authClient.signOut()
-    navigate("/login")
+    navigate(ROUTES.login)
   }
 
   return (

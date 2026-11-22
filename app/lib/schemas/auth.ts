@@ -1,13 +1,15 @@
 import { Schema } from "effect";
-import { PASSWORD_MAX_LENGTH, PASSWORD_MIN_LENGTH } from "@/lib/constants/auth";
-
-const emailPattern = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
+import {
+  EMAIL_PATTERN,
+  PASSWORD_MAX_LENGTH,
+  PASSWORD_MIN_LENGTH,
+} from "@/lib/constants/auth";
 
 export const Email = Schema.String.pipe(
   Schema.maxLength(254, {
     message: () => "Email must be at most 254 characters",
   }),
-  Schema.pattern(emailPattern, {
+  Schema.pattern(EMAIL_PATTERN, {
     message: () => "Invalid email address",
   })
 );

@@ -43,11 +43,6 @@ export const stringify = (message: unknown): string => {
   return typeof message === "string" ? message : JSON.stringify(message);
 };
 
-/**
- * Reads the active tracer span (set by `Effect.withSpan`) out of the log
- * event's fiber context, so every log emitted inside a span automatically
- * carries `traceId`/`spanId` — the correlation key between logs and traces.
- */
 export const currentSpanAnnotations = (
   context: FiberRefs.FiberRefs
 ): Record<string, string> => {
@@ -57,13 +52,6 @@ export const currentSpanAnnotations = (
   return { traceId: span.value.traceId, spanId: span.value.spanId };
 };
 
-/**
- * Reads the request (`CurrentRequest`, provided by the per-request runtime)
- * out of the log event's fiber context, so every Effect log carries the
- * request id, and the user id once the session has resolved. Read from the
- * fiber, not from the async-local store: Effect's scheduler is shared across
- * requests, so a fiber can resume inside another request's async context.
- */
 export const currentRequestAnnotations = (
   context: FiberRefs.FiberRefs
 ): { requestId?: string; userId?: string } => {

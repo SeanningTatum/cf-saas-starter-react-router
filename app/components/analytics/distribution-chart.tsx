@@ -19,6 +19,7 @@ import {
   ChartLegendContent,
   type ChartConfig,
 } from "@/components/ui/chart";
+import { DEFAULT_DISTRIBUTION_COLORS } from "@/lib/constants/charts";
 
 export interface DistributionDataPoint {
   name: string;
@@ -27,29 +28,14 @@ export interface DistributionDataPoint {
 }
 
 export interface DistributionChartProps {
-  /** Chart title */
   title: string;
-  /** Chart description */
   description?: string;
-  /** Data points with name and value */
   data: DistributionDataPoint[];
-  /** Chart type: pie, donut, or bar */
   type?: "pie" | "donut" | "bar";
-  /** Show legend */
   showLegend?: boolean;
-  /** Height of the chart */
   height?: number;
-  /** Default colors if not provided in data */
   colors?: string[];
 }
-
-const defaultColors = [
-  "var(--primary)",
-  "var(--chart-2)",
-  "var(--chart-3)",
-  "var(--chart-4)",
-  "var(--chart-5)",
-];
 
 export function DistributionChart({
   title,
@@ -58,7 +44,7 @@ export function DistributionChart({
   type = "donut",
   showLegend = true,
   height = 300,
-  colors = defaultColors,
+  colors = DEFAULT_DISTRIBUTION_COLORS,
 }: DistributionChartProps) {
   const { t } = useTranslation("common");
   const chartConfig = React.useMemo(() => {
@@ -105,7 +91,6 @@ export function DistributionChart({
       );
     }
 
-    // Pie or donut chart
     const innerRadius = type === "donut" ? 60 : 0;
 
     return (

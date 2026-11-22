@@ -46,3 +46,5 @@ export const ADMIN_GUARD_REFUSALS = {
     message: "Name the user to act on",
   },
 } as const;
+
+export const USER_SEARCH_DEBOUNCE_MS = 500;

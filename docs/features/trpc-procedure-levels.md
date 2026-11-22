@@ -17,6 +17,9 @@ The tests: `app/trpc/__tests__/router.test.ts`.
 could delete any account by id, and no test asked "who may call this?". A new procedure fails the test until it is listed
 with its level, so the level is a choice a reviewer sees.
 
+That is why the app router has no `user` router: `user.getUsers` and `user.deleteUser` were both holes. "has no
+user-level procedure that deletes users" and "has no user-level procedure that lists users" fail if either comes back.
+
 `OWNERSHIP` lists every `protected` procedure again. The hole it stands for is a signed-in user acting on another user's
 row by sending its id. Real cases run on real D1 (see [real-d1-tests](real-d1-tests.md)): the guard is a WHERE clause,
 and a stub cannot run one.

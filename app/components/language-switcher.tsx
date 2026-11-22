@@ -9,32 +9,14 @@ import { useTranslation } from "react-i18next";
 import { useFetcher } from "react-router";
 import { supportedLngs } from "@/i18n";
 import { cn } from "@/lib/utils";
-
-const languageLabels: Record<string, string> = {
-  en: "English",
-  zh: "中文",
-};
+import { API_ROUTES } from "@/lib/constants/routes";
+import { LANGUAGE_LABELS } from "@/lib/constants/i18n";
 
 interface LanguageSwitcherProps {
   className?: string;
-  /** Compact pill suitable for top bars. Defaults to false (wide select). */
   compact?: boolean;
 }
 
-/**
- * Locale toggle. SSR detects locale via cookie/header in
- * `app/i18n/i18n.server.ts`; this component drives the swap by submitting
- * to the `/api/set-locale` action via `useFetcher`. That:
- *   1. Sets the persistent locale cookie (server-owned encoding — see
- *      `app/routes/api/set-locale.ts`) so future SSR requests honor it.
- *   2. Triggers React Router's automatic loader revalidation, so the root
- *      loader re-detects locale and `useChangeLanguage(loaderData.locale)`
- *      in `app/root.tsx` flips the live i18next instance.
- *
- * No full reload, no manual `i18n.changeLanguage` call — relying on the
- * existing root-level binding keeps the component idempotent and avoids
- * fighting with `useChangeLanguage`'s revert-on-mismatch effect.
- */
 export function LanguageSwitcher({
   className,
   compact = false,
@@ -47,7 +29,7 @@ export function LanguageSwitcher({
     if (newLng === i18n.language || pending) return;
     fetcher.submit(
       { lng: newLng },
-      { method: "post", action: "/api/set-locale" },
+      { method: "post", action: API_ROUTES.setLocale },
     );
   }
 
@@ -65,7 +47,7 @@ export function LanguageSwitcher({
       <SelectContent>
         {supportedLngs.map((lng) => (
           <SelectItem key={lng} value={lng}>
-            {languageLabels[lng] ?? lng}
+            {LANGUAGE_LABELS[lng] ?? lng}
           </SelectItem>
         ))}
       </SelectContent>

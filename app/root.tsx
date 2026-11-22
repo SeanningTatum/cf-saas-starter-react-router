@@ -41,12 +41,6 @@ export async function loader({ request, context }: Route.LoaderArgs) {
   return { locale, requestId: context.requestId };
 }
 
-/**
- * The id to show a user who reports a problem. Loader data is the freshest
- * source (the root loader runs again on each navigation), but React Router
- * skips the root loader on a 404 or 405, so fall back to the id of the
- * request that rendered the document.
- */
 const useRequestId = () => {
   const fromLoader = useRouteLoaderData<typeof loader>("root")?.requestId;
   const fromDocument = useDocumentRequestId();

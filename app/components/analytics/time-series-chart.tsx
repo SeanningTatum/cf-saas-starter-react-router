@@ -5,6 +5,7 @@ import { Area, AreaChart, CartesianGrid, XAxis, YAxis, Bar, BarChart, Line, Line
 import { useTranslation } from "react-i18next";
 
 import { formatDate as formatDateI18n } from "@/lib/date-utils";
+import { DEFAULT_TIME_RANGES } from "@/lib/constants/charts";
 import {
   Card,
   CardAction,
@@ -35,37 +36,19 @@ export interface TimeSeriesDataPoint {
 }
 
 export interface TimeSeriesChartProps {
-  /** Chart title */
   title: string;
-  /** Chart description */
   description?: string;
-  /** Data points with date and numeric values */
   data: TimeSeriesDataPoint[];
-  /** Key in data to use for the primary value */
   dataKey: string;
-  /** Label for the data series */
   dataLabel?: string;
-  /** Chart type: area, line, or bar */
   type?: "area" | "line" | "bar";
-  /** Color for the chart (CSS variable or hex) */
   color?: string;
-  /** Show time range selector */
   showTimeRangeSelector?: boolean;
-  /** Available time ranges */
   timeRanges?: { value: string; label: string; days: number }[];
-  /** Height of the chart */
   height?: number;
-  /** Show Y axis */
   showYAxis?: boolean;
-  /** Format function for tooltip values */
   valueFormatter?: (value: number) => string;
 }
-
-const defaultTimeRanges = [
-  { value: "90d", label: "Last 3 months", days: 90 },
-  { value: "30d", label: "Last 30 days", days: 30 },
-  { value: "7d", label: "Last 7 days", days: 7 },
-];
 
 export function TimeSeriesChart({
   title,
@@ -76,7 +59,7 @@ export function TimeSeriesChart({
   type = "area",
   color = "var(--primary)",
   showTimeRangeSelector = false,
-  timeRanges = defaultTimeRanges,
+  timeRanges = DEFAULT_TIME_RANGES,
   height = 300,
   showYAxis = false,
   valueFormatter,
@@ -181,7 +164,6 @@ export function TimeSeriesChart({
       );
     }
 
-    // Default: area chart
     return (
       <AreaChart {...commonProps}>
         <defs>

@@ -11,14 +11,6 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 
-/**
- * Single source of truth for the light/dark/system options — shared by this
- * standalone toggle and the theme submenu in `nav-user.tsx` so both list the
- * same choices with the same icons. `value` doubles as the i18n key suffix
- * under `common.json`'s `theme` namespace (`theme.light` / `theme.dark` /
- * `theme.system`) — render sites call `t(`theme.${value}`)` rather than a
- * hardcoded label here.
- */
 export const themeItems: ReadonlyArray<{
   value: "light" | "dark" | "system"
   icon: LucideIcon
