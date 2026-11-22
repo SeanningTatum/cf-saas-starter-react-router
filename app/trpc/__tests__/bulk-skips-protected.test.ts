@@ -59,6 +59,7 @@ describe("bulk admin procedures skip the caller and every admin", { timeout: 60_
       role: "user",
     });
     expect(result).toEqual({ success: true, affectedCount: 1, skippedCount: 2 });
+    expect(await row(plain)).toMatchObject({ role: "user" });
     await adminsUntouched();
   });
 
