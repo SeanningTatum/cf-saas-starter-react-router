@@ -1,4 +1,6 @@
 import { redirect, type AppLoadContext } from "react-router";
+import { activeSession } from "@/auth/ban";
+import { hasAdminRole } from "@/auth/protected-user";
 
 /**
  * The non-null shape returned by `context.auth.api.getSession(...)` once a
@@ -10,48 +12,38 @@ export type Session = NonNullable<
   Awaited<ReturnType<AppLoadContext["auth"]["api"]["getSession"]>>
 >;
 
-/**
- * Loader auth gate: resolves the current session or redirects to `/login`.
- * Centralizes the `context.auth.api.getSession({ headers })` + redirect
- * branching duplicated across the admin/dashboard layouts and auth routes.
- */
+const readActiveSession = async (
+  request: Request,
+  context: AppLoadContext
+): Promise<Session | null> =>
+  activeSession(
+    await context.auth.api.getSession({ headers: request.headers }),
+    new Date()
+  );
+
 export async function requireSession(
   request: Request,
   context: AppLoadContext
 ): Promise<Session> {
-  const session = await context.auth.api.getSession({
-    headers: request.headers,
-  });
+  const session = await readActiveSession(request, context);
   if (!session) throw redirect("/login");
   return session;
 }
 
-/**
- * Loader auth gate: resolves the current session and requires `role === "admin"`,
- * redirecting non-admins to `/dashboard` (and unauthenticated users to `/login`
- * via `requireSession`).
- */
 export async function requireAdmin(
   request: Request,
   context: AppLoadContext
 ): Promise<Session> {
   const session = await requireSession(request, context);
-  if (session.user.role !== "admin") throw redirect("/dashboard");
+  if (!hasAdminRole(session.user.role)) throw redirect("/dashboard");
   return session;
 }
 
-/**
- * Loader guard for public-only routes (home, login, sign-up): redirects an
- * already-authenticated visitor to `to` (default `/dashboard`) instead of
- * rendering the route.
- */
 export async function redirectIfAuthenticated(
   request: Request,
   context: AppLoadContext,
   to = "/dashboard"
 ): Promise<void> {
-  const session = await context.auth.api.getSession({
-    headers: request.headers,
-  });
+  const session = await readActiveSession(request, context);
   if (session) throw redirect(to);
 }

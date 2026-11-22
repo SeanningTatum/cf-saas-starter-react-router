@@ -73,7 +73,7 @@ wrangler login
 bun run scripts/first-time-setup.ts
 ```
 
-The wizard creates your D1 database, R2 bucket, optional KV namespace, generates a `BETTER_AUTH_SECRET`, writes `wrangler.jsonc` + `.env`, runs migrations, and deploys. ~3 min end-to-end. Its last step offers to apply the [repo rules](#repo-rules-githubrepo-rulesjson).
+The wizard creates your D1 database, R2 bucket, optional KV namespace, generates a `BETTER_AUTH_SECRET`, writes `wrangler.jsonc` + `.env`, runs migrations, and deploys. ~3 min end-to-end. It sets no `BETTER_AUTH_URL`, so the deployed Worker answers 500 until you add it ([`docs/auth.md`](docs/auth.md)). Its last step offers to apply the [repo rules](#repo-rules-githubrepo-rulesjson).
 
 ### Option B — Manual
 
@@ -271,7 +271,7 @@ bun run teardown              # Tear down Cloudflare resources
 
 ## Authentication
 
-[Better Auth](https://better-auth.com/) 1.4 with the Drizzle adapter and `admin()` plugin for RBAC.
+[Better Auth](https://better-auth.com/) 1.7 (config, sessions, bans and admin rules: [`docs/auth.md`](docs/auth.md)) with the Drizzle adapter and `admin()` plugin for RBAC.
 
 - Auth handler: `/api/auth/*` ([`app/routes/api/auth.$.ts`](app/routes/api/auth.$.ts))
 - Server config: [`app/auth/server.ts`](app/auth/server.ts)
@@ -286,12 +286,15 @@ bun run teardown              # Tear down Cloudflare resources
 
 Never trust the page guard alone — UI hiding doesn't equal authorization.
 
-**Set the production secret:**
+**Set the production secret and base URL.** A build other than `bun run dev` refuses to start auth without them: every request gets a 500 until you set both. The secret needs 32 or more characters. The URL is a var in `wrangler.jsonc` (and under `env.preview`):
 
 ```bash
 openssl rand -base64 32
 wrangler secret put BETTER_AUTH_SECRET
+# wrangler.jsonc: "vars": { "BETTER_AUTH_URL": "https://app.example.com" }
 ```
+
+`AUTH_TRUSTED_ORIGINS` (optional, extra origins) and the accepted forms are in [`docs/auth.md`](docs/auth.md). Setup rewrites `wrangler.jsonc`, so re-add the `vars` after a re-run.
 
 **Promote a user to admin** — Drizzle Studio:
 
