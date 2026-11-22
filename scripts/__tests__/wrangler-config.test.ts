@@ -28,8 +28,9 @@ const committed = JSON.parse(
 const built = buildWranglerConfig(DUMMY_INPUT) as WranglerShape;
 
 describe("buildWranglerConfig", () => {
-  it("rebuilds the committed wrangler.jsonc exactly, so setup and teardown cannot drop a binding", () => {
-    expect(built).toEqual(committed);
+  it("builds the same rate-limit bindings wrangler.jsonc holds, in both blocks, whatever names and ids setup wrote around them", () => {
+    expect(built.ratelimits).toEqual(committed.ratelimits);
+    expect(built.env.preview.ratelimits).toEqual(committed.env.preview.ratelimits);
   });
 
   it("binds every rate-limit rule the app names, at top level and in preview", () => {

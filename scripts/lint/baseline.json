@@ -27,8 +27,7 @@
       "app/routes/admin/components/data-table.tsx": 2,
       "app/routes/home.tsx": 1,
       "app/services/tracing-otlp.ts": 1,
-      "app/services/tracing.ts": 1,
-      "workers/security-headers.ts": 1
+      "app/services/tracing.ts": 1
     },
     "file-size": {
       "app/repositories/__tests__/user.test.ts": 531,
@@ -109,7 +108,6 @@
       "app/routes/admin/kitchen-sink.tsx": 8,
       "app/routes/admin/layout/app-sidebar.tsx": 2,
       "app/routes/api/set-locale.ts": 1,
-      "app/routes/api/upload-file.ts": 4,
       "app/routes/authentication/components/auth-shell.tsx": 4,
       "app/routes/dashboard/_index.tsx": 3,
       "app/routes/home.tsx": 4,
@@ -133,11 +131,10 @@
       "app/trpc/routes/__tests__/health.test.ts": 13,
       "app/trpc/routes/admin.ts": 1,
       "app/trpc/routes/health.ts": 2,
-      "e2e/auth.spec.ts": 14,
-      "e2e/file-upload.paths.spec.ts": 21,
+      "e2e/file-upload.paths.spec.ts": 16,
       "e2e/home-harness.spec.ts": 1,
       "e2e/request-context.spec.ts": 19,
-      "e2e/security-headers.spec.ts": 15,
+      "e2e/security-headers.spec.ts": 12,
       "scripts/__tests__/e2e-videos.test.ts": 1,
       "scripts/__tests__/first-time-setup.test.ts": 30,
       "scripts/__tests__/github-workflows.test.ts": 3,
