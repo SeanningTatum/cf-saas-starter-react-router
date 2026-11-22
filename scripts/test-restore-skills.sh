@@ -125,8 +125,36 @@ wait
   || { bad "concurrent restores: calls=$(calls "$SB")"; cat "$SB"/err.* 2>/dev/null | sed 's/^/      /'; }
 rm -r "$SB"
 
+# The lock changes hands while a waiter judges its old owner: the owner it read exits (and
+# removes its lock), a new restore takes the lock, and only then does the waiter learn the old
+# owner is dead. It must leave the new owner's lock alone. The stub ps makes that order
+# certain: asked about the old owner, it first swaps in a live owner's lock, then answers "dead".
+SB=$(sandbox)
+sleep 30 & DEAD=$!; kill "$DEAD"; wait "$DEAD" 2>/dev/null
+plant "$SB" "$DEAD Thu Jan 1 00:00:00 1970"
+LIVE="$$ $(started $$)"
+REAL_PS=$(command -v ps)
+cat >"$SB/bin/ps" <<EOF
+#!/usr/bin/env bash
+if [ "\${!#}" = "$DEAD" ] && [ ! -e "$SB/handed-over" ]; then
+  touch "$SB/handed-over"
+  printf '%s\n' "$LIVE" >"$SB/.agents/.restore.lock"
+  exit 1
+fi
+exec "$REAL_PS" "\$@"
+EOF
+chmod +x "$SB/bin/ps"
+(sleep 2; rm -f "$SB/.agents/.restore.lock") & RELEASE=$!
+restore "$SB" >/dev/null 2>"$SB/err"
+wait "$RELEASE" 2>/dev/null
+[ -e "$SB/handed-over" ] && ! grep -q "reclaiming" "$SB/err" && [ "$(calls "$SB")" = 1 ] && lockgone "$SB" \
+  && ok "a lock that changed hands while its old owner was being judged is left to the new owner" \
+  || { bad "handed-over lock: calls=$(calls "$SB") swapped=$([ -e "$SB/handed-over" ] && echo y || echo n)"; sed 's/^/      /' "$SB/err"; }
+rm -r "$SB"
+
 # The lock stands on this: of many racing creators of one path, exactly one succeeds.
-# (`mkdir` does not promise it on every host; see create_excl in the script.)
+# (`mkdir` does not promise it on every host: uutils coreutils on Ubuntu 26.04 lets several
+# racers win; see create_excl in the script.)
 SB=$(mktemp -d); wrong=0
 for round in $(seq 1 25); do
   for i in 1 2 3 4 5 6 7 8; do (create_excl "$SB/l.$round" "$i" && echo won >>"$SB/w.$round") & done
