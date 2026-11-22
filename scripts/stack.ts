@@ -6,6 +6,7 @@
  *   bun run scripts/stack.ts restack --plan <file.json> --from <n>   (needs git 2.38 for rebase --update-refs; the workflow checks)
  *
  * Plan: { base, prs: [{ n, branch, title, fence: [path | dir/], message }], rest?: n, exclude?: [path | dir/] }.
+ * A plan with no `exclude` uses `scratchDirs` from harness.config.json; an `exclude` of its own, even [], wins.
  * Excluded paths are never assigned, never unassigned and never staged; `assign` lists them as `excluded`.
  * A fence entry ending in "/" is a directory prefix; any other entry is an exact path.
  * Success prints one JSON object to stdout. Failure prints { error, code, help } to stderr.
@@ -19,6 +20,7 @@
  */
 import { readFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
+import { loadHarnessConfigFromDisk } from "./lib/harness-config";
 
 export interface GitResult {
   code: number;
@@ -31,6 +33,7 @@ export type GitRunner = (args: string[]) => GitResult;
 export interface Deps {
   git: GitRunner;
   readFile: (path: string) => string;
+  scratchDirs: string[];
 }
 
 export interface Outcome {
@@ -82,6 +85,7 @@ export const defaultDeps: Deps = {
     return { code: r.status ?? 1, stdout: r.stdout ?? "", stderr: r.stderr ?? "" };
   },
   readFile: (p) => readFileSync(p, "utf8"),
+  scratchDirs: loadHarnessConfigFromDisk().scratchDirs,
 };
 
 /** Drop "./" prefixes and doubled slashes; keep a trailing "/" (the directory marker). */
@@ -164,7 +168,7 @@ function loadPlan(path: string | undefined, deps: Deps): Plan | Outcome {
   if (new Set(ns).size !== ns.length) return usage("plan.prs has a duplicate n");
   if (p.exclude !== undefined && (!Array.isArray(p.exclude) || p.exclude.some((e) => typeof e !== "string"))) return usage("plan.exclude must be an array of strings");
   if (p.rest !== undefined && !ns.includes(p.rest)) return usage(`plan.rest ${p.rest} is not a PR in plan.prs`);
-  return { ...(p as Plan), prs: [...p.prs].sort((a, b) => a.n - b.n) };
+  return { ...(p as Plan), exclude: p.exclude ?? deps.scratchDirs, prs: [...p.prs].sort((a, b) => a.n - b.n) };
 }
 
 const isOutcome = (v: unknown): v is Outcome => typeof v === "object" && v !== null && "code" in v;
