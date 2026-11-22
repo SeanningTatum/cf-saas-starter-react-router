@@ -26,6 +26,7 @@ Put that sentence in the test name or a comment. `app/trpc/__tests__/index.test.
 3. **Boundaries.** Each `Schema` refinement: one rejected value plus the happy decode, at the boundary (`100` passes, `101` fails).
 4. **Branch selection.** When code picks between drizzle calls, prove which ran with `chainableSpy` + `toHaveBeenCalledWith`.
 5. **Non-mutation.** A helper that derives from its input must leave the input unchanged.
+6. **State machines (`*.machine.ts`).** These tests own the logic, because the e2e spec only checks the wiring. Cover every transition and guard, that every state is reachable and can get back to the start, and the events ignored while busy. Use the pure `transition()` and `snapshot.can()`, with no browser. Model: `app/components/__tests__/file-upload.machine.test.ts`.
 
 ## Do not write
 

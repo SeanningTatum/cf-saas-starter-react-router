@@ -191,10 +191,12 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 // Note: Resizable component (react-resizable-panels) is not SSR-compatible with Cloudflare Workers
 import { api } from "@/trpc/client";
 import { SiteHeader } from "./layout/site-header";
+import { FileUpload } from "@/components/file-upload";
+import { ALLOWED_UPLOAD_CONTENT_TYPES } from "@/lib/constants/upload";
 
 // SiteHeader (rendered below) uses the "admin" namespace (GitHub link text);
 // declare it here so it's loaded on a direct/hard navigation to this route.
-export const handle = { i18n: ["admin"] };
+export const handle = { i18n: ["admin", "upload"] };
 
 export default function KitchenSink() {
   const createWorkflowMutation = api.user.createWorkflow.useMutation();
@@ -493,6 +495,14 @@ export default function KitchenSink() {
                 </ToggleGroup>
               </CardContent>
             </Card>
+          </div>
+        </div>
+
+        {/* File Upload Section — e2e/file-upload.paths.spec.ts drives this one */}
+        <div className="space-y-4" id="upload">
+          <h2 className="text-xl font-semibold">File Upload</h2>
+          <div className="max-w-xl">
+            <FileUpload maxSize={1024 * 1024} accept={ALLOWED_UPLOAD_CONTENT_TYPES.join(",")} />
           </div>
         </div>
 

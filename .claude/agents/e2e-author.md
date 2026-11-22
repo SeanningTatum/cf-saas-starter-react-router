@@ -13,6 +13,8 @@ Write specs that stay in the repo and fail when a user-visible flow breaks. This
 
 Per flow: one golden path, one error path. Each spec has a comment naming the regression it catches ("the invite link 500s for an already-accepted invite"). A spec that cannot name one is not written.
 
+**A component driven by a `*.machine.ts`:** its unit tests already cover every transition, so don't repeat them in the browser. Test the wiring: pick generated paths so each DOM binding (drag, pick, click, key) and each state's view (including each distinct error message) shows up once, list them by name, and add a test that fails if the machine stops generating one. A path with no request step must send no request. Model: `e2e/file-upload.paths.spec.ts`. Six to eight paths is normal; one per transition is too many.
+
 Tag them: `test(title, { tag: "@golden" }, ...)` and `{ tag: "@error" }`. These are the permanent smoke tests, and `scripts/e2e-videos.ts` records them as the PR's videos, so each walks the path a reviewer should watch and nothing else; the title becomes the video's name.
 
 ## Conventions
