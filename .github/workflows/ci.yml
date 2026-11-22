@@ -43,6 +43,30 @@ jobs:
           # ruleset with .github/repo-rules.json; without it the gate prints a notice.
           GH_TOKEN: ${{ github.token }}
 
+  # TEMPORARY, proof for #137; the next commit on this branch removes it.
+  restore-skills-x50:
+    name: restore-skills test, 50 runs (temporary, #137)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - name: Runner image and tools
+        run: |
+          head -2 /etc/os-release
+          mkdir --version | head -1
+          bash --version | head -1
+      - name: 50 runs in a row
+        run: |
+          pass=0; fail=0
+          for i in $(seq 1 50); do
+            if out=$(bash scripts/test-restore-skills.sh 2>&1); then pass=$((pass+1)); echo "run $i: pass"
+            else fail=$((fail+1)); echo "run $i: FAIL"; echo "$out"; fi
+          done
+          echo "runs=50 pass=$pass fail=$fail"
+          [ "$fail" -eq 0 ]
+
   build:
     name: Build (Cloudflare Workers)
     runs-on: ubuntu-latest
