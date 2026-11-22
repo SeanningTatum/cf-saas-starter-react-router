@@ -1,12 +1,7 @@
-# Per-PR preview cleanup.
-#
-# Deletes the PR's dedicated D1 database (`<project>-db-pr-<N>`, provisioned
-# by preview.yml via scripts/ci/setup-preview-db.ts) when the PR closes.
-# Same opt-in gate as preview.yml: the repo variable CLOUDFLARE_ACCOUNT_ID
-# and secret CLOUDFLARE_API_TOKEN must be set, otherwise the job is skipped.
-#
-# The shared preview R2 bucket is intentionally NOT touched — it is shared
-# across all PR previews and outlives any single PR.
+# Deletes the PR's D1 database (`<project>-db-pr-<N>`, made by preview.yml) when the PR closes.
+# Same gate and split as preview.yml: only the delete step sees CLOUDFLARE_PREVIEW_API_TOKEN.
+# The shared preview R2 bucket stays: it outlives any one PR.
+# Skipped, not failed, until set up; see docs/ci/pipelines.md
 name: Preview Cleanup
 
 on:
@@ -17,30 +12,58 @@ permissions:
   contents: read
 
 jobs:
-  cleanup-preview:
-    name: Delete per-PR D1
+  readiness:
+    name: Check preview setup
     runs-on: ubuntu-latest
-    if: ${{ vars.CLOUDFLARE_ACCOUNT_ID != '' }}
-    timeout-minutes: 10
-    env:
-      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-      CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+    timeout-minutes: 5
+    outputs:
+      ready: ${{ steps.gate.outputs.ready }}
     steps:
       - uses: actions/checkout@v4
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
-          bun-version: latest
+          bun-version-file: .bun-version
 
       - name: Install dependencies
-        run: bun install --frozen-lockfile
+        run: bun install --frozen-lockfile --ignore-scripts
+
+      - name: Check preview setup
+        id: gate
+        env:
+          HAS_ACCOUNT_ID: ${{ (vars.CLOUDFLARE_PREVIEW_ACCOUNT_ID || vars.CLOUDFLARE_ACCOUNT_ID) != '' }}
+          HAS_TOKEN: ${{ secrets.CLOUDFLARE_PREVIEW_API_TOKEN != '' }}
+          PROD_TOKEN_AT_REPO_LEVEL: ${{ secrets.CLOUDFLARE_API_TOKEN != '' }}
+        run: bun scripts/ci/deploy-gate.ts ready preview-cleanup
+
+  cleanup-preview:
+    name: Delete per-PR D1
+    needs: readiness
+    runs-on: ubuntu-latest
+    if: needs.readiness.outputs.ready == 'true'
+    timeout-minutes: 10
+    env:
+      CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_PREVIEW_ACCOUNT_ID || vars.CLOUDFLARE_ACCOUNT_ID }}
+      PR_NUMBER: ${{ github.event.number }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: .bun-version
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile --ignore-scripts
 
       - name: Delete per-PR D1
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_PREVIEW_API_TOKEN }}
         # Must not fail the job if the DB never existed (PR predates this
         # workflow, or previews were enabled after the PR opened).
         run: |
-          PROJECT_NAME=$(bun -e 'const fs = require("node:fs"); const c = fs.readFileSync("wrangler.jsonc", "utf-8").replace(/^\s*\/\/.*$/gm, ""); console.log(JSON.parse(c).name)')
-          DB_NAME="${PROJECT_NAME}-db-pr-${{ github.event.number }}"
+          PROJECT_NAME=$(bun scripts/ci/deploy-gate.ts project-name)
+          DB_NAME="${PROJECT_NAME}-db-pr-${PR_NUMBER}"
           echo "Deleting D1 database: ${DB_NAME}"
           bunx wrangler d1 delete "${DB_NAME}" -y || echo "DB absent — nothing to clean"

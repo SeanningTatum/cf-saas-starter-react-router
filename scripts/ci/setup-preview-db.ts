@@ -14,6 +14,7 @@
 import { execSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
+import { stripJsonc } from "../lib/wrangler-config";
 
 const WRANGLER_PATH = path.join(__dirname, "..", "..", "wrangler.jsonc");
 const UUID_REGEX =
@@ -54,7 +55,7 @@ function readWranglerConfig(): WranglerConfig {
 
   const content = fs.readFileSync(WRANGLER_PATH, "utf-8");
   // Strip single-line comments for JSONC parsing (same approach as teardown.ts)
-  const jsonContent = content.replace(/^\s*\/\/.*$/gm, "");
+  const jsonContent = stripJsonc(content);
 
   try {
     return JSON.parse(jsonContent);

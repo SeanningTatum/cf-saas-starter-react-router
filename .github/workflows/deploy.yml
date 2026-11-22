@@ -1,23 +1,8 @@
-# Production deploy on push to main.
-#
-# Fires only AFTER the `CI` workflow concludes successfully on `main`, so a
-# red typecheck / test / harness-check never reaches production. (Deploy runs
-# once per green push — it does not re-run the test suite.)
-#
-# Like preview.yml this is OPT-IN. It stays off until you wire up your own
-# Cloudflare account:
-#
-#   1. Set the repo VARIABLE `CLOUDFLARE_ACCOUNT_ID`
-#      (Settings → Secrets and variables → Actions → Variables tab) to your
-#      Cloudflare account ID.
-#   2. Set the repo SECRET `CLOUDFLARE_API_TOKEN`
-#      (same page → Secrets tab) to an API token created from the
-#      "Edit Cloudflare Workers" template, with "D1:Edit" permission added
-#      (the template alone can't run D1 migrations).
-#
-# `bun run setup` must have filled in the real production wrangler IDs
-# (D1 database_id, R2 bucket, etc.) and committed them, or `wrangler deploy`
-# will fail. Production uses the default (top-level) wrangler.jsonc env.
+# Production deploy after CI passes on a push to main. Skipped, not failed, until set up.
+# The token is a `production` environment secret. Pull-request code cannot read it only
+# once that environment has a required reviewer and default-branch-only deploys
+# (bun run scripts/repo-rules.ts --apply, from #67); before that, a branch in this repo
+# can add `environment: production` to a workflow of its own. See docs/ci/pipelines.md
 name: Deploy Production
 
 on:
@@ -35,19 +20,16 @@ permissions:
   contents: read
 
 jobs:
-  deploy:
-    name: Deploy to Cloudflare (production)
+  readiness:
+    name: Check production setup
     runs-on: ubuntu-latest
-    # Only on a green CI run for a push to main (CI also runs on PRs), and only when credentials are wired up.
+    # Only on a green CI run for a push to main (CI also runs on PRs).
     if: >-
       ${{ github.event.workflow_run.conclusion == 'success'
-          && github.event.workflow_run.event == 'push'
-          && vars.CLOUDFLARE_ACCOUNT_ID != '' }}
-    timeout-minutes: 15
-    environment: production
-    env:
-      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-      CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          && github.event.workflow_run.event == 'push' }}
+    timeout-minutes: 5
+    outputs:
+      ready: ${{ steps.gate.outputs.ready }}
     steps:
       # workflow_run checks out the default branch by default — pin to the
       # exact commit that passed CI so we deploy what was tested.
@@ -58,33 +40,86 @@ jobs:
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
-          bun-version: latest
+          bun-version-file: .bun-version
 
-      # The job gate can only read the CLOUDFLARE_ACCOUNT_ID variable (secrets
-      # aren't readable in job-level `if`), so verify the token separately.
-      - name: Check Cloudflare credentials
+      - name: Install dependencies
+        run: bun install --frozen-lockfile --ignore-scripts
+
+      - name: Check production setup
+        id: gate
+        env:
+          HAS_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID != '' }}
+          D1_DATABASE_ID: ${{ vars.CLOUDFLARE_D1_DATABASE_ID }}
+        run: bun scripts/ci/deploy-gate.ts ready production
+
+  deploy:
+    name: Deploy to Cloudflare (production)
+    needs: readiness
+    runs-on: ubuntu-latest
+    if: needs.readiness.outputs.ready == 'true'
+    timeout-minutes: 15
+    environment: production
+    env:
+      CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+      D1_DATABASE_ID: ${{ vars.CLOUDFLARE_D1_DATABASE_ID }}
+      DEPLOY_SHA: ${{ github.event.workflow_run.head_sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: .bun-version
+
+      # The token is an environment secret, which the readiness job cannot see,
+      # so check it here. Every later step waits on this one.
+      - name: Check production token
+        id: token
+        env:
+          HAS_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN != '' }}
         run: |
-          if [ -z "$CLOUDFLARE_API_TOKEN" ]; then
-            echo "::error::CLOUDFLARE_ACCOUNT_ID is set but the CLOUDFLARE_API_TOKEN secret is missing or empty. Set it under Settings → Secrets and variables → Actions."
-            exit 1
+          if [ "$HAS_TOKEN" != "true" ]; then
+            echo "::notice::Deploy Production skipped: the production environment has no CLOUDFLARE_API_TOKEN secret. See docs/ci/pipelines.md"
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=true" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Install dependencies
+        if: steps.token.outputs.ready == 'true'
         run: bun install --frozen-lockfile
 
+      - name: Use the CLOUDFLARE_D1_DATABASE_ID variable
+        if: steps.token.outputs.ready == 'true' && vars.CLOUDFLARE_D1_DATABASE_ID != ''
+        run: bun scripts/ci/deploy-gate.ts use-d1
+
       - name: Apply production D1 migrations
-        run: bun run db:migrate:remote
+        if: steps.token.outputs.ready == 'true'
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          bun run db:migrate:remote || {
+            echo "::error::D1 migration failed. If the log says Authentication error, the token lacks D1 Edit. See docs/ci/pipelines.md"
+            exit 1
+          }
 
       - name: Build
+        if: steps.token.outputs.ready == 'true'
         run: bun run build
 
       - name: Deploy to Cloudflare Workers
+        if: steps.token.outputs.ready == 'true'
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
         run: bunx wrangler deploy
 
       - name: Deploy summary
+        if: steps.token.outputs.ready == 'true'
         run: |
           {
             echo "### Production deploy"
             echo
-            echo "Deployed commit \`${{ github.event.workflow_run.head_sha }}\` to Cloudflare Workers (production)."
+            echo "Deployed commit \`$DEPLOY_SHA\` to Cloudflare Workers (production)."
           } >> "$GITHUB_STEP_SUMMARY"
