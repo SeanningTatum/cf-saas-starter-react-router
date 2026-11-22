@@ -1,10 +1,23 @@
 import { Schema } from "effect";
+import { Email } from "./auth";
 
 export const Role = Schema.Literal("user", "admin");
 export type Role = typeof Role.Type;
 
 export const Status = Schema.Literal("verified", "unverified", "banned");
 export type Status = typeof Status.Type;
+
+const UserId = Schema.String.pipe(Schema.maxLength(128));
+
+// D1 binds at most 100 variables per statement, and a bulk UPDATE also binds its SET columns.
+export const MAX_BULK_USER_IDS = 50;
+
+const BulkUserIds = Schema.Array(UserId).pipe(
+  Schema.minItems(1),
+  Schema.maxItems(MAX_BULK_USER_IDS)
+);
+
+const BanReason = Schema.String.pipe(Schema.maxLength(500));
 
 export const GetUsersInput = Schema.Struct({
   page: Schema.Number.pipe(
@@ -18,71 +31,79 @@ export const GetUsersInput = Schema.Struct({
     Schema.lessThanOrEqualTo(100),
     Schema.optionalWith({ default: () => 10 })
   ),
-  search: Schema.optional(Schema.String),
+  search: Schema.optional(Schema.String.pipe(Schema.maxLength(100))),
   role: Schema.optional(Role),
   status: Schema.optional(Status),
 });
 export type GetUsersInput = typeof GetUsersInput.Type;
 
 export const GetUserInput = Schema.Struct({
-  userId: Schema.String,
+  userId: UserId,
 });
 export type GetUserInput = typeof GetUserInput.Type;
 
 export const UpdateUserData = Schema.Struct({
-  name: Schema.optional(Schema.String),
-  email: Schema.optional(Schema.String.pipe(Schema.pattern(/^[^@\s]+@[^@\s]+\.[^@\s]+$/))),
+  name: Schema.optional(Schema.String.pipe(Schema.maxLength(100))),
+  email: Schema.optional(Email),
   role: Schema.optional(Role),
   banned: Schema.optional(Schema.Boolean),
-  banReason: Schema.optional(Schema.String),
+  banReason: Schema.optional(BanReason),
   banExpires: Schema.optional(Schema.DateFromSelf),
   verified: Schema.optional(Schema.Boolean),
 });
 export type UpdateUserData = typeof UpdateUserData.Type;
 
 export const UpdateUserInput = Schema.Struct({
-  userId: Schema.String,
+  userId: UserId,
   data: UpdateUserData,
 });
 export type UpdateUserInput = typeof UpdateUserInput.Type;
 
 export const BanUserInput = Schema.Struct({
-  userId: Schema.String,
-  reason: Schema.optional(Schema.String),
+  userId: UserId,
+  reason: Schema.optional(BanReason),
   expiresAt: Schema.optional(Schema.DateFromSelf),
 });
 export type BanUserInput = typeof BanUserInput.Type;
 
 export const UnbanUserInput = Schema.Struct({
-  userId: Schema.String,
+  userId: UserId,
 });
 export type UnbanUserInput = typeof UnbanUserInput.Type;
 
 export const DeleteUserInput = Schema.Struct({
-  userId: Schema.String,
+  userId: UserId,
 });
 export type DeleteUserInput = typeof DeleteUserInput.Type;
 
 export const BulkBanUsersInput = Schema.Struct({
-  userIds: Schema.Array(Schema.String).pipe(Schema.minItems(1)),
-  reason: Schema.optional(Schema.String),
+  userIds: BulkUserIds,
+  reason: Schema.optional(BanReason),
   expiresAt: Schema.optional(Schema.DateFromSelf),
 });
 export type BulkBanUsersInput = typeof BulkBanUsersInput.Type;
 
 export const BulkDeleteUsersInput = Schema.Struct({
-  userIds: Schema.Array(Schema.String).pipe(Schema.minItems(1)),
+  userIds: BulkUserIds,
 });
 export type BulkDeleteUsersInput = typeof BulkDeleteUsersInput.Type;
 
 export const BulkUpdateUserRolesInput = Schema.Struct({
-  userIds: Schema.Array(Schema.String).pipe(Schema.minItems(1)),
+  userIds: BulkUserIds,
   role: Role,
 });
 export type BulkUpdateUserRolesInput = typeof BulkUpdateUserRolesInput.Type;
 
 export const CreateWorkflowInput = Schema.Struct({
-  email: Schema.String,
-  metadata: Schema.Record({ key: Schema.String, value: Schema.String }),
+  email: Email,
+  metadata: Schema.Record({
+    key: Schema.String.pipe(Schema.maxLength(64)),
+    value: Schema.String.pipe(Schema.maxLength(500)),
+  }).pipe(
+    Schema.filter((r) => Object.keys(r).length <= 20, {
+      message: () => "metadata must have at most 20 entries",
+      jsonSchema: { maxProperties: 20 },
+    })
+  ),
 });
 export type CreateWorkflowInput = typeof CreateWorkflowInput.Type;

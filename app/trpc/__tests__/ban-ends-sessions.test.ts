@@ -1,14 +1,7 @@
-import { readdirSync, readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
 import { TRPCError } from "@trpc/server";
-import type { AppLoadContext } from "react-router";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
-import { getPlatformProxy } from "wrangler";
-import { createAuth, type Auth } from "@/auth/server";
 import { requireSession } from "@/lib/session";
-import { makeAppRuntime, type AppRuntime } from "@/runtime";
-import { createCallerFactory, createTRPCContext } from "@/trpc";
-import { appRouter } from "@/trpc/router";
+import { BASE_URL, startRealApp, type Account, type RealApp } from "./real-d1";
 
 /**
  * A ban must end the user's sessions in the same step (issue #69).
@@ -20,10 +13,8 @@ import { appRouter } from "@/trpc/router";
  * working: protected tRPC calls and guarded loaders let the banned user in
  * until the cookie expired, days later.
  *
- * Why this file breaks the "no D1" rule, on purpose: the claim is that a live
- * session dies, and only a real session can die. This runs real local D1
- * (wrangler's platform proxy, in memory), real Better Auth and the real tRPC
- * router; nothing under test is mocked.
+ * The claim is that a live session dies, and only a real session can die, so
+ * this runs on the real-D1 harness (`./real-d1.ts` says why that is allowed).
  */
 
 // `import.meta.env.DEV` is always true under vitest, which makes
@@ -33,52 +24,16 @@ vi.mock("@/lib/log-format", async (importOriginal) => ({
   isDev: false,
 }));
 
-const PASSWORD = "correct-horse-battery-staple";
-const BASE_URL = "http://localhost";
-const MIGRATIONS = fileURLToPath(new URL("../../../drizzle/", import.meta.url));
-
-type Proxy = Awaited<ReturnType<typeof getPlatformProxy<Env>>>;
-type Account = { userId: string; email: string; headers: Headers };
-
-let proxy: Proxy;
-let db: D1Database;
-let auth: Auth;
-let runtime: AppRuntime;
-let loadContext: AppLoadContext;
+let app: RealApp;
 let admin: Account;
 
-const headersFrom = (setCookie: Headers): Headers =>
-  new Headers({
-    cookie: setCookie
-      .getSetCookie()
-      .map((c) => c.split(";")[0])
-      .join("; "),
-  });
-
-const signUp = async (email: string): Promise<Account> => {
-  const res = await auth.api.signUpEmail({
-    body: { name: email.split("@")[0], email, password: PASSWORD },
-    returnHeaders: true,
-  });
-  return { userId: res.response.user.id, email, headers: headersFrom(res.headers) };
-};
-
-const signIn = async (email: string): Promise<Headers> => {
-  const res = await auth.api.signInEmail({
-    body: { email, password: PASSWORD },
-    returnHeaders: true,
-  });
-  return headersFrom(res.headers);
-};
-
-// A fresh context per call: the session is resolved when the context is built,
-// so reusing one would hide a session that died after it was built.
-const callerFor = async (headers: Headers) =>
-  createCallerFactory(appRouter)(await createTRPCContext({ headers, runtime }));
+const signUp = (email: string) => app.signUp(email);
+const signIn = (email: string) => app.signIn(email);
+const callerFor = (headers: Headers) => app.callerFor(headers);
 
 const sessionRows = async (userId: string) =>
   (
-    await db
+    await app.db
       .prepare("SELECT count(*) AS n FROM session WHERE user_id = ?")
       .bind(userId)
       .first<{ n: number }>()
@@ -86,7 +41,7 @@ const sessionRows = async (userId: string) =>
 
 const bannedFlag = async (userId: string) =>
   (
-    await db
+    await app.db
       .prepare("SELECT banned FROM user WHERE id = ?")
       .bind(userId)
       .first<{ banned: number | null }>()
@@ -103,7 +58,7 @@ const nextProtectedCall = (headers: Headers): Promise<string> =>
 
 /** "allowed", or "<status> <Location>" of the redirect the loader guard threw. */
 const nextGuardedLoader = (headers: Headers): Promise<string> =>
-  requireSession(new Request(`${BASE_URL}/dashboard`, { headers }), loadContext).then(
+  requireSession(new Request(`${BASE_URL}/dashboard`, { headers }), app.loadContext).then(
     () => "allowed",
     (e: unknown) =>
       e instanceof Response
@@ -127,46 +82,12 @@ const signInRefusal = (email: string): Promise<unknown> =>
   );
 
 beforeAll(async () => {
-  proxy = await getPlatformProxy<Env>({ persist: false, remoteBindings: false });
-  db = proxy.env.DATABASE;
-
-  const files = readdirSync(MIGRATIONS)
-    .filter((f) => f.endsWith(".sql"))
-    .sort();
-  for (const file of files) {
-    const statements = readFileSync(`${MIGRATIONS}${file}`, "utf8")
-      .split("--> statement-breakpoint")
-      .map((s) => s.trim())
-      .filter((s) => s.length > 0);
-    for (const statement of statements) await db.prepare(statement).run();
-  }
-
-  // The proxy has no workflow binding and no secret; the protected probe
-  // (`user.createWorkflow`) needs the first, Better Auth the second.
-  const env = {
-    ...proxy.env,
-    BETTER_AUTH_SECRET: "ban-ends-sessions-test-secret-0123456789abcdef",
-    EXAMPLE_WORKFLOW: { create: async () => ({ id: "wf-test" }) },
-  } as unknown as Env;
-
-  auth = createAuth(env.DATABASE, env.BETTER_AUTH_SECRET, BASE_URL);
-  runtime = makeAppRuntime(env, BASE_URL);
-  loadContext = { auth } as unknown as AppLoadContext;
-
-  const adminEmail = "admin@ban.test";
-  await signUp(adminEmail);
-  await db.prepare("UPDATE user SET role = 'admin' WHERE email = ?").bind(adminEmail).run();
-  const adminUser = await db
-    .prepare("SELECT id FROM user WHERE email = ?")
-    .bind(adminEmail)
-    .first<{ id: string }>();
-  // Sign in after the role change so the admin's session carries the role.
-  admin = { userId: adminUser?.id ?? "", email: adminEmail, headers: await signIn(adminEmail) };
+  app = await startRealApp();
+  admin = await app.signUpAdmin("admin@ban.test");
 }, 60_000);
 
 afterAll(async () => {
-  await runtime?.dispose();
-  await proxy?.dispose();
+  await app?.dispose();
 });
 
 type Road = { name: string; ban: (userId: string) => Promise<unknown> };
@@ -189,7 +110,7 @@ const ROADS: Road[] = [
   {
     name: "Better Auth auth.api.adminUpdateUser with banned: true",
     ban: (userId) =>
-      auth.api.adminUpdateUser({
+      app.auth.api.adminUpdateUser({
         body: { userId, data: { banned: true } },
         headers: admin.headers,
       }),
@@ -198,7 +119,7 @@ const ROADS: Road[] = [
     // Control: Better Auth's own ban already deletes sessions. Pins that the
     // library road keeps doing so.
     name: "Better Auth auth.api.banUser",
-    ban: (userId) => auth.api.banUser({ body: { userId }, headers: admin.headers }),
+    ban: (userId) => app.auth.api.banUser({ body: { userId }, headers: admin.headers }),
   },
 ];
 

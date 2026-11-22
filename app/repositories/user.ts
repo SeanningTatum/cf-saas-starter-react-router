@@ -1,5 +1,5 @@
 import { Effect } from "effect";
-import { eq, inArray, count, desc, or, like, and, type SQL } from "drizzle-orm";
+import { eq, inArray, count, desc, or, and, sql, type SQL } from "drizzle-orm";
 import { session, user } from "@/db/schema";
 import { Database } from "@/services/database";
 import { tryQuery, tryUpdate, tryDelete, requireFound } from "@/lib/effect-utils";
@@ -31,8 +31,12 @@ export const buildUserConditions = (
 ): SQL | undefined => {
   const conditions: SQL[] = [];
   if (input.search) {
-    const term = `%${input.search}%`;
-    const cond = or(like(user.name, term), like(user.email, term));
+    // instr, not LIKE: `%` and `_` in the term stay literal, and D1 refuses
+    // any LIKE pattern over 50 bytes.
+    const cond = or(
+      sql`instr(lower(${user.name}), lower(${input.search})) > 0`,
+      sql`instr(lower(${user.email}), lower(${input.search})) > 0`
+    );
     if (cond) conditions.push(cond);
   }
   if (input.role) conditions.push(eq(user.role, input.role));
