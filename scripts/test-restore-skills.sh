@@ -137,14 +137,16 @@ REAL_PS=$(command -v ps)
 cat >"$SB/bin/ps" <<EOF
 #!/usr/bin/env bash
 if [ "\${!#}" = "$DEAD" ] && [ ! -e "$SB/handed-over" ]; then
-  touch "$SB/handed-over"
   printf '%s\n' "$LIVE" >"$SB/.agents/.restore.lock"
+  touch "$SB/handed-over"
   exit 1
 fi
 exec "$REAL_PS" "\$@"
 EOF
 chmod +x "$SB/bin/ps"
-(sleep 2; rm -f "$SB/.agents/.restore.lock") & RELEASE=$!
+# The new owner lets go only once the stub says the hand-over happened: no clock decides the
+# order, however slow the machine. (The bound only stops a broken restore from hanging the test.)
+(for _ in $(seq 1 300); do [ -e "$SB/handed-over" ] && break; sleep 0.2; done; rm -f "$SB/.agents/.restore.lock") & RELEASE=$!
 restore "$SB" >/dev/null 2>"$SB/err"
 wait "$RELEASE" 2>/dev/null
 [ -e "$SB/handed-over" ] && ! grep -q "reclaiming" "$SB/err" && [ "$(calls "$SB")" = 1 ] && lockgone "$SB" \
