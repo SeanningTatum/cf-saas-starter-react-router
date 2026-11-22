@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
@@ -264,7 +264,7 @@ const hookEnv = (extra: Record<string, string> = {}): NodeJS.ProcessEnv => {
   const scrubbed = Object.fromEntries(
     Object.entries(envOutsideAnyHook(process.env)).filter(([key]) => key !== "HUSKY" && key !== "CI"),
   );
-  return { ...scrubbed, XDG_CONFIG_HOME: initDir.dir, ...extra };
+  return { ...scrubbed, HOME: initDir.dir, XDG_CONFIG_HOME: initDir.dir, ...extra };
 };
 
 const git = (cwd: string, args: string[], env: NodeJS.ProcessEnv = hookEnv()) =>
@@ -385,6 +385,8 @@ describe("installer against real git in a throwaway repository", () => {
     () => {
       const repo = initRepo("hooks-prod-runner");
       scaffold(repo, ["commit-msg"]);
+      vi.stubEnv("HOME", initDir.dir);
+      vi.stubEnv("XDG_CONFIG_HOME", initDir.dir);
       const lines: string[] = [];
       const deps: Deps = {
         env: {},
@@ -401,6 +403,7 @@ describe("installer against real git in a throwaway repository", () => {
       expect(readText(repo, ".git", "config")).toContain(`hooksPath = ${HOOKS_PATH}`);
       expect(fs.existsSync(path.join(repo, ".husky", "_", "commit-msg"))).toBe(true);
     },
+    REAL_GIT_TIMEOUT_MS,
   );
 
   it("a folder inside another repository gets no files and no config, and the line says why", () => {
