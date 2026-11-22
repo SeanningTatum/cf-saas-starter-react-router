@@ -470,7 +470,7 @@ export async function setupGitHubCiCredentials(
 
   const wire = await confirm({
     message:
-      "Set CI/CD credentials on GitHub now (enables push-to-main → production deploy + PR previews)?",
+      "Set CI/CD credentials on GitHub now (enables the deploy after a merge into production + PR previews)?",
     initialValue: true,
   });
   if (isCancel(wire) || !wire) {
@@ -545,7 +545,7 @@ export async function setupGitHubCiCredentials(
         "\x1b[32m✓ CLOUDFLARE_API_TOKEN set in the production environment\x1b[0m"
       );
       console.log(
-        "\x1b[32m🚀 Pushes to main will now auto-deploy to production.\x1b[0m"
+        "\x1b[32m🚀 A merge into production will now auto-deploy it.\x1b[0m"
       );
     }
   }
@@ -889,7 +889,7 @@ async function main() {
   // Step 11: Wire up GitHub Actions CI/CD credentials (optional).
   // Sets the repo VARIABLE CLOUDFLARE_ACCOUNT_ID and the repo SECRET
   // CLOUDFLARE_API_TOKEN that .github/workflows/{deploy,preview}.yml need to
-  // deploy on push to main / per-PR. Entirely opt-in and skipped cleanly if
+  // deploy after a merge into production / per-PR. Entirely opt-in and skipped cleanly if
   // the GitHub CLI isn't available.
   await setupGitHubCiCredentials(accountId);
 
@@ -907,7 +907,7 @@ async function main() {
   );
   console.log("  3. CI/CD (GitHub Actions):");
   console.log(
-    "     \x1b[33m.github/workflows/deploy.yml\x1b[0m — push to main auto-deploys to production (after CI passes)"
+    "     \x1b[33m.github/workflows/deploy.yml\x1b[0m — a merge into production auto-deploys it (after CI passes)"
   );
   console.log(
     "     \x1b[33m.github/workflows/preview.yml\x1b[0m — every PR gets its own preview deployment"

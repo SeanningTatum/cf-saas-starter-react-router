@@ -5,7 +5,7 @@ export const meta = {
   whenToUse:
     "A fresh fork that still wears the starter's look. Not for one colour or one component, not on a repo with live users whose brand is not changing (it rewrites every primitive), not as a throwaway exploration on a branch you care about.",
   phases: [
-    { title: "Preflight", detail: "clean tree, green baseline, no brand yet, branch off main" },
+    { title: "Preflight", detail: "clean tree, green baseline, no brand yet, branch off the default branch" },
     { title: "Brief", detail: "the impeccable init interview; asks you in chat, then writes PRODUCT.md" },
     { title: "Draw", detail: "taste draws the directions, then one comp lane per direction in parallel" },
     { title: "Critique", detail: "taste loop, impeccable critique, motion review per comp; sameness check; one redraw" },
@@ -132,7 +132,7 @@ except where a step says to.
      anything else is dirty, fail and name the files: parallel lanes writing over uncommitted work make
      the diff unreadable.
   4. Baseline. \`./scripts/verify.sh --baseline\`. If red, fail and name the failing gate.
-  5. Branch. If on main, \`git switch -c feat/brand-init\`. Otherwise stay.
+  5. Branch. If the current branch is the repo's default branch (\`bun scripts/default-branch.ts\` prints it), \`git switch -c feat/brand-init\`. Otherwise stay.
 Return ok=false with a one-line reason for the first failure, else ok=true. Always return root when you found it.`,
   {
     label: "preflight",

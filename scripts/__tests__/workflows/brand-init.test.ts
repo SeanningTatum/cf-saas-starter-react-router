@@ -315,14 +315,23 @@ describe("brand-init: happy path, Preflight to Ship", () => {
   });
 });
 
+describe("brand-init: the branch to leave", () => {
+  it("preflight asks for a new branch off the repo's default branch, read from scripts/default-branch.ts, not off a literal main (catches a repo whose default is staging getting brand work committed on it)", async () => {
+    const r = await run({}, rules([["preflight", { ok: false, reason: "stop here", branch: "staging", root: ROOT }]]));
+    const prompt = r.calls[0].prompt;
+    expect(prompt).toContain("bun scripts/default-branch.ts");
+    expect(prompt).not.toMatch(/If on main\b/);
+  });
+});
+
 describe("brand-init: a failing gate stops the run", () => {
   it("a red preflight, a relative root or a bad arg stops before any other agent", async () => {
-    const red = await run({}, rules([["preflight", { ok: false, reason: "baseline red: typecheck", branch: "main", root: ROOT }]]));
+    const red = await run({}, rules([["preflight", { ok: false, reason: "baseline red: typecheck", branch: "staging", root: ROOT }]]));
     expect(labels(red.calls)).toEqual(["preflight"]);
     expect(res(red)).toEqual({ error: "baseline red: typecheck" });
     // The DESIGN.md guard lives in the preflight agent; the script must hand it the redo flag.
     expect(red.calls[0].prompt).toContain("redo is false");
-    const redo = await run({ redo: true }, rules([["preflight", { ok: false, reason: "dirty tree: app/root.tsx", branch: "main", root: ROOT }]]));
+    const redo = await run({ redo: true }, rules([["preflight", { ok: false, reason: "dirty tree: app/root.tsx", branch: "staging", root: ROOT }]]));
     expect(redo.calls[0].prompt).toContain("redo is true");
     expect(labels(redo.calls)).toEqual(["preflight"]);
 

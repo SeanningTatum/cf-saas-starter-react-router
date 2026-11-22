@@ -160,6 +160,17 @@ describe("checkFeatureDoc edge cases", () => {
     expect(checkFeatureDoc(doc).map((f) => f.rule)).toEqual(["stack"]);
   });
 
+  it("a record with no base takes the repo's default branch, not a literal: PR 1 must target it", () => {
+    const noBase = good.replace("base: main\n", "").replaceAll("| main |", "| staging |");
+    expect(checkFeatureDoc(noBase, () => "staging")).toEqual([]);
+    expect(checkFeatureDoc(noBase, () => "develop").map((f) => f.rule)).toEqual(["stack"]);
+  });
+
+  it("a record with no base and no known default branch skips the PR 1 base check instead of guessing", () => {
+    const noBase = good.replace("base: main\n", "").replaceAll("| main |", "| staging |");
+    expect(checkFeatureDoc(noBase, () => undefined)).toEqual([]);
+  });
+
   it("a mermaid block with an unknown diagram type fails: the page would render as raw text", () => {
     const doc = good.replace("flowchart TD\n  P1", "flowchar TD\n  P1");
     expect(checkFeatureDoc(doc).map((f) => f.rule)).toEqual(["mermaid"]);

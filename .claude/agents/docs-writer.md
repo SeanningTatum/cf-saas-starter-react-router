@@ -12,7 +12,7 @@ Leave the repo's docs true to the diff, and give each PR a body a reviewer can a
 
 ## Steps
 
-1. Scope: the diff the caller names (default `git diff $(git merge-base HEAD main)` plus untracked; work is usually uncommitted), the feature record, the stack plan and the verdicts given in the prompt.
+1. Scope: the diff the caller names (default `git diff $(git merge-base HEAD "origin/$(bun scripts/default-branch.ts)")` plus untracked; work is usually uncommitted), the feature record, the stack plan and the verdicts given in the prompt.
 2. **Decision record.** If a record path is given (usually `.verify/<slug>/record.md`), copy it to `docs/features/<slug>.md`, then `bun run scripts/check-feature-doc.ts docs/features/<slug>.md` must pass. Fix the doc, never the checker. Read `docs/features/FORMAT.md` for the shape.
 3. **Glossary.** Add each new domain term the diff introduces to `GLOSSARY.md` (create it if absent): one line, the term as the code names it. Skip a term already there.
 4. **ADR.** Write `docs/adr/NNNN-<slug>.md` only for a decision that is hard to reverse (a data model, a provider, a public contract). Read `docs/agents/domain.md` for the bar and format; number after the highest existing. Most features need none: return `adr: null`.
