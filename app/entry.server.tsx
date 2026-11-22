@@ -1,4 +1,8 @@
-import type { AppLoadContext, EntryContext } from "react-router";
+import type {
+  AppLoadContext,
+  EntryContext,
+  HandleErrorFunction,
+} from "react-router";
 import { ServerRouter } from "react-router";
 import { isbot } from "isbot";
 import { renderToReadableStream } from "react-dom/server";
@@ -7,9 +11,24 @@ import { I18nextProvider, initReactI18next } from "react-i18next";
 import { i18nServer } from "./i18n/i18n.server";
 import { supportedLngs, fallbackLng, defaultNS } from "./i18n";
 import resourcesToBackend from "i18next-resources-to-backend";
-import { loggers } from "@/lib/logger";
+import { FIRST_SERVER_ERROR_STATUS } from "@/lib/constants/error-reporting";
 import { NonceContext } from "@/lib/csp-nonce";
 import { RequestIdContext } from "@/lib/request-id";
+
+const READ_METHODS: ReadonlyArray<string> = ["GET", "HEAD"];
+
+export const handleError: HandleErrorFunction = (error, { request, context }) => {
+  if (request.signal.aborted) return;
+  context.reportError({
+    error,
+    source: READ_METHODS.includes(request.method) ? "loader" : "action",
+  });
+};
+
+export const reportRenderError = (
+  loadContext: Pick<AppLoadContext, "reportError">,
+  error: unknown
+): void => loadContext.reportError({ error, source: "render" });
 
 export default async function handleRequest(
   request: Request,
@@ -19,7 +38,6 @@ export default async function handleRequest(
   loadContext: AppLoadContext
 ) {
   const nonce = loadContext.cspNonce;
-  let shellRendered = false;
   const userAgent = request.headers.get("user-agent");
 
   const instance = createInstance();
@@ -57,17 +75,11 @@ export default async function handleRequest(
     {
       nonce,
       onError(error: unknown) {
-        responseStatusCode = 500;
-        if (shellRendered) {
-          loggers.server.error(
-            { err: error instanceof Error ? error.message : String(error) },
-            "SSR render error"
-          );
-        }
+        responseStatusCode = FIRST_SERVER_ERROR_STATUS;
+        reportRenderError(loadContext, error);
       },
     }
   );
-  shellRendered = true;
 
   if ((userAgent && isbot(userAgent)) || routerContext.isSpaMode) {
     await body.allReady;

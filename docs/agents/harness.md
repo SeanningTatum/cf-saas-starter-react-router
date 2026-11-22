@@ -124,6 +124,8 @@ After the first push no branch is rewritten: `.claude/settings.json` denies `git
 3. Greptile 5/5 on the roll-up's current head, or each remaining comment declined with a reason. The 5/5 bar applies to the roll-up head only, never to the stacked PRs.
 4. You (or a coordinator you authorized) squash-merge the roll-up with `gh pr merge <n> --squash --match-head-commit <reviewed sha>`. `ship-feature` prints the command with the sha Greptile reviewed. The stacked PRs already show Merged (into `review/<slug>`), so nothing is left to close.
 
+Commit subjects and PR titles follow Conventional Commits, checked by the `commit-msg` hook and the PR title job; the rule and the titles of the roll-up and release PRs are in [Commit subjects and PR titles](../ci/pipelines.md#commit-subjects-and-pr-titles).
+
 **Greptile settings (dashboard, by hand).** Set Greptile to review only when mentioned, so stacked PRs never trigger automatic reviews; the workflow posts `@greptileai review` on the roll-up itself, so an automatic review when the roll-up opens would be a second, wasted one. This is a setting in the Greptile dashboard, not a file in this repo.
 
 **When another feature merges first.** The stack is already in `review/<slug>`, so merge the default branch into it (`bun scripts/default-branch.ts` prints it; `staging` today); no rebase, no force push, and no re-review of the stacked PRs:

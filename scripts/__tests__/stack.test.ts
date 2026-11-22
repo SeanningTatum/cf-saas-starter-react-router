@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { HARNESS_DEFAULTS } from "../lib/harness-config";
+import { lintTitle } from "./helpers/lint-title";
 import { run, assignPaths, normalizePath, type Deps, type GitResult, type Plan } from "../stack";
 
 const plan: Plan = {
@@ -179,6 +180,14 @@ describe("stack split", () => {
       "rev-parse HEAD",
     ]);
     expect((o.out as any).branches.map((b: any) => [b.n, b.sha])).toEqual([[1, "abc123"], [2, "abc123"], [3, "abc123"]]);
+  });
+
+  it("commits each PR with the plan's message and invents no subject of its own: the subjects pass commitlint", async () => {
+    const { deps, calls } = stub(changed);
+    run(["split", "--plan", "p.json"], deps);
+    const subjects = calls.filter((c) => c[0] === "commit").map((c) => c[2] ?? "");
+    expect(subjects).toEqual(plan.prs.map((p) => p.message));
+    for (const subject of subjects) expect((await lintTitle(subject)).problems).toEqual([]);
   });
 
   it("refuses with exit 3 and touches no branch when a path is unassigned", () => {

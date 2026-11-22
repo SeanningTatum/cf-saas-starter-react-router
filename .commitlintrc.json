@@ -1,0 +1,43 @@
+{
+  "extends": ["@commitlint/config-conventional"],
+  "rules": {
+    "type-enum": [
+      2,
+      "always",
+      ["feat", "fix", "docs", "chore", "refactor", "test", "ci", "perf", "build", "style", "revert"]
+    ],
+    "scope-enum": [
+      2,
+      "always",
+      [
+        "auth",
+        "trpc",
+        "db",
+        "ui",
+        "upload",
+        "tracing",
+        "analytics",
+        "logging",
+        "security",
+        "harness",
+        "lint",
+        "ci",
+        "deploy",
+        "release",
+        "setup",
+        "deps",
+        "config",
+        "docs",
+        "adr",
+        "readme",
+        "design",
+        "e2e",
+        "scripts"
+      ]
+    ],
+    "header-max-length": [2, "always", 100],
+    "subject-case": [0],
+    "body-max-line-length": [0],
+    "footer-max-line-length": [0]
+  }
+}

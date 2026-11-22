@@ -77,7 +77,7 @@ export const meta = {
  *     accept?: object }      { <tag>: true|false } from a needs-accept stop
  */
 // @lib
-const { twice, checkArgs, asker, preflightFault, tracked } = workflowLib({ agent, log, name: "brand-init" });
+const { twice, atAttempt, checkArgs, asker, preflightFault, tracked } = workflowLib({ agent, log, name: "brand-init" });
 
 const input = args && typeof args === "object" ? args : {};
 const badArg = checkArgs("brand-init", [["brief", "string"], ["sector", "string"], ["root", "string"], ["redo", "boolean"], ["rebuildHome", "boolean"], ["answers", "object"], ["why", "object"], ["accept", "object"]], input, true);
@@ -772,7 +772,7 @@ const missingBuild = [];
 for (const lane of BUILD_LANES) {
   if (builtByName.get(lane.name)) continue;
   log(`WARNING: build:${lane.name} returned nothing; retrying once`);
-  const retry = await buildLane(lane);
+  const retry = await atAttempt(2, () => buildLane(lane));
   if (retry) builtByName.set(lane.name, retry);
   else missingBuild.push({ severity: "P1", source: `build:${lane.name}`, issue: `build lane returned nothing twice; its fence (${lane.owns.join(", ")}) was not rebuilt` });
 }
@@ -1192,7 +1192,7 @@ ${fs.map((f) => `  · [${f.severity}] ${f.source}: ${f.issue}${f.file ? ` (${f.f
         // A lane that returns nothing gets one retry. If it is still empty, the work it was handed
         // must not vanish with it: every assigned item goes to `unresolved`, which blocks Ship.
         return ask(prompt, opts)
-          .then((r) => r || ask(prompt, { ...opts, label: `${opts.label}:retry` }))
+          .then((r) => r || atAttempt(2, () => ask(prompt, { ...opts, label: `${opts.label}:retry` })))
           .then((r) => {
             if (!r) failedLane(name, fs);
             return toReport(name, lane, r, "fix lane returned nothing twice");
@@ -1517,7 +1517,7 @@ ${reportedFiles.map((p) => `       · ${p}`).join("\n") || "       · (none)"}
      Do NOT stage anything under .verify/ (the comps, screenshots and verdict.md stay local), or draw
      files. Check \`git status --short\` afterwards: anything modified and unstaged that is not one of
      those is a surprise, so name it in your note. Commit message:
-     \`feat(brand): ${tokens.name ?? "new"} brand — tokens, primitives, ${cfg.docs.design}\`, ending with the
+     \`feat(design): ${tokens.name ?? "new"} brand, tokens, primitives, ${cfg.docs.design}\` (Conventional Commits per .commitlintrc.json; the PR title is the same line), ending with the
      Co-Authored-By line for the model you run as (\`Co-Authored-By: <your model name> <noreply@anthropic.com>\`).
      Push the branch and open the PR with the \`engineering-toolkit:pr-format\` skill's layout: the pick
      screenshots (desktop and mobile, light and dark) and the final critique summary in the body, the

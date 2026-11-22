@@ -7,6 +7,7 @@
  */
 import { readdirSync } from "node:fs";
 import { describe, expect, it } from "vitest";
+import { lintTitle } from "../helpers/lint-title";
 import { configLine, labels, ledgerAt, callShape, rowShape, seq, type AnswerInput, type AnswerRule, type DryRunResult } from "../../lib/workflow-dry-run";
 
 import { type Obj, ROOT, OUT, UI_DIR, ANSWERS, SHIP_ARGS, run, res, byLabel, one, indexOf, fenceIn, laneDid, tokensFor, PASS, SHIPPED, rules } from "./brand-init.fixtures";
@@ -471,11 +472,32 @@ describe("brand-init: run ledger", () => {
     expect(lg.rows.filter((row) => row.attempt === 2)).toHaveLength(1);
   });
 
+  it("a build lane retried by hand shows as attempt 2 in the ledger: a retry outside twice() must not read as a first try", async () => {
+    const { r2 } = await happyPath();
+    const r = await run({ answers: ANSWERS, pick: 2, rebuildHome: true }, rules([["build:shell", seq(null, (c: AnswerInput) => laneDid(c))]]), r2);
+    const lg = ledgerAt(r, "run:record:ship");
+    expect(lg.rows.filter((row) => row.label === "build:shell").map((row) => [row.attempt, row.outcome])).toEqual([
+      [1, "empty"],
+      [2, "ok"],
+    ]);
+  });
+
   it("the PR body gets the run summary and the pick and accept stops tell the main thread to show it: a PR or a review page without the telemetry table breaks the ticket's second criterion", async () => {
     const { r2, r3 } = await happyPath();
     expect(one(r3, "ship:record-commit-pr").prompt).toContain("`## Run` heading and the output of `bun scripts/run-telemetry.ts summary brand-init --markdown`");
     expect(res(r2).next).toContain("`bun scripts/run-telemetry.ts summary brand-init`");
     const stopped = await run(SHIP_ARGS, rules([["check:gates", { verdict: "FAIL", findings: [], evidence: "typecheck: 3 errors" }]]));
     expect(res(stopped).next).toContain("ingest brand-init brand-init <this run's transcript directory>");
+  });
+});
+
+describe("brand-init: the commit subject it dictates passes the repo's commitlint config", () => {
+  it("names a subject in the list of scopes: the old 'feat(brand)' scope would fail the commit-msg hook and the PR title job", async () => {
+    const { r3 } = await happyPath();
+    const prompt = one(r3, "ship:record-commit-pr").prompt;
+    const subject = prompt.match(/`(feat\([a-z-]+\): [^`]*)`/)?.[1] ?? "";
+    expect(subject).toContain("feat(design): ");
+    expect((await lintTitle(subject)).problems).toEqual([]);
+    expect(prompt).toContain("the PR title is the same line");
   });
 });

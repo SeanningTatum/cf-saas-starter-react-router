@@ -3,6 +3,7 @@ import { TRPCError } from "@trpc/server";
 import type { AppServices } from "@/runtime";
 import type { AppError } from "@/models/errors";
 import { loggers } from "@/lib/logger";
+import { TRPC_SERVER_FAILURE_CODES } from "@/lib/constants/error-reporting";
 
 // The literal set of tags every AppError union member can carry. Anything
 // with a `_tag` outside this set is NOT a known AppError — even though it
@@ -155,23 +156,21 @@ const appErrorToTRPC = (e: AppError): TRPCError => {
 
 // Generic fallback for anything that isn't a pre-existing TRPCError or a
 // known AppError (a raw thrown Error, a rejected promise's reason, etc).
-// The raw message/stack is logged server-side only — never sent to the
-// client, which only ever sees a generic "Internal Server Error".
+// The original error rides on the TRPCError as `cause`, where the error
+// reporter reads it (docs/agents/error-reporting.md). tRPC never sends
+// `cause` to the client, which only ever sees "Internal Server Error".
+const withOrigin = (mapped: TRPCError, origin: AppError): TRPCError =>
+  TRPC_SERVER_FAILURE_CODES.includes(mapped.code)
+    ? new TRPCError({ code: mapped.code, message: mapped.message, cause: origin })
+    : mapped;
+
 const toTRPC = (err: unknown): TRPCError => {
   if (err instanceof TRPCError) return err;
-  if (isAppError(err)) return appErrorToTRPC(err);
-  loggers.trpc.error(
-    {
-      err:
-        err instanceof Error
-          ? { name: err.name, message: err.message, stack: err.stack }
-          : err,
-    },
-    "Unhandled error in tRPC procedure"
-  );
+  if (isAppError(err)) return withOrigin(appErrorToTRPC(err), err);
   return new TRPCError({
     code: "INTERNAL_SERVER_ERROR",
     message: "Internal Server Error",
+    cause: err,
   });
 };
 
@@ -215,15 +214,12 @@ export const runProcedure = <A, E, R extends AppServices = AppServices>(
           if (failure._tag === "Some") {
             throw toTRPC(failure.value);
           }
-          // Unrecoverable defect (interruption, die, etc) — log full cause,
-          // never leak it to the client.
-          loggers.trpc.error(
-            { cause: Cause.pretty(cause) },
-            "Unhandled defect in tRPC procedure"
-          );
+          // Unrecoverable defect (interruption, die, etc): the cause rides on
+          // the TRPCError for the error reporter and never reaches the client.
           throw new TRPCError({
             code: "INTERNAL_SERVER_ERROR",
             message: "Internal Server Error",
+            cause: Cause.squash(cause),
           });
         },
       })

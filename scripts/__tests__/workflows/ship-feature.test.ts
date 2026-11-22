@@ -8,6 +8,7 @@
  * fragments), never on how the script is laid out, so moving its helpers into a library keeps them green.
  */
 import { describe, expect, it } from "vitest";
+import { lintTitle } from "../helpers/lint-title";
 import { dryRun, labels, ledgerAt, callShape, rowShape, seq, type AgentCall, type AnswerRule, type DryRunResult } from "../../lib/workflow-dry-run";
 import { loadHarnessConfigFromDisk } from "../../lib/harness-config";
 
@@ -500,5 +501,101 @@ describe("ship-feature: run ledger", () => {
     const { stopped } = await runHappy();
     expect((stopped.result as { next: string }).next).toContain(`bun scripts/run-telemetry.ts summary ${SLUG}\``);
     expect((stopped.result as { next: string }).next).toContain(`ingest ${SLUG} ship-feature`);
+  });
+});
+
+describe("ship-feature: every commit subject and PR title it writes passes the repo's commitlint config", () => {
+  const stackPlanOf = (calls: AgentCall[]) => {
+    const prompt = find(calls, "contract:branch").prompt;
+    const json = prompt.slice(prompt.indexOf("{\n"), prompt.lastIndexOf("}") + 1);
+    return JSON.parse(json) as { prs: { title: string; message: string }[] };
+  };
+  const quotedAfter = (prompt: string, flag: string) => [...prompt.matchAll(new RegExp(`${flag} '([^']*)'`, "g"))].map((m) => m[1] ?? "");
+  const verdictOf = async (titles: string[]) => Promise.all(titles.map(async (t) => [t, (await lintTitle(t)).valid] as const));
+
+  it("lints the stacked commit subjects, the stacked PR titles and the roll-up title, for a plan whose titles are plain words (a bare 'Widget data' would be refused by the PR title job)", async () => {
+    const { shipped } = await runHappy();
+    const plan = stackPlanOf(shipped.calls);
+    const subjects = plan.prs.map((p) => p.message.split("\n")[0] ?? "");
+    const openTitles = find(shipped.calls, "open:prs").prompt.split("\n").flatMap((l) => (l.match(/title='([^']*)'/) ? [l.match(/title='([^']*)'/)?.[1] ?? ""] : []));
+    const rollupTitles = quotedAfter(find(shipped.calls, "rollup:pr").prompt, "--title");
+    const all = [...subjects, ...plan.prs.map((p) => p.title), ...openTitles, ...rollupTitles];
+    expect(all.length).toBeGreaterThanOrEqual(7);
+    expect((await verdictOf(all)).filter(([, valid]) => !valid)).toEqual([]);
+  });
+
+  it("keeps a conforming plan title as written, and a roll-up of fixes is typed fix, not feat (the version script reads the type)", async () => {
+    const fixPlan = { ...PLAN, prs: [{ ...PR1, title: "fix(db): add the widget guard" }, { ...PR2, title: "fix(ui): show the widget error" }] };
+    const stopped = await dryRun("ship-feature", { args: ARGS, answers: happy([["intake:record", fixPlan]]) });
+    const run = await dryRun("ship-feature", { args: approve(), answers: happy([["intake:record", fixPlan]]), resumeFrom: stopped });
+    const plan = stackPlanOf(run.calls);
+    expect(plan.prs.map((p) => p.message.split("\n")[0])).toEqual(["fix(db): add the widget guard", "fix(ui): show the widget error"]);
+    expect(quotedAfter(find(run.calls, "rollup:pr").prompt, "--title")).toEqual(["fix: Demo widget"]);
+  });
+
+  it("types the roll-up feat when any stacked PR is a feat: a feature with one new screen is a minor bump", async () => {
+    const mixed = { ...PLAN, prs: [{ ...PR1, title: "fix(db): add the widget guard" }, { ...PR2, title: "feat(ui): add the widget screen" }] };
+    const stopped = await dryRun("ship-feature", { args: ARGS, answers: happy([["intake:record", mixed]]) });
+    const run = await dryRun("ship-feature", { args: approve(), answers: happy([["intake:record", mixed]]), resumeFrom: stopped });
+    expect(quotedAfter(find(run.calls, "rollup:pr").prompt, "--title")).toEqual(["feat: Demo widget"]);
+  });
+
+  const shipWith = async (plan: typeof PLAN, over: AnswerRule[] = []) => {
+    const answers = happy([["intake:record", plan], ...over]);
+    const stopped = await dryRun("ship-feature", { args: ARGS, answers });
+    return dryRun("ship-feature", { args: approve(), answers, resumeFrom: stopped });
+  };
+
+  it("gives a roll-up with a breaking stacked PR a feat! title that lints clean: a lost ! would ship a breaking stack as a minor", async () => {
+    const breaking = { ...PLAN, prs: [{ ...PR1, title: "feat(db)!: drop the old widget column" }, { ...PR2, title: "fix(ui): show the widget error" }] };
+    const run = await shipWith(breaking);
+    const [title] = quotedAfter(find(run.calls, "rollup:pr").prompt, "--title");
+    expect(title).toBe("feat!: Demo widget");
+    expect((await lintTitle(title ?? "")).problems).toEqual([]);
+    const fixOnly = { ...PLAN, prs: [{ ...PR1, title: "fix(db)!: drop the old column" }, { ...PR2, title: "fix(ui): show the error" }] };
+    expect(quotedAfter(find((await shipWith(fixOnly)).calls, "rollup:pr").prompt, "--title")).toEqual(["fix!: Demo widget"]);
+  });
+
+  it("does not double-prefix a plan title that is already conventional", async () => {
+    const run = await shipWith({ ...PLAN, title: "feat(db): Demo widget" });
+    expect(quotedAfter(find(run.calls, "rollup:pr").prompt, "--title")).toEqual(["feat: Demo widget"]);
+  });
+
+  it("names the same roll-up title in the retry hint as in the command, when the merge step stops half way", async () => {
+    const run = await shipWith(PLAN, [["rollup:pr", { ok: false, failed_command: "gh pr merge 102", merged: [101] }]]);
+    const [title] = quotedAfter(find(run.calls, "rollup:pr").prompt, "--title");
+    expect(title).toBe("feat: Demo widget");
+    expect(JSON.stringify(run.result)).toContain(`--title '${title}'`);
+  });
+
+  const chars = (n: number) => "word ".repeat(Math.ceil(n / 5)).slice(0, n).trimEnd();
+  const MAX = 100;
+
+  it("keeps a roll-up of a 95-character plain plan title within 100 characters and lint clean: 'feat: ' plus 95 is 101 and the roll-up PR would fail its title check", async () => {
+    const run = await shipWith({ ...PLAN, title: chars(95) });
+    const [title] = quotedAfter(find(run.calls, "rollup:pr").prompt, "--title");
+    expect((title ?? "").length).toBeLessThanOrEqual(MAX);
+    expect(title).toMatch(/^feat: word/);
+    expect((await lintTitle(title ?? "")).problems).toEqual([]);
+  });
+
+  it("keeps a 100-character conventional stacked title as written", async () => {
+    const exact = `fix(ui): ${chars(MAX - 9)}`;
+    expect(exact).toHaveLength(MAX);
+    const run = await shipWith({ ...PLAN, prs: [{ ...PR1, title: exact }, { ...PR2, title: "fix(ui): show the error" }] });
+    expect(stackPlanOf(run.calls).prs[0]?.message.split("\n")[0]).toBe(exact);
+  });
+
+  it("cuts a long stacked title in the subject only and leaves it lint clean, with the breaking mark kept", async () => {
+    const long = `feat(db)!: ${chars(150)}`;
+    const run = await shipWith({ ...PLAN, prs: [{ ...PR1, title: long }, { ...PR2, title: "fix(ui): show the error" }] });
+    const subject = stackPlanOf(run.calls).prs[0]?.message.split("\n")[0] ?? "";
+    expect(subject.length).toBeLessThanOrEqual(MAX);
+    expect(subject).toMatch(/^feat\(db\)!: word/);
+    expect(subject).not.toMatch(/[\s.]$/);
+    expect((await lintTitle(subject)).problems).toEqual([]);
+    const [rollup] = quotedAfter(find(run.calls, "rollup:pr").prompt, "--title");
+    expect(rollup).toMatch(/^feat!: /);
+    expect((await lintTitle(rollup ?? "")).problems).toEqual([]);
   });
 });
