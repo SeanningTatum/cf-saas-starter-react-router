@@ -1256,7 +1256,12 @@ for (let round = 1; round <= maxRounds; round++) {
     if (!pinned(k)) {
       log(`Plan round ${round}: the ux re-plan moved the recommendation off the approved direction ${chosen} — one revise`);
       const again = await runProducer(k, reviseNote(rec[k], [pin]));
-      if (again) rec[k] = again;
+      if (again) {
+        // The correction replaces a checked output, so it goes through the same gate.
+        const g2 = await gate(`${k}:plan-round-${round}:pin`, PRODUCERS[k].agentType, again, (fixes) => runProducer(k, reviseNote(again, [...fixes, pin])));
+        if (g2.stop) return { stopped: "Plan", reason: g2.stop };
+        rec[k] = g2.out;
+      }
       if (!pinned(k)) {
         log(`Stopped at Plan: the ux re-plan will not keep the approved direction ${chosen}`);
         return { stopped: "Plan", reason: `the ux re-plan after approval recommends another direction than the approved ${chosen}; nothing published` };

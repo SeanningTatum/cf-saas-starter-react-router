@@ -39,6 +39,8 @@ type Fakes = {
   hasUi?: boolean;
   /** The fake ux re-plan keeps the direction a pin names; without one (or when false) it drifts to "b". */
   uxKeepsPin?: boolean;
+  /** The first ux re-plan drifts to "b" even with a pin; later ones keep the pin. */
+  uxDriftsOnce?: boolean;
   /** These judge labels fail on their first call. */
   failOnce?: string[];
 };
@@ -60,6 +62,7 @@ function run(plans: Record<string, unknown>, fakes: Fakes = {}) {
   let record = "";
   let published: string | null = null;
   const failed = new Set<string>();
+  let uxRevisions = 0;
   const reply = (label: string, prompt: string): unknown => {
     if (label === "preflight")
       return {
@@ -89,7 +92,9 @@ function run(plans: Record<string, unknown>, fakes: Fakes = {}) {
     if (label === "ux") return ux("a");
     if (label === "ux:revise") {
       const pin = /Keep (\w) the ONLY recommended direction/.exec(prompt);
-      return ux(fakes.uxKeepsPin && pin ? pin[1] : "b");
+      uxRevisions++;
+      const keeps = fakes.uxKeepsPin || (fakes.uxDriftsOnce && uxRevisions > 1);
+      return ux(keeps && pin ? pin[1] : "b");
     }
     if (label.startsWith("memory:")) return "recorded";
     if (label === "writeback:body") return { title: "T", body_file: "/repo/.verify/x/issue-body.md", comment_file: "/repo/.verify/x/change-comment.md" };
@@ -177,6 +182,18 @@ describe("plan-feature plan loop", () => {
     expect(calls.find((c) => c.label === "ux:revise")?.prompt).toContain("The human approved direction a. Keep a the ONLY recommended direction");
     // Not redrawn after an approval: the three prototypes are drawn once, at Design.
     expect(labels(calls).filter((x) => /^proto:\w:direction$/.test(x))).toHaveLength(3);
+  });
+
+  it("a ux re-plan that drifts once is corrected, and the correction passes its own gate before publishing", async () => {
+    const { result, calls, published } = await run({ "1": { approved: true, pick: "a", changes: [{ target: "ux", text: NOTE }] } }, { hasUi: true, uxDriftsOnce: true });
+
+    expect(result.record_comment_url).toBeTruthy();
+    expect(published).toContain("Chosen: a");
+    const l = labels(calls);
+    expect(l.filter((x) => x === "ux:revise").length).toBeGreaterThanOrEqual(2);
+    // The corrected ux is judged before the stack re-plan reads it.
+    expect(l).toContain("judge:ux:plan-round-1:pin");
+    expect(l.indexOf("judge:ux:plan-round-1:pin")).toBeLessThan(l.indexOf("judge:stack:plan-round-1"));
   });
 
   it("a ux re-plan that will not keep the approved direction stops the run instead of publishing a mismatched record", async () => {
