@@ -76,5 +76,10 @@ tmp/
 # lavish review pages written outside .verify/
 /.lavish/
 
+# generated pages under plans/. Feature prototypes stay tracked: PR 1 of a feature carries
+# plans/<slug>-proto-<id>.html (.claude/agents/stack-planner.md)
+/plans/*.html
+!/plans/*-proto-*.html
+
 # impeccable hook cache (config.json is committed)
 .impeccable/hook.cache.json
