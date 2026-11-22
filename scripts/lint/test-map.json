@@ -25,12 +25,6 @@
       "reason": "Tagged error classes hold no logic. The test maps each one to its tRPC error, and the tagged-error-mapped rule fails a class with no mapping."
     },
     {
-      "match": "app/db/schema.ts",
-      "kind": "covered-by",
-      "test": "app/repositories/__tests__/user.test.ts",
-      "reason": "Table definitions with no logic; the repository tests query through them."
-    },
-    {
       "match": "app/entry.client.tsx",
       "kind": "covered-by",
       "test": "e2e/auth.spec.ts",
@@ -55,6 +49,7 @@
       "reason": "The route table. Every page.goto in e2e resolves through it."
     },
     { "match": "app/auth/**", "kind": "unit" },
+    { "match": "app/db/**", "kind": "unit" },
     { "match": "app/hooks/**", "kind": "unit" },
     { "match": "app/i18n/**", "kind": "unit" },
     { "match": "app/lib/**", "kind": "unit" },

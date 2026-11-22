@@ -1,7 +1,7 @@
 export const LINT_ROOTS = ["app", "workers"] as const;
 export const SKIPPED_DIRS = ["node_modules", ".react-router", "build"] as const;
 export const SOURCE_FILE = /\.tsx?$/;
-export const TEST_PATH = /__tests__|\.test\.tsx?$|\.test-layer\.ts$/;
+export const TEST_PATH = /(^|\/)__tests__\/|\.test\.tsx?$|\.test-layer\.ts$/;
 
 export const VENDORED_UI = "app/components/ui/";
 export const ERRORS_DIR = "app/models/errors";
@@ -14,6 +14,7 @@ export const TEST_MAP_KINDS = ["unit", "machine", "procedure", "route", "compone
 export const APP_ALIAS = "@/";
 export const APP_DIR = "app/";
 export const ROUTES_FILE = "app/routes.ts";
+export const ROUTER_FILE = "app/trpc/router.ts";
 export const LEVELS_FILE = "app/trpc/__tests__/router.test.ts";
 export const LEVELS_NAME = "LEVELS";
 export const E2E_DIR = "e2e";

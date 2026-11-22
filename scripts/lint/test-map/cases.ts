@@ -1,4 +1,4 @@
-import { LEVELS_FILE, ROUTES_FILE, TEST_MAP_PATH } from "../constants";
+import { LEVELS_FILE, ROUTER_FILE, ROUTES_FILE, TEST_MAP_PATH } from "../constants";
 import type { Case } from "../types";
 
 type Files = Record<string, string>;
@@ -29,8 +29,15 @@ const ROUTER =
 const LEVELS = 'const LEVELS: Record<string, string> = { "notes.list": "admin" };\nexport { LEVELS };\n';
 const PROCEDURE_TEST =
   'import { expect, it } from "vitest";\nimport { appRouter } from "@/trpc/router";\nit("lists", async () => { expect(await caller(appRouter).notes.list()).toEqual([]); });\n';
+const APP_ROUTER =
+  'import { createTRPCRouter } from ".";\nimport { notesRouter } from "./routes/notes";\nexport const appRouter = createTRPCRouter({ notes: notesRouter });\n';
 const procedure = (levels: string, extra: Files): Files =>
-  mapped(PROCEDURE, { "app/trpc/routes/notes.ts": ROUTER, [LEVELS_FILE]: levels, ...extra });
+  mapped([...PROCEDURE, { match: "app/trpc/**", kind: "covered-by", test: LEVELS_FILE, reason: "The router; the levels test walks it." }], {
+    "app/trpc/routes/notes.ts": ROUTER,
+    [ROUTER_FILE]: APP_ROUTER,
+    [LEVELS_FILE]: `${levels}expect(LEVELS).toBeDefined();\n`,
+    ...extra,
+  });
 
 const TABLE_SPEC = "e2e/table.spec.ts";
 const ROUTE = [
@@ -124,6 +131,34 @@ export const testMapCases: Case[] = [
     expect: "clean",
   },
   {
+    name: "unit: expect.extend alone is not an assertion",
+    files: unit('import { expect, it } from "vitest";\nimport { helper } from "../helper";\nexpect.extend({});\nit("adds", () => { void helper(1); });\n'),
+    expect: "finding",
+  },
+  {
+    name: "unit: a file whose name only contains __tests__ is not skipped as a test",
+    files: mapped(UNIT, { "app/lib/not__tests__really.ts": HELPER }),
+    expect: "finding",
+  },
+  {
+    name: "unit: a source file that imports from a test folder is caught, so shipped code cannot live where no rule looks",
+    files: mapped(UNIT, {
+      "app/lib/helper.ts": 'import { secret } from "./__tests__/support";\nexport const helper = () => secret;\n',
+      "app/lib/__tests__/support.ts": "export const secret = 1;\n",
+      "app/lib/__tests__/helper.test.ts": REAL_TEST,
+    }),
+    expect: "finding",
+  },
+  {
+    name: "unit: a type-only import from test support is fine",
+    files: mapped(UNIT, {
+      "app/lib/helper.ts": 'import type { Shape } from "./__tests__/support";\nexport function helper(a: number): Shape | number { return a + 1; }\n',
+      "app/lib/__tests__/support.ts": "export type Shape = number;\n",
+      "app/lib/__tests__/helper.test.ts": REAL_TEST,
+    }),
+    expect: "clean",
+  },
+  {
     name: "unit: an index file is imported through its folder",
     files: mapped([{ match: "app/trpc/**", kind: "unit" }], {
       "app/trpc/index.ts": HELPER,
@@ -139,6 +174,11 @@ export const testMapCases: Case[] = [
   { name: "machine: a unit test and a paths spec that imports its model are clean", files: machine({ "e2e/door.paths.spec.ts": PATHS_SPEC }), expect: "clean" },
   { name: "machine: a unit test alone is not enough", files: machine({}), expect: "finding" },
   {
+    name: "machine: a paths spec that asserts nothing does not count",
+    files: machine({ "e2e/door.paths.spec.ts": PATHS_SPEC.replace("expect(doorPaths).toBeDefined();", "void doorPaths;") }),
+    expect: "finding",
+  },
+  {
     name: "machine: a paths spec that imports neither the machine nor its model does not count",
     files: machine({ "e2e/door.paths.spec.ts": PATHS_SPEC.replace("@/components/door.model", "@/components/window.model") }),
     expect: "finding",
@@ -153,18 +193,44 @@ export const testMapCases: Case[] = [
   { name: "procedure: a procedure with no LEVELS entry is caught", files: procedure(LEVELS.replace("notes.list", "notes.other"), { "app/trpc/routes/__tests__/notes.test.ts": PROCEDURE_TEST }), expect: "finding" },
   { name: "procedure: a router with no procedure test is caught", files: procedure(LEVELS, {}), expect: "finding" },
   {
+    name: "procedure: a LEVELS entry under another router's name does not count",
+    files: procedure(LEVELS.replace("notes.list", "tags.list"), { "app/trpc/routes/__tests__/notes.test.ts": PROCEDURE_TEST }),
+    expect: "finding",
+  },
+  {
+    name: "procedure: a test that names the procedure in a string and never calls it does not count",
+    files: procedure(LEVELS, {
+      "app/trpc/routes/__tests__/notes.test.ts": PROCEDURE_TEST.replace("await caller(appRouter).notes.list()", '"notes.list"').replace("toEqual([])", 'toBe("notes.list")'),
+    }),
+    expect: "finding",
+  },
+  {
+    name: "procedure: a test that never imports the router does not count",
+    files: procedure(LEVELS, { "app/trpc/routes/__tests__/notes.test.ts": PROCEDURE_TEST.replace("@/trpc/router", "@/somewhere/else") }),
+    expect: "finding",
+  },
+  {
     name: "procedure: a test that names none of the file's procedures does not count",
     files: procedure(LEVELS, { "app/trpc/routes/__tests__/notes.test.ts": PROCEDURE_TEST.replace("notes.list()", "tags.all()") }),
     expect: "finding",
   },
   {
-    name: "procedure: a procedure exported on its own and merged elsewhere is checked too",
+    name: "procedure: a procedure exported on its own and merged elsewhere needs its LEVELS entry too",
     files: mapped(PROCEDURE, {
       "app/trpc/routes/health.ts": 'import { adminProcedure } from "..";\nexport const dbHealth = adminProcedure.query(() => 1);\n',
       [LEVELS_FILE]: LEVELS,
       "app/trpc/routes/__tests__/health.test.ts": PROCEDURE_TEST.replace("notes.list()", "admin.dbHealth()"),
     }),
     expect: "finding",
+  },
+  {
+    name: "procedure: a procedure exported on its own, listed in LEVELS and called in its test, is clean",
+    files: mapped(PROCEDURE, {
+      "app/trpc/routes/health.ts": 'import { adminProcedure } from "..";\nexport const dbHealth = adminProcedure.query(() => 1);\n',
+      [LEVELS_FILE]: LEVELS.replace("notes.list", "admin.dbHealth"),
+      "app/trpc/routes/__tests__/health.test.ts": PROCEDURE_TEST.replace("notes.list()", "admin.dbHealth()"),
+    }),
+    expect: "clean",
   },
 
   { name: "route: a spec with both tags that visits the path is clean", files: route({ "e2e/users.spec.ts": smokeSpec('"/admin/users"', ["@golden", "@error"]) }), expect: "clean" },
@@ -194,5 +260,14 @@ export const testMapCases: Case[] = [
 
   { name: "covered-by: a named test that exists and asserts is clean", files: coveredBy({ "e2e/home.spec.ts": smokeSpec('"/"', ["@golden"]) }), expect: "clean" },
   { name: "covered-by: a named test that does not exist is caught", files: coveredBy({}), expect: "finding" },
+  {
+    name: "covered-by: a named file that is not a test does not count",
+    files: mapped([{ match: "app/entry.client.tsx", kind: "covered-by", test: "app/lib/helper.ts", reason: "Anything with an expect call." }, ...UNIT], {
+      "app/entry.client.tsx": "hydrate();\n",
+      "app/lib/helper.ts": "export const helper = () => expect(1);\n",
+      "app/lib/__tests__/helper.test.ts": REAL_TEST,
+    }),
+    expect: "finding",
+  },
   { name: "covered-by: a named test that asserts nothing is caught", files: coveredBy({ "e2e/home.spec.ts": 'import { test } from "@playwright/test";\ntest("x", async () => {});\n' }), expect: "finding" },
 ];

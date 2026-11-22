@@ -3,7 +3,8 @@ import { ROUTES_FILE, TEST_MAP_PATH } from "../../constants";
 import { memoryRepo } from "../../repo";
 import { sourceOf } from "../../__tests__/fixtures";
 import type { MapEntry } from "../map";
-import { firstRuntimeStatement, proofProblems } from "../proofs";
+import { proofProblems, rule } from "../../rules/test-map";
+import { firstRuntimeStatement } from "../proofs";
 
 const UNIT: MapEntry = { match: "app/lib/**", kind: "unit" };
 
@@ -71,9 +72,26 @@ describe("proofProblems unit", () => {
       "app/lib/__tests__/helper.test.tsx": TSX_TEST.replace("../helper", "../other"),
     });
 
-    expect(proofProblems(repo, "app/lib/helper.ts", UNIT).map((problem) => problem.message)).toEqual([
-      "its test app/lib/__tests__/helper.test.tsx never imports it",
+    expect(proofProblems(repo, "app/lib/helper.ts", UNIT)).toMatchObject([
+      { file: "app/lib/__tests__/helper.test.tsx", message: "this test never imports app/lib/helper.ts, the file it is named after" },
     ]);
+  });
+});
+
+describe("the rule in file mode", () => {
+  const map = JSON.stringify({ entries: [UNIT] });
+  const weakTest = 'import { it } from "vitest";\nimport { helper } from "../helper";\nit("runs", () => { void helper; });\n';
+  const repo = () => memoryRepo({ [TEST_MAP_PATH]: map, "app/lib/helper.ts": HELPER, "app/lib/__tests__/helper.test.ts": weakTest });
+
+  it("reports a weak test on the test file when only the test is named, so editing a test to assert nothing fails the edit hook", () => {
+    const hits = rule.check(repo(), new Set(["app/lib/__tests__/helper.test.ts"]));
+
+    expect(hits).toMatchObject([{ file: "app/lib/__tests__/helper.test.ts", line: 1 }]);
+    expect(hits[0]?.message).toContain("no `expect()` or `assert()` call");
+  });
+
+  it("checks nothing when the named files are neither a source file nor its test", () => {
+    expect(rule.check(repo(), new Set(["app/lib/other.ts"]))).toEqual([]);
   });
 });
 
@@ -93,7 +111,8 @@ describe("proofProblems component", () => {
 
     expect(problem?.message).toBe("no file under app/routes/sandbox/ renders it");
     expect(problem?.fix).toContain('{ "match": "app/components/new-card.tsx", "kind": "covered-by", "test": "e2e/<spec>.spec.ts", "reason": "…" }');
-    expect(problem?.fix).toContain(`above the broader glob in ${TEST_MAP_PATH}`);
+    expect(problem?.fix).toContain(`named in ${TEST_MAP_PATH}`);
+    expect(problem?.fix).toContain("Write the spec first");
   });
 });
 
@@ -106,7 +125,7 @@ describe("proofProblems route", () => {
 
     const [problem] = proofProblems(repo, "app/routes/home.tsx", { match: "app/routes/**", kind: "route" });
 
-    expect(problem?.message).toBe("no e2e spec with an @golden and an @error test visits / or /:lng");
+    expect(problem?.message).toBe("no e2e spec that holds an @golden and an @error test visits / or /:lng");
     expect(problem?.fix).toContain('`page.goto("/")`');
   });
 });

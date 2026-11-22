@@ -10,7 +10,7 @@ const TRAILING_SLASH = /\/$/;
 
 export const withoutExtension = (path: string): string => path.replace(CODE_EXTENSION, "");
 
-function resolveSpecifier(specifier: string, from: string): string | undefined {
+export function resolveSpecifier(specifier: string, from: string): string | undefined {
   if (specifier.startsWith(APP_ALIAS)) return withoutExtension(`${APP_DIR}${specifier.slice(APP_ALIAS.length)}`);
   if (!specifier.startsWith(".")) return undefined;
   return withoutExtension(posix.normalize(posix.join(posix.dirname(from), specifier)).replace(TRAILING_SLASH, ""));

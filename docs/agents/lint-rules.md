@@ -36,7 +36,7 @@ This table is generated from `scripts/lint/rules/`. Do not edit it by hand; run 
 | `no-try-catch` | 1 | A `try` statement outside an `Effect.try` or `Effect.tryPromise` callback. | `app/` and `workers/`, except tests and the ShadCN primitives in `app/components/ui/`. | wrap the call that can fail in `Effect.tryPromise({ try: () => call(), catch: (cause) => new SomeError({ cause }) })` and handle the failure with `Effect.catchTag` | `app/repositories/bucket.ts` |
 | `no-zod` | 2 | Any load of `zod` or a `zod/…` subpath: an `import`, a `require()` or a dynamic `import()`. | `app/` and `workers/`, except tests. | write the schema with Effect Schema: `import { Schema } from "effect"`, then `Schema.Struct({ … })` and `Schema.decodeUnknown(…)` | `app/lib/schemas/user.ts` |
 | `tagged-error-mapped` | 3 | A `Data.TaggedError` class in `app/models/errors/` whose runtime tag has no `case` or `_tag ===` branch inside the mapper in `app/lib/effect-trpc.ts`. | `app/models/errors/` against `app/lib/effect-trpc.ts`. | add the tag to `APP_ERROR_TAGS` and a `case "<Tag>":` that returns a `TRPCError` to the switch in `appErrorToTRPC` in app/lib/effect-trpc.ts | `app/lib/effect-trpc.ts` |
-| `test-map` | 4 | A source file that matches no entry in `scripts/lint/test-map.json`, or whose kind's proof is missing: `unit` a `__tests__/<name>.test.ts` that imports it and asserts; `machine` that and an `e2e/<name>.paths.spec.ts`; `procedure` a `LEVELS` entry and a procedure test; `route` an e2e spec with a `@golden` and an `@error` test that visits its path; `component` and `primitive` a sandbox entry; `declaration` no code that runs; `covered-by` a named test that exists and asserts. | Every `.ts` and `.tsx` file under `app/`, `workers/`, `scripts/`, except tests and their helpers. | give the file the proof its kind names; `scripts/lint/test-map.json` says which kind each folder is |  |
+| `test-map` | 4 | A source file that matches no entry in `scripts/lint/test-map.json`, or whose kind's proof is missing: `unit` a `__tests__/<name>.test.ts` that imports it and asserts; `machine` that and an `e2e/<name>.paths.spec.ts`; `procedure` a `LEVELS` entry and a test that calls it through the router; `route` an e2e spec that holds a `@golden` and an `@error` test and visits its path; `component` and `primitive` a sandbox entry; `declaration` no code that runs; `covered-by` a named test that exists and asserts. Also a source file that imports test support. | Every `.ts` and `.tsx` file under `app/`, `workers/`, `scripts/`, except tests and their helpers. | give the file the proof its kind names; `scripts/lint/test-map.json` says which kind each folder is |  |
 
 Checks on the baseline file itself:
 
@@ -92,14 +92,16 @@ export const rule: FileRule = {
 | Kind | The proof the rule looks for |
 |------|------------------------------|
 | `unit` | `__tests__/<name>.test.ts` (or `.test.tsx`) beside the file, which imports the file with a real import and asserts. A file with no code of its own (types, re-exports) needs none. |
-| `machine` | The unit test, and `e2e/<name>.paths.spec.ts` that imports the machine or its `.model`. |
-| `procedure` | Each procedure has an entry in `LEVELS` in `app/trpc/__tests__/router.test.ts`, and `__tests__/<name>.test.ts` beside the router names at least one of them. |
-| `route` | The file is in `app/routes.ts`, and an e2e spec that holds a `@golden` and an `@error` test calls `page.goto` on its path. A layout takes the path it wraps. |
-| `component`, `primitive` | A file under `app/routes/sandbox/` imports it. The sandbox arrives with #135; until then today's files are in the baseline, and a new one uses `covered-by` with the e2e spec that exercises it. |
+| `machine` | The unit test, and `e2e/<name>.paths.spec.ts` that imports the machine or its `.model` and asserts. |
+| `procedure` | Each procedure has its `<router>.<name>` entry in `LEVELS` in `app/trpc/__tests__/router.test.ts`, and `__tests__/<name>.test.ts` beside the router imports the app router, calls one of the procedures and asserts. |
+| `route` | The file is in `app/routes.ts`, and one e2e spec holds a `@golden` and an `@error` test, asserts, and calls `page.goto` on its path. The rule does not check which test in the spec makes the visit. A layout takes the path it wraps. |
+| `component`, `primitive` | A file under `app/routes/sandbox/` imports it. The sandbox arrives with #135; until then today's files are in the baseline, and a new one needs an e2e spec that exercises it, named by a `covered-by` entry. |
 | `declaration` | The file holds no code that runs. |
-| `covered-by` | The entry names a `test` file that exists and asserts, and gives a `reason`. For entry points and config. |
+| `covered-by` | The entry names a `test` (a unit test or an e2e spec in this repo) that exists and asserts, and gives a `reason`. For entry points and config. The rule cannot check that the test exercises the file: the reason is what a reviewer reads. |
 
-A file that matches no entry fails as unclassified, and the finding says where to add it: a new folder is a choice, not a gap. An entry that matches no file fails too, so the map holds no dead rows.
+A file that matches no entry fails as unclassified, and the finding says where to add it: a new folder is a choice, not a gap. An entry that matches no file fails too, so the map holds no dead rows. A source file that imports from a test path fails as well, since no rule reads code that lives there.
+
+A finding is cleared by writing the proof. A new map entry, a `covered-by` or a wider glob is a change to the rule for that file: make it only when the kind was wrong, and say why in the pull request. A weak or missing test is reported on the test file's own path, so naming only the test in `bun run lint:house <files>` still finds it.
 
 ## The baseline
 
