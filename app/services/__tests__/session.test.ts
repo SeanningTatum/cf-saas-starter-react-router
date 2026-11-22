@@ -1,8 +1,11 @@
 import { describe, expect } from "vitest";
 import { it } from "@effect/vitest";
-import { Effect, Exit, Cause, Layer, TestClock } from "effect";
-import { Session, SessionLive } from "../session";
+import { Effect, Exit, Cause, Layer, Option, TestClock } from "effect";
+import { Session, SessionLive, getSession } from "../session";
 import { AuthApi } from "../auth";
+import { makeOtlpTracer, makeSpanBuffer } from "../tracing";
+import { isErrorSpan } from "../tracing-otlp";
+import { AUTH_GET_SESSION_SPAN } from "@/lib/constants/spans";
 import { ExternalServiceError } from "@/models/errors/repository";
 
 type Api = { getSession: (opts: { headers: Headers }) => Promise<unknown> };
@@ -79,6 +82,17 @@ describe("SessionLive", () => {
     })
   );
 
+  it.effect("records its lookup as an auth.get_session span, so the layer cannot bypass the traced lookup", () => {
+    const buffer = makeSpanBuffer();
+    return Session.pipe(
+      Effect.provide(provide({ getSession: async () => null })),
+      Effect.withTracer(makeOtlpTracer(buffer)),
+      Effect.map(() => {
+        expect(buffer.spans.map((span) => span.name)).toEqual([AUTH_GET_SESSION_SPAN]);
+      })
+    );
+  });
+
   describe("with a banned user", () => {
     const NOW = new Date("2030-06-15T12:00:00Z");
     const sessionFor = (ban: { banned: boolean; banExpires?: Date }) => ({
@@ -126,6 +140,62 @@ describe("SessionLive", () => {
         );
         expect(session?.id).toBe("s1");
         expect(user?.id).toBe("u1");
+      })
+    );
+  });
+});
+
+describe("getSession", () => {
+  it.effect("records one auth.get_session client span that ends ok, so a slow session lookup shows in the trace", () => {
+    const buffer = makeSpanBuffer();
+    return getSession({ getSession: async () => null }, new Headers()).pipe(
+      Effect.withTracer(makeOtlpTracer(buffer)),
+      Effect.map(() => {
+        expect(buffer.spans).toHaveLength(1);
+        const [span] = buffer.spans;
+        expect(span?.name).toBe(AUTH_GET_SESSION_SPAN);
+        expect(span?.kind).toBe("client");
+        expect(span && isErrorSpan(span)).toBe(false);
+      })
+    );
+  });
+
+  it.effect("ends the span as failed and fails with ExternalServiceError when Better Auth throws, so an auth outage shows red and maps to 503", () => {
+    const buffer = makeSpanBuffer();
+    const failing = {
+      getSession: async (): Promise<null> => {
+        throw new Error("auth down");
+      },
+    };
+    return Effect.gen(function* () {
+      const exit = yield* Effect.exit(getSession(failing, new Headers()));
+
+      expect(Exit.isFailure(exit)).toBe(true);
+      if (Exit.isFailure(exit)) {
+        const failure = Cause.failureOption(exit.cause);
+        expect(Option.getOrUndefined(failure)).toBeInstanceOf(ExternalServiceError);
+      }
+      expect(buffer.spans.map((span) => [span.name, isErrorSpan(span)])).toEqual([
+        [AUTH_GET_SESSION_SPAN, true],
+      ]);
+    }).pipe(Effect.withTracer(makeOtlpTracer(buffer)));
+  });
+
+  it.effect("passes the request headers to Better Auth, so the lookup reads the caller's cookie", () => {
+    const headers = new Headers({ cookie: "sid=fake" });
+    const seen: Headers[] = [];
+    return getSession(
+      {
+        getSession: async (input: { headers: Headers }) => {
+          seen.push(input.headers);
+          return null;
+        },
+      },
+      headers
+    ).pipe(
+      Effect.map(() => {
+        expect(seen).toHaveLength(1);
+        expect(seen[0]).toBe(headers);
       })
     );
   });

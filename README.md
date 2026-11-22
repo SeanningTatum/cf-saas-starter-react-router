@@ -130,10 +130,10 @@ State lives in GitHub: the spec is an issue, each ticket is an issue, and a merg
 
 | Gate | Command | Runs in |
 |------|---------|--------|
-| typecheck | `bun run typecheck` | baseline, full |
-| test | `bun run test` | baseline, full |
-| non-negotiables-selftest | `bun run scripts/check-non-negotiables.ts --selftest` | baseline, full |
-| non-negotiables | `bun run scripts/check-non-negotiables.ts` | baseline, full |
+| typecheck | `bun run typecheck` | lean, baseline, full |
+| test | `bun run test` | lean, baseline, full |
+| non-negotiables-selftest | `bun run scripts/check-non-negotiables.ts --selftest` | lean, baseline, full |
+| non-negotiables | `bun run scripts/check-non-negotiables.ts` | lean, baseline, full |
 | migrations | `bun run scripts/migration-check.ts` | baseline, full |
 | harness | `./scripts/harness-check.sh` | baseline, full |
 | secrets | `bun run scripts/secret-scan.ts` | baseline, full |
@@ -141,7 +141,7 @@ State lives in GitHub: the spec is an issue, each ticket is an issue, and a merg
 | build | `bun run build` | full |
 | e2e | `bun run test:e2e` | full |
 
-`./scripts/verify.sh --baseline` runs the quick set; bare `./scripts/verify.sh` runs them all. CI runs the same script, so adding a gate is a one-line change there.
+`./scripts/verify.sh --baseline` runs the quick set; bare `./scripts/verify.sh` runs them all. CI runs the same script, so to add a gate, add an object with its `tier` to `gates` in `harness.config.json` ([gates](docs/agents/harness.md#gates)). A stacked PR (one whose base is not the default branch or `production`) gets only the lean tier in CI, and `./scripts/verify.sh --changed [base]` runs just what its diff needs locally; see [which checks run where](docs/ci/pipelines.md#which-checks-run-where).
 
 ### Slash commands
 

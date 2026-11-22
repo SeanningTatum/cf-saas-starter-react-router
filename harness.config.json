@@ -4,26 +4,21 @@
   "coauthor": "Co-Authored-By: Claude Fable 5.2 <noreply@anthropic.com>",
   "scratchDirs": [".verify/", "tmp/"],
   "gates": [
-    {"name": "typecheck", "run": "bun run typecheck", "baseline": true, "limitSeconds": 600},
-    {"name": "test", "run": "bun run test", "baseline": true, "limitSeconds": 600},
+    {"name": "typecheck", "run": "bun run typecheck", "tier": "lean", "limitSeconds": 600},
+    {"name": "test", "run": "bun run test", "tier": "lean", "limitSeconds": 600},
     {
       "name": "non-negotiables-selftest",
       "run": "bun run scripts/check-non-negotiables.ts --selftest",
-      "baseline": true,
+      "tier": "lean",
       "limitSeconds": 300
     },
-    {
-      "name": "non-negotiables",
-      "run": "bun run scripts/check-non-negotiables.ts",
-      "baseline": true,
-      "limitSeconds": 300
-    },
-    {"name": "migrations", "run": "bun run scripts/migration-check.ts", "baseline": true, "limitSeconds": 120},
-    {"name": "harness", "run": "./scripts/harness-check.sh", "baseline": true, "limitSeconds": 300},
-    {"name": "secrets", "run": "bun run scripts/secret-scan.ts", "baseline": true, "limitSeconds": 120},
-    {"name": "audit", "run": "bun run scripts/package-audit.ts", "baseline": true, "limitSeconds": 120},
-    {"name": "build", "run": "bun run build", "baseline": false, "limitSeconds": 900},
-    {"name": "e2e", "run": "CI=1 bun run test:e2e", "baseline": false, "limitSeconds": 900}
+    {"name": "non-negotiables", "run": "bun run scripts/check-non-negotiables.ts", "tier": "lean", "limitSeconds": 300},
+    {"name": "migrations", "run": "bun run scripts/migration-check.ts", "tier": "baseline", "limitSeconds": 120},
+    {"name": "harness", "run": "./scripts/harness-check.sh", "tier": "baseline", "limitSeconds": 300},
+    {"name": "secrets", "run": "bun run scripts/secret-scan.ts", "tier": "baseline", "limitSeconds": 120},
+    {"name": "audit", "run": "bun run scripts/package-audit.ts", "tier": "baseline", "limitSeconds": 120},
+    {"name": "build", "run": "bun run build", "tier": "full", "limitSeconds": 900},
+    {"name": "e2e", "run": "CI=1 bun run test:e2e", "tier": "full", "limitSeconds": 900}
   ],
   "tracker": {"readyLabel": "ready-for-agent"},
   "reviewBot": {"login": "greptile-apps", "summaryMarker": "<!-- greptile_summary -->", "trigger": "@greptileai review"},

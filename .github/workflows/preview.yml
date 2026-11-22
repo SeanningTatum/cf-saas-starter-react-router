@@ -3,6 +3,8 @@
 # the steps that call Cloudflare see it. `readiness` holds no secret value.
 # Each preview gets its own D1 database and a seeded password derived from PREVIEW_SEED_SECRET.
 # Setup and token scopes: see docs/ci/pipelines.md
+# Only a PR into the default branch or production deploys; a stacked PR (any other base) skips,
+# and its roll-up gets the one preview of the whole feature.
 name: Preview Deploy
 
 on:
@@ -19,6 +21,7 @@ permissions:
 jobs:
   readiness:
     name: Check preview setup
+    if: github.base_ref == github.event.repository.default_branch || github.base_ref == 'production'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:

@@ -14,8 +14,7 @@ export const USAGE_TEXT = "usage: bun scripts/harness-config.ts show | get <dott
 
 export const KEY_SEPARATOR = ".";
 export const GATE_FIELD_SEPARATOR = "|";
-export const GATE_BASELINE_YES = "y";
-export const GATE_BASELINE_NO = "n";
+export const GATE_TIERS = ["lean", "baseline", "full"] as const;
 export const GATE_FORBIDDEN_CHARACTERS = /[|\n\r]/;
 export const NOT_FOUND_CODE = "ENOENT";
 export const SAFE_BRANCH_PATTERN = /^(?!.*\.\.)[A-Za-z0-9][A-Za-z0-9._/-]*$/;

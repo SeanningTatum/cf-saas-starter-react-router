@@ -40,7 +40,7 @@ const faultOf = (file: string): string => {
 const realText = readFileSync(join(HARNESS_ROOT, CONFIG_FILE_NAME), "utf8");
 const realConfig = loadedOrThrow(realText);
 
-const gate = { name: "g", run: "echo hi", baseline: true, limitSeconds: 5 };
+const gate = { name: "g", run: "echo hi", tier: "lean", limitSeconds: 5 };
 
 describe("loadHarnessConfig defaults", () => {
   it("a project with no file gets the defaults, not an error: a missing file must not stop a fresh project", () => {
@@ -123,6 +123,10 @@ describe("loadHarnessConfig faults", () => {
     expect(faultOf(JSON.stringify({ gates: [{ ...gate, limitSeconds: 1.5 }] }))).toMatch(/limitSeconds/);
   });
 
+  it("a gate tier other than lean, baseline or full is refused: verify.sh would run that gate in no tier but the full run", () => {
+    expect(faultOf(JSON.stringify({ gates: [{ ...gate, tier: "quick" }] }))).toMatch(/gates\.0\.tier/);
+  });
+
   it("a seeded login without a password is refused and names the login", () => {
     expect(faultOf(JSON.stringify({ seedLogins: { admin: { email: "a@b.c" } } }))).toMatch(/seedLogins\.admin\.password/);
   });
@@ -136,8 +140,8 @@ describe("the real harness.config.json", () => {
   it("holds the gates that verify.sh --list prints, in order: a gate added in one place only would run in neither", () => {
     const listed = spawnSync("./scripts/verify.sh", ["--list"], { cwd: HARNESS_ROOT, encoding: "utf8" });
     expect(listed.status).toBe(0);
-    const rows = listed.stdout.trim().split("\n").map((line) => /^(\S+)\s+(baseline|full)\s+(\d+)s\s+(.*)$/.exec(line));
-    const fromList = rows.map((row) => ({ name: row?.[1], baseline: row?.[2] === "baseline", limitSeconds: Number(row?.[3]), run: row?.[4] }));
+    const rows = listed.stdout.trim().split("\n").map((line) => /^(\S+)\s+(lean|baseline|full)\s+(\d+)s\s+(.*)$/.exec(line));
+    const fromList = rows.map((row) => ({ name: row?.[1], tier: row?.[2], limitSeconds: Number(row?.[3]), run: row?.[4] }));
     expect(fromList).toEqual(realConfig.gates);
   });
 
@@ -234,9 +238,9 @@ describe("harness-config CLI", () => {
     expect(run(["get", "constructor"], withReal).code).toBe(1);
   });
 
-  it("gates prints name|run|y or n|limit, one line per gate, as verify.sh reads them", () => {
-    const out = run(["gates"], depsWith(JSON.stringify({ gates: [gate, { ...gate, name: "h", baseline: false }] })));
-    expect(out.stdout).toEqual(["g|echo hi|y|5", "h|echo hi|n|5"]);
+  it("gates prints name|run|tier|limit, one line per gate, as verify.sh reads them", () => {
+    const out = run(["gates"], depsWith(JSON.stringify({ gates: [gate, { ...gate, name: "h", tier: "full" }] })));
+    expect(out.stdout).toEqual(["g|echo hi|lean|5", "h|echo hi|full|5"]);
   });
 
   it("gates with none set exits 1 with the line that says what to set", () => {

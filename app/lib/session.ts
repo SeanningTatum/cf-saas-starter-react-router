@@ -1,4 +1,5 @@
 import { redirect, type AppLoadContext } from "react-router";
+import { getSession } from "@/services/session";
 import { activeSession } from "@/auth/ban";
 import { hasAdminRole } from "@/auth/protected-user";
 
@@ -17,7 +18,9 @@ const readActiveSession = async (
   context: AppLoadContext
 ): Promise<Session | null> =>
   activeSession(
-    await context.auth.api.getSession({ headers: request.headers }),
+    await context.runtime.runPromise(
+      getSession(context.auth.api, request.headers)
+    ),
     new Date()
   );
 

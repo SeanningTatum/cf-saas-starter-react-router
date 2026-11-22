@@ -15,6 +15,7 @@ import {
   DEFAULT_REVIEW_BOT,
   DEFAULT_SCRATCH_DIRS,
   GATE_FORBIDDEN_CHARACTERS,
+  GATE_TIERS,
   KEY_SEPARATOR,
   LEADING_CURRENT_DIRECTORY,
   MESSAGE_PREFIX,
@@ -42,7 +43,7 @@ const GateField = Schema.String.pipe(
 const GateSchema = Schema.Struct({
   name: GateField,
   run: GateField,
-  baseline: Schema.Boolean,
+  tier: Schema.Literal(...GATE_TIERS),
   limitSeconds: Schema.Int.pipe(Schema.positive()),
 });
 

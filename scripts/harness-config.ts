@@ -3,8 +3,6 @@ import {
   EXIT_BAD_CONFIG,
   EXIT_OK,
   EXIT_USAGE,
-  GATE_BASELINE_NO,
-  GATE_BASELINE_YES,
   GATE_FIELD_SEPARATOR,
   KEY_SEPARATOR,
   MESSAGE_PREFIX,
@@ -72,9 +70,7 @@ function get(config: HarnessConfig, positional: string[]): Outcome {
 
 function gates(config: HarnessConfig): Outcome {
   if (config.gates.length === 0) return fail(`${MESSAGE_PREFIX} ${MISSING_GATES_LINE}`);
-  const lines = config.gates.map((gate) =>
-    [gate.name, gate.run, gate.baseline ? GATE_BASELINE_YES : GATE_BASELINE_NO, gate.limitSeconds].join(GATE_FIELD_SEPARATOR),
-  );
+  const lines = config.gates.map((gate) => [gate.name, gate.run, gate.tier, gate.limitSeconds].join(GATE_FIELD_SEPARATOR));
   return done(lines);
 }
 

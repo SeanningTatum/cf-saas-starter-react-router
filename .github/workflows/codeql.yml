@@ -6,7 +6,8 @@ name: CodeQL
 on:
   push:
     branches: [staging, production]
-  # Every PR, not only those into staging or production: a stacked PR targets the PR below it.
+  # Every PR, so the job below can choose: it scans a PR into the default branch or production,
+  # and skips a stacked PR (one whose base is any other branch). docs/ci/pipelines.md
   pull_request:
   schedule:
     # Mondays, so a new query pack reaches code that has not changed.
@@ -22,6 +23,7 @@ concurrency:
 jobs:
   analyze:
     name: CodeQL (${{ matrix.language }})
+    if: github.event_name != 'pull_request' || github.base_ref == github.event.repository.default_branch || github.base_ref == 'production'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:

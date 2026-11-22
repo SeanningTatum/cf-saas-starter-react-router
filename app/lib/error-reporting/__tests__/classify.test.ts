@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { Cause, FiberId } from "effect";
+import { Cause, Effect, FiberId } from "effect";
 import { TRPCError } from "@trpc/server";
 import { classifyError } from "../classify";
 import { QueryError } from "@/models/errors/repository";
@@ -55,6 +55,26 @@ describe("classifyError, tagged errors and causes", () => {
     expect(classifyError(Cause.fail(queryError()))).toMatchObject({
       kind: "expected",
       tag: "QueryError",
+    });
+  });
+
+  it("classifies the FiberFailure that runPromise rejects with by its cause, so a failed lookup in a loader keeps its tag and a die stays a defect", async () => {
+    const failed = await Effect.runPromise(Effect.fail(queryError())).catch(
+      (error: unknown) => error
+    );
+    const died = await Effect.runPromise(Effect.die(new Error("x"))).catch(
+      (error: unknown) => error
+    );
+
+    expect(classifyError(failed)).toMatchObject({
+      kind: "expected",
+      tag: "QueryError",
+      name: "QueryError",
+    });
+    expect(classifyError(died)).toMatchObject({
+      kind: "defect",
+      name: "Error",
+      message: "x",
     });
   });
 

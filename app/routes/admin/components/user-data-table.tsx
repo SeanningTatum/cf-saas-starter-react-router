@@ -26,6 +26,7 @@ import {
   type VisibilityState,
 } from "@tanstack/react-table";
 import { toast } from "sonner";
+import { reportHandledError } from "@/lib/error-reporting/browser";
 import { useSearchParams, useRevalidator } from "react-router";
 import { useTranslation } from "react-i18next";
 
@@ -95,7 +96,7 @@ async function runAdminAction<T extends { error?: unknown } | null | undefined>(
     toast.success(successMessage);
     onSuccess?.();
   } catch (error) {
-    console.error(errorMessage, error);
+    reportHandledError(error);
     toast.error(errorMessage);
   }
 }

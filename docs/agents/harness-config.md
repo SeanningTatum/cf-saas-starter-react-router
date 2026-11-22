@@ -35,13 +35,13 @@ A key with no default is empty. A consumer that needs it fails with a line that 
 
 ### `gates`
 
-One object per gate, in run order. `scripts/verify.sh` runs them; `bun scripts/harness-config.ts gates` prints one `name|run|y or n|limitSeconds` line each. `name` and `run` must not hold a `|` or a line break, because that line is how bash reads them.
+One object per gate, in run order. `scripts/verify.sh` runs them; `bun scripts/harness-config.ts gates` prints one `name|run|tier|limitSeconds` line each. `name` and `run` must not hold a `|` or a line break, because that line is how bash reads them.
 
 | Key | Type | Meaning |
 |---|---|---|
 | `name` | string | What `--only` takes |
 | `run` | string | The shell command |
-| `baseline` | boolean | In the quick `--baseline` set |
+| `tier` | `lean`, `baseline` or `full` | The smallest run the gate is in. `--lean` runs the `lean` gates, `--baseline` the `lean` and `baseline` ones, the bare run all three. `--changed` builds its own list and reads only the limit from here |
 | `limitSeconds` | positive integer | Time limit; the gate is killed past it |
 
 ### `tracker`

@@ -1,4 +1,4 @@
-import { Cause, Effect, Option } from "effect";
+import { Cause, Effect, Option, Runtime } from "effect";
 import {
   FIRST_SERVER_ERROR_STATUS,
   MAX_CAUSE_DEPTH,
@@ -125,6 +125,9 @@ const fromCause = (
 
 const classify = (error: unknown, depth: number): ClassifiedError => {
   if (Cause.isCause(error)) return fromCause(error, depth);
+  if (Runtime.isFiberFailure(error)) {
+    return fromCause(error[Runtime.FiberFailureCauseId], depth);
+  }
   if (!isObject(error)) return defect(error);
   if (isTrpcError(error)) return fromTrpcError(error, depth);
   if (isResponseLike(error)) return fromResponse(error);

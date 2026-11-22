@@ -25,9 +25,9 @@ SaaS starter on **Cloudflare Workers + React Router v7 + tRPC + D1/Drizzle + Bet
 2. **Plan** (when a decision is involved): `/grill-me` or `/grill-with-docs`, then `/to-spec`, then `/to-tickets`.
 3. **Work:** one ticket at a time (`gh issue edit <n> --add-assignee @me`), lanes in parallel (below).
 4. **Verify:** `feature-verifier` browser-walks any user-visible flow.
-5. **Done:** `./scripts/verify.sh` green, PASS verdict in the PR (user-visible work), PR has `Closes #<n>`, one `context-memory` record. A stacked feature merges on the [merge bar](docs/agents/harness.md#review-loop-and-merge-bar): local reviews with no open P0/P1, Greptile 5/5 on the roll-up's current head only (not per stacked PR).
+5. **Done:** `./scripts/verify.sh` green, PASS verdict in the PR (user-visible work), PR has `Closes #<n>`, one `context-memory` record. A stacked PR runs `./scripts/verify.sh --changed <branch below>` only; the full suite, a second review round and Greptile run once, on the roll-up's head ([merge bar](docs/agents/harness.md#review-loop-and-merge-bar): no open P0/P1, Greptile 5/5).
 
-Trivial edits (typo, one line) skip the bookends, but never skip `./scripts/verify.sh` on user-visible work. `./scripts/verify.sh` runs every gate, `--baseline` the quick set; the list is in `scripts/verify.sh`. **Scope creep:** a diff that touches more than two tickets stops and splits; a cross-feature refactor is its own ticket.
+Trivial edits (typo, one line) skip the bookends, but never skip `./scripts/verify.sh` on user-visible work. `./scripts/verify.sh` runs every gate, `--baseline` the quick set, `--changed` what a stacked diff needs; the list is in `scripts/verify.sh`. **Scope creep:** a diff that touches more than two tickets stops and splits; a cross-feature refactor is its own ticket.
 
 ## Delegate in parallel
 
