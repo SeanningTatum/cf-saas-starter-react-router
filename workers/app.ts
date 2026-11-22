@@ -36,8 +36,6 @@ const requestHandler = createRequestHandler(
   import.meta.env.MODE
 );
 
-export { ExampleWorkflow } from "../workflows/example";
-
 const internalError = (requestId: string) =>
   new Response(`Internal Server Error (request id: ${requestId})`, {
     status: 500,

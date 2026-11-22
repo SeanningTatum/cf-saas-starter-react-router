@@ -27,13 +27,6 @@
       "bucket_name": "cf-saas-starter-react-router-bucket"
     }
   ],
-  "workflows": [
-    {
-      "binding": "EXAMPLE_WORKFLOW",
-      "name": "cf-saas-starter-react-router-example-workflow",
-      "class_name": "ExampleWorkflow"
-    }
-  ],
   "ai": {
     "binding": "AI"
   },
@@ -63,13 +56,6 @@
         {
           "binding": "BUCKET",
           "bucket_name": "cf-saas-starter-react-router-bucket-preview"
-        }
-      ],
-      "workflows": [
-        {
-          "binding": "EXAMPLE_WORKFLOW",
-          "name": "cf-saas-starter-react-router-example-workflow-preview",
-          "class_name": "ExampleWorkflow"
         }
       ],
       "ai": {
