@@ -92,14 +92,14 @@
     "next_page": "Go to next page",
     "last_page": "Go to last page",
     "toasts": {
-      "impersonate_success": "Now impersonating {{name}}",
-      "impersonate_error": "Failed to impersonate {{name}}",
-      "ban_success": "User {{name}} has been banned",
-      "ban_error": "Failed to ban user {{name}}",
-      "unban_success": "User {{name}} has been unbanned",
-      "unban_error": "Failed to unban user {{name}}",
-      "role_update_success": "{{name}}'s role updated to {{role}}",
-      "role_update_error": "Failed to update role for {{name}}"
+      "impersonate_success": "Now impersonating {{- name}}",
+      "impersonate_error": "Failed to impersonate {{- name}}",
+      "ban_success": "User {{- name}} has been banned",
+      "ban_error": "Failed to ban user {{- name}}",
+      "unban_success": "User {{- name}} has been unbanned",
+      "unban_error": "Failed to unban user {{- name}}",
+      "role_update_success": "{{- name}}'s role updated to {{role}}",
+      "role_update_error": "Failed to update role for {{- name}}"
     }
   }
 }
