@@ -101,7 +101,6 @@ export function stripJsonc(text: string): string {
   return text.replace(/^\s*\/\/.*$/gm, "");
 }
 
-/** The parsed wrangler.jsonc text, or null when what is left after the comments go is not JSON. */
 export function parseJsonc<T>(text: string): T | null {
   try {
     return JSON.parse(stripJsonc(text)) as T;
