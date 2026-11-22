@@ -16,6 +16,13 @@ describe("renderRules", () => {
     expect(row?.split(/(?<!\\)\|/)).toHaveLength(8);
   });
 
+  it("escapes a backslash before it escapes a pipe, so a cell that ends in a backslash cannot un-escape the next pipe", () => {
+    const table = renderRules([badWordRule({ matches: "ends in a backslash \\" })]);
+    const row = table.split("\n").find((line) => line.startsWith("| `no-bad`"));
+
+    expect(row).toContain("ends in a backslash \\\\ |");
+  });
+
   it("prints a row for every baseline check, so the baseline-* ids in a finding are documented", () => {
     const table = renderRules([badWordRule()]);
 
