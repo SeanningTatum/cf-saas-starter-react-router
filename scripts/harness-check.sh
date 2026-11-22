@@ -5,11 +5,14 @@
 #        B. init.sh exists and is executable
 #        C. CLAUDE.md and AGENTS.md are the same file (symlink / byte-identical)
 #        D. Every .claude/agents/*.md has YAML frontmatter with name + description
+#        D1. Agent frontmatter is valid (name = file name, tools, model, effort) and the README roster table is fresh (bun scripts/roster.ts check)
 #        D2. .kimi-code/agents is a symlink onto .claude/agents (one roster, two CLIs)
 #        G. Every hook script referenced by .claude/settings.json exists and is executable
 #        H. The SessionStart skill restore and the context-memory store resolver pass their own tests
 #        I. Workflows: every command that launches one has its script, every script
 #           parses and names itself by filename, brand-init fences cover app/components/ui once
+#        J. The workflow scripts are what their sources build (.claude/workflow-src + the shared library)
+#        K. The repo's ruleset and production environment match .github/repo-rules.json
 
 set -uo pipefail
 
@@ -52,6 +55,15 @@ if [ -z "$AGENT_BAD" ]; then
   ok "all sub-agents have valid frontmatter"
 else
   fail "sub-agents with broken frontmatter:$AGENT_BAD"
+fi
+
+# D1. Roster: every agent's name, tools, model and effort are valid, and the table in
+#     .claude/agents/README.md is what the frontmatter produces. The script prints the fix.
+if ROSTER_OUT=$(bun scripts/roster.ts check 2>&1); then
+  ok "$ROSTER_OUT"
+else
+  fail "agent roster invalid or stale:"
+  printf '%s\n' "$ROSTER_OUT" | sed 's/^/      /'
 fi
 
 # D2. Kimi Code reads the same roster. Kimi Code discovers project sub-agents from
@@ -146,7 +158,8 @@ fi
 # I2. brand-init hardcodes the primitive fences. Every file in app/components/ui must
 #     appear exactly once as "<name>" inside the fence arrays, which the workflow marks with
 #     `// harness:primitive-fences:start` and `// harness:primitive-fences:end` (0 = a
-#     primitive escapes the redesign, 2+ = two lanes fight over it). Names elsewhere don't count.
+#     primitive escapes the redesign, 2+ = two lanes fight over it), and every name in a
+#     `ui([...])` fence must be a file there. Names elsewhere don't count.
 if [ -f .claude/workflows/brand-init.js ]; then
   FENCE_FILE=.claude/workflows/brand-init.js
   FENCE_TEXT=$(awk '/harness:primitive-fences:start/{f=1;next} /harness:primitive-fences:end/{f=0} f' "$FENCE_FILE")
@@ -161,12 +174,42 @@ if [ -f .claude/workflows/brand-init.js ]; then
       c=$(printf '%s\n' "$FENCE_TEXT" | grep -o "\"${n}\"" | wc -l | tr -d ' ')
       [ "$c" = "1" ] || FENCE_BAD="$FENCE_BAD ${n}(x${c})"
     done
+    # The reverse: a fence must not name a primitive that is gone, or a lane is told to edit a missing file.
+    while IFS= read -r n; do
+      [ -z "$n" ] && continue
+      [ -f "app/components/ui/${n}.tsx" ] || FENCE_BAD="$FENCE_BAD ${n}(no-file)"
+    done < <(printf '%s\n' "$FENCE_TEXT" | grep 'ui(\[' | grep -oE '"[a-z0-9-]+"' | tr -d '"' | sort -u)
     if [ -z "$FENCE_BAD" ]; then
-      ok "brand-init fences cover every app/components/ui primitive exactly once"
+      ok "brand-init fences cover every app/components/ui primitive exactly once and name no missing one"
     else
       fail "brand-init fence mismatch:$FENCE_BAD"
     fi
   fi
+fi
+
+# J. .claude/workflows/*.js are built: each is its source in .claude/workflow-src/ with the shared
+#    library pasted in. A script edited by hand, or a source edited without a rebuild, drifts.
+if WF_OUT=$(bun scripts/workflows.ts check 2>&1); then
+  ok "$WF_OUT"
+else
+  fail "workflow scripts differ from their sources:"
+  printf '%s\n' "$WF_OUT" | sed 's/^/      /'
+fi
+
+# K. Repo rules. The ruleset on the default branch and the production environment must
+#    match .github/repo-rules.json (docs/ci/repo-rules.md says when a notice stays green).
+RR_OUT=$(bun run scripts/repo-rules.ts --check 2>&1)
+RR_CODE=$?
+if [ "$RR_CODE" -ne 0 ]; then
+  fail "repo rules differ from .github/repo-rules.json:"
+  printf '%s\n' "$RR_OUT" | sed 's/^/      /'
+elif grep -q '^notice:' <<<"$RR_OUT"; then
+  grep '^notice:' <<<"$RR_OUT" | sed 's/^notice:/  - repo rules:/'
+  # In GitHub Actions the script also prints `::notice::` lines; pass them through
+  # at the start of a line so the run page shows them.
+  grep '^::notice::' <<<"$RR_OUT" || true
+else
+  ok "repo rules match .github/repo-rules.json"
 fi
 
 echo ""

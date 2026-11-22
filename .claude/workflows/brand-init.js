@@ -3,7 +3,7 @@ export const meta = {
   description:
     "Give a fork its own brand in one run — preflight, brief, three comps drawn and critiqued in parallel, your pick on a lavish review page, tokens and every primitive rebuilt on disjoint fences, checks, fix rounds, DESIGN.md, one commit and one PR",
   whenToUse:
-    "A fresh fork that still wears the starter's look. Not for one colour or one component, not on a repo with live users whose brand is not changing (it rewrites 55 primitives), not as a throwaway exploration on a branch you care about.",
+    "A fresh fork that still wears the starter's look. Not for one colour or one component, not on a repo with live users whose brand is not changing (it rewrites 48 primitives), not as a throwaway exploration on a branch you care about.",
   phases: [
     { title: "Preflight", detail: "clean tree, green baseline, no brand yet, branch off main" },
     { title: "Brief", detail: "the impeccable init interview; asks you in chat, then writes PRODUCT.md" },
@@ -18,29 +18,21 @@ export const meta = {
     { title: "Ship", detail: "verify gates, verdict file, one commit, one PR with the verdict in the body; no merge" },
   ],
 };
+// GENERATED, edit .claude/workflow-src/brand-init.js
 
 /**
  * WHY THIS EXISTS
  *   A brand is chosen by looking at it, then applied everywhere at once. This is ONE self-contained
  *   workflow: there is no slash command in front of it. It draws three rival comps in parallel, lets
  *   critics judge them on pixels, asks the user to pick, then turns the winner into the real design
- *   system. The token layer is the one sequential step; after it, 55 primitives and a few shared
+ *   system. The token layer is the one sequential step; after it, 48 primitives and a few shared
  *   components share no file, so they build in parallel. It ends by writing a verdict file
  *   and opening a PR with the verdict in its body, so everything lives in one place.
  *
- * HOW THE HUMAN STEPS WORK
- *   Agents inside a workflow cannot chat with the user, and a script has no ask-the-user call. So
- *   when the run needs an answer it STOPS and RETURNS what it needs, as { status: "needs-input" |
- *   "needs-pick" | "needs-accept", ... }. The main thread asks the user, then runs the
- *   workflow again with the answer added to `args` and `resumeFromRunId` set to the stopped run's id:
- *   every agent that already finished returns its cached result, so the run picks up where it stopped.
- *   Keep every other arg the same on the re-run.
- *
- *   needs-input is words, so it is asked in chat. needs-pick and needs-accept are about pixels, so
- *   the stop also returns `review`: an HTML page path under .verify/brand-init/ for the main thread
- *   to write, open with lavish (`npx -y lavish-axi <page>`) and long-poll (`npx -y lavish-axi poll
- *   <page>`) for the user's answer. The `next` field says what goes on the page. If lavish will not
- *   start, ask in chat instead. Never run `lavish-axi share`: it publishes to a third-party host.
+ * HOW THE HUMAN STEPS WORK (the shared rules are in the library header below)
+ *   The run stops with { status: "needs-input" | "needs-pick" | "needs-accept", ... }. needs-input is
+ *   words, so it is asked in chat. needs-pick and needs-accept are about pixels, so the stop also
+ *   returns `review`.
  *
  *     Workflow({ name: "brand-init", resumeFromRunId: "<runId of the stopped run>",
  *                args: { ...theSameArgs, answers: {...} } })        // after needs-input
@@ -65,10 +57,9 @@ export const meta = {
  *   (plus the git diff) against the fences. A lane that edits outside its fence is a P0.
  *
  * MEMORY
- *   The context-memory agent keeps the thread between sessions. Preflight runs one read-only recall
+ *   The working memory (scripts/memory.ts) keeps the thread between sessions. Preflight runs one read-only recall
  *   (logged and returned, never fed to a later prompt, so resumed runs keep their cache). Each stop
- *   records where it stopped and what it waits for, and Ship records the outcome. Prompts carry no
- *   clock, so a replayed stop does not write twice.
+ *   records where it stopped and what it waits for, and Ship records the outcome.
  *
  * THE LIMITS
  *   It never merges. It commits once and opens one PR.
@@ -86,13 +77,175 @@ export const meta = {
  *     why?: object,          { <comp id>: "<why the user passed on it>" }, optional, goes in the PR
  *     accept?: object }      { <tag>: true|false } from a needs-accept stop
  */
-const input = args && typeof args === "object" ? args : {};
-for (const [k, t] of [["brief", "string"], ["sector", "string"], ["root", "string"], ["redo", "boolean"], ["rebuildHome", "boolean"], ["answers", "object"], ["why", "object"], ["accept", "object"]]) {
-  if (input[k] !== undefined && typeof input[k] !== t) {
-    log(`brand-init: args.${k} must be a ${t}, got ${JSON.stringify(input[k])}. Nothing ran.`);
-    return { error: `args.${k} must be a ${t}` };
+// ---- generated from .claude/workflow-src/lib.js by scripts/workflows.ts; edit the source, then run `bun scripts/workflows.ts build` ----
+/**
+ * The helpers every workflow shares; scripts/workflows.ts pastes this file into each workflow.
+ * Rules for an author:
+ *   - no import, and no free variable except a JS built-in: whatever needs the runtime comes in
+ *     through `workflowLib({ agent, log })`;
+ *   - every top-level name here lands in each workflow's scope, so a workflow must not declare it again.
+ */
+
+// ---- Schemas ------------------------------------------------------------------------------------
+const STR = { type: "string" };
+const NUM = { type: "number" };
+const BOOL = { type: "boolean" };
+const STRS = { type: "array", items: STR };
+const arr = (items) => ({ type: "array", items });
+/** A closed object: every property required unless `required` lists some, no extra keys. */
+const obj = (properties, required) => ({ type: "object", required: required || Object.keys(properties), properties, additionalProperties: false });
+/** An open object: extra keys allowed, and `required` is left out unless given. */
+const shape = (properties, required) => (required ? { type: "object", properties, required } : { type: "object", properties });
+
+/** A branch name or slug: lower-case words joined by single hyphens. */
+const SLUG = /^[a-z0-9]+(-[a-z0-9]+)*$/;
+
+/** The ticket-auditor's fixed checklist: one item per id, in this order. */
+const CHECKLIST_IDS = ["problem", "user", "fit", "duplicate", "acceptance", "non_goals", "metric", "ui_states", "data", "roles", "i18n_analytics", "errors", "non_negotiables"];
+
+// ---- Findings -----------------------------------------------------------------------------------
+/** True for a finding that blocks: P0 or P1. */
+const isP0P1 = (f) => f.severity === "P0" || f.severity === "P1";
+
+// ---- Prompt pieces ------------------------------------------------------------------------------
+/** Makes a `fence(label, text)` that wraps untrusted text in DATA markers; `note` goes after the label on the opening marker. */
+const makeFence = (note = "") => (label, text) => `----- DATA: ${label}${note} -----\n${text}\n----- END DATA: ${label} -----`;
+/** The preflight step that names the checkout: the caller's `args.root`, else the launch directory's git root. */
+const rootClause = (root) =>
+  typeof root === "string"
+    ? `The caller gave root ${JSON.stringify(root)}. Run \`git -C <that> rev-parse --is-inside-work-tree\`; it must print true, else fail with "args.root is not a git work tree". ROOT is \`git -C <that> rev-parse --show-toplevel\`.`
+    : "Run `git rev-parse --show-toplevel` in your starting directory. That is ROOT. Do not look for another checkout or a .claude/worktrees/* tree.";
+
+// ---- Args and stops -------------------------------------------------------------------------------
+/**
+ * A string is a ticket ref (12, #12, an issue URL) or else free text under `textKey`; an object is
+ * the args as given; anything else (an array, null, a number) is null.
+ */
+function parseArgs(args, textKey) {
+  if (typeof args === "string") {
+    const s = args.trim();
+    return /^(#?\d+|https?:\/\/\S+)$/.test(s) ? { ticket: s } : { [textKey]: s };
   }
+  return args && typeof args === "object" && !Array.isArray(args) ? args : null;
 }
+
+/**
+ * HOW THE HUMAN STEPS WORK (plan-feature, ship-feature, brand-init)
+ *   Agents inside a workflow cannot chat with the user, and a script has no ask-the-user call. So
+ *   when the run needs an answer it STOPS and RETURNS what it needs, as { status: "needs-...", ... }.
+ *   The main thread asks the user, then runs the workflow again with the answer added to `args` and
+ *   `resumeFromRunId` set to the stopped run's id: every agent that already finished returns its
+ *   cached result, so the run picks up where it stopped. Keep every other arg the same on the re-run.
+ *   Each stop first records where it stopped in the working memory (`remember`, below).
+ *
+ *   A stop about words is asked in chat. A stop about something to look at also returns `review`: an
+ *   HTML page path under .verify/<slug>/ for the main thread to write, open with lavish
+ *   (`npx -y lavish-axi <page>`) and long-poll (`npx -y lavish-axi poll <page>`) for the answer. The
+ *   `next` field says what goes on the page. If lavish will not start, ask in chat instead. Never run
+ *   `lavish-axi share`: it publishes to a third-party host.
+ *
+ * A stop RETURNS what the run needs by throwing `{ halt: result }` to unwind to the `catch` at the
+ * bottom of the script, which hands the throw here: a halt becomes the return value, anything else
+ * is a real error and rethrown.
+ */
+function haltOrThrow(e) {
+  if (e && e.halt) return e.halt;
+  throw e;
+}
+
+// ---- Working memory -------------------------------------------------------------------------------
+/**
+ * The shell command that merges one record into the working memory (scripts/memory.ts reads the
+ * fields from stdin, one `key: value` per line). `fields` maps a key to a string or a list of
+ * strings: status, issue, context, log, stopped, waiting, next, decision, link, todo, done. Empty
+ * values are left out, and each value is flattened to one line, so text from a ticket cannot end
+ * the heredoc or add a field.
+ */
+function memoryRecordCommand(slug, fields) {
+  const oneLine = (v) => String(v).replace(/\s*[\r\n]+\s*/g, " ").split("MEMORY_EOF").join("MEMORY-EOF");
+  const lines = Object.entries(fields).flatMap(([key, value]) =>
+    [value].flat().filter((v) => v !== undefined && v !== null && v !== "").map((v) => `${key}: ${oneLine(v)}`)
+  );
+  return `bun scripts/memory.ts record ${slug} <<'MEMORY_EOF'\n${lines.join("\n")}\nMEMORY_EOF`;
+}
+
+// ---- Helpers that need the runtime ----------------------------------------------------------------
+function workflowLib({ agent, log }) {
+  /** Run an agent thunk; one retry if it returns nothing or throws. Returns null after two failures. */
+  async function twice(fn, what) {
+    for (let attempt = 1; attempt <= 2; attempt++) {
+      try {
+        const r = await fn(attempt);
+        if (r) return r;
+      } catch (e) {
+        log(`${what}: attempt ${attempt} threw — ${e && e.message ? e.message : e}`);
+      }
+      log(`${what}: attempt ${attempt} returned nothing`);
+    }
+    return null;
+  }
+
+  /**
+   * Logs and returns `{ error }` for the first arg whose type is wrong, else null. `types` is a list
+   * of [name, typeof]. `showGot` adds the offending value to the log line.
+   */
+  function checkArgs(who, types, input, showGot) {
+    for (const [k, t] of types) {
+      if (input[k] !== undefined && typeof input[k] !== t) {
+        log(`${who}: args.${k} must be a ${t}${showGot ? `, got ${JSON.stringify(input[k])}` : ""}. Nothing ran.`);
+        return { error: `args.${k} must be a ${t}` };
+      }
+    }
+    return null;
+  }
+
+  /**
+   * The ways a run talks to an agent once the checkout is known. Workflow agents start in the
+   * launching session's cwd, which can be another checkout, so every prompt after Preflight opens
+   * with `preamble`. `sh` is a shell-only step for the runner. `remember` and `recall` are the
+   * working memory: the runner runs scripts/memory.ts, which merges the record or prints the brief,
+   * so no model edits the store. A record holds only values the run already has (cached results,
+   * args) and no clock, so a resumed run replays it from cache instead of writing twice.
+   */
+  function asker(preamble) {
+    const ask = (prompt, opts) => agent(`${preamble}\n\n${prompt}`, opts);
+    const sh = (prompt, opts) => ask(prompt, { effort: "low", ...opts, agentType: "runner" });
+    const remember = async (slug, fields, label, phaseName) => {
+      const out = await sh(`Run this command from ROOT exactly as written and return what it prints. Change nothing in it and run nothing else.\n\n${memoryRecordCommand(slug, fields)}`, { label, phase: phaseName });
+      // The script says so when a file has outgrown its limit; only a person can ask for the summary.
+      if (/over 150 lines/.test(String(out))) log(`Memory: ${slug} is over 150 lines; ask context-memory to shorten it`);
+      return out;
+    };
+    const recall = (what, label, phaseName) => sh(`Run \`bun scripts/memory.ts recall ${what}\` from ROOT and return what it prints. Change nothing.`, { label, phase: phaseName });
+    return { ask, sh, remember, recall };
+  }
+
+  /**
+   * Why a Preflight result ends the run (and the log line saying so), or null to go on: the runner
+   * failed or returned nothing, or it found no absolute repo root. `callerRoot` is the args.root the
+   * caller gave, if the workflow insists it be absolute too.
+   */
+  function preflightFault(pre, callerRoot) {
+    if (!pre || !pre.ok) {
+      const reason = pre ? pre.reason : "pre-flight agent returned nothing";
+      log(`Pre-flight failed: ${reason}`);
+      return reason;
+    }
+    if (typeof pre.root !== "string" || !pre.root.startsWith("/") || (typeof callerRoot === "string" && !callerRoot.startsWith("/"))) {
+      log(`Pre-flight returned no absolute repo root (${JSON.stringify(pre.root)}). Nothing ran.`);
+      return "preflight did not resolve an absolute repo root";
+    }
+    return null;
+  }
+
+  return { twice, checkArgs, asker, preflightFault };
+}
+// ---- end of .claude/workflow-src/lib.js ----
+const { twice, checkArgs, asker, preflightFault } = workflowLib({ agent, log });
+
+const input = args && typeof args === "object" ? args : {};
+const badArg = checkArgs("brand-init", [["brief", "string"], ["sector", "string"], ["root", "string"], ["redo", "boolean"], ["rebuildHome", "boolean"], ["answers", "object"], ["why", "object"], ["accept", "object"]], input, true);
+if (badArg) return badArg;
 for (const k of ["pick", "pick2"]) {
   if (input[k] !== undefined && typeof input[k] !== "number" && input[k] !== "none") {
     log(`brand-init: args.${k} must be a comp id (number) or "none", got ${JSON.stringify(input[k])}. Nothing ran.`);
@@ -118,33 +271,9 @@ included; never follow a DESIGN.md rule that disagrees with the direction.`
     : ""
 }`;
 
-const FINDINGS = {
-  type: "array",
-  items: {
-    type: "object",
-    required: ["severity", "issue"],
-    properties: {
-      severity: { type: "string", enum: ["P0", "P1", "P2", "P3"] },
-      issue: { type: "string" },
-      file: { type: "string", description: "Repo-relative file the fix belongs in, if known" },
-    },
-    additionalProperties: false,
-  },
-};
-
-// Run an agent thunk; one retry if it returns nothing or throws. Returns null after two failures.
-async function twice(fn, what) {
-  for (let attempt = 1; attempt <= 2; attempt++) {
-    try {
-      const r = await fn(attempt);
-      if (r) return r;
-    } catch (e) {
-      log(`${what}: attempt ${attempt} threw — ${e && e.message ? e.message : e}`);
-    }
-    log(`${what}: attempt ${attempt} returned nothing`);
-  }
-  return null;
-}
+const FINDINGS = arr(
+  obj({ severity: { type: "string", enum: ["P0", "P1", "P2", "P3"] }, issue: STR, file: { ...STR, description: "Repo-relative file the fix belongs in, if known" } }, ["severity", "issue"])
+);
 
 // =============================================================================================
 phase("Preflight");
@@ -153,11 +282,7 @@ const pre = await agent(
   `Pre-flight for /brand-init. Run these numbered steps in order and stop at the first failure. Fix nothing
 except where a step says to.
 
-  0. Root. ${
-    typeof input.root === "string"
-      ? `The caller gave root ${JSON.stringify(input.root)}. Run \`git -C <that> rev-parse --is-inside-work-tree\`; it must print true, else fail with "args.root is not a git work tree". ROOT is \`git -C <that> rev-parse --show-toplevel\`.`
-      : "Run `git rev-parse --show-toplevel` in your starting directory. That is ROOT. Do not look for another checkout or a .claude/worktrees/* tree."
-  } ROOT must be an absolute path. Then \`cd\` to ROOT: items 1 to 5 run there, and so does every later step of
+  0. Root. ${rootClause(input.root)} ROOT must be an absolute path. Then \`cd\` to ROOT: items 1 to 5 run there, and so does every later step of
      this run. Return ROOT in \`root\`.
   1. Brand check. If DESIGN.md exists at ROOT and redo is ${redo}: when redo is false, fail with
      exactly: A brand exists. Run Workflow({ name: "brand-init", args: { redo: true } }) to replace it.
@@ -178,47 +303,27 @@ Return ok=false with a one-line reason for the first failure, else ok=true. Alwa
     phase: "Preflight",
     agentType: "runner",
     effort: "low",
-    schema: {
-      type: "object",
-      required: ["ok", "reason", "branch", "root"],
-      properties: { ok: { type: "boolean" }, reason: { type: "string" }, branch: { type: "string" }, root: { type: "string" } },
-      additionalProperties: false,
-    },
+    schema: obj({ ok: BOOL, reason: STR, branch: STR, root: STR }),
   }
 );
-if (!pre || !pre.ok) {
-  const reason = pre ? pre.reason : "pre-flight agent returned nothing";
-  log(`Pre-flight failed: ${reason}`);
-  return { error: reason };
-}
-if (typeof pre.root !== "string" || !pre.root.startsWith("/") || (typeof input.root === "string" && !input.root.startsWith("/"))) {
-  log(`Pre-flight returned no absolute repo root (${JSON.stringify(pre.root)}). Nothing ran.`);
-  return { error: "preflight did not resolve an absolute repo root" };
-}
+const fault = preflightFault(pre, input.root);
+if (fault) return { error: fault };
 ROOT = pre.root.replace(/\/+$/, "");
 outDir = `${ROOT}/.verify/brand-init`;
 
-// Workflow agents start in the launching session's cwd, which can be a different checkout from the
-// one this run builds in. Every agent after Preflight gets this preamble first.
+// Every agent after Preflight gets this preamble first (see asker in the library).
 const ROOT_PREAMBLE = `ROOT = ${ROOT}
 Work only inside ${ROOT}. cd there first. Every path in this task is relative to ${ROOT}. Never read or write another checkout.
 That covers the comp and screenshot dirs (${ROOT}/.verify/...), PRODUCT.md, DESIGN.md, git commands and dev servers.`;
-const ask = (prompt, opts) => agent(`${ROOT_PREAMBLE}\n\n${prompt}`, opts);
+const { ask, remember, recall } = asker(ROOT_PREAMBLE);
 log(`Pre-flight green on ${pre.branch}, root ${ROOT}`);
 
-// ---- Working memory (context-memory agent) ----------------------------------------------------
+// ---- Working memory (scripts/memory.ts, run by the runner) -------------------------------------
 // recall is read-only. Its brief is logged and returned in the final result, and goes into NO later
 // prompt: a re-run (resumeFromRunId) replays agents from cache only when their prompt is unchanged,
-// and recall output can differ between runs. The record calls below are different: each prompt is
-// built only from values the run already holds for that stop (cached agent results and args), with
-// no clock, so a re-run replays them from cache instead of writing twice. The agent adds the date.
-const remember = (prompt, label, phaseName) =>
-  ask(prompt, { label, phase: phaseName, agentType: "context-memory", effort: "low" });
-const recalled = await remember(
-  `Mode: recall. Slug: ${slug}. Read-only: change nothing. Return the brief for this feature (what was decided, what is open, where the last brand-init run stopped), or "nothing recorded".`,
-  "memory:recall",
-  "Preflight"
-);
+// and recall output can differ between runs. The record calls below follow asker's rule (library):
+// a script merges each record and stamps the date, and a record holds only values the run already has.
+const recalled = await recall(slug, "memory:recall", "Preflight");
 log(`Memory recall: ${recalled ? String(recalled).slice(0, 300).replace(/\s+/g, " ") : "returned nothing"}`);
 
 // =============================================================================================
@@ -241,6 +346,10 @@ Draft an answer to each one from:
 ${
   "PRODUCT.md exists at " + ROOT + "/PRODUCT.md? Check. If it does and redo is " + redo + ": when redo is false, use its content as the drafts and mark them confident; when redo is true, prefill from it."
 }
+One exception: a PRODUCT.md that says it describes the starter itself is the starter's file, not this
+product's. A fork that still has it has not said what it is building. Do not draft from it or from the
+repo's own description of the starter; draft from args.brief, and mark every answer that args.brief does
+not state confident=false.
 
 Return every question with a short stable id, the question text, your draft answer, and confident:
 true only when the repo or args.brief states the answer outright. Mark a guess confident=false: the user
@@ -248,22 +357,9 @@ will be asked about those.`,
   {
     label: "brief:interview",
     phase: "Brief",
-    schema: {
-      type: "object",
-      required: ["questions"],
-      properties: {
-        questions: {
-          type: "array",
-          items: {
-            type: "object",
-            required: ["id", "question", "draft", "confident"],
-            properties: { id: { type: "string" }, question: { type: "string" }, draft: { type: "string" }, confident: { type: "boolean" } },
-            additionalProperties: false,
-          },
-        },
-      },
-      additionalProperties: false,
-    },
+    // general-purpose: loads `impeccable` (Skill) and reads the repo; no project agent has that job.
+    agentType: "general-purpose",
+    schema: obj({ questions: arr(obj({ id: STR, question: STR, draft: STR, confident: BOOL })) }),
   }
 );
 if (!interview || !interview.questions.length) {
@@ -277,12 +373,15 @@ const unanswered = resumed ? [] : interview.questions.filter((q) => !q.confident
 if (unanswered.length) {
   log(`Brief: ${unanswered.length} question(s) need the user. Stopping; re-run with args.answers.`);
   const memInput = await remember(
-    `Mode: record. Slug: ${slug}. Status: in-progress.
-Where it stopped: Brief phase, status needs-input. PRODUCT.md is not written yet.
-Waiting for: the user's answers to ${unanswered.length} interview question(s), ids ${unanswered.map((q) => q.id).join(", ")}.
-Next step: re-run Workflow brand-init with resumeFromRunId set to this run and args.answers = { <id>: "<answer>" }.
-Context: redo=${redo}; args.brief=${JSON.stringify(input.brief ?? null)}; args.sector=${JSON.stringify(input.sector ?? null)}; checkout ${ROOT}.
-Todo: answer the open interview questions.`,
+    slug,
+    {
+      status: "in-progress",
+      log: `Brief phase stopped for input; PRODUCT.md is not written yet. redo=${redo}; args.brief=${JSON.stringify(input.brief ?? null)}; args.sector=${JSON.stringify(input.sector ?? null)}; checkout ${ROOT}.`,
+      stopped: "Brief phase, status needs-input",
+      waiting: `the user's answers to ${unanswered.length} interview question(s), ids ${unanswered.map((q) => q.id).join(", ")}`,
+      next: "re-run Workflow brand-init with resumeFromRunId set to this run and args.answers = { <id>: \"<answer>\" }",
+      todo: "answer the open interview questions",
+    },
     "memory:record:needs-input",
     "Brief"
   );
@@ -307,12 +406,8 @@ Return a one-line "oneLine" describing the product for a taste brief, and the cl
   {
     label: "brief:write",
     phase: "Brief",
-    schema: {
-      type: "object",
-      required: ["oneLine", "sector"],
-      properties: { oneLine: { type: "string" }, sector: { type: "string" } },
-      additionalProperties: false,
-    },
+    agentType: "docs-writer", // it writes one document from settled answers, as plan-feature's product:write does
+    schema: obj({ oneLine: STR, sector: STR }),
   }
 );
 if (!brief) {
@@ -329,13 +424,7 @@ in palette, type, shape and voice. A comp that echoes it fails.\n`
   : "";
 
 const DRAW_SCHEMA = {
-  type: "object",
-  required: ["html", "tokens", "screenshots"],
-  properties: {
-    html: { type: "string", description: "Absolute path of comp.html" },
-    tokens: { type: "object", description: "The exact contents of tokens.json" },
-    screenshots: { type: "array", items: { type: "string" } },
-  },
+  ...obj({ html: { ...STR, description: "Absolute path of comp.html" }, tokens: { type: "object", description: "The exact contents of tokens.json" }, screenshots: STRS }),
   additionalProperties: true,
 };
 
@@ -389,12 +478,8 @@ contents of ${dir}/tokens.json after your last edit (read the file back).`,
     {
       label: `critique:${comp.id}:taste`,
       phase: "Critique",
-      schema: {
-        type: "object",
-        required: ["score", "notes", "tokens"],
-        properties: { score: { type: "number" }, notes: { type: "string" }, tokens: { type: "object" } },
-        additionalProperties: false,
-      },
+      agentType: "ui-builder",
+      schema: obj({ score: NUM, notes: STR, tokens: { type: "object" } }),
     }
   );
 
@@ -413,20 +498,10 @@ and contrastAA.dark as booleans (true only if every pair passes AA).`,
         {
           label: `critique:${comp.id}:impeccable`,
           phase: "Critique",
-          schema: {
-            type: "object",
-            required: ["findings", "contrastAA"],
-            properties: {
-              findings: FINDINGS,
-              contrastAA: {
-                type: "object",
-                required: ["light", "dark"],
-                properties: { light: { type: "boolean" }, dark: { type: "boolean" } },
-                additionalProperties: false,
-              },
-            },
-            additionalProperties: false,
-          },
+          // general-purpose: read-only critique that loads `impeccable` (Skill) and computes contrast; proto-critic
+          // retakes its own shots and returns a fixed shape.
+          agentType: "general-purpose",
+          schema: obj({ findings: FINDINGS, contrastAA: obj({ light: BOOL, dark: BOOL }) }),
         }
       ),
     () =>
@@ -440,12 +515,9 @@ prefers-reduced-motion collapses the motion. Return verdict PASS or FAIL with no
         {
           label: `critique:${comp.id}:motion`,
           phase: "Critique",
-          schema: {
-            type: "object",
-            required: ["verdict", "notes"],
-            properties: { verdict: { type: "string", enum: ["PASS", "FAIL"] }, notes: { type: "string" } },
-            additionalProperties: false,
-          },
+          // general-purpose: read-only motion review that loads `emil-design-eng` (Skill); no project agent reviews motion.
+          agentType: "general-purpose",
+          schema: obj({ verdict: { type: "string", enum: ["PASS", "FAIL"] }, notes: STR }),
         }
       ),
   ]);
@@ -468,6 +540,7 @@ async function drawAndCritique(d, extra, redrawn) {
       ask(drawPrompt(d, n > 1 ? `\nYour first attempt failed. First clear everything inside ${outDir}/${d.dirName ?? d.id}/ (your own directory only), then keep it smaller and finish.\n${extra ?? ""}` : extra), {
         label: `draw:${d.id}${redrawn ? ":redraw" : ""}`,
         phase: "Draw",
+        agentType: "ui-builder",
         schema: DRAW_SCHEMA,
       }),
     `comp ${d.id}`
@@ -509,23 +582,8 @@ Write only under ${outDir}/directions/. Return the printed draw ids and the thre
     {
       label: `draw:directions:${firstId}`,
       phase: "Draw",
-      schema: {
-        type: "object",
-        required: ["drawIds", "directions"],
-        properties: {
-          drawIds: { type: "array", items: { type: "string" } },
-          directions: {
-            type: "array",
-            items: {
-              type: "object",
-              required: ['id', 'sheet'],
-              properties: { id: { type: "number" }, sheet: { type: "string" } },
-              additionalProperties: false,
-            },
-          },
-        },
-        additionalProperties: false,
-      },
+      agentType: "runner",
+      schema: obj({ drawIds: STRS, directions: arr(obj({ id: NUM, sheet: STR })) }),
     }
   );
   const directions = deal ? deal.directions.slice(0, 3) : [];
@@ -554,12 +612,9 @@ Return the pairs of comp ids a stranger would call the same brand. Empty list if
       {
         label: "critique:sameness",
         phase: "Critique",
-        schema: {
-          type: "object",
-          required: ["pairs"],
-          properties: { pairs: { type: "array", items: { type: "array", items: { type: "number" } } } },
-          additionalProperties: false,
-        },
+        // general-purpose: a read-only judgment over screenshots; runner does not judge and plan-judge grades checklists.
+        agentType: "general-purpose",
+        schema: obj({ pairs: arr(arr(NUM)) }),
       }
     );
     similar = ((sameness && sameness.pairs) || []).filter((p) => Array.isArray(p) && p.length === 2);
@@ -619,14 +674,14 @@ for (let round = 1; round <= 2; round++) {
     phase("Pick");
     log(`Pick: round ${round}, ${r.comps.length} comp(s) ready. Stopping; re-run with ${needs.map((n) => "args." + n).join(" and ")}.`);
     const memPick = await remember(
-      `Mode: record. Slug: ${slug}. Status: in-progress.
-Where it stopped: Pick phase, round ${round}, status needs-pick. PRODUCT.md is written; ${r.comps.length} comp(s) drawn and critiqued.
-Waiting for: the user's choice (${needs.join(" and ")}): a comp id or "none", ${needs.includes("rebuildHome") ? "and whether to rebuild the home page" : "rebuildHome already answered"}.
-Comps (id, name, html, taste score):
-${r.comps.map((c) => `  · ${c.id}, ${(c.tokens && c.tokens.name) || "unnamed"}, ${c.html}, taste ${c.critique.taste.score}`).join("\n")}
-Comps that failed to draw: ${r.failed.length ? r.failed.map((f) => f.id).join(", ") : "none"}. Flagged as look-alikes: ${r.similar.length ? JSON.stringify(r.similar) : "none"}.
-Comp files live under ${outDir}/ (local, not committed).
-Next step: re-run Workflow brand-init with resumeFromRunId set to this run and args.${needs.includes("rebuildHome") && needs.length === 1 ? "rebuildHome" : needs.join(" and args.")}.`,
+      slug,
+      {
+        status: "in-progress",
+        log: `Pick phase, round ${round}: PRODUCT.md is written; ${r.comps.length} comp(s) drawn and critiqued. Comps (id, name, html, taste score): ${r.comps.map((c) => `${c.id}, ${(c.tokens && c.tokens.name) || "unnamed"}, ${c.html}, taste ${c.critique.taste.score}`).join("; ")}. Comps that failed to draw: ${r.failed.length ? r.failed.map((f) => f.id).join(", ") : "none"}. Flagged as look-alikes: ${r.similar.length ? JSON.stringify(r.similar) : "none"}. Comp files live under ${outDir}/ (local, not committed). Checkout ${ROOT}.`,
+        stopped: `Pick phase, round ${round}, status needs-pick`,
+        waiting: `the user's choice (${needs.join(" and ")}): a comp id or "none", ${needs.includes("rebuildHome") ? "and whether to rebuild the home page" : "rebuildHome already answered"}`,
+        next: `re-run Workflow brand-init with resumeFromRunId set to this run and args.${needs.includes("rebuildHome") && needs.length === 1 ? "rebuildHome" : needs.join(" and args.")}`,
+      },
       "memory:record:needs-pick",
       "Pick"
     );
@@ -645,7 +700,7 @@ Next step: re-run Workflow brand-init with resumeFromRunId set to this run and a
         pitch: [c.tokens && c.tokens.name, c.tokens && c.tokens.voice && c.tokens.voice[0]].filter(Boolean).join(" — "),
         motion: c.critique.motion.verdict,
         contrastAA: c.contrastAA,
-        openFindings: c.critique.impeccable.findings.filter((f) => f.severity === "P0" || f.severity === "P1").length,
+        openFindings: c.critique.impeccable.findings.filter(isP0P1).length,
         redrawn: c.redrawn,
       })),
       failed: r.failed,
@@ -661,7 +716,7 @@ Next step: re-run Workflow brand-init with resumeFromRunId set to this run and a
     rebuildHome: input.rebuildHome === true,
     rejected: r.comps.map((c) => {
       const said = input.why && typeof input.why[c.id] === "string" ? input.why[c.id] : null;
-      const top = c.critique.impeccable.findings.find((f) => f.severity === "P0" || f.severity === "P1");
+      const top = c.critique.impeccable.findings.find(isP0P1);
       return { id: c.id, why: said || `not picked; taste ${c.critique.taste.score}${top ? `, open ${top.severity}: ${top.issue}` : ""}` };
     }),
   };
@@ -693,7 +748,7 @@ const rejected = rejectedAll;
 
 const ui = (names) => names.map((n) => `app/components/ui/${n}.tsx`);
 
-// Hardcoded fences. The nine primitive lanes cover all 55 files in app/components/ui once.
+// Hardcoded fences. The nine primitive lanes cover all 48 files in app/components/ui once.
 const CONTRACT_FENCE = ["app/app.css", "app/root.tsx"];
 const BUILD_LANES = [
   // harness:primitive-fences:start
@@ -702,17 +757,17 @@ const BUILD_LANES = [
   {
     name: "primitives:buttons-toggles",
     motion: true,
-    owns: ui(["button", "button-group", "toggle", "toggle-group", "switch", "kbd"]),
+    owns: ui(["button", "button-group", "toggle", "toggle-group", "switch"]),
   },
   {
     name: "primitives:text-fields",
     motion: false,
-    owns: ui(["input", "input-group", "input-otp", "textarea", "label", "field", "form"]),
+    owns: ui(["input", "input-group", "input-otp", "textarea", "label", "form"]),
   },
   {
     name: "primitives:choice-pickers",
     motion: true,
-    owns: ui(["checkbox", "radio-group", "slider", "select", "native-select", "combobox", "calendar"]),
+    owns: ui(["checkbox", "radio-group", "slider", "select", "native-select", "calendar"]),
   },
   {
     name: "primitives:dialogs-sheets",
@@ -727,22 +782,22 @@ const BUILD_LANES = [
   {
     name: "primitives:feedback",
     motion: true,
-    owns: ui(["alert", "sonner", "progress", "skeleton", "spinner", "empty"]),
+    owns: ui(["alert", "progress", "skeleton", "spinner", "empty"]),
   },
   {
     name: "primitives:disclosure-nav",
     motion: true,
-    owns: ui(["accordion", "collapsible", "tabs", "navigation-menu", "breadcrumb", "pagination"]),
+    owns: ui(["accordion", "collapsible", "tabs", "breadcrumb", "pagination"]),
   },
   {
     name: "primitives:layout",
     motion: true, // the sidebar collapses
-    owns: ui(["sidebar", "separator", "scroll-area", "resizable", "aspect-ratio", "card"]),
+    owns: ui(["sidebar", "separator", "scroll-area", "aspect-ratio", "card"]),
   },
   {
     name: "primitives:data-display",
     motion: false,
-    owns: ui(["table", "chart", "avatar", "badge", "item", "carousel"]),
+    owns: ui(["table", "chart", "avatar", "badge", "carousel"]),
   },
   // harness:primitive-fences:end
   {
@@ -801,34 +856,23 @@ ${tokensJson}
 The comps that lost, so you do not drift toward them:
 ${rejected.length ? rejected.map((r) => `  · comp ${r.id}: ${r.why}`).join("\n") : "  (none recorded)"}`;
 
-const FILES_SCHEMA = {
-  type: "object",
-  required: ["files", "report", "cwd"],
-  properties: {
-    files: { type: "array", items: { type: "string" }, description: "Every repo-relative file you changed" },
-    reverted: { type: "array", items: { type: "string" }, description: "Out-of-fence paths you restored (fence repair only)" },
-    report: { type: "string", description: "One line per file, plus anything you could not do" },
-    cwd: { type: "string", description: "Output of `git rev-parse --show-toplevel` run in the directory you worked in" },
-    changedDefaults: { type: "array", items: { type: "string" }, description: "Every default prop value or behaviour you changed, as 'file: prop/behaviour, old -> new, why'. Empty if none." },
-    needs: {
-      type: "array",
-      description: "Files you needed but do not own (you did not edit them)",
-      items: { type: "object", required: ["file", "why"], properties: { file: { type: "string" }, why: { type: "string" } }, additionalProperties: false },
-    },
+const FILES_SCHEMA = obj(
+  {
+    files: { ...STRS, description: "Every repo-relative file you changed" },
+    reverted: { ...STRS, description: "Out-of-fence paths you restored (fence repair only)" },
+    report: { ...STR, description: "One line per file, plus anything you could not do" },
+    cwd: { ...STR, description: "Output of `git rev-parse --show-toplevel` run in the directory you worked in" },
+    changedDefaults: { ...STRS, description: "Every default prop value or behaviour you changed, as 'file: prop/behaviour, old -> new, why'. Empty if none." },
+    needs: { type: "array", description: "Files you needed but do not own (you did not edit them)", items: obj({ file: STR, why: STR }) },
   },
-  additionalProperties: false,
-};
+  ["files", "report", "cwd"]
+);
 
-const VERDICT_SCHEMA = {
-  type: "object",
-  required: ["verdict", "findings", "evidence"],
-  properties: {
-    verdict: { type: "string", enum: ["PASS", "FAIL"] },
-    findings: FINDINGS,
-    evidence: { type: "string", description: "Screenshot paths or verbatim command output tails" },
-  },
-  additionalProperties: false,
-};
+const VERDICT_SCHEMA = obj({
+  verdict: { type: "string", enum: ["PASS", "FAIL"] },
+  findings: FINDINGS,
+  evidence: { ...STR, description: "Screenshot paths or verbatim command output tails" },
+});
 
 // ---------------------------------------------------------------------------------------------
 phase("Contract");
@@ -844,12 +888,7 @@ const snap = await ask(
     phase: "Contract",
     agentType: "runner",
     effort: "low",
-    schema: {
-      type: "object",
-      required: ["paths"],
-      properties: { paths: { type: "array", items: { type: "string" } } },
-      additionalProperties: false,
-    },
+    schema: obj({ paths: STRS }),
   }
 );
 (snap ? snap.paths : []).forEach((p) => preDirty.add(p));
@@ -992,12 +1031,7 @@ async function fenceCheck(reports, phaseName) {
       phase: phaseName,
       agentType: "runner",
       effort: "low",
-      schema: {
-        type: "object",
-        required: ["paths"],
-        properties: { paths: { type: "array", items: { type: "string" } } },
-        additionalProperties: false,
-      },
+      schema: obj({ paths: STRS }),
     }
   );
   if (!diff) log("WARNING: git diff fence check returned nothing — earlier violations stay, only lane self-reports are added");
@@ -1118,7 +1152,13 @@ ${browserRules("impeccable-critique", 5281)}
 ${SKILL_RULE}
 Load \`impeccable\` and run \`critique\` on the screenshots. Judge pixels. Does it match the chosen comp
 (${compDir}/shots/)? ${WIDE_CHECK} Report every issue P0-P3. ${FIND_NOTE}`,
-        { label: "check:impeccable-critique", phase: "Check", schema: VERDICT_SCHEMA }
+        {
+          label: "check:impeccable-critique",
+          phase: "Check",
+          // general-purpose: drives the live app and loads `impeccable` (Skill); feature-verifier has no Skill tool.
+          agentType: "general-purpose",
+          schema: VERDICT_SCHEMA,
+        }
       ),
   },
   ...(rebuildHome
@@ -1138,7 +1178,13 @@ ${SKILL_RULE}
 Load \`design-taste-frontend\` and run its references/critique.md loop, at most 3 rounds, scoring only (no
 fixing). ${WIDE_CHECK} A score under 7.5 is reported as scored and is a P1; never round up. Put the score and the
 last critique in evidence.`,
-              { label: "check:taste-critique", phase: "Check", schema: VERDICT_SCHEMA }
+              {
+                label: "check:taste-critique",
+                phase: "Check",
+                // general-purpose: drives the live app and loads `design-taste-frontend` (Skill).
+                agentType: "general-purpose",
+                schema: VERDICT_SCHEMA,
+              }
             ),
         },
       ]
@@ -1154,10 +1200,16 @@ ${CHECK_INPUTS}
 
 ${browserRules("motion", 5283)}
 ${SKILL_RULE}
-Load the \`emil-design-eng\` skill (not \`review-animations\`, which the Skill tool refuses) and judge by its rules the primitives that move (dialog, sheet, dropdown-menu, tabs, accordion, sonner, button
+Load the \`emil-design-eng\` skill (not \`review-animations\`, which the Skill tool refuses) and judge by its rules the primitives that move (dialog, sheet, dropdown-menu, tabs, accordion, button
 press states). Check that the durations and easings come from the --duration-* / --ease-* tokens and
 that prefers-reduced-motion collapses them. ${FIND_NOTE}`,
-        { label: "check:review-animations", phase: "Check", schema: VERDICT_SCHEMA }
+        {
+          label: "check:review-animations",
+          phase: "Check",
+          // general-purpose: drives the live app and loads `emil-design-eng` (Skill); no project agent reviews motion.
+          agentType: "general-purpose",
+          schema: VERDICT_SCHEMA,
+        }
       ),
   },
   {
@@ -1200,16 +1252,15 @@ async function runChecks(defs) {
 }
 await runChecks(CHECKS);
 
-const isBlocking = (f) => f.severity === "P0" || f.severity === "P1";
 const checkFailed = (name) => {
   const r = results[name];
-  return !r || r.verdict !== "PASS" || r.findings.some(isBlocking);
+  return !r || r.verdict !== "PASS" || r.findings.some(isP0P1);
 };
 const openFindings = () =>
   CHECKS.flatMap((c) => {
     const r = results[c.name];
     if (!r) return [{ severity: "P1", source: c.name, issue: "check returned nothing" }];
-    const blocking = r.findings.filter(isBlocking).map((f) => ({ severity: f.severity, source: c.name, issue: f.issue, file: f.file }));
+    const blocking = r.findings.filter(isP0P1).map((f) => ({ severity: f.severity, source: c.name, issue: f.issue, file: f.file }));
     // A FAIL with no P0/P1 finding (a red gate reported as findings: []) must still block.
     if (r.verdict !== "PASS" && !blocking.length) {
       blocking.push({ severity: "P1", source: c.name, issue: `verdict ${r.verdict} with no blocking finding. Evidence: ${String(r.evidence).slice(0, 400)}` });
@@ -1232,13 +1283,15 @@ async function escalate(items, why, tag) {
   if (said === null) {
     log(`${items.length} item(s) ${why} — stopping to ask the user (${tag})`);
     const memAccept = await remember(
-      `Mode: record. Slug: ${slug}. Status: in-progress.
-Where it stopped: needs-accept (${tag}) with winning comp ${winner.id} ("${(winner.tokens && winner.tokens.name) || "unnamed"}", taste ${winner.critique.taste.score}) built on ${ROOT}.
-Waiting for: the user to accept the risk and ship, or stop. These findings ${why}:
-${items.map((i) => `  · [${i.severity}] ${i.source}: ${i.issue}${i.file ? ` (${i.file})` : ""}`).join("\n")}
-Evidence: ${outDir}/check/ (local screenshots).
-Next step: re-run Workflow brand-init with resumeFromRunId set to this run and args.accept = { ...args.accept, "${tag}": true|false }.
-Todo: decide on the open findings above.`,
+      slug,
+      {
+        status: "in-progress",
+        log: `needs-accept (${tag}) with winning comp ${winner.id} ("${(winner.tokens && winner.tokens.name) || "unnamed"}", taste ${winner.critique.taste.score}) built on ${ROOT}. These findings ${why}: ${items.map((i) => `[${i.severity}] ${i.source}: ${i.issue}${i.file ? ` (${i.file})` : ""}`).join("; ")}. Evidence: ${outDir}/check/ (local screenshots).`,
+        stopped: `needs-accept (${tag})`,
+        waiting: "the user to accept the risk and ship, or stop",
+        next: `re-run Workflow brand-init with resumeFromRunId set to this run and args.accept = { ...args.accept, "${tag}": true|false }`,
+        todo: "decide on the open findings recorded in the log",
+      },
       "memory:record:needs-accept:" + tag,
       tag === "post-fix" ? "Fix" : "Close"
     );
@@ -1562,12 +1615,7 @@ ${redo ? "This is a redo: replace the old DESIGN.md outright. Carry nothing over
       label: "close:design-md",
       phase: "Close",
       agentType: "impeccable:impeccable-documenter",
-      schema: {
-        type: "object",
-        required: ["written", "files"],
-        properties: { written: { type: "boolean" }, files: { type: "array", items: { type: "string" } } },
-        additionalProperties: false,
-      },
+      schema: obj({ written: BOOL, files: STRS }),
     }
   );
   if (!doc || !doc.written || !doc.files.includes("DESIGN.md")) {
@@ -1627,7 +1675,13 @@ Produce, in this order:
    decide these yourself.
 
 Be blunt about what is unfinished.`,
-  { label: "close:synthesis", phase: "Close", effort: "high" }
+  {
+    label: "close:synthesis",
+    phase: "Close",
+    // general-purpose: no project agent has this job (a blunt report from the run's own results), and a narrower type would bring the wrong instructions.
+    agentType: "general-purpose",
+    effort: "high",
+  }
 );
 
 // ---------------------------------------------------------------------------------------------
@@ -1702,19 +1756,9 @@ the PR url, and a reason when shipped is false or anything went wrong.`,
     {
       label: "ship:record-commit-pr",
       phase: "Ship",
-      schema: {
-        type: "object",
-        required: ["shipped"],
-        properties: {
-          shipped: { type: "boolean" },
-          reason: { type: "string" },
-          gatesGreen: { type: "boolean" },
-          verdictWritten: { type: "boolean" },
-          commit: { type: "string" },
-          pr: { type: "string" },
-        },
-        additionalProperties: false,
-      },
+      // general-purpose: writes the verdict, stops on a red gate, commits, and opens the PR with a skill (Skill tool); runner makes no judgment.
+      agentType: "general-purpose",
+      schema: obj({ shipped: BOOL, reason: STR, gatesGreen: BOOL, verdictWritten: BOOL, commit: STR, pr: STR }, ["shipped"]),
     }
   );
   ship = shipped ?? { shipped: false, reason: "ship agent returned nothing" };
@@ -1722,18 +1766,22 @@ the PR url, and a reason when shipped is false or anything went wrong.`,
 
 // One writer, once, after every other lane. Status is done only when a PR exists.
 const memFinal = await remember(
-  `Mode: record. Slug: ${slug}. Status: ${ship.shipped ? "done (PR open, not merged: the user merges)" : "blocked"}.
-Winner: comp ${winner.id} ("${tokens.name ?? "unnamed"}"), taste score ${winner.critique.taste.score} (scored, not rounded). Rebuilt home: ${rebuildHome ? "yes" : "no"}. Redo of an existing brand: ${redo}.
-Why it won: the user picked it on the review page after the critiques; taste notes: ${JSON.stringify(winner.critique.taste.notes ?? "")}
-Rejected comps and why:
-${rejected.length ? rejected.map((r) => `  · comp ${r.id}: ${r.why}`).join("\n") : "  · (none)"}
-Links: PR ${ship.pr ?? "none"}; commit ${ship.commit ?? "none"}; verdict ${ship.verdictWritten ? outDir + "/verdict.md (local, not committed)" : "not written"}; DESIGN.md ${mayShip ? "written" : "not written"}.
-Ship: shipped=${ship.shipped}${ship.reason ? `; reason: ${ship.reason}` : ""}.
-Todo (follow-ups still owed):
-${finalBlocking.length ? finalBlocking.map((f) => `  · [${f.severity}] ${f.source}: ${f.issue}`).join("\n") : "  · no open blocking findings"}
-${unresolved.length ? unresolved.map((u) => `  · ${u.file}: ${u.why}`).join("\n") : ""}
-${ship.shipped ? "  · merge the PR after review" : "  · resolve the blockers above and re-run, or fix by hand"}
-Next step: ${ship.shipped ? "user reviews and merges the PR" : "see Todo"}.`,
+  slug,
+  {
+    status: ship.shipped ? "done" : "blocked",
+    log: `${ship.shipped ? "PR open, not merged: the user merges." : "Not shipped."} Winner: comp ${winner.id} ("${tokens.name ?? "unnamed"}"), taste score ${winner.critique.taste.score} (scored, not rounded). Rebuilt home: ${rebuildHome ? "yes" : "no"}. Redo of an existing brand: ${redo}. Ship: shipped=${ship.shipped}${ship.reason ? `; reason: ${ship.reason}` : ""}. Verdict ${ship.verdictWritten ? outDir + "/verdict.md (local, not committed)" : "not written"}; DESIGN.md ${mayShip ? "written" : "not written"}.${finalBlocking.length ? "" : " No open blocking findings."}`,
+    next: ship.shipped ? "user reviews and merges the PR" : "resolve the blockers in the todo list and re-run, or fix by hand",
+    decision: [
+      `comp ${winner.id} ("${tokens.name ?? "unnamed"}") is the brand — the user picked it on the review page after the critiques; taste ${winner.critique.taste.score}; taste notes: ${JSON.stringify(winner.critique.taste.notes ?? "")} — brand-init run`,
+      ...rejected.map((r) => `comp ${r.id} was not picked — ${r.why} — brand-init run`),
+    ],
+    link: [ship.pr ? `PR: ${ship.pr}` : "", ship.commit ? `commit: ${ship.commit}` : ""],
+    todo: [
+      ...finalBlocking.map((f) => `[${f.severity}] ${f.source}: ${f.issue}`),
+      ...unresolved.map((u) => `${u.file}: ${u.why}`),
+      ship.shipped ? "merge the PR after review" : "resolve the blockers above and re-run, or fix by hand",
+    ],
+  },
   "memory:record:ship",
   "Ship"
 );

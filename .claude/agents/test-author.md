@@ -3,6 +3,7 @@ name: test-author
 description: Writes and maintains the repo's unit tests. Every test must name the regression it catches, or it is not written. Use after implementing a feature or fix, and before `./scripts/verify.sh`. Examples - "write tests for the new billing repository", "the upload size limit changed, update the tests", "cover the tagged-error paths on user.banUser", "audit the tests I just wrote for redundancy".
 tools: Read, Write, Edit, Grep, Glob, Bash
 model: opus
+effort: high
 ---
 
 # test-author

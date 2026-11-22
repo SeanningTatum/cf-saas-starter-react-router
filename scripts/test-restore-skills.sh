@@ -15,7 +15,9 @@ FAILED=0
 ok()  { echo "  ✓ $1"; PASS=$((PASS+1)); }
 bad() { echo "  ✗ $1"; FAILED=$((FAILED+1)); }
 
-started() { ps -o lstart= -p "$1" 2>/dev/null | awk '{$1=$1; print}'; }
+# The script's own helpers: started() so a planted "live owner" line reads as the script would
+# write it, create_excl() to test the primitive the lock stands on.
+eval "$(grep -E '^(started|create_excl)\(\)' "$SCRIPT")"
 
 # sandbox -> path of a fresh repo-shaped dir with two locked skills, neither installed
 sandbox() {
@@ -49,8 +51,8 @@ EOF
 
 restore() { PATH="$1/bin:$PATH" bash "$1/scripts/restore-skills.sh" "${@:2}"; }
 calls()   { [ -f "$1/calls" ] && wc -l <"$1/calls" | tr -d ' ' || echo 0; }
-lockgone() { [ ! -d "$1/.agents/.restore.lock" ] && [ ! -d "$1/.agents/.restore.lock.reclaim" ]; }
-plant()   { mkdir "$1/.agents/.restore.lock" && printf '%s\n' "$2" >"$1/.agents/.restore.lock/owner"; }
+lockgone() { [ ! -e "$1/.agents/.restore.lock" ] && [ ! -e "$1/.agents/.restore.lock.reclaim" ]; }
+plant()   { printf '%s\n' "$2" >"$1/.agents/.restore.lock"; }
 
 echo "restore-skills.sh"
 
@@ -115,11 +117,34 @@ rm -r "$SB"
 SB=$(sandbox)
 sleep 30 & DEAD=$!; kill "$DEAD"; wait "$DEAD" 2>/dev/null
 plant "$SB" "$DEAD Thu Jan 1 00:00:00 1970"
-for _ in 1 2 3 4; do restore "$SB" >/dev/null 2>&1 & done
+for i in 1 2 3 4; do restore "$SB" >/dev/null 2>"$SB/err.$i" & done
 wait
+# On failure, print each restore's stderr: it names every lock that was reclaimed.
 [ "$(calls "$SB")" = 1 ] && lockgone "$SB" \
   && ok "4 concurrent restores over a stale lock run exactly one installer" \
-  || bad "concurrent restores: calls=$(calls "$SB")"
+  || { bad "concurrent restores: calls=$(calls "$SB")"; cat "$SB"/err.* 2>/dev/null | sed 's/^/      /'; }
+rm -r "$SB"
+
+# The lock stands on this: of many racing creators of one path, exactly one succeeds.
+# (`mkdir` does not promise it on every host; see create_excl in the script.)
+SB=$(mktemp -d); wrong=0
+for round in $(seq 1 25); do
+  for i in 1 2 3 4 5 6 7 8; do (create_excl "$SB/l.$round" "$i" && echo won >>"$SB/w.$round") & done
+  wait
+  [ "$(wc -l <"$SB/w.$round" 2>/dev/null | tr -d ' ')" = 1 ] || wrong=$((wrong+1))
+done
+[ "$wrong" = 0 ] \
+  && ok "8 racing creators of one lock file: exactly one wins, 25 rounds" \
+  || bad "create_excl let more or fewer than one creator win in $wrong of 25 rounds"
+rm -r "$SB"
+
+# A lock directory left by an older version of this script, old enough, is reclaimed.
+SB=$(sandbox)
+mkdir "$SB/.agents/.restore.lock" && touch -t 202001010000 "$SB/.agents/.restore.lock"
+restore "$SB" >/dev/null 2>&1
+[ "$(calls "$SB")" = 1 ] && lockgone "$SB" \
+  && ok "an old-format lock directory is reclaimed" \
+  || bad "old-format lock: calls=$(calls "$SB")"
 rm -r "$SB"
 
 # No clock: whole-second timestamps flake across a second boundary. The stub installer

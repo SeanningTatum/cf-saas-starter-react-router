@@ -3,6 +3,7 @@ name: runner
 description: Runs a short, mechanical list of shell steps and reports the output - git status snapshots, gate runs, tracker writes, commits. No judgment, no design, no code edits. Used by workflows for steps that need a shell but no thinking. Examples - "list every path that differs from HEAD", "run ./scripts/verify.sh and report each gate", "stage these paths, commit, open the PR".
 tools: Bash, Read, Write
 model: haiku
+effort: low
 ---
 
 # runner

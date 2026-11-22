@@ -31,11 +31,15 @@ vi.mock("@clack/prompts", () => ({
 }));
 
 import { execSync, spawnSync } from "node:child_process";
+import { confirm } from "@clack/prompts";
 import {
   buildAccountIdVariableArgs,
   executeArgv,
+  offerRepoRules,
   setupGitHubCiCredentials,
+  upsertEnvLine,
 } from "../first-time-setup";
+import { password } from "@clack/prompts";
 
 // A grab-bag of classic shell-injection payloads. If any of these were ever
 // concatenated into a shell command string, they would execute arbitrary
@@ -153,6 +157,125 @@ describe("executeArgv (shell-injection safety)", () => {
   });
 });
 
+describe("setupGitHubCiCredentials secrets (pipelines)", () => {
+  type Mock = ReturnType<typeof vi.fn>;
+  const PROD = "prod-token-aaaa1111";
+  const PREVIEW = "preview-token-bbbb2222";
+
+  /** Runs the wizard with the given token answers; returns what reached gh and the .env. */
+  const OK = { status: 0, stdout: "", stderr: "", error: undefined };
+  const NOT_FOUND = { status: 1, stdout: "", stderr: "gh: Not Found (HTTP 404)", error: undefined };
+
+  /** `envGet` is gh's answer to the GET of the production environment. */
+  async function wizard(answers: string[], envGet: typeof OK = OK) {
+    (execSync as unknown as Mock).mockReturnValue("");
+    (spawnSync as unknown as Mock).mockImplementation((_file: string, args: string[]) =>
+      args[0] === "api" && args.length === 2 ? envGet : OK,
+    );
+    for (const a of answers) (password as unknown as Mock).mockResolvedValueOnce(a);
+    const saved: [string, string][] = [];
+    const logged: string[] = [];
+    const log = vi.spyOn(console, "log").mockImplementation((...a) => void logged.push(a.join(" ")));
+    await setupGitHubCiCredentials("acct", (k, v) => void saved.push([k, v]));
+    log.mockRestore();
+    const secretCalls = (execSync as unknown as Mock).mock.calls
+      .filter(([cmd]: [string]) => String(cmd).startsWith("gh secret set"))
+      .map(([cmd, opts]: [string, { input?: string }]) => ({ cmd: String(cmd), input: opts?.input }));
+    const argvs = (spawnSync as unknown as Mock).mock.calls.map(([, args]: [string, string[]]) => args);
+    return { saved, logged, secretCalls, argvs };
+  }
+
+  it("sends the production token to the production environment secret, not a repo-level secret: PR jobs can read repo secrets", async () => {
+    const { secretCalls } = await wizard([PROD, ""]);
+    const prod = secretCalls.filter((c) => c.input === PROD);
+    expect(prod.map((c) => c.cmd)).toEqual(["gh secret set CLOUDFLARE_API_TOKEN --env production"]);
+    expect(secretCalls.map((c) => c.cmd)).not.toContain("gh secret set CLOUDFLARE_API_TOKEN");
+  });
+
+  const ENDPOINT = "repos/{owner}/{repo}/environments/production";
+
+  it("an existing production environment gets no PUT: an empty PUT can wipe its reviewers and branch policy", async () => {
+    const { argvs, secretCalls } = await wizard([PROD, ""], OK);
+    expect(argvs).toContainEqual(["api", ENDPOINT]);
+    expect(argvs.filter((a) => a.includes("PUT"))).toEqual([]);
+    expect(secretCalls.map((c) => c.cmd)).toContain("gh secret set CLOUDFLARE_API_TOKEN --env production");
+  });
+
+  it("a missing production environment (404) is created with a PUT, through argv and no shell", async () => {
+    const { argvs } = await wizard([PROD, ""], NOT_FOUND);
+    expect(argvs).toContainEqual(["api", "-X", "PUT", ENDPOINT]);
+  });
+
+  it("any other failure reading the environment stops before the secret: no PUT and no token sent blind", async () => {
+    const denied = { ...NOT_FOUND, stderr: "gh: Forbidden (HTTP 403)" };
+    const { argvs, secretCalls } = await wizard([PROD, ""], denied);
+    expect(argvs.filter((a) => a.includes("PUT"))).toEqual([]);
+    expect(secretCalls.map((c) => c.cmd)).not.toContain("gh secret set CLOUDFLARE_API_TOKEN --env production");
+  });
+
+  it("warns to protect the environment before it asks for the production token", async () => {
+    const { logged } = await wizard([PROD, ""]);
+    const hint = logged.find((l) => l.includes("environment: production"));
+    expect(hint).toContain("repo-rules.ts --apply");
+  });
+
+  it("puts no secret value in any argv or command string: argv shows in the process list", async () => {
+    const { saved, argvs } = await wizard([PROD, PREVIEW]);
+    const seed = saved[0][1];
+    const commandStrings = (execSync as unknown as Mock).mock.calls.map(([cmd]: [string]) => String(cmd));
+    for (const secret of [PROD, PREVIEW, seed]) {
+      expect(commandStrings.some((c) => c.includes(secret))).toBe(false);
+      expect(argvs.flat().some((a) => a.includes(secret))).toBe(false);
+    }
+  });
+
+  it("a blank preview token sets neither preview secret and writes no .env line", async () => {
+    const { secretCalls, saved } = await wizard([PROD, ""]);
+    expect(secretCalls.map((c) => c.cmd)).not.toContain("gh secret set CLOUDFLARE_PREVIEW_API_TOKEN");
+    expect(secretCalls.map((c) => c.cmd)).not.toContain("gh secret set PREVIEW_SEED_SECRET");
+    expect(saved).toEqual([]);
+  });
+
+  it("a preview token sets the preview token and a random seed secret, and saves the same seed to .env", async () => {
+    const { secretCalls, saved } = await wizard([PROD, PREVIEW]);
+    const byCmd = Object.fromEntries(secretCalls.map((c) => [c.cmd, c.input]));
+    expect(byCmd["gh secret set CLOUDFLARE_PREVIEW_API_TOKEN"]).toBe(PREVIEW);
+    const seed = byCmd["gh secret set PREVIEW_SEED_SECRET"];
+    expect(seed).toMatch(/^[0-9a-f]{32}$/);
+    expect(saved).toEqual([["PREVIEW_SEED_SECRET", seed]]);
+  });
+
+  it("never prints the seed secret or either token", async () => {
+    const { saved, logged } = await wizard([PROD, PREVIEW]);
+    for (const secret of [PROD, PREVIEW, saved[0][1]]) {
+      expect(logged.some((l) => l.includes(secret))).toBe(false);
+    }
+  });
+});
+
+describe("upsertEnvLine", () => {
+  it("appends to a file without a trailing newline without gluing two lines together", () => {
+    expect(upsertEnvLine("A=1", "K", "v")).toBe("A=1\nK=v\n");
+  });
+
+  it("starts a new file and keeps an existing trailing newline", () => {
+    expect(upsertEnvLine("", "K", "v")).toBe("K=v\n");
+    expect(upsertEnvLine("A=1\n", "K", "v")).toBe("A=1\nK=v\n");
+  });
+
+  it("replaces an existing line instead of adding a second: a stale secret would print wrong passwords", () => {
+    expect(upsertEnvLine("A=1\nK=old\nB=2\n", "K", "new")).toBe("A=1\nK=new\nB=2\n");
+  });
+
+  it("leaves one line for the key when the file repeats it: the last duplicate would otherwise win", () => {
+    expect(upsertEnvLine("K=a\nA=1\nK=b\n", "K", "new")).toBe("K=new\nA=1\n");
+  });
+
+  it("does not touch a key that only shares a prefix", () => {
+    expect(upsertEnvLine("KEY2=x\n", "KEY", "v")).toBe("KEY2=x\nKEY=v\n");
+  });
+});
+
 describe("setupGitHubCiCredentials (call-site shell-injection regression)", () => {
   it.each(INJECTION_PAYLOADS)(
     "routes a malicious account id %j to gh via spawnSync argv and never through a shell string",
@@ -167,7 +290,7 @@ describe("setupGitHubCiCredentials (call-site shell-injection regression)", () =
       });
 
       // Pass the payload as the accountId arg so the account-id text prompt is skipped.
-      await setupGitHubCiCredentials(payload);
+      await setupGitHubCiCredentials(payload, () => {});
 
       // The account ID reached `gh` as a discrete argv element via spawnSync (no shell).
       const ghVarCall = (
@@ -192,4 +315,35 @@ describe("setupGitHubCiCredentials (call-site shell-injection regression)", () =
       }
     }
   );
+});
+
+describe("offerRepoRules", () => {
+  const applied = { code: 0, stdout: ["did: POST repos/acme/saas/rulesets"], stderr: [] };
+  const answer = (yes: boolean) =>
+    (confirm as unknown as ReturnType<typeof vi.fn>).mockResolvedValueOnce(yes);
+
+  it("writes nothing to GitHub when the user declines: the rules stop direct pushes, so they are opt-in", async () => {
+    answer(false);
+    const apply = vi.fn(() => applied);
+    await offerRepoRules(apply);
+    expect(apply).not.toHaveBeenCalled();
+  });
+
+  it("runs the one documented command (--apply, no dry run) when the user accepts", async () => {
+    answer(true);
+    const apply = vi.fn(() => applied);
+    await offerRepoRules(apply);
+    expect(apply).toHaveBeenCalledTimes(1);
+    expect(apply).toHaveBeenCalledWith(["--apply"]);
+  });
+
+  it("does not claim success when the apply fails (no admin rights)", async () => {
+    answer(true);
+    const log = vi.spyOn(console, "log").mockImplementation(() => {});
+    await offerRepoRules(() => ({ code: 1, stdout: ["error: POST failed"], stderr: [] }));
+    const printed = log.mock.calls.map((c) => String(c[0])).join("\n");
+    log.mockRestore();
+    expect(printed).toContain("error: POST failed");
+    expect(printed).not.toContain("✓ Repo rules applied");
+  });
 });

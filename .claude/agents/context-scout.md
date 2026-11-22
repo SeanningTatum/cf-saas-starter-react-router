@@ -3,6 +3,7 @@ name: context-scout
 description: Collects what the repo already knows about a feature's area, with a source on every line. Read-only. Used by the plan-feature workflow (.claude/workflows/plan-feature.js) before the ticket audit. Examples - "scout the memory and code for a team-invites ticket", "what does this repo already hold on file upload?", "find prior issues and PRs for CSV export".
 tools: Read, Grep, Glob, Bash
 model: sonnet
+effort: medium
 ---
 
 # context-scout

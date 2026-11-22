@@ -3,6 +3,7 @@ name: ui-builder
 description: Builds and changes user-visible UI in this repo - routes, components, forms, tables, empty/loading/error states, brand work. Runs inside a file fence the caller sets, with the design skills as lead. Does not judge its own output. Examples - "add an empty state to the users table", "build the billing settings page", "rebuild the primitives lane in the chosen brand".
 tools: Read, Edit, Write, Grep, Glob, Bash, Skill
 model: opus
+effort: high
 ---
 
 # ui-builder

@@ -15,6 +15,10 @@ import {
   isCancel,
 } from "@clack/prompts";
 import { buildWranglerConfig, writeWranglerJsonc } from "./lib/wrangler-config";
+import {
+  run as runRepoRules,
+  type Outcome as RepoRulesOutcome,
+} from "./repo-rules";
 
 function sanitizeResourceName(name: string): string {
   return name
@@ -368,12 +372,79 @@ async function runDatabaseMigrations(accountId?: string) {
   previewSpinner.stop("\x1b[32m✓ Preview migrations applied\x1b[0m");
 }
 
-// Wires the two GitHub Actions credentials the CI/CD workflows need:
-//   - repo VARIABLE CLOUDFLARE_ACCOUNT_ID (auto — we already know it)
-//   - repo SECRET   CLOUDFLARE_API_TOKEN  (prompted, masked)
-// Uses the GitHub CLI (`gh`). No-ops with guidance if gh is missing, not
-// authenticated, or the repo has no GitHub remote — never blocks setup.
-export async function setupGitHubCiCredentials(accountId?: string) {
+// Updates (or adds) KEY=value in the text of a .env file.
+export function upsertEnvLine(text: string, key: string, value: string): string {
+  const line = `${key}=${value}`;
+  const lines = text.split("\n");
+  const first = lines.findIndex((l) => l.startsWith(`${key}=`));
+  if (first >= 0) {
+    // Keep the first line for the key, drop any repeats.
+    return lines
+      .map((l, i) => (i === first ? line : l))
+      .filter((l, i) => i === first || !l.startsWith(`${key}=`))
+      .join("\n");
+  }
+  return `${text}${text === "" || text.endsWith("\n") ? "" : "\n"}${line}\n`;
+}
+
+function updateLocalEnv(key: string, value: string) {
+  const envPath = path.join(__dirname, "..", ".env");
+  const current = fs.existsSync(envPath) ? fs.readFileSync(envPath, "utf-8") : "";
+  // A new .env holds a secret: owner-only. An existing file keeps its mode.
+  fs.writeFileSync(envPath, upsertEnvLine(current, key, value), { mode: 0o600 });
+}
+
+// Sets one GitHub secret. The value goes in on stdin, never in argv, so it
+// stays out of the process list. `name` and `environment` are constants in this
+// file, so the command string holds no user input. Returns an error message,
+// or undefined on success.
+function setGhSecret(
+  name: string,
+  value: string,
+  environment?: string
+): string | undefined {
+  const command = environment
+    ? `gh secret set ${name} --env ${environment}`
+    : `gh secret set ${name}`;
+  try {
+    execSync(command, {
+      input: value,
+      encoding: "utf-8",
+      stdio: ["pipe", "pipe", "pipe"],
+    });
+    return undefined;
+  } catch (error: any) {
+    return error.stdout || error.stderr || String(error);
+  }
+}
+
+// Makes sure the `production` environment exists. It reads first and creates
+// only on a 404: a PUT on an existing environment with an empty body can wipe
+// its reviewers and branch policy. Returns an error message, or undefined.
+function ensureProductionEnvironment(): string | undefined {
+  const endpoint = "repos/{owner}/{repo}/environments/production";
+  const found = executeArgv("gh", ["api", endpoint], true);
+  if (typeof found === "string") return undefined;
+  if (!/404|not found/i.test(found.message)) return found.message;
+  const created = executeArgv("gh", ["api", "-X", "PUT", endpoint], true);
+  return typeof created === "string" ? undefined : created.message;
+}
+
+// Wires the GitHub Actions credentials the CI/CD workflows need
+// (docs/ci/pipelines.md lists them all):
+//   - repo VARIABLE                 CLOUDFLARE_ACCOUNT_ID         (auto — we already know it)
+//   - `production` ENVIRONMENT secret CLOUDFLARE_API_TOKEN        (prompted, masked)
+//   - repo SECRET                   CLOUDFLARE_PREVIEW_API_TOKEN  (prompted, masked; blank skips previews)
+//   - repo SECRET                   PREVIEW_SEED_SECRET           (random; also saved to the local .env)
+// The production token is an environment secret: once that environment is
+// protected (docs/ci/pipelines.md), no job that runs pull-request code can
+// read it. Uses the GitHub CLI (`gh`). No-ops with
+// guidance if gh is missing, not authenticated, or the repo has no GitHub
+// remote — never blocks setup. Secret values never print and never touch argv.
+export async function setupGitHubCiCredentials(
+  accountId?: string,
+  saveLocalEnv: (key: string, value: string) => void = updateLocalEnv
+) {
   console.log("\n\x1b[36m🤖 Step 11: GitHub Actions CI/CD credentials\x1b[0m");
 
   const manualHint = () => {
@@ -381,7 +452,9 @@ export async function setupGitHubCiCredentials(accountId?: string) {
       "\x1b[33mSkipped. To enable auto-deploy later, set these on GitHub\n" +
         "  (Settings → Secrets and variables → Actions):\n" +
         "    • Variable CLOUDFLARE_ACCOUNT_ID\n" +
-        "    • Secret   CLOUDFLARE_API_TOKEN\x1b[0m"
+        "    • Secret   CLOUDFLARE_API_TOKEN (in the 'production' environment)\n" +
+        "    • Secret   CLOUDFLARE_PREVIEW_API_TOKEN and PREVIEW_SEED_SECRET (for previews)\n" +
+        "  Details: docs/ci/pipelines.md\x1b[0m"
     );
   };
 
@@ -440,48 +513,123 @@ export async function setupGitHubCiCredentials(accountId?: string) {
     varSpinner.stop("\x1b[32m✓ CLOUDFLARE_ACCOUNT_ID variable set\x1b[0m");
   }
 
-  // 2. API token → repo secret (sensitive → masked prompt).
+  // 2. Production token → `production` environment secret (masked prompt).
+  // Make sure the environment exists first; argv form, no shell.
   console.log(
-    "\x1b[2mCreate a token at https://dash.cloudflare.com/profile/api-tokens\n" +
-      "  from the 'Edit Cloudflare Workers' template, then add 'D1:Edit'\n" +
+    "\x1b[33mProtect the 'production' environment first: until it has a required reviewer\n" +
+      "  and deploys only from the default branch, a branch in this repo can add\n" +
+      "  'environment: production' to its own workflow and read this token. Apply the\n" +
+      "  rules with: bun run scripts/repo-rules.ts --apply (see docs/ci/repo-rules.md,\n" +
+      "  added by #67).\x1b[0m\n" +
+      "\x1b[2mCreate a token at https://dash.cloudflare.com/profile/api-tokens\n" +
+      "  from the 'Edit Cloudflare Workers' template, then add Account → D1 → Edit\n" +
       "  (needed to run migrations in CI). Leave blank to skip.\x1b[0m"
   );
   const token = await password({
-    message: "Cloudflare API token (input hidden):",
+    message: "Cloudflare API token for production (input hidden):",
   });
   if (isCancel(token) || !token) {
     console.log(
-      "\x1b[33mSkipped CLOUDFLARE_API_TOKEN. Set it later with:\n" +
-        "  gh secret set CLOUDFLARE_API_TOKEN\x1b[0m"
+      "\x1b[33mSkipped the production token. Set it later with:\n" +
+        "  gh secret set CLOUDFLARE_API_TOKEN --env production\x1b[0m"
+    );
+  } else {
+    const secretSpinner = spinner();
+    secretSpinner.start("Setting CLOUDFLARE_API_TOKEN (production environment)...");
+    const envFailed = ensureProductionEnvironment();
+    const secretError =
+      envFailed ?? setGhSecret("CLOUDFLARE_API_TOKEN", token as string, "production");
+    if (secretError) {
+      secretSpinner.stop("\x1b[31m✗ Failed to set CLOUDFLARE_API_TOKEN\x1b[0m");
+      console.error(`\x1b[31m${secretError}\x1b[0m`);
+      console.log(
+        "\x1b[33mSet it later with: gh secret set CLOUDFLARE_API_TOKEN --env production\x1b[0m"
+      );
+    } else {
+      secretSpinner.stop(
+        "\x1b[32m✓ CLOUDFLARE_API_TOKEN set in the production environment\x1b[0m"
+      );
+      console.log(
+        "\x1b[32m🚀 Pushes to main will now auto-deploy to production.\x1b[0m"
+      );
+    }
+  }
+
+  // 3. Preview token → repo secret. A separate token, so a pull-request job
+  // never holds the production one. Blank skips previews.
+  console.log(
+    "\x1b[2mFor PR previews, create a second token the same way (ideally in a\n" +
+      "  separate Cloudflare account; see docs/ci/pipelines.md). Leave blank to skip previews.\x1b[0m"
+  );
+  const previewToken = await password({
+    message: "Cloudflare API token for previews (input hidden):",
+  });
+  if (isCancel(previewToken) || !previewToken) {
+    console.log(
+      "\x1b[33mSkipped previews. Turn them on later with:\n" +
+        "  gh secret set CLOUDFLARE_PREVIEW_API_TOKEN\n" +
+        "  gh secret set PREVIEW_SEED_SECRET\x1b[0m"
     );
     return;
   }
 
-  const secretSpinner = spinner();
-  secretSpinner.start("Setting CLOUDFLARE_API_TOKEN secret...");
-  // Pass the token via stdin (not argv) so it never lands in the process list.
-  let secretError: string | undefined;
-  try {
-    execSync("gh secret set CLOUDFLARE_API_TOKEN", {
-      input: token as string,
-      encoding: "utf-8",
-      stdio: ["pipe", "pipe", "pipe"],
-    });
-  } catch (error: any) {
-    secretError = error.stdout || error.stderr || String(error);
-  }
-  if (secretError) {
-    secretSpinner.stop("\x1b[31m✗ Failed to set CLOUDFLARE_API_TOKEN\x1b[0m");
-    console.error(`\x1b[31m${secretError}\x1b[0m`);
+  const previewSpinner = spinner();
+  previewSpinner.start("Setting CLOUDFLARE_PREVIEW_API_TOKEN secret...");
+  const previewError = setGhSecret(
+    "CLOUDFLARE_PREVIEW_API_TOKEN",
+    previewToken as string
+  );
+  if (previewError) {
+    previewSpinner.stop("\x1b[31m✗ Failed to set CLOUDFLARE_PREVIEW_API_TOKEN\x1b[0m");
+    console.error(`\x1b[31m${previewError}\x1b[0m`);
     console.log(
-      "\x1b[33mSet it later with: gh secret set CLOUDFLARE_API_TOKEN\x1b[0m"
+      "\x1b[33mSet it later with: gh secret set CLOUDFLARE_PREVIEW_API_TOKEN\x1b[0m"
     );
-  } else {
-    secretSpinner.stop("\x1b[32m✓ CLOUDFLARE_API_TOKEN secret set\x1b[0m");
-    console.log(
-      "\x1b[32m🚀 CI/CD wired — pushes to main will now auto-deploy to production.\x1b[0m"
-    );
+    return;
   }
+  previewSpinner.stop("\x1b[32m✓ CLOUDFLARE_PREVIEW_API_TOKEN secret set\x1b[0m");
+
+  // 4. Seed secret: previews derive their test-account password from it. Saved
+  // to the local .env (gitignored) so a maintainer can print a preview's
+  // password. The value is never printed.
+  const seedSecret = generateSecureRandomString(32);
+  const seedError = setGhSecret("PREVIEW_SEED_SECRET", seedSecret);
+  if (seedError) {
+    console.error(`\x1b[31m✗ Failed to set PREVIEW_SEED_SECRET\n${seedError}\x1b[0m`);
+    console.log("\x1b[33mSet it later with: gh secret set PREVIEW_SEED_SECRET\x1b[0m");
+    return;
+  }
+  saveLocalEnv("PREVIEW_SEED_SECRET", seedSecret);
+  console.log(
+    "\x1b[32m✓ PREVIEW_SEED_SECRET set (also saved to .env). Print a preview's password with:\n" +
+      "  bun scripts/seed-preview.ts --print-password --pr <N>\x1b[0m"
+  );
+}
+
+// Off unless the user says yes: the rules stop direct pushes to the default branch.
+// `apply` is injected so the test can watch the call without touching GitHub.
+export async function offerRepoRules(
+  apply: (argv: string[]) => RepoRulesOutcome = runRepoRules
+) {
+  console.log("\n\x1b[36m🛡️  Step 12: Repo rules (branch protection)\x1b[0m");
+  const wanted = await confirm({
+    message:
+      "Apply the repo rules now (pull requests only on the default branch, CI required, a reviewer on production deploys)?",
+    initialValue: false,
+  });
+  if (isCancel(wanted) || !wanted) {
+    console.log(
+      "\x1b[33mSkipped. Apply them later with: bun run scripts/repo-rules.ts --apply\x1b[0m"
+    );
+    return;
+  }
+  const outcome = apply(["--apply"]);
+  for (const line of [...outcome.stdout, ...outcome.stderr]) console.log(line);
+  console.log(
+    outcome.code === 0
+      ? "\x1b[32m✓ Repo rules applied\x1b[0m"
+      : "\x1b[33mRepo rules not applied. Fix the error above, then run: bun run scripts/repo-rules.ts --apply\x1b[0m"
+  );
 }
 
 // Main setup function
@@ -750,6 +898,9 @@ async function main() {
   // the GitHub CLI isn't available.
   await setupGitHubCiCredentials(accountId);
 
+  // Step 12: Offer to apply the repo rules (optional, needs admin rights).
+  await offerRepoRules();
+
   // Final instructions
   console.log("\n\x1b[36m✅ Setup Complete!\x1b[0m\n");
   console.log("\x1b[32mNext steps:\x1b[0m");
@@ -767,7 +918,7 @@ async function main() {
     "     \x1b[33m.github/workflows/preview.yml\x1b[0m — every PR gets its own preview deployment"
   );
   console.log(
-    "     (both require the repo variable \x1b[33mCLOUDFLARE_ACCOUNT_ID\x1b[0m and the secret \x1b[33mCLOUDFLARE_API_TOKEN\x1b[0m on GitHub — Step 11 above sets these for you if the GitHub CLI is available)\n"
+    "     (deploy needs the repo variable \x1b[33mCLOUDFLARE_ACCOUNT_ID\x1b[0m and the \x1b[33mproduction\x1b[0m environment secret \x1b[33mCLOUDFLARE_API_TOKEN\x1b[0m; previews need \x1b[33mCLOUDFLARE_PREVIEW_API_TOKEN\x1b[0m and \x1b[33mPREVIEW_SEED_SECRET\x1b[0m. Step 11 above sets these if the GitHub CLI is available. Details: docs/ci/pipelines.md)\n"
   );
 
   outro("✨ Happy building! 🎉");

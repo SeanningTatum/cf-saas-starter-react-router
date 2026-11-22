@@ -11,7 +11,7 @@ import {
   BanUserInput,
   UnbanUserInput,
   DeleteUserInput,
-  CreateWorkflowInput,
+  MAX_BULK_USER_IDS,
   Role,
   Status,
 } from "../user";
@@ -151,13 +151,42 @@ describe("DeleteUserInput", () => {
   });
 });
 
-describe("CreateWorkflowInput", () => {
-  it("decodes email + metadata record", () => {
-    expect(
-      decode(CreateWorkflowInput)({
-        email: "a@b.com",
-        metadata: { source: "signup" },
-      })._tag
-    ).toBe("Right");
-  });
+// Catches: a cap dropped or loosened, letting a client send a field (or a
+// list) of any size to the server and the database. One row per distinct
+// cap; fields that share a schema share its row.
+describe("input caps: at the cap decodes, one over fails", () => {
+  const s = (n: number) => "a".repeat(n);
+  const ids = (n: number) => Array.from({ length: n }, (_, i) => `u${i}`);
+  const email = (n: number) => `${"a".repeat(n - "@b.co".length)}@b.co`;
+  const cases: ReadonlyArray<
+    [
+      string,
+      (u: unknown) => { readonly _tag: "Left" | "Right" },
+      number,
+      (n: number) => unknown,
+    ]
+  > = [
+    ["UserId (GetUserInput.userId)", decode(GetUserInput), 128, (n) => ({ userId: s(n) })],
+    [
+      "bulk user ids (BulkDeleteUsersInput.userIds)",
+      decode(BulkDeleteUsersInput),
+      MAX_BULK_USER_IDS,
+      (n) => ({ userIds: ids(n) }),
+    ],
+    [
+      "ban reason (BanUserInput.reason)",
+      decode(BanUserInput),
+      500,
+      (n) => ({ userId: "u1", reason: s(n) }),
+    ],
+    ["GetUsersInput.search", decode(GetUsersInput), 100, (n) => ({ search: s(n) })],
+    ["UpdateUserData.name", decode(UpdateUserData), 100, (n) => ({ name: s(n) })],
+    ["Email (UpdateUserData.email)", decode(UpdateUserData), 254, (n) => ({ email: email(n) })],
+  ];
+  for (const [name, check, cap, build] of cases) {
+    it(`${name}: ${cap} decodes, ${cap + 1} fails`, () => {
+      expect(check(build(cap))._tag).toBe("Right");
+      expect(check(build(cap + 1))._tag).toBe("Left");
+    });
+  }
 });

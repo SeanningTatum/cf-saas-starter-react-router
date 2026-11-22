@@ -24,7 +24,6 @@ const APP_ERROR_TAGS = new Set<AppError["_tag"]>([
   "BucketDeleteError",
   "BucketListError",
   "BucketValidationError",
-  "WorkflowTriggerError",
   "AnalyticsDeliveryError",
 ]);
 
@@ -142,12 +141,6 @@ const appErrorToTRPC = (e: AppError): TRPCError => {
         code: "BAD_REQUEST",
         message: e.message,
       });
-    case "WorkflowTriggerError":
-      return new TRPCError({
-        code: "INTERNAL_SERVER_ERROR",
-        message: `Failed to trigger workflow: ${e.name}`,
-        cause: e.cause,
-      });
     case "AnalyticsDeliveryError":
       // Analytics swallows this error; the case exists for exhaustiveness.
       return new TRPCError({
@@ -187,7 +180,7 @@ export const tagToTRPC = <A, E, R>(
 ): Effect.Effect<A, TRPCError, R> =>
   Effect.catchAll(effect, (err) => Effect.fail(toTRPC(err)));
 
-// The runtime's own layer construction can fail — a missing D1/R2/Workflow
+// The runtime's own layer construction can fail — a missing D1/R2
 // binding or a broken Better Auth config surfaces as ConfigurationError |
 // ExternalServiceError | BucketBindingError when the request-scoped
 // ManagedRuntime resolves its services. That failure is NOT part of

@@ -22,6 +22,8 @@ test|bun run test|y|600
 non-negotiables-selftest|bun run scripts/check-non-negotiables.ts --selftest|y|300
 non-negotiables|bun run scripts/check-non-negotiables.ts|y|300
 harness|./scripts/harness-check.sh|y|300
+secrets|bun run scripts/secret-scan.ts|y|120
+audit|bun run scripts/package-audit.ts|y|120
 build|bun run build|n|900
 e2e|CI=1 bun run test:e2e|n|900'
 

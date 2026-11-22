@@ -1,0 +1,49 @@
+# Code scan: CodeQL reads the source for injection, unsafe input handling and
+# workflow mistakes. Results show in the repo's Security tab -> Code scanning.
+# See docs/ci/supply-chain.md
+name: CodeQL
+
+on:
+  push:
+    branches: [main]
+  # Every PR, not only those into main: a stacked PR targets the PR below it.
+  pull_request:
+  schedule:
+    # Mondays, so a new query pack reaches code that has not changed.
+    - cron: "23 5 * * 1"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: codeql-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  analyze:
+    name: CodeQL (${{ matrix.language }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      security-events: write
+      actions: read # needed when the repo is private
+    strategy:
+      fail-fast: false
+      matrix:
+        language: [javascript-typescript, actions]
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@1bd86f2fdb4b86187fa4059f16f31a3202acc9ea # v4.39.4
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: none
+
+      - name: Analyze
+        uses: github/codeql-action/analyze@1bd86f2fdb4b86187fa4059f16f31a3202acc9ea # v4.39.4
+        with:
+          category: "/language:${{ matrix.language }}"

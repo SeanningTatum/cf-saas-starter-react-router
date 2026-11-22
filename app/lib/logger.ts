@@ -57,27 +57,6 @@ export function createLayerLogger(layer: LogLayer) {
   return logger.child({ layer });
 }
 
-export function createRequestLogger(
-  layer: LogLayer,
-  context?: {
-    traceId?: string;
-    path?: string;
-    userId?: string;
-    [key: string]: unknown;
-  }
-) {
-  const traceId = context?.traceId ?? generateTraceId();
-  return logger.child({
-    layer,
-    traceId,
-    ...context,
-  });
-}
-
-export function generateTraceId(): string {
-  return Math.random().toString(16).slice(2, 10);
-}
-
 export const loggers = {
   client: createLayerLogger("client"),
   server: createLayerLogger("server"),

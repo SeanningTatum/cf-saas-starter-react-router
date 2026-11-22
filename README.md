@@ -10,7 +10,7 @@
 
 **Three pillars:**
 1. **Harness-first** — agents stay coherent across sessions via the [5-subsystem framework](#harness--the-system-around-the-agent): instructions, state, verification, scope, lifecycle.
-2. **AI-first** — six project-local sub-agents, Matt Pocock's planning skills, seven gates, five AST-checked non-negotiables.
+2. **AI-first** — six project-local sub-agents, Matt Pocock's planning skills, nine gates, five AST-checked non-negotiables.
 3. **DX that just works** — `bun install` + `bun run dev` and you're live. `bun run scripts/first-time-setup.ts` gets you from zero to deployed Worker in ~3 minutes. Local dev runs the same Workers runtime that ships to production.
 
 📦 **Latest release:** [`v2.4.0` — One Review Where It Counts](https://github.com/SeanningTatum/cf-saas-starter-react-router/releases/tag/v2.4.0)
@@ -31,7 +31,7 @@ If you're a human, scroll to [Quick Start](#quick-start). If you're an agent, sc
 - **UI:** ShadCN/Radix + Tailwind v4 (oklch), next-themes, react-hook-form + Effect resolver
 - **i18n:** remix-i18next + i18next, route-level namespaces, fully typed
 - **Testing:** Vitest 3 (unit) + Playwright 1.58 (e2e) + `@effect/vitest`
-- **Background:** Cloudflare Workflows (`ExampleWorkflow`)
+- **Background:** no Workflow ships; [add a Cloudflare Workflow](docs/add-a-cloudflare-workflow.md) when you need one
 
 **Agent harness**
 - GitHub issues and PRs — specs, tickets and verdicts; the project state
@@ -73,7 +73,7 @@ wrangler login
 bun run scripts/first-time-setup.ts
 ```
 
-The wizard creates your D1 database, R2 bucket, optional KV namespace, generates a `BETTER_AUTH_SECRET`, writes `wrangler.jsonc` + `.env`, runs migrations, and deploys. ~3 min end-to-end.
+The wizard creates your D1 database, R2 bucket, optional KV namespace, generates a `BETTER_AUTH_SECRET`, writes `wrangler.jsonc` + `.env`, runs migrations, and deploys. ~3 min end-to-end. Its last step offers to apply the [repo rules](#repo-rules-githubrepo-rulesjson).
 
 ### Option B — Manual
 
@@ -135,6 +135,8 @@ State lives in GitHub: the spec is an issue, each ticket is an issue, and a merg
 | non-negotiables-selftest | `bun run scripts/check-non-negotiables.ts --selftest` | baseline, full |
 | non-negotiables | `bun run scripts/check-non-negotiables.ts` | baseline, full |
 | harness | `./scripts/harness-check.sh` | baseline, full |
+| secrets | `bun run scripts/secret-scan.ts` | baseline, full |
+| audit | `bun run scripts/package-audit.ts` | baseline, full |
 | build | `bun run build` | full |
 | e2e | `bun run test:e2e` | full |
 
@@ -152,7 +154,7 @@ State lives in GitHub: the spec is an issue, each ticket is an issue, and a merg
 |-------|----------|
 | [`effect-ts-enforcer`](.claude/agents/effect-ts-enforcer.md) | After writing — review the diff against the 5 non-negotiables |
 | [`test-author`](.claude/agents/test-author.md) | After a change — write the tests that pin it |
-| [`span-instrumenter`](.claude/agents/span-instrumenter.md) | After adding a procedure, repo method or service — add tracing spans |
+| [`instrumenter`](.claude/agents/instrumenter.md) | After adding a procedure, repo method or service — add tracing spans, and analytics events for a metric |
 | [`ui-builder`](.claude/agents/ui-builder.md) | Any user-visible work |
 | [`context-memory`](.claude/agents/context-memory.md) | Keep per-feature working memory — context, decisions, links, todos — shared by every worktree |
 | [`feature-verifier`](.claude/agents/feature-verifier.md) | Walk a user-visible flow in the browser and record the verdict |
@@ -179,6 +181,16 @@ Auto-installed via `postinstall` (sets `core.hooksPath = .githooks`). Re-install
 ```bash
 SKIP_HOOKS=1 git commit -m "..."
 ```
+
+### Repo rules ([`.github/repo-rules.json`](.github/repo-rules.json))
+
+The rules GitHub enforces are a file: pull requests only on the default branch, the three CI jobs required, linear history, no force push, and a required reviewer on the `production` environment. The repo owner applies them with one command (it needs admin rights, and is safe to run twice):
+
+```bash
+bun run scripts/repo-rules.ts --apply            # add --dry-run to see the writes first
+```
+
+`./scripts/harness-check.sh` fails when the live rules drift from the file. How it checks, and how to turn on required human review: [`docs/ci/repo-rules.md`](docs/ci/repo-rules.md).
 
 ### CLAUDE.md ↔ AGENTS.md
 
@@ -213,7 +225,6 @@ e2e/                  Playwright tests
 public/               Static assets
 scripts/              Setup / teardown / seed + verify.sh + harness-check.sh
 workers/app.ts        Cloudflare Workers entrypoint
-workflows/            Cloudflare Workflow definitions
 init.sh               Harness bootstrap — install + skills + migrate + typecheck + test
 ```
 
@@ -408,7 +419,7 @@ The Action also comments the URL (and a per-commit version URL) on the PR.
 
 **Data isolation** — each PR gets its **own D1 database** (`<name>-db-pr-<N>`). On PR open (and every push), [`scripts/ci/setup-preview-db.ts`](scripts/ci/setup-preview-db.ts) creates the database if needed and patches the CI checkout's `wrangler.jsonc` to point the preview `DATABASE` binding at it (the patch is never committed); CI then applies migrations **and seeds fixtures** ([`scripts/seed-preview.ts`](scripts/seed-preview.ts) `--preview`) before uploading the version, so every preview URL has representative, logged-in-ready data from the first push. On PR close, [`.github/workflows/preview-cleanup.yml`](.github/workflows/preview-cleanup.yml) deletes that database. The preview **R2 bucket is shared** across all PR previews — not per-PR, because wrangler can't delete non-empty buckets, so per-PR buckets would accumulate as orphans. `bun run teardown` also sweeps up any leftover `-db-pr-*` databases.
 
-**Test accounts** — every preview and local D1 gets the same three fixtures (`bun run db:seed` / `bun run db:seed:preview`, password `Password123!` for all):
+**Test accounts** — every preview and local D1 gets the same three fixtures:
 
 | Email | Role | Notes |
 |-------|------|-------|
@@ -416,15 +427,13 @@ The Action also comments the URL (and a per-commit version URL) on the PR.
 | `user@preview.local` | user | regular account |
 | `banned@preview.local` | user | `banned = true`, for testing the ban UI |
 
+Local D1 (`bun run db:seed`) uses the password `Password123!`, for local use only. A preview never uses it: see [Preview passwords](docs/ci/pipelines.md#preview-passwords).
+
 Seeding is idempotent (`INSERT OR IGNORE` on fixed `seed-*` ids) — safe to rerun on every PR synchronize. New tables/features must extend these fixtures.
 
 > **Free plan note:** Cloudflare's D1 free plan caps you at 10 databases, so per-PR databases assume a paid plan. On the free plan, revert the "Provision per-PR D1" step in `preview.yml` back to migrating the shared `<name>-db-preview` database (a one-line change).
 
-**One-time enablement for your repo** — previews ship disabled. To turn them on:
-
-1. Set the repo **variable** `CLOUDFLARE_ACCOUNT_ID` (Settings → Secrets and variables → Actions → Variables tab).
-2. Set the repo **secret** `CLOUDFLARE_API_TOKEN` (same page → Secrets tab), created from the "Edit Cloudflare Workers" API token template plus `D1:Edit` added (migrations need it).
-3. `bun run setup` already provisions the `preview` Worker/R2 resources (plus the shared `-db-preview` D1 used for manual preview work) alongside production; per-PR D1 databases are created automatically by CI — there's nothing else to create.
+**Turning previews and deploys on** — both ship disabled and end as skipped (not failed) until you set up your Cloudflare account. Every variable and secret, the steps to set each one, and how to create the two API tokens are in [`docs/ci/pipelines.md`](docs/ci/pipelines.md). `bun run setup` already provisions the `preview` Worker/R2 resources (plus the shared `-db-preview` D1 used for manual preview work) alongside production; per-PR D1 databases are created automatically by CI.
 
 **Manual commands** — useful for a one-off preview without opening a PR:
 
@@ -453,5 +462,9 @@ CLOUDFLARE_ENV=preview bun run build \
 3. Pre-commit gate runs typecheck + tests automatically
 4. Run `./scripts/verify.sh` — every gate green
 5. Open the PR
+
+### Security
+
+Report a vulnerability in private: see [`SECURITY.md`](SECURITY.md). How dependency updates, the secret scan, the package audit and CodeQL work: [`docs/ci/supply-chain.md`](docs/ci/supply-chain.md).
 
 When in doubt: read first, code second.

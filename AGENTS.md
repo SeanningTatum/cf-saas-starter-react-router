@@ -19,7 +19,7 @@ SaaS starter on **Cloudflare Workers + React Router v7 + tRPC + D1/Drizzle + Bet
 | Working memory per feature | [`context-memory`](.claude/agents/context-memory.md) store outside the repo (`./scripts/memory-dir.sh`) |
 | Symbol graph of the code | `./scripts/codegraph.sh explore "<q>"` before grep; optional, per checkout ([`docs/agents/harness.md`](docs/agents/harness.md#codegraph)) |
 
-`context-memory`: **recall** is read-only, run it at the start of any task. **record** merges decisions, todos and where work stopped; run it once at the end, from the main thread, never in lanes. Never run `lavish-axi share` (public host). Workflow agents cannot poll the user: the workflow returns a `review` page path; the main thread polls it.
+`context-memory`: **recall** is read-only, run it at the start of any task. **record** merges decisions, todos and where work stopped (`scripts/memory.ts` does the merge); run it once at the end, from the main thread, never in lanes. Never run `lavish-axi share` (public host). Workflow agents cannot poll the user: the workflow returns a `review` page path; the main thread polls it.
 
 ## Workflow
 
@@ -37,7 +37,7 @@ Any change beyond one file runs as parallel sub-agents, not one long thread.
 
 1. **Fix the contract:** types, procedure signatures, lane path fences. The only sequential step.
 2. **Build lanes:** one `Agent` call per lane, all in one message: data (schema + repository + tests) · api (tRPC procedure + tests) · UI (`ui-builder`). Lanes own disjoint paths; a lane needing a file it does not own stops and reports.
-3. **Writers:** `test-author` ‖ `span-instrumenter`.
+3. **Writers:** `test-author` ‖ `instrumenter`.
 4. **Checkers:** `effect-ts-enforcer` ‖ `feature-verifier` ‖ design critique ‖ `./scripts/verify.sh`. Read-only; each browser lane owns its port (`CI=1 bun run dev --port <free>`).
 5. **Converge:** the main thread reads every report, re-dispatches the owner of each P0/P1, then runs Done. Lanes never record.
 
@@ -84,9 +84,11 @@ Enforced by `scripts/check-non-negotiables.ts`.
 |--------|----|
 | New tagged error | Add it to `tagToTRPC` in `app/lib/effect-trpc.ts` |
 | New helper or repository | Add its unit test in the same diff |
+| New / changed tRPC procedure | Add it to `LEVELS` (and `OWNERSHIP` if `protected`) in `app/trpc/__tests__/router.test.ts`; cap every string and array in its input (`input-bounds.test.ts`) |
 | New / changed DB table or user-visible data | Extend the fixtures in `scripts/seed-preview.ts` |
 | New / changed user-visible flow | `feature-verifier` → `.verify/<slug>/verdict.md`, in the PR |
 | New / changed component driven by a `*.machine.ts` | Unit tests on the machine own the logic: every transition, guard and reachable state. The e2e spec owns the wiring: generated paths that hit each DOM binding and each state's view once, never one per transition (model: `e2e/file-upload.paths.spec.ts`) |
+| New / changed workflow | Edit `.claude/workflow-src/`, never `.claude/workflows/`; `bun scripts/workflows.ts build`; a dry-run test for the new branch ([how](docs/agents/harness.md#editing-a-workflow)) |
 | New / changed feature | A GitHub issue (`/to-spec`, `/to-tickets`); its PR closes it |
 | A new domain term | `GLOSSARY.md`  |
 | A decision worth keeping | `context-memory` record (dated, why); an ADR if hard to reverse; an agent rule goes in this file |

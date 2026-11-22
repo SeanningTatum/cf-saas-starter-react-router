@@ -188,8 +188,6 @@ import {
   CommandList,
 } from "@/components/ui/command";
 import { ScrollArea } from "@/components/ui/scroll-area";
-// Note: Resizable component (react-resizable-panels) is not SSR-compatible with Cloudflare Workers
-import { api } from "@/trpc/client";
 import { SiteHeader } from "./layout/site-header";
 import { FileUpload } from "@/components/file-upload";
 import { ALLOWED_UPLOAD_CONTENT_TYPES } from "@/lib/constants/upload";
@@ -199,7 +197,6 @@ import { ALLOWED_UPLOAD_CONTENT_TYPES } from "@/lib/constants/upload";
 export const handle = { i18n: ["admin", "upload"] };
 
 export default function KitchenSink() {
-  const createWorkflowMutation = api.user.createWorkflow.useMutation();
   const [isOpen, setIsOpen] = React.useState(false);
   const [progress, setProgress] = React.useState(33);
   const [sliderValue, setSliderValue] = React.useState([50]);
@@ -993,36 +990,6 @@ export default function KitchenSink() {
                     ))}
                   </ScrollArea>
                 </div>
-              </CardContent>
-            </Card>
-          </div>
-        </div>
-
-        {/* Custom Section */}
-        <div className="space-y-4">
-          <h2 className="text-xl font-semibold">Custom</h2>
-          <div className="grid gap-4 md:grid-cols-2">
-            <Card>
-              <CardHeader>
-                <CardTitle>Workflow Trigger</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <Button
-                  onClick={() => {
-                    createWorkflowMutation.mutate({
-                      email: "test@example.com",
-                      metadata: { test: "test" },
-                    });
-                  }}
-                >
-                  Trigger Workflow
-                </Button>
-                {createWorkflowMutation.isPending && (
-                  <p className="text-sm mt-2">Loading...</p>
-                )}
-                {createWorkflowMutation.isSuccess && (
-                  <p className="text-sm text-green-600 mt-2">Success!</p>
-                )}
               </CardContent>
             </Card>
           </div>

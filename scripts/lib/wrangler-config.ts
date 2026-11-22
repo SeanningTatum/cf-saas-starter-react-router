@@ -27,8 +27,6 @@ export function buildWranglerConfig(input: WranglerConfigInput): object {
   const bucketName = `${projectName}-bucket`;
   const previewDbName = `${dbName}-preview`;
   const previewBucketName = `${bucketName}-preview`;
-  const workflowName = `${projectName}-example-workflow`;
-  const previewWorkflowName = `${workflowName}-preview`;
 
   const r2Buckets = [{ binding: "BUCKET", bucket_name: bucketName }];
   const previewR2Buckets = [
@@ -56,13 +54,6 @@ export function buildWranglerConfig(input: WranglerConfigInput): object {
       },
     ],
     ...(enableR2 ? { r2_buckets: r2Buckets } : {}),
-    workflows: [
-      {
-        binding: "EXAMPLE_WORKFLOW",
-        name: workflowName,
-        class_name: "ExampleWorkflow",
-      },
-    ],
     ai: {
       binding: "AI",
     },
@@ -89,13 +80,6 @@ export function buildWranglerConfig(input: WranglerConfigInput): object {
           },
         ],
         ...(enableR2 ? { r2_buckets: previewR2Buckets } : {}),
-        workflows: [
-          {
-            binding: "EXAMPLE_WORKFLOW",
-            name: previewWorkflowName,
-            class_name: "ExampleWorkflow",
-          },
-        ],
         ai: {
           binding: "AI",
         },
@@ -110,6 +94,11 @@ export function buildWranglerConfig(input: WranglerConfigInput): object {
       },
     },
   };
+}
+
+/** wrangler.jsonc text without its whole-line `//` comments, ready for JSON.parse. */
+export function stripJsonc(text: string): string {
+  return text.replace(/^\s*\/\/.*$/gm, "");
 }
 
 /**
