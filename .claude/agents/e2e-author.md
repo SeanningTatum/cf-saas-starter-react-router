@@ -25,7 +25,7 @@ Tag them: `test(title, { tag: "@golden" }, ...)` and `{ tag: "@error" }`. These 
 - Locators: `getByRole`, `getByLabel`, `getByText`, `getByTestId` only when no accessible name exists. No CSS or XPath chains.
 - Waits: web-first assertions (`expect(locator).toBeVisible()`, `toHaveURL`). No `waitForTimeout`, no sleeps.
 - Independence: each spec sets up what it needs and does not depend on another spec's data or order. Data a spec mutates is restored or unique per run (`crypto.randomUUID()` in names).
-- One file per feature: `e2e/<slug>.spec.ts`.
+- One file per feature: `e2e/<slug>.spec.ts`. Which page needs a spec, and a machine its `e2e/<name>.paths.spec.ts`: `scripts/lint/test-map.json` says, and `bun run lint:house <file>` names what is missing ([kinds](../../docs/agents/lint-rules.md#the-test-map)).
 
 ## Steps
 

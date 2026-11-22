@@ -36,7 +36,7 @@ This table is generated from `scripts/lint/rules/`. Do not edit it by hand; run 
 | `no-try-catch` | 1 | A `try` statement outside an `Effect.try` or `Effect.tryPromise` callback. | `app/` and `workers/`, except tests and the ShadCN primitives in `app/components/ui/`. | wrap the call that can fail in `Effect.tryPromise({ try: () => call(), catch: (cause) => new SomeError({ cause }) })` and handle the failure with `Effect.catchTag` | `app/repositories/bucket.ts` |
 | `no-zod` | 2 | Any load of `zod` or a `zod/…` subpath: an `import`, a `require()` or a dynamic `import()`. | `app/` and `workers/`, except tests. | write the schema with Effect Schema: `import { Schema } from "effect"`, then `Schema.Struct({ … })` and `Schema.decodeUnknown(…)` | `app/lib/schemas/user.ts` |
 | `tagged-error-mapped` | 3 | A `Data.TaggedError` class in `app/models/errors/` whose runtime tag has no `case` or `_tag ===` branch inside the mapper in `app/lib/effect-trpc.ts`. | `app/models/errors/` against `app/lib/effect-trpc.ts`. | add the tag to `APP_ERROR_TAGS` and a `case "<Tag>":` that returns a `TRPCError` to the switch in `appErrorToTRPC` in app/lib/effect-trpc.ts | `app/lib/effect-trpc.ts` |
-| `unit-test` | 4 | A `.ts` module that exports a function, class or value and has no unit test beside it, or whose test is close to empty, asserts nothing, or never imports the module. | `app/lib/` and `app/repositories/`, every level deep. A module that exports only types needs no test. | add `__tests__/<name>.test.ts` beside the module; the test imports the module and asserts on what it returns | `app/lib/__tests__/date-utils.test.ts` |
+| `test-map` | 4 | A source file that matches no entry in `scripts/lint/test-map.json`, or whose kind's proof is missing: `unit` a `__tests__/<name>.test.ts` that imports it and asserts; `machine` that and an `e2e/<name>.paths.spec.ts`; `procedure` a `LEVELS` entry and a procedure test; `route` an e2e spec with a `@golden` and an `@error` test that visits its path; `component` and `primitive` a sandbox entry; `declaration` no code that runs; `covered-by` a named test that exists and asserts. | Every `.ts` and `.tsx` file under `app/`, `workers/`, `scripts/`, except tests and their helpers. | give the file the proof its kind names; `scripts/lint/test-map.json` says which kind each folder is |  |
 
 Checks on the baseline file itself:
 
@@ -79,11 +79,27 @@ export const rule: FileRule = {
 };
 ```
 
-- **`scope: "file"`** rules get one parsed file at a time; `applies(path)` says which files. **`scope: "repo"`** rules get the whole tree through `repo.files(dir)` and `repo.source(path)`, for a rule that relates one file to another (`tagged-error-mapped`, `unit-test`).
+- **`scope: "file"`** rules get one parsed file at a time; `applies(path)` says which files. **`scope: "repo"`** rules get the whole tree through `repo.files(dir)` and `repo.source(path)`, for a rule that relates one file to another (`tagged-error-mapped`, `test-map`). In file mode a repo rule is also handed the named files, so it can stop at them.
 - **Cases are the rule's test.** Each case is a small tree of files held in memory and what the rule should say about it. The self-test fails a rule with no `fix`, no "finding" case, no "clean" case, an `example` path that does not exist, or a finding that does not print in the house shape. Write a case for each way round the rule that you can think of; a bypass found later becomes a new case.
-- A hit can carry its own `fix` when the rule's general one would not help.
+- A hit can carry its own `fix` and `example` when the rule's general ones would not help.
 - Then: add `"<id>": {}` under `debt` in `scripts/lint/baseline.json`, run `bun run lint:house --write-docs`, and run `bun run lint:house`. If the repo already breaks the new rule, list today's findings under that key in the same pull request; that is the only time a baseline may gain entries.
 - To let a rule take a comment that excuses one line, set `suppressionMarker: "some-marker:"`. See below.
+
+## The test map
+
+`scripts/lint/test-map.json` gives every `.ts` and `.tsx` file under `app/`, `workers/` and `scripts/` a kind, and the `test-map` rule checks the proof that kind names. Entries are ordered globs; the first match wins, so a narrow entry goes above a broad one. Tests and their helpers (`__tests__/`, `*.test.ts`, `*.test-layer.ts`) need no entry.
+
+| Kind | The proof the rule looks for |
+|------|------------------------------|
+| `unit` | `__tests__/<name>.test.ts` (or `.test.tsx`) beside the file, which imports the file with a real import and asserts. A file with no code of its own (types, re-exports) needs none. |
+| `machine` | The unit test, and `e2e/<name>.paths.spec.ts` that imports the machine or its `.model`. |
+| `procedure` | Each procedure has an entry in `LEVELS` in `app/trpc/__tests__/router.test.ts`, and `__tests__/<name>.test.ts` beside the router names at least one of them. |
+| `route` | The file is in `app/routes.ts`, and an e2e spec that holds a `@golden` and an `@error` test calls `page.goto` on its path. A layout takes the path it wraps. |
+| `component`, `primitive` | A file under `app/routes/sandbox/` imports it. The sandbox arrives with #135; until then today's files are in the baseline, and a new one uses `covered-by` with the e2e spec that exercises it. |
+| `declaration` | The file holds no code that runs. |
+| `covered-by` | The entry names a `test` file that exists and asserts, and gives a `reason`. For entry points and config. |
+
+A file that matches no entry fails as unclassified, and the finding says where to add it: a new folder is a choice, not a gap. An entry that matches no file fails too, so the map holds no dead rows.
 
 ## The baseline
 

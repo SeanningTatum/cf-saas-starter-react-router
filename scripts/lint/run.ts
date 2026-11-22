@@ -53,7 +53,7 @@ const toFinding = (rule: Rule, hit: Hit): Finding => ({
   line: hit.line,
   message: hit.message,
   fix: hit.fix ?? rule.fix,
-  example: rule.example,
+  example: hit.example ?? rule.example,
 });
 
 const byText = (a: string, b: string): number => Number(a > b) - Number(a < b);
@@ -78,7 +78,7 @@ export function runRules(rules: Rule[], repo: Repo, roots: readonly string[], on
   }
   for (const rule of rules) {
     if (rule.scope !== "repo") continue;
-    const hits = rule.check(repo).filter((hit) => !only || only.has(hit.file));
+    const hits = rule.check(repo, only).filter((hit) => !only || only.has(hit.file));
     findings.push(...hits.map((hit) => toFinding(rule, hit)));
   }
   return { findings: findings.sort(byPlace), suppressions, filesChecked };

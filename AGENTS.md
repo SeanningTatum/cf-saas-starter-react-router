@@ -65,7 +65,7 @@ One line each, as orientation. The `non-negotiables` gate (`bun run lint:house`)
 1. **Effect TS** is the default: failures travel in the Effect error channel.
 2. **Effect Schema** for all validation.
 3. **Tagged errors** in `app/models/errors/`, each mapped to a tRPC error.
-4. **Unit test for every helper and repository.**
+4. **Every source file has its proof:** a unit test, a paths spec, an e2e spec or another kind, as `scripts/lint/test-map.json` says for its folder.
 5. **Cloudflare Workers, not Node:** bindings come from the `CloudflareEnv` Tag or `context.cloudflare.env`.
 
 ## When you change something

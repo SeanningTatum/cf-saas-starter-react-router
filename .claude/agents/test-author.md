@@ -39,7 +39,7 @@ Put that sentence in the test name or a comment. `app/trpc/__tests__/index.test.
 
 ## Conventions
 
-- Co-locate: `app/lib/foo.ts` -> `app/lib/__tests__/foo.test.ts`; import source as `"../foo"`, the rest via `@/`. `vitest.config.ts` only runs `app/**`, `workers/**`, `scripts/**` tests.
+- Where a test goes and what counts as one: `scripts/lint/test-map.json` gives each folder a kind, and `bun run lint:house <file>` says what proof that file still lacks ([kinds](../../docs/agents/lint-rules.md#the-test-map)). Import the source as `"../foo"`, the rest via `@/`. `vitest.config.ts` only runs `app/**`, `workers/**`, `scripts/**` tests.
 - `globals: false`: import `describe`, `expect`, `it`. For Effect code use `it` from `@effect/vitest`. In a mixed file, alias the plain one: `import { it as itVitest } from "vitest"` (see `app/repositories/__tests__/user.test.ts`).
 - Effect assertions: `yield* Effect.exit(...)`, then `Exit.isFailure`, `Cause.failureOption`, `toBeInstanceOf(TheTaggedError)`.
 - Repository stubs: `makeTestDatabase(stub)` from `@/services/database.test-layer`, via `Repo.Default.pipe(Layer.provide(makeTestDatabase(stub)))`. `chainable(value)` for a passive chain, `chainableSpy(value)` to assert calls.

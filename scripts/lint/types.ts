@@ -17,6 +17,7 @@ export interface Hit {
   line: number;
   message: string;
   fix?: string;
+  example?: string;
 }
 
 export type FileHit = Omit<Hit, "file">;
@@ -46,7 +47,7 @@ export interface FileRule extends RuleBase {
 
 export interface RepoRule extends RuleBase {
   scope: "repo";
-  check(repo: Repo): Hit[];
+  check(repo: Repo, only?: ReadonlySet<string>): Hit[];
 }
 
 export type Rule = FileRule | RepoRule;

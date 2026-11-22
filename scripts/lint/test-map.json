@@ -1,0 +1,85 @@
+{
+  "entries": [
+    { "match": "app/components/ui/**", "kind": "primitive" },
+    { "match": "app/**/*.d.ts", "kind": "declaration" },
+    { "match": "workers/**/*.d.ts", "kind": "declaration" },
+    { "match": "app/**/*.machine.ts", "kind": "machine" },
+    {
+      "match": "app/components/file-upload.model.ts",
+      "kind": "covered-by",
+      "test": "app/components/__tests__/file-upload.machine.test.ts",
+      "reason": "Test support for the upload machine: it generates the paths the unit test checks and the paths spec replays. No app code imports it."
+    },
+    { "match": "app/**/index.ts", "kind": "unit" },
+    { "match": "app/components/**", "kind": "component" },
+    { "match": "app/routes/**/components/**", "kind": "component" },
+    { "match": "app/routes/**/layout/**", "kind": "component" },
+    { "match": "app/routes/api/**", "kind": "unit" },
+    { "match": "app/routes/**", "kind": "route" },
+    { "match": "app/trpc/routes/**", "kind": "procedure" },
+    { "match": "app/trpc/**", "kind": "unit" },
+    {
+      "match": "app/models/errors/**",
+      "kind": "covered-by",
+      "test": "app/lib/__tests__/effect-trpc.test.ts",
+      "reason": "Tagged error classes hold no logic. The test maps each one to its tRPC error, and the tagged-error-mapped rule fails a class with no mapping."
+    },
+    {
+      "match": "app/db/schema.ts",
+      "kind": "covered-by",
+      "test": "app/repositories/__tests__/user.test.ts",
+      "reason": "Table definitions with no logic; the repository tests query through them."
+    },
+    {
+      "match": "app/entry.client.tsx",
+      "kind": "covered-by",
+      "test": "e2e/auth.spec.ts",
+      "reason": "The browser entry point. Every e2e spec hydrates through it; the auth spec fails if forms never hydrate."
+    },
+    {
+      "match": "app/entry.server.tsx",
+      "kind": "covered-by",
+      "test": "e2e/security-headers.spec.ts",
+      "reason": "The server render entry point. The spec reads the headers and the nonce it puts on every page."
+    },
+    {
+      "match": "app/root.tsx",
+      "kind": "covered-by",
+      "test": "e2e/request-context.spec.ts",
+      "reason": "The root layout and error boundary. The spec loads a page and a 404 through it."
+    },
+    {
+      "match": "app/routes.ts",
+      "kind": "covered-by",
+      "test": "e2e/auth.spec.ts",
+      "reason": "The route table. Every page.goto in e2e resolves through it."
+    },
+    { "match": "app/auth/**", "kind": "unit" },
+    { "match": "app/hooks/**", "kind": "unit" },
+    { "match": "app/i18n/**", "kind": "unit" },
+    { "match": "app/lib/**", "kind": "unit" },
+    { "match": "app/repositories/**", "kind": "unit" },
+    { "match": "app/services/**", "kind": "unit" },
+    { "match": "app/runtime.ts", "kind": "unit" },
+    { "match": "workers/**", "kind": "unit" },
+    {
+      "match": "scripts/check-non-negotiables.ts",
+      "kind": "covered-by",
+      "test": "scripts/lint/__tests__/cli.test.ts",
+      "reason": "A four-line entry over scripts/lint/cli.ts, kept so older briefs still work."
+    },
+    {
+      "match": "scripts/lint/rules/**",
+      "kind": "covered-by",
+      "test": "scripts/lint/__tests__/selftest.test.ts",
+      "reason": "A rule carries its own cases. The self-test runs them and fails a rule that lacks a failing or a passing case."
+    },
+    {
+      "match": "scripts/lint/**/cases.ts",
+      "kind": "covered-by",
+      "test": "scripts/lint/__tests__/selftest.test.ts",
+      "reason": "Case data for the rules. The self-test runs every case and fails one whose expectation is wrong."
+    },
+    { "match": "scripts/**", "kind": "unit" }
+  ]
+}
