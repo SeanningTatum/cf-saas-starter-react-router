@@ -17,6 +17,7 @@ import { useTranslation } from "react-i18next";
 import { useChangeLanguage } from "remix-i18next/react";
 import { i18nServer } from "./i18n/i18n.server";
 import { useNonce } from "./lib/csp-nonce";
+import { useDocumentRequestId } from "./lib/request-id";
 
 export const handle = { i18n: ["common"] };
 
@@ -38,13 +39,26 @@ export async function loader({ request, context }: Route.LoaderArgs) {
   return { locale, requestId: context.requestId };
 }
 
+/**
+ * The id to show a user who reports a problem. Loader data is the freshest
+ * source (the root loader runs again on each navigation), but React Router
+ * skips the root loader on a 404 or 405, so fall back to the id of the
+ * request that rendered the document.
+ */
+const useRequestId = () => {
+  const fromLoader = useRouteLoaderData<typeof loader>("root")?.requestId;
+  const fromDocument = useDocumentRequestId();
+  return fromLoader ?? fromDocument;
+};
+
 export function Layout({ children }: { children: React.ReactNode }) {
   const loaderData = useRouteLoaderData<typeof loader>("root");
   const locale = loaderData?.locale ?? "en";
   const nonce = useNonce();
+  const requestId = useRequestId();
 
   return (
-    <html lang={locale} suppressHydrationWarning>
+    <html lang={locale} data-request-id={requestId} suppressHydrationWarning>
       <head>
         <meta charSet="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -80,9 +94,7 @@ export default function App({ loaderData }: Route.ComponentProps) {
 
 export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {
   const { t } = useTranslation("common");
-  // Undefined when the root loader itself failed. The id comes through loader
-  // data, so the server and the client render the same HTML.
-  const requestId = useRouteLoaderData<typeof loader>("root")?.requestId;
+  const requestId = useRequestId();
 
   let message = t("errors.oops");
   let details = t("errors.unexpected");

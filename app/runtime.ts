@@ -33,7 +33,7 @@ export type AppServices =
  * `request.id` is not set here: the tracer stamps it on every span, this one
  * included (see `makeOtlpTracer`), so it has one source.
  */
-export const requestLayer = (
+const requestLayer = (
   request: RequestContext
 ): Layer.Layer<CurrentRequest | Tracer.ParentSpan> =>
   Layer.merge(

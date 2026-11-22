@@ -65,17 +65,16 @@ export function emitLog(
   };
 
   if (isDev) {
-    // The request id leads the line, shortened, and stays out of the trailing
-    // JSON. When it takes the prefix, `traceId` moves to the JSON, so the
-    // trace can still be found; otherwise `traceId` leads as before.
-    const { layer, requestId, ...withTrace } = data;
-    const { traceId, ...withoutTrace } = withTrace;
+    // The request id leads the line, shortened; with no request, the trace
+    // id leads as before. Whichever id leads stays out of the trailing JSON.
+    const { layer, requestId, traceId, ...others } = data;
     const shortRequestId =
       typeof requestId === "string" && requestId.length > 0
         ? requestId.slice(0, 8)
         : undefined;
     const id = shortRequestId ?? traceId;
-    const rest = shortRequestId ? withTrace : withoutTrace;
+    const rest =
+      shortRequestId && traceId !== undefined ? { ...others, traceId } : others;
     const prefix = [
       layer ? `[${layer}]` : "",
       id ? `(${id})` : "",

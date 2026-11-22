@@ -3,7 +3,7 @@ import { Effect, ManagedRuntime } from "effect";
 import { observabilityLayer } from "../runtime";
 import type { FetchLike } from "@/services/tracing";
 import { currentSpanAnnotations } from "@/services/logger";
-import { setRequestUser, type RequestContext } from "@/lib/request-context";
+import type { RequestContext } from "@/lib/request-context";
 
 // The wiring under test is `observabilityLayer`, the exact layer
 // `makeAppRuntime` puts under the app services. Building the whole app runtime
@@ -24,22 +24,14 @@ const exportedSpans = (bodies: string[]): ExportedSpan[] =>
     (body) => JSON.parse(body).resourceSpans[0].scopeSpans[0].spans as ExportedSpan[]
   );
 
-/**
- * Builds the runtime, runs `before` outside any span (where `createTRPCContext`
- * resolves the session), then one child span; disposes and returns what was
- * exported.
- */
-const runOneRequest = async (
-  request: RequestContext,
-  before: Effect.Effect<void> = Effect.void
-) => {
+/** Builds the runtime, runs one child span, disposes, and returns what was exported. */
+const runOneRequest = async (request: RequestContext) => {
   const bodies: string[] = [];
   const fetchFn: FetchLike = async (_url, init) => {
     bodies.push(init.body);
     return { ok: true, status: 200 };
   };
   const runtime = ManagedRuntime.make(observabilityLayer(env, request, fetchFn));
-  await runtime.runPromise(before);
   await runtime.runPromise(Effect.void.pipe(Effect.withSpan("child")));
   await runtime.dispose();
   const spans = exportedSpans(bodies);
@@ -92,45 +84,8 @@ describe("observabilityLayer with a request", () => {
     );
   });
 
-  it("continues the caller's trace when a traceparent came in", async () => {
-    // Catches ignoring `request.parent`: the request would start a new trace
-    // and the caller's trace would stop at this service.
-    const parent = {
-      traceId: "4bf92f3577b34da6a3ce929d0e0e4736",
-      spanId: "00f067aa0ba902b7",
-      sampled: true,
-    };
-    const { root, child } = await runOneRequest(
-      request({ requestId: parent.traceId, parent })
-    );
-
-    expect(root.traceId).toBe(parent.traceId);
-    expect(root.parentSpanId).toBe(parent.spanId);
-    expect(child.traceId).toBe(parent.traceId);
-    expect(child.parentSpanId).toBe(root.spanId);
-  });
-});
-
-describe("setRequestUser through the request runtime", () => {
-  beforeEach(() => {
-    vi.spyOn(console, "info").mockImplementation(() => {});
-  });
-  afterEach(() => {
-    vi.restoreAllMocks();
-  });
-
-  it("records the user on the request and as user.id on the request span", async () => {
-    // This is the path `createTRPCContext` takes. Catches the runtime not
-    // providing CurrentRequest (the user would never reach a log line) or the
-    // request span not being the current span there (no user.id on the trace).
-    const ctx = request();
-    const { root } = await runOneRequest(ctx, setRequestUser("u1"));
-
-    expect(ctx.userId).toBe("u1");
-    expect(root.attributes).toEqual(
-      expect.arrayContaining([{ key: "user.id", value: { stringValue: "u1" } }])
-    );
-  });
+  // Continuing an incoming trace and `user.id` after sign-in are pinned on the
+  // real stack in workers/__tests__/request-flow.test.ts.
 });
 
 describe("observabilityLayer, logs outside any span", () => {

@@ -9,6 +9,7 @@ import { supportedLngs, fallbackLng, defaultNS } from "./i18n";
 import resourcesToBackend from "i18next-resources-to-backend";
 import { loggers } from "@/lib/logger";
 import { NonceContext } from "@/lib/csp-nonce";
+import { RequestIdContext } from "@/lib/request-id";
 
 export default async function handleRequest(
   request: Request,
@@ -43,13 +44,15 @@ export default async function handleRequest(
 
   const body = await renderToReadableStream(
     <NonceContext.Provider value={nonce}>
-      <I18nextProvider i18n={instance}>
-        <ServerRouter
-          context={routerContext}
-          url={request.url}
-          nonce={nonce}
-        />
-      </I18nextProvider>
+      <RequestIdContext.Provider value={loadContext.requestId}>
+        <I18nextProvider i18n={instance}>
+          <ServerRouter
+            context={routerContext}
+            url={request.url}
+            nonce={nonce}
+          />
+        </I18nextProvider>
+      </RequestIdContext.Provider>
     </NonceContext.Provider>,
     {
       nonce,

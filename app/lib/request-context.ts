@@ -15,6 +15,9 @@ import { setLogContext } from "./log-format";
  * - Plain promise code (`loggers.x.info(...)`) has no context argument, so
  *   `emitLog` reads the async-local store that `workers/app.ts` opens around
  *   the request with `runWithRequestContext`.
+ *
+ * The id is for finding a request's logs and spans, nothing more. A caller can
+ * choose it (it comes from `traceparent`), so never use it to decide access.
  */
 
 export interface TraceParent {
