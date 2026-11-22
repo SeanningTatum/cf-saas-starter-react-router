@@ -21,7 +21,7 @@ export const endSessionsOnBan =
   ): Promise<void> => {
     if (!user || !isBanActive(user, new Date())) return;
     if (context) {
-      await context.context.internalAdapter.deleteSessions(user.id);
+      await context.context.internalAdapter.deleteUserSessions(user.id);
       return;
     }
     await sessionsWithoutEndpoint
