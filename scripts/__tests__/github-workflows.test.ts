@@ -311,7 +311,7 @@ describe("workflows follow the staging to production flow", () => {
     expect(text).toContain(`[ "$HEAD_REF" != "${integration}" ] || [ "$HEAD_REPO" != "$REPO" ]`);
   });
 
-  it.each(["production-guard.yml", "release.yml"])(
+  it.each(["production-guard.yml", "release.yml", "ci.yml", "pr-body.yml"])(
     "%s has no ${{ }} expression inside a run script: values go through env",
     (f) => {
       const lines = codeLines(f);
@@ -333,13 +333,19 @@ describe("workflows follow the staging to production flow", () => {
 });
 
 describe("which jobs run for which base: the full suite into the default branch and production, the lean job on a stacked PR", () => {
-  const event = (name: string, base: string, defaultBranch = "staging"): Context => ({
-    github: { event_name: name, base_ref: base, event: { repository: { default_branch: defaultBranch } } },
+  const event = (name: string, base: string, defaultBranch = "staging", headRepo = "o/r"): Context => ({
+    github: {
+      event_name: name,
+      base_ref: base,
+      repository: "o/r",
+      event: { repository: { default_branch: defaultBranch }, pull_request: { head: { repo: { full_name: headRepo } } } },
+    },
     needs: { readiness: { outputs: { ready: "true" } } },
   });
   const ran = (f: string, context: Context) => jobsThatRun(jobsOf(read(f)), context);
-  const full = { "ci.yml": ["baseline", "build", "e2e"], "codeql.yml": ["analyze"], "preview.yml": ["readiness", "deploy-preview"] };
-  const lean = { "ci.yml": ["lean"], "codeql.yml": [], "preview.yml": [] };
+  const pushed = ["baseline", "build", "e2e"];
+  const full = { "ci.yml": [...pushed, "size", "lighthouse", "report"], "codeql.yml": ["analyze"], "preview.yml": ["readiness", "deploy-preview"], "pr-body.yml": ["size-table"] };
+  const lean = { "ci.yml": ["lean"], "codeql.yml": [], "preview.yml": [], "pr-body.yml": ["size-table"] };
   const required = JSON.parse(fs.readFileSync(path.join(ROOT, ".github", "repo-rules.json"), "utf-8")).rulesets.flatMap(
     (set: { rules: { type: string; parameters?: { required_status_checks?: { context: string }[] } }[] }) =>
       set.rules.flatMap((rule) => rule.parameters?.required_status_checks?.map((check) => check.context) ?? []),
@@ -356,8 +362,12 @@ describe("which jobs run for which base: the full suite into the default branch 
     for (const [f, jobs] of Object.entries(expected)) expect(ran(f, context), f).toEqual(jobs);
   });
 
-  it("a push runs the full suite and not the lean job (the push trigger already limits it to staging and production)", () => {
-    expect(ran("ci.yml", event("push", ""))).toEqual(full["ci.yml"]);
+  it("a PR from a fork into the default branch measures size and Lighthouse but skips the comment: its token cannot write", () => {
+    expect(ran("ci.yml", event("pull_request", "staging", "staging", "someone/fork"))).toEqual([...pushed, "size", "lighthouse"]);
+  });
+
+  it("a push runs the full suite and not the lean job, the size job, Lighthouse or the comment (no PR to compare or comment on)", () => {
+    expect(ran("ci.yml", event("push", ""))).toEqual(pushed);
     expect(ran("codeql.yml", event("push", ""))).toEqual(["analyze"]);
   });
 
@@ -381,5 +391,76 @@ describe("which jobs run for which base: the full suite into the default branch 
   it("the evaluator reads && before ||, as GitHub does, so the cases above test the real precedence", () => {
     expect(evaluate("'a' == 'b' && 'x' == 'x' || 'c' == 'c'", {})).toBe(true);
     expect(evaluate("'a' == 'b' && ('x' == 'x' || 'c' == 'c')", {})).toBe(false);
+  });
+
+  it("the evaluator reads always() as true, and a job that starts with it runs whatever its needs did", () => {
+    expect(evaluate("always() && 'a' == 'a'", {})).toBe(true);
+    const jobs = jobsOf("jobs:\n  a:\n    if: 'x' == 'y'\n  b:\n    needs: [a]\n    if: always() && 'x' == 'x'\n  c:\n    needs: [a]\n");
+    expect(jobsThatRun(jobs, {})).toEqual(["b"]);
+  });
+});
+
+describe("size and Lighthouse on PRs (#159)", () => {
+  const ci = jobsOf(read("ci.yml"));
+  const job = (id: string) => ci.find((j) => j.id === id);
+
+  it("the comment job is the only ci.yml job with a write permission, asks for pull-requests: write and nothing more, and checks out no PR code", () => {
+    const writers = ci.filter((j) => /:\s*write/.test(j.body)).map((j) => j.id);
+    expect(writers).toEqual(["report"]);
+    expect(job("report")?.body).toMatch(/^ {4}permissions:\n {6}pull-requests: write\n {4}\S/m);
+    expect(job("report")?.body).not.toMatch(/actions\/checkout@/);
+    expect(job("report")?.needs).toEqual(["size", "lighthouse"]);
+  });
+
+  it("the comment job finds its own comment by the hidden marker and edits it, else posts one: one comment per PR, never a pile", () => {
+    const body = job("report")?.body ?? "";
+    expect(body).toContain("marker='<!-- ci:size-lighthouse -->'");
+    expect(body).toContain('select(.user.login == \\"github-actions[bot]\\" and (.body | startswith(\\"$marker\\")))');
+    expect(body).toContain('gh api -X PATCH "repos/$REPO/issues/comments/$id" -F body=@comment.md');
+  });
+
+  it("size and Lighthouse measure against the base branch, with full history for the worktree, and keep their reports as artifacts", () => {
+    for (const id of ["size", "lighthouse"]) {
+      expect(job(id)?.body).toMatch(/fetch-depth:\s*0/);
+      expect(job(id)?.body).toContain('--base "origin/$BASE_REF"');
+      expect(job(id)?.body).toMatch(/actions\/upload-artifact@/);
+    }
+  });
+
+  it("nothing uploads to a public Lighthouse host: no lhci upload, no temporary-public-storage", () => {
+    expect(read("ci.yml")).not.toMatch(/temporary-public-storage|lhci|--upload/);
+  });
+
+  it("the required job names are not taken by the new jobs", () => {
+    expect(["size", "lighthouse", "report"].map((id) => job(id)?.name)).toEqual([
+      "Size (against the base branch)",
+      "Lighthouse (mobile, against the base branch)",
+      "Size and Lighthouse comment",
+    ]);
+  });
+});
+
+describe("pr-body.yml checks the size table on every PR", () => {
+  const lines = codeLines("pr-body.yml");
+  const text = lines.join("\n");
+
+  it("runs on opened, edited, synchronize and reopened, with no branches filter: an edited body is checked again, on stacked PRs too", () => {
+    expect(text).toMatch(/pull_request:\s*\n\s+types:\s*\[opened, edited, synchronize, reopened\]/);
+    expect(text).not.toMatch(/^\s{4}branches:/m);
+  });
+
+  it("reads the body only inside an env: block, and the shas from the event", () => {
+    const uses = lines.flatMap((line, i) => (/github\.event\.pull_request\.body/.test(line) ? [i] : []));
+    expect(uses).toHaveLength(1);
+    expect(lines[uses[0] ?? 0]).toMatch(/^\s+PR_BODY:\s*\$\{\{\s*github\.event\.pull_request\.body\s*\}\}\s*$/);
+    expect(text).toMatch(/BASE_SHA:\s*\$\{\{\s*github\.event\.pull_request\.base\.sha\s*\}\}/);
+    expect(text).toMatch(/HEAD_SHA:\s*\$\{\{\s*github\.event\.pull_request\.head\.sha\s*\}\}/);
+  });
+
+  it("stays cheap: no build, no install scripts, full history for the diff", () => {
+    expect(text).not.toMatch(/bun run build|verify\.sh|bun run size/);
+    expect(text).toContain("bun install --frozen-lockfile --ignore-scripts");
+    expect(text).toMatch(/fetch-depth:\s*0/);
+    expect(text).toContain("run: bun scripts/ci/pr-size-body.ts");
   });
 });

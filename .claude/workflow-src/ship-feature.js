@@ -1003,10 +1003,12 @@ const opened = await sh(
   `Push and open the stacked PRs for "${slug}". In order, stop at the first failure:
   0. ${rollupBranch ? `\`git branch -f ${rollupBranch} ${pre.base_sha}\`, then \`git push -u origin ${rollupBranch}\` (the roll-up branch, at the base commit; PR 1 targets it). A plain push: if origin already has ${rollupBranch} from an earlier run and refuses it, fail with that push.` : "Single PR: it targets the base directly; skip."}
   1. \`git push -u origin ${prs.map((p) => p.branch).join(" ")}\`.
-  2. First run \`bun scripts/run-telemetry.ts summary ${slug} --markdown\` once from ROOT. If it fails, skip the \`## Run\` part below. For each PR in order, append a blank line, the heading \`## Run\` and that output to its body file, then \`gh pr create --base <base> --head <branch> --title <title> --body-file <body>\` with
+  2. The size table (docs/ci/pipelines.md#reading-the-size-table). For each PR in order, from ROOT: \`git switch <branch>\`, then \`bun run size --base <base> --pr-body\` with a 900000 ms Bash timeout (it builds the branch and its base; the base is cached by commit, so the next PR reuses it). Append a blank line and its output to the body file: it is \`## Size\` and either the table with its load-time line or "No shipped code changed.". If it fails, append \`## Size\` and the line \`Not measured: <its last error line>\` and go on; CI's PR body check then asks for the table. Then \`git switch ${prs[prs.length - 1].branch}\`.
+${prs.map((p) => `       branch=${p.branch} base=${shq(`origin/${baseOf(p)}`)} body=${outDir()}/pr-${p.n}.md`).join("\n")}
+  3. First run \`bun scripts/run-telemetry.ts summary ${slug} --markdown\` once from ROOT. If it fails, skip the \`## Run\` part below. For each PR in order, append a blank line, the heading \`## Run\` and that output to its body file, then \`gh pr create --base <base> --head <branch> --title <title> --body-file <body>\` with
 ${prs.map((p) => `       n=${p.n} base=${baseOf(p)} branch=${p.branch} title=${shq(p.title)} body=${outDir()}/pr-${p.n}.md`).join("\n")}
      Record each PR's number and url.
-  3. ${prs.length > 1 ? `For each PR: append to its body file a section "## Stack" listing every PR in order as "${"`"}n. #<number> <title>${"`"}" with "← this PR" on its own line, then \`gh pr edit <number> --body-file <body>\`.` : "Single PR: nothing to do."}
+  4. ${prs.length > 1 ? `For each PR: append to its body file a section "## Stack" listing every PR in order as "${"`"}n. #<number> <title>${"`"}" with "← this PR" on its own line, then \`gh pr edit <number> --body-file <body>\`.` : "Single PR: nothing to do."}
 Return ok, failed_command, prs [{ n, number, url, branch }].`,
   { label: "open:prs", phase: "Open", schema: obj({ ok: BOOL, failed_command: STR, prs: arr(obj({ n: NUM, number: NUM, url: STR, branch: STR })) }) }
 );
@@ -1111,6 +1113,7 @@ ${issue ? `\nCloses ${issue.url}` : ""}
   1. Write this text byte for byte to ${outDir()}/rollup.md with a quoted heredoc. In it, replace the line starting "Fixture logins:" with the fixture logins line you find under "How to test" in ${outDir()}/pr-1.md (keep the "Fixture logins:" prefix).
 ${fence("rollup.md", body)}
      Then run \`bun scripts/run-telemetry.ts summary ${slug} --markdown\` from ROOT and append a blank line, the heading \`## Run\` and its output to that file; if the command fails, append nothing.
+     Then, on ${top.branch} (its tree is the roll-up's), run \`bun run size --base ${shq(`origin/${BASE}`)} --pr-body\` from ROOT with a 900000 ms Bash timeout and append a blank line and its output to that file; if it fails, append \`## Size\` and the line \`Not measured: <its last error line>\`.
   2. For each PR in order (${openPrs.map((p) => `#${p.number} ${p.branch}`).join(", ")}):
      a. \`gh pr edit <n> --base ${rollupBranch}\` (PR 1 targets it already, and GitHub may have retargeted the others; then it is a no-op).
      b. \`gh pr merge <n> --merge --match-head-commit $(git rev-parse <branch>)\`. Never --squash, --rebase, --admin, --auto or --delete-branch. If GitHub says the PR is not mergeable yet or its base was just modified, wait 10 s and run it again, up to three times.
