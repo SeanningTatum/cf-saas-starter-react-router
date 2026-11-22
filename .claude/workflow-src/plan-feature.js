@@ -78,7 +78,7 @@ export const meta = {
  *     fit?: "override" | "stop", product?: object, brief?: object, escalations?: object, plans?: object, accept?: object }
  */
 // @lib
-const { twice, checkArgs, asker, preflightFault } = workflowLib({ agent, log });
+const { twice, checkArgs, asker, preflightFault, tracked } = workflowLib({ agent, log, name: "plan-feature" });
 
 const ARG_TYPES = [["ticket", "string"], ["idea", "string"], ["slug", "string"], ["root", "string"], ["research", "boolean"], ["fit", "string"], ["product", "object"], ["brief", "object"], ["escalations", "object"], ["plans", "object"], ["accept", "object"]];
 const input = parseArgs(args, "idea");
@@ -225,7 +225,7 @@ const trackerLine = input.ticket
   : "  6. No ticket was given (an idea). Return issue as null.";
 
 // Shell only, so it runs on the runner (haiku).
-const pre = await agent(
+const pre = await tracked(
   `Pre-flight for plan-feature. Check each item in order and stop at the first failure. Change nothing.
 
   0. Root. ${rootClause(input.root)} ROOT must be absolute. \`cd\` to ROOT: items 1 to 6 run there. Return it in \`root\`.
@@ -445,7 +445,7 @@ const runProducer = (key, extra) => {
   const p = PRODUCERS[key];
   const opts = { label: p.label + (extra ? ":revise" : ""), phase: p.phase, agentType: p.agentType, schema: SCHEMAS[key] };
   const body = promptFor(key) + (extra || "");
-  return p.mode ? agent(`Mode: ${p.mode}.\n${ROOT_PREAMBLE}\n\n${body}`, opts) : ask(body, opts);
+  return p.mode ? tracked(`Mode: ${p.mode}.\n${ROOT_PREAMBLE}\n\n${body}`, opts) : ask(body, opts);
 };
 
 rec.context = await twice(() => runProducer("context"), "context-scout");
@@ -1112,7 +1112,7 @@ for (let round = 1; round <= maxRounds; round++) {
         tracker: writebackNote || null,
         noDesignFile: !pre.has_design,
         changedSinceLastRound: lastChanges.map((c) => `[${c.target}] ${c.text}`),
-        next: `Write the review page at ${planPage} (run \`npx -y lavish-axi playbook comparison\` and \`playbook input\` first; style it with the app's tokens from app/app.css). Read the record at ${draft}; show it, do not rewrite it. ${round > 1 ? `This is round ${round}: say at the top what changed (changedSinceLastRound). ` : ""}Sections: summary, fit verdict and success metric; every decision (D1..) with the chosen option marked, the rejected options with reasons, and who decided; ${hasUi ? "the UX flow and state table, and the Flow diagram, mermaid drawn with the mermaid library from cdnjs (pinned version); " : "no UI (say so in one line); the Flow diagram; "}the PR stack as a table; open questions.${hasUi ? ` PROTOTYPES: copy each surviving prototype (${protos.filter((p) => !p.failed).map((p) => p.file).join(", ") || "none"}) into ${outDir()}/ and show it in an <iframe src="proto-<id>.html"> (relative src, never a leading /), side by side on wide screens and stacked on narrow, each with its name, idea and layout line and a "Known issues" list from knownIssues ("No known issues" when empty).${survivors().length < 3 ? ` Banner: only ${survivors().length} of 3 prototypes survived (${protos.filter((p) => p.failed).map((p) => p.id).join(", ") || "none ran"} failed); draw no frame for them.` : ""} PICK: one radio per surviving direction, ${chosen} preselected as the recommendation, with one sentence on why.` : ""}${writebackNote ? ` Banner at the top: ${writebackNote} Say plainly which happened, show the text as a diff, and ask what to do about it.` : ""}${!pre.has_design ? " Note at the top that DESIGN.md does not exist, so the UX section uses the app tokens only." : ""} End with ONE form: "Approve the plan" or "Request changes" with a text field per area (fit, ux, architect, stack, other); one submit that calls window.lavish.queuePrompt once with data { approved, pick, changes: [{ target, text }] }. Open it with \`npx -y lavish-axi ${planPage}\`, tell the user it is open, then run \`npx -y lavish-axi poll ${planPage}\` in the foreground and re-run it if it times out. Read the answer, post \`npx -y lavish-axi reply ${planPage} --agent-reply "<what happens next>"\`, then ${resumeHow(`plans: { ...earlier rounds, "${round}": { approved: true|false, pick: "<prototype id>", changes: [{ target: "fit"|"ux"|"architect"|"stack"|"other", text }] } }`)} If lavish will not start, show the same content in chat and ask there.`,
+        next: `Write the review page at ${planPage} (run \`npx -y lavish-axi playbook comparison\` and \`playbook input\` first; style it with the app's tokens from app/app.css). Read the record at ${draft}; show it, do not rewrite it. ${round > 1 ? `This is round ${round}: say at the top what changed (changedSinceLastRound). ` : ""}Sections: summary, fit verdict and success metric; every decision (D1..) with the chosen option marked, the rejected options with reasons, and who decided; ${hasUi ? "the UX flow and state table, and the Flow diagram, mermaid drawn with the mermaid library from cdnjs (pinned version); " : "no UI (say so in one line); the Flow diagram; "}the PR stack as a table; open questions.${hasUi ? ` PROTOTYPES: copy each surviving prototype (${protos.filter((p) => !p.failed).map((p) => p.file).join(", ") || "none"}) into ${outDir()}/ and show it in an <iframe src="proto-<id>.html"> (relative src, never a leading /), side by side on wide screens and stacked on narrow, each with its name, idea and layout line and a "Known issues" list from knownIssues ("No known issues" when empty).${survivors().length < 3 ? ` Banner: only ${survivors().length} of 3 prototypes survived (${protos.filter((p) => p.failed).map((p) => p.id).join(", ") || "none ran"} failed); draw no frame for them.` : ""} PICK: one radio per surviving direction, ${chosen} preselected as the recommendation, with one sentence on why.` : ""}${writebackNote ? ` Banner at the top: ${writebackNote} Say plainly which happened, show the text as a diff, and ask what to do about it.` : ""}${!pre.has_design ? " Note at the top that DESIGN.md does not exist, so the UX section uses the app tokens only." : ""} ${runSummaryNote(memSlug(), "plan-feature")} End with ONE form: "Approve the plan" or "Request changes" with a text field per area (fit, ux, architect, stack, other); one submit that calls window.lavish.queuePrompt once with data { approved, pick, changes: [{ target, text }] }. Open it with \`npx -y lavish-axi ${planPage}\`, tell the user it is open, then run \`npx -y lavish-axi poll ${planPage}\` in the foreground and re-run it if it times out. Read the answer, post \`npx -y lavish-axi reply ${planPage} --agent-reply "<what happens next>"\`, then ${resumeHow(`plans: { ...earlier rounds, "${round}": { approved: true|false, pick: "<prototype id>", changes: [{ target: "fit"|"ux"|"architect"|"stack"|"other", text }] } }`)} If lavish will not start, show the same content in chat and ask there.`,
       }
     );
   }
@@ -1249,7 +1249,7 @@ if (hasUi && chosen) {
           items: seriousOpen,
           prototype: protoRel(chosen),
           review: sfile,
-          next: `Write the review page at ${sfile} (run \`npx -y lavish-axi playbook table\` and \`playbook input\` first; style it with the app's tokens from app/app.css). Copy ${protoRel(chosen)} into ${outDir()}/ and show it in an <iframe src="proto-${chosen}.html"> (relative src), list the findings, and end with ONE form: "Accept and publish (the findings go into the record's Open questions)" or "Stop", one submit that calls window.lavish.queuePrompt once with data { accept: true|false }. Open it with \`npx -y lavish-axi ${sfile}\`, tell the user it is open, run \`npx -y lavish-axi poll ${sfile}\` in the foreground (re-run on timeout), post \`npx -y lavish-axi reply ${sfile} --agent-reply "<what happens next>"\`, then ${resumeHow("accept: { states: true|false }")} If lavish will not start, ask in chat.`,
+          next: `Write the review page at ${sfile} (run \`npx -y lavish-axi playbook table\` and \`playbook input\` first; style it with the app's tokens from app/app.css). Copy ${protoRel(chosen)} into ${outDir()}/ and show it in an <iframe src="proto-${chosen}.html"> (relative src), list the findings. ${runSummaryNote(memSlug(), "plan-feature")} End with ONE form: "Accept and publish (the findings go into the record's Open questions)" or "Stop", one submit that calls window.lavish.queuePrompt once with data { accept: true|false }. Open it with \`npx -y lavish-axi ${sfile}\`, tell the user it is open, run \`npx -y lavish-axi poll ${sfile}\` in the foreground (re-run on timeout), post \`npx -y lavish-axi reply ${sfile} --agent-reply "<what happens next>"\`, then ${resumeHow("accept: { states: true|false }")} If lavish will not start, ask in chat.`,
         }
       );
     }

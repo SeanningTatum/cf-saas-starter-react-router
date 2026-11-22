@@ -80,7 +80,7 @@ export const meta = {
  *     rollupRounds?: number (Greptile rounds on the roll-up, or the single PR; default 3, 0 skips) }
  */
 // @lib
-const { twice, checkArgs, asker } = workflowLib({ agent, log });
+const { twice, checkArgs, asker, tracked } = workflowLib({ agent, log, name: "ship-feature" });
 
 const ARG_TYPES = [["ticket", "string"], ["prompt", "string"], ["record", "string"], ["slug", "string"], ["base", "string"], ["root", "string"], ["ready", "string"], ["ships", "object"], ["reviewRounds", "number"], ["rollupRounds", "number"]];
 const input = parseArgs(args, "prompt");
@@ -163,7 +163,7 @@ const recordLine = input.record
     ? `  7. Record. Find the issue comment whose body starts with \`<!-- plan-feature:decision-record -->\` (\`gh issue view <n> --json comments\`; the last one wins). If there is one, write its body WITHOUT that first marker line to ROOT/.verify/_intake/record-<issue number>.md (mkdir -p) and return that absolute path as record_path. Else record_path "".`
     : "  7. Record. None (prompt input): record_path \"\".";
 
-const pre = await agent(
+const pre = await tracked(
   `Pre-flight for ship-feature. Check each item in order and stop at the first failure. Change nothing except the move in item 4b and the files item 7 names.
 
   0. Root. ${typeof input.root === "string" ? `Use ${shq(input.root)}: \`git -C <it> rev-parse --show-toplevel\` is ROOT.` : "`git rev-parse --show-toplevel` is ROOT."} cd there; everything below runs in ROOT.
@@ -291,6 +291,7 @@ ${sourceText}`,
   );
   if (!audit) return { stopped: "Intake", reason: "ticket-auditor returned nothing twice" };
   slug = input.slug || audit.slug;
+  if (!SLUG.test(slug)) return { stopped: "Intake", reason: "the ticket-auditor returned a slug that is not kebab-case" };
   if (audit.verdict !== "ready") {
     if (input.ready === "stop") return { stopped: "Intake", reason: `stopped by the human: ticket not ready (${audit.verdict})` };
     if (input.ready !== "override") {
@@ -826,7 +827,7 @@ for (; shipRound <= 3; shipRound++) {
       shots: hasUi ? `${shotsDir}/` : null,
       videos: reel,
       review: page,
-      next: `Write ${page} (run \`npx -y lavish-axi playbook explanation\` and \`playbook input\` first; style it with the tokens in app/app.css; relative image paths, never a leading /). Top: the feature, the verdict lines and a one-line recommendation (ship, or what blocks). Then: the PR stack as cards (title, branch -> base, its paths, a link to its body file); OPEN P0/P1 findings as a table, most severe first${hasUi ? "; the browser-walk screenshots from shots/ at desktop and mobile; every video in video/ (golden-*, error-*, demo-*) as a <video controls> element captioned with its file name" : ""}; the other findings collapsed; unfenced paths that fell to the last PR. One form: Approve (push and open the PRs) or Request changes (a textarea, one change per line), one submit that calls window.lavish.queuePrompt once. Open it with \`npx -y lavish-axi ${page}\`, run \`npx -y lavish-axi poll ${page}\` in the foreground (re-run on timeout), then ${resumeHow(`ships: { ...earlier rounds, "${shipRound}": <the answer> }`)} Never run \`lavish-axi share\`.`,
+      next: `Write ${page} (run \`npx -y lavish-axi playbook explanation\` and \`playbook input\` first; style it with the tokens in app/app.css; relative image paths, never a leading /). Top: the feature, the verdict lines and a one-line recommendation (ship, or what blocks). Then: the PR stack as cards (title, branch -> base, its paths, a link to its body file); OPEN P0/P1 findings as a table, most severe first${hasUi ? "; the browser-walk screenshots from shots/ at desktop and mobile; every video in video/ (golden-*, error-*, demo-*) as a <video controls> element captioned with its file name" : ""}; the other findings collapsed; unfenced paths that fell to the last PR. ${runSummaryNote(slug, "ship-feature")} One form: Approve (push and open the PRs) or Request changes (a textarea, one change per line), one submit that calls window.lavish.queuePrompt once. Open it with \`npx -y lavish-axi ${page}\`, run \`npx -y lavish-axi poll ${page}\` in the foreground (re-run on timeout), then ${resumeHow(`ships: { ...earlier rounds, "${shipRound}": <the answer> }`)} Never run \`lavish-axi share\`.`,
     });
   }
   if (answer.approved) {
@@ -973,7 +974,7 @@ const opened = await sh(
   `Push and open the stacked PRs for "${slug}". In order, stop at the first failure:
   0. ${rollupBranch ? `\`git branch -f ${rollupBranch} ${pre.base_sha}\`, then \`git push -u origin ${rollupBranch}\` (the roll-up branch, at the base commit; PR 1 targets it). A plain push: if origin already has ${rollupBranch} from an earlier run and refuses it, fail with that push.` : "Single PR: it targets the base directly; skip."}
   1. \`git push -u origin ${prs.map((p) => p.branch).join(" ")}\`.
-  2. For each PR in order: \`gh pr create --base <base> --head <branch> --title <title> --body-file <body>\` with
+  2. First run \`bun scripts/run-telemetry.ts summary ${slug} --markdown\` once from ROOT. If it fails, skip the \`## Run\` part below. For each PR in order, append a blank line, the heading \`## Run\` and that output to its body file, then \`gh pr create --base <base> --head <branch> --title <title> --body-file <body>\` with
 ${prs.map((p) => `       n=${p.n} base=${baseOf(p)} branch=${p.branch} title=${shq(p.title)} body=${outDir()}/pr-${p.n}.md`).join("\n")}
      Record each PR's number and url.
   3. ${prs.length > 1 ? `For each PR: append to its body file a section "## Stack" listing every PR in order as "${"`"}n. #<number> <title>${"`"}" with "← this PR" on its own line, then \`gh pr edit <number> --body-file <body>\`.` : "Single PR: nothing to do."}
@@ -1080,6 +1081,7 @@ ${issue ? `\nCloses ${issue.url}` : ""}
     `Merge the stacked PRs of "${slug}" into ${rollupBranch}, then open the roll-up PR. In order, stop at the first failure (ok=false, failed_command):
   1. Write this text byte for byte to ${outDir()}/rollup.md with a quoted heredoc. In it, replace the line starting "Fixture logins:" with the fixture logins line you find under "How to test" in ${outDir()}/pr-1.md (keep the "Fixture logins:" prefix).
 ${fence("rollup.md", body)}
+     Then run \`bun scripts/run-telemetry.ts summary ${slug} --markdown\` from ROOT and append a blank line, the heading \`## Run\` and its output to that file; if the command fails, append nothing.
   2. For each PR in order (${openPrs.map((p) => `#${p.number} ${p.branch}`).join(", ")}):
      a. \`gh pr edit <n> --base ${rollupBranch}\` (PR 1 targets it already, and GitHub may have retargeted the others; then it is a no-op).
      b. \`gh pr merge <n> --merge --match-head-commit $(git rev-parse <branch>)\`. Never --squash, --rebase, --admin, --auto or --delete-branch. If GitHub says the PR is not mergeable yet or its base was just modified, wait 10 s and run it again, up to three times.

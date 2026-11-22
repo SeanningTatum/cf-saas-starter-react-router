@@ -8,7 +8,7 @@
 import { readdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { dryRun, labels, seq, type AgentCall, type AnswerInput, type AnswerRule, type DryRunResult } from "../../lib/workflow-dry-run";
+import { dryRun, labels, ledgerAt, callShape, rowShape, RUN_OK, seq, type AgentCall, type AnswerInput, type AnswerRule, type DryRunResult } from "../../lib/workflow-dry-run";
 
 /** The workflow returns untyped JSON. */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -68,6 +68,7 @@ function rules(overrides: AnswerRule[] = []): AnswerRule[] {
   return [
     ...overrides,
     ["preflight", { ok: true, reason: "", branch: "feat/brand-init", root: ROOT }],
+    [/^run:record/, RUN_OK],
     ["memory:recall", "nothing recorded"],
     [/^memory:record:/, (c: AnswerInput) => `recorded ${c.label}`],
     ["brief:interview", { questions: QUESTIONS }],
@@ -184,7 +185,7 @@ describe("brand-init: happy path, Preflight to Ship", () => {
     const committers = r3.calls.filter((c) => /ONE commit, one PR/.test(c.prompt));
     expect(labels(committers)).toEqual(["ship:record-commit-pr"]);
     expect(committers[0].phase).toBe("Ship");
-    expect(labels(r3.calls.filter((c) => c.phase === "Ship"))).toEqual(["ship:record-commit-pr", "memory:record:ship"]);
+    expect(labels(r3.calls.filter((c) => c.phase === "Ship"))).toEqual(["ship:record-commit-pr", "run:record:ship", "memory:record:ship"]);
     // DESIGN.md describes the shipped tree: it is written after every check and before the commit.
     expect(indexOf(r3, "close:design-md")).toBeGreaterThan(Math.max(...r3.calls.filter((c) => c.label.startsWith("check:")).map((c) => c.n)));
     expect(indexOf(r3, "close:design-md")).toBeLessThan(indexOf(r3, "ship:record-commit-pr"));
@@ -352,7 +353,7 @@ describe("brand-init: a failing gate stops the run", () => {
 
     const declined = await run({ ...SHIP_ARGS, accept: { "post-fix": false } }, rules([redGate]), stopped);
     // The fix rounds replay from cache; only the report and the final record are new.
-    expect(labels(declined.live)).toEqual(["close:synthesis", "memory:record:ship"]);
+    expect(labels(declined.live)).toEqual(["close:synthesis", "run:record:ship", "memory:record:ship"]);
     expect(res(declined)).toMatchObject({ designMd: null, ship: { shipped: false }, escalations: [{ decision: "stop" }] });
   });
 
@@ -374,8 +375,8 @@ describe("brand-init: stop at the pick and resume", () => {
   it("a re-run replays every call before the stop, never writes the stop's record twice, and moves on to Contract", async () => {
     const stopped = await run({ answers: ANSWERS }, rules());
     expect(res(stopped)).toMatchObject({ status: "needs-pick", needs: ["pick", "rebuildHome"] });
-    const recordAt = indexOf(stopped, "memory:record:needs-pick");
-    expect(recordAt).toBe(stopped.calls.length - 1);
+    const recordAt = indexOf(stopped, "run:record:needs-pick");
+    expect(recordAt).toBe(stopped.calls.length - 2);
 
     // Same args again (the user has not answered yet): the record prompt carries no clock, so it replays.
     const again = await run({ answers: ANSWERS }, rules(), stopped);
@@ -510,5 +511,60 @@ describe("brand-init: fix rounds", () => {
       items: [expect.objectContaining({ severity: "P0", source: "fence:primitives:feedback", file: "app/components/ui/button.tsx" })],
     });
     expect(byLabel(r, "ship:record-commit-pr")).toEqual([]);
+  });
+});
+
+describe("brand-init: run ledger", () => {
+  const drawn = () => ({ html: `${OUT}/1/comp.html`, tokens: tokensFor(1, "drawn"), screenshots: [`${OUT}/1/shots/mobile-light.png`, `${OUT}/1/shots/desktop-light.png`] });
+
+  it("at the brief stop, the pick stop and Ship the run:record ledger lists exactly the calls made before it, in order, and its check line verifies: a call that dodges the ledger gives a false cost report", async () => {
+    const { r1, r2, r3 } = await happyPath();
+    for (const [r, label] of [
+      [r1, "run:record:needs-input"],
+      [r2, "run:record:needs-pick"],
+      [r3, "run:record:ship"],
+    ] as const) {
+      const lg = ledgerAt(r, label);
+      expect(lg.verifies).toBe(true);
+      expect([lg.workflow, lg.slug]).toEqual(["brand-init", "brand-init"]);
+      expect(rowShape(lg.rows)).toEqual(r.calls.slice(0, lg.at).map(callShape));
+    }
+  });
+
+  it("a re-run with the same args replays the stop's run:record call from cache with the same prompt: the ledger holds no clock and no random value", async () => {
+    const { r2 } = await happyPath();
+    const again = await run({ answers: ANSWERS }, rules(), r2);
+    const before = one(r2, "run:record:needs-pick");
+    const after = one(again, "run:record:needs-pick");
+    expect(after.cached).toBe(true);
+    expect(after.prompt).toBe(before.prompt);
+    expect(again.live).toEqual([]);
+  });
+
+  it.each([
+    ["a dead agent", null, "empty"],
+    [
+      "a thrown error",
+      () => {
+        throw new Error("rate limited");
+      },
+      "threw",
+    ],
+  ] as const)("%s on the first try shows outcome %s with attempt 1, then the retry shows attempt 2: the ledger must tell a retry from a first try", async (_who, first, outcome) => {
+    const r = await run({ answers: ANSWERS }, rules([[/^draw:1$/, seq(first, drawn)]]));
+    const lg = ledgerAt(r, "run:record:needs-pick");
+    expect(lg.rows.filter((row) => row.label === "draw:1").map((row) => [row.attempt, row.outcome])).toEqual([
+      [1, outcome],
+      [2, "ok"],
+    ]);
+    expect(lg.rows.filter((row) => row.attempt === 2)).toHaveLength(1);
+  });
+
+  it("the PR body gets the run summary and the pick and accept stops tell the main thread to show it: a PR or a review page without the telemetry table breaks the ticket's second criterion", async () => {
+    const { r2, r3 } = await happyPath();
+    expect(one(r3, "ship:record-commit-pr").prompt).toContain("`## Run` heading and the output of `bun scripts/run-telemetry.ts summary brand-init --markdown`");
+    expect(res(r2).next).toContain("`bun scripts/run-telemetry.ts summary brand-init`");
+    const stopped = await run(SHIP_ARGS, rules([["check:gates", { verdict: "FAIL", findings: [], evidence: "typecheck: 3 errors" }]]));
+    expect(res(stopped).next).toContain("ingest brand-init brand-init <this run's transcript directory>");
   });
 });

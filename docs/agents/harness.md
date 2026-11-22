@@ -84,6 +84,24 @@ A workflow script is one body the runtime runs: it cannot import a file. So the 
 - **Prove an edit changed no prompt:** `WORKFLOW_DRY_RUN_TRACE=<file>` appends every dry run (each prompt, opts, log line and result) as one JSON line. Trace `bunx vitest run scripts/__tests__/workflows` before the edit and after the rebuild, then `diff <(sort before.jsonl) <(sort after.jsonl)`. `WORKFLOW_DRY_RUN_DIR=<dir>` points the tests at a build made with `build --out <dir>`.
 - **What a dry run does not show:** how the real runtime finds cached results on resume (the harness replays call by call, in order), and anything an agent would do with a prompt. A change to what a prompt asks for still needs one real run.
 
+### Run telemetry
+
+Every workflow run leaves `.verify/<slug>/run.json` (gitignored): one entry per agent call with its label, phase, agent, the model asked for, the attempt (2 is a retry), the outcome (`ok`, `empty`, `threw`) and the verdict. `eval-plan-feature` writes `.verify/eval-plan-feature/run.json`.
+
+It has two halves, because a workflow script gets nothing from `agent()` but the answer: no tokens, no clock, no file access.
+
+1. **In the run.** The workflow library ([`lib.js`](../../.claude/workflow-src/lib.js)) counts every call. At each stop and at the end, just before the memory record, the `runner` writes the ledger with `bun scripts/run-telemetry.ts record <slug> <workflow>`. The command carries a count and a checksum, so a garbled copy writes nothing. A failed write is logged and never stops a run. This half knows no tokens and no seconds.
+2. **After the run.** Claude Code keeps each agent's transcript in the run's transcript directory (`<session dir>/subagents/workflows/<run id>/`, the directory the Workflow tool names when it returns). `bun scripts/run-telemetry.ts ingest <slug> <workflow> <that directory>` reads it and fills in tokens in and out, cache tokens, seconds and the model that ran. Run it after each return of a workflow, once per run id; a feature that stopped and resumed has several. That directory's layout is not a documented API: when a file is missing or reads differently, the fields stay empty and every table prints `n/a`. Nothing is estimated.
+
+| Command | What it does |
+|---|---|
+| `bun scripts/run-telemetry.ts record <slug> <workflow>` | Writes the ledger from stdin. The workflows call it; you do not. |
+| `bun scripts/run-telemetry.ts ingest <slug> <workflow> <dir>...` | Adds tokens, seconds and the model from the transcripts. With no ledger yet, it builds the calls from the journal. |
+| `bun scripts/run-telemetry.ts summary <slug> [--markdown]` | One table per workflow: calls, retries, failed, tokens in and out, seconds, by phase. Review pages show it; `ship-feature` and `brand-init` put the `--markdown` form in the PR body under `## Run`. |
+| `bun scripts/run-telemetry.ts stats [--dir .verify]` | Across every feature on this machine: cost per feature (in tokens; the repo holds no price table), the slowest phase, the failure rate by agent. |
+
+A PR body shows the ledger as it stood at the last stop before the PR opened, so the steps after it (the push, the roll-up review) are not in that table; `summary` run later shows them.
+
 ## Review loop and merge bar
 
 `ship-feature` reviews stacked PRs on this machine and spends Greptile on one PR per feature: the roll-up, or the single PR when there is one. Per feature that is 1-3 Greptile reviews. Before this, every stacked PR was reviewed by the Greptile CLI before push, then by Greptile on GitHub, and re-scored after every rebase: on Sola in November 2026, six features of 8-11 stacked PRs each cost 30+ Greptile reviews per feature, mostly of code already reviewed, and days of approvals.

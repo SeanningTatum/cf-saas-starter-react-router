@@ -83,7 +83,7 @@ export const meta = {
  * The helpers every workflow shares; scripts/workflows.ts pastes this file into each workflow.
  * Rules for an author:
  *   - no import, and no free variable except a JS built-in: whatever needs the runtime comes in
- *     through `workflowLib({ agent, log })`;
+ *     through `workflowLib({ agent, log, name })`;
  *   - every top-level name here lands in each workflow's scope, so a workflow must not declare it again.
  */
 
@@ -172,13 +172,113 @@ function memoryRecordCommand(slug, fields) {
   return `bun scripts/memory.ts record ${slug} <<'MEMORY_EOF'\n${lines.join("\n")}\nMEMORY_EOF`;
 }
 
+// ---- Run telemetry ----------------------------------------------------------------------------------
+/** FNV-1a, 32 bit, over the UTF-16 code units of `text`, as 8 lower-case hex digits. scripts/run-telemetry.ts computes the same sum. */
+function ledgerChecksum(text) {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < text.length; i++) {
+    h ^= text.charCodeAt(i);
+    h = Math.imul(h, 0x01000193) >>> 0;
+  }
+  return h.toString(16).padStart(8, "0");
+}
+
+/** A short verdict for the ledger: the result's `verdict` string, else pass or fail from its first boolean among ok, pass, passed, else "". */
+function verdictOf(result) {
+  if (!result || typeof result !== "object") return "";
+  if (typeof result.verdict === "string") return result.verdict;
+  for (const k of ["ok", "pass", "passed"]) if (typeof result[k] === "boolean") return result[k] ? "pass" : "fail";
+  return "";
+}
+
+/** The most characters one ledger string keeps; agent output can reach a ledger string, so each is cut and stripped to a safe set. */
+const LEDGER_FIELD_MAX = 80;
+
+/**
+ * The shell command that hands the ledger to scripts/run-telemetry.ts: one JSON array per call, then a
+ * line with the call count and a checksum, so a runner that garbled the copy leaves nothing behind.
+ * A script has no clock and no file access, so this is how a run reports its calls.
+ */
+function runRecordCommand(workflow, slug, calls) {
+  const clean = (v) => String(v).replace(/[^A-Za-z0-9 :._/#()-]/g, "-").slice(0, LEDGER_FIELD_MAX).split("RUN_EOF").join("RUN-EOF");
+  const lines = calls.map((c) => JSON.stringify([clean(c.label), clean(c.phase), clean(c.agent), clean(c.model), c.attempt, clean(c.outcome), clean(c.verdict)]));
+  const footer = JSON.stringify({ calls: lines.length, check: ledgerChecksum(lines.join("\n")) });
+  return `bun scripts/run-telemetry.ts record ${slug} ${workflow} <<'RUN_EOF'\n${[...lines, footer].join("\n")}\nRUN_EOF`;
+}
+
+/** The sentence a stop that returns a `review` page adds to its `next`: the page shows the run's numbers too. */
+const runSummaryNote = (slug, workflow) =>
+  `The page also shows the run summary: the output of \`bun scripts/run-telemetry.ts summary ${slug}\`, run from ROOT. Tokens and seconds read n/a until \`bun scripts/run-telemetry.ts ingest ${slug} ${workflow} <this run's transcript directory>\` has run; run it first when you have the directory.`;
+
 // ---- Helpers that need the runtime ----------------------------------------------------------------
-function workflowLib({ agent, log }) {
+function workflowLib({ agent, log, name }) {
+  // Every agent call goes through `tracked`, which keeps one ledger entry per call. The entry is
+  // pushed when the call starts (so the ledger is in call order) and filled in when it settles.
+  const entries = [];
+  let attemptNo = 1;
+
+  function tracked(prompt, opts) {
+    const o = opts || {};
+    const entry = { label: o.label || "", phase: o.phase || "", agent: o.agentType || "", model: o.model || "", attempt: attemptNo, outcome: "", verdict: "" };
+    entries.push(entry);
+    let pending;
+    try {
+      pending = agent(prompt, opts);
+    } catch (e) {
+      entry.outcome = "threw";
+      throw e;
+    }
+    return Promise.resolve(pending).then(
+      (r) => {
+        entry.outcome = r === null || r === undefined ? "empty" : "ok";
+        entry.verdict = verdictOf(r);
+        return r;
+      },
+      (e) => {
+        entry.outcome = "threw";
+        throw e;
+      }
+    );
+  }
+
+  const ledger = () => entries.filter((e) => e.outcome).map((e) => ({ ...e }));
+
+  /**
+   * Has the runner write the ledger (scripts/run-telemetry.ts). A failed write is logged and changes
+   * nothing else. The command holds only values the run already has, so a resumed run replays it from cache.
+   */
+  async function recordRun(slug, label, phaseName, send, where) {
+    if (!SLUG.test(slug) || !SLUG.test(name)) {
+      log("Memory and run ledger: not written, slug is not kebab-case");
+      return null;
+    }
+    let out = null;
+    let why = "the runner returned nothing";
+    try {
+      out = await send(`Run this command from ${where} exactly as written and return what it prints. Change nothing in it and run nothing else.\n\n${runRecordCommand(name, slug, ledger())}`, { label, phase: phaseName });
+      if (out !== null && out !== undefined) why = String(out).slice(0, 200);
+    } catch (e) {
+      why = `the runner threw: ${e && e.message ? e.message : e}`.slice(0, 200);
+    }
+    if (!/run-telemetry: recorded/.test(String(out))) log(`Run telemetry: not recorded (${why})`);
+    return out;
+  }
+
   /** Run an agent thunk; one retry if it returns nothing or throws. Returns null after two failures. */
   async function twice(fn, what) {
     for (let attempt = 1; attempt <= 2; attempt++) {
       try {
-        const r = await fn(attempt);
+        // `fn` makes its agent call before its first await. The attempt number is set for that call
+        // only and put back before anything else runs, so a parallel branch never reads this retry.
+        const before = attemptNo;
+        attemptNo = Math.max(before, attempt);
+        let pending;
+        try {
+          pending = fn(attempt);
+        } finally {
+          attemptNo = before;
+        }
+        const r = await pending;
         if (r) return r;
       } catch (e) {
         log(`${what}: attempt ${attempt} threw — ${e && e.message ? e.message : e}`);
@@ -211,9 +311,17 @@ function workflowLib({ agent, log }) {
    * args) and no clock, so a resumed run replays it from cache instead of writing twice.
    */
   function asker(preamble) {
-    const ask = (prompt, opts) => agent(`${preamble}\n\n${prompt}`, opts);
+    const ask = (prompt, opts) => tracked(`${preamble}\n\n${prompt}`, opts);
     const sh = (prompt, opts) => ask(prompt, { effort: "low", ...opts, agentType: "runner" });
     const remember = async (slug, fields, label, phaseName) => {
+      // A slug or workflow name reaches a shell line below, so only a kebab-case one gets that far.
+      if (!SLUG.test(slug) || !SLUG.test(name)) {
+        log("Memory and run ledger: not written, slug is not kebab-case");
+        return null;
+      }
+      // The ledger first, so the memory record that follows sees a file already written.
+      const runLabel = label.startsWith("memory") ? `run:record${label.replace(/^memory(:record)?/, "")}` : `run:record:${label}`;
+      await recordRun(slug, runLabel, phaseName, sh, "ROOT");
       const out = await sh(`Run this command from ROOT exactly as written and return what it prints. Change nothing in it and run nothing else.\n\n${memoryRecordCommand(slug, fields)}`, { label, phase: phaseName });
       // The script says so when a file has outgrown its limit; only a person can ask for the summary.
       if (/over 150 lines/.test(String(out))) log(`Memory: ${slug} is over 150 lines; ask context-memory to shorten it`);
@@ -241,10 +349,10 @@ function workflowLib({ agent, log }) {
     return null;
   }
 
-  return { twice, checkArgs, asker, preflightFault };
+  return { twice, checkArgs, asker, preflightFault, tracked, ledger, recordRun };
 }
 // ---- end of .claude/workflow-src/lib.js ----
-const { twice, checkArgs, asker, preflightFault } = workflowLib({ agent, log });
+const { twice, checkArgs, asker, preflightFault, tracked } = workflowLib({ agent, log, name: "plan-feature" });
 
 const ARG_TYPES = [["ticket", "string"], ["idea", "string"], ["slug", "string"], ["root", "string"], ["research", "boolean"], ["fit", "string"], ["product", "object"], ["brief", "object"], ["escalations", "object"], ["plans", "object"], ["accept", "object"]];
 const input = parseArgs(args, "idea");
@@ -391,7 +499,7 @@ const trackerLine = input.ticket
   : "  6. No ticket was given (an idea). Return issue as null.";
 
 // Shell only, so it runs on the runner (haiku).
-const pre = await agent(
+const pre = await tracked(
   `Pre-flight for plan-feature. Check each item in order and stop at the first failure. Change nothing.
 
   0. Root. ${rootClause(input.root)} ROOT must be absolute. \`cd\` to ROOT: items 1 to 6 run there. Return it in \`root\`.
@@ -611,7 +719,7 @@ const runProducer = (key, extra) => {
   const p = PRODUCERS[key];
   const opts = { label: p.label + (extra ? ":revise" : ""), phase: p.phase, agentType: p.agentType, schema: SCHEMAS[key] };
   const body = promptFor(key) + (extra || "");
-  return p.mode ? agent(`Mode: ${p.mode}.\n${ROOT_PREAMBLE}\n\n${body}`, opts) : ask(body, opts);
+  return p.mode ? tracked(`Mode: ${p.mode}.\n${ROOT_PREAMBLE}\n\n${body}`, opts) : ask(body, opts);
 };
 
 rec.context = await twice(() => runProducer("context"), "context-scout");
@@ -1278,7 +1386,7 @@ for (let round = 1; round <= maxRounds; round++) {
         tracker: writebackNote || null,
         noDesignFile: !pre.has_design,
         changedSinceLastRound: lastChanges.map((c) => `[${c.target}] ${c.text}`),
-        next: `Write the review page at ${planPage} (run \`npx -y lavish-axi playbook comparison\` and \`playbook input\` first; style it with the app's tokens from app/app.css). Read the record at ${draft}; show it, do not rewrite it. ${round > 1 ? `This is round ${round}: say at the top what changed (changedSinceLastRound). ` : ""}Sections: summary, fit verdict and success metric; every decision (D1..) with the chosen option marked, the rejected options with reasons, and who decided; ${hasUi ? "the UX flow and state table, and the Flow diagram, mermaid drawn with the mermaid library from cdnjs (pinned version); " : "no UI (say so in one line); the Flow diagram; "}the PR stack as a table; open questions.${hasUi ? ` PROTOTYPES: copy each surviving prototype (${protos.filter((p) => !p.failed).map((p) => p.file).join(", ") || "none"}) into ${outDir()}/ and show it in an <iframe src="proto-<id>.html"> (relative src, never a leading /), side by side on wide screens and stacked on narrow, each with its name, idea and layout line and a "Known issues" list from knownIssues ("No known issues" when empty).${survivors().length < 3 ? ` Banner: only ${survivors().length} of 3 prototypes survived (${protos.filter((p) => p.failed).map((p) => p.id).join(", ") || "none ran"} failed); draw no frame for them.` : ""} PICK: one radio per surviving direction, ${chosen} preselected as the recommendation, with one sentence on why.` : ""}${writebackNote ? ` Banner at the top: ${writebackNote} Say plainly which happened, show the text as a diff, and ask what to do about it.` : ""}${!pre.has_design ? " Note at the top that DESIGN.md does not exist, so the UX section uses the app tokens only." : ""} End with ONE form: "Approve the plan" or "Request changes" with a text field per area (fit, ux, architect, stack, other); one submit that calls window.lavish.queuePrompt once with data { approved, pick, changes: [{ target, text }] }. Open it with \`npx -y lavish-axi ${planPage}\`, tell the user it is open, then run \`npx -y lavish-axi poll ${planPage}\` in the foreground and re-run it if it times out. Read the answer, post \`npx -y lavish-axi reply ${planPage} --agent-reply "<what happens next>"\`, then ${resumeHow(`plans: { ...earlier rounds, "${round}": { approved: true|false, pick: "<prototype id>", changes: [{ target: "fit"|"ux"|"architect"|"stack"|"other", text }] } }`)} If lavish will not start, show the same content in chat and ask there.`,
+        next: `Write the review page at ${planPage} (run \`npx -y lavish-axi playbook comparison\` and \`playbook input\` first; style it with the app's tokens from app/app.css). Read the record at ${draft}; show it, do not rewrite it. ${round > 1 ? `This is round ${round}: say at the top what changed (changedSinceLastRound). ` : ""}Sections: summary, fit verdict and success metric; every decision (D1..) with the chosen option marked, the rejected options with reasons, and who decided; ${hasUi ? "the UX flow and state table, and the Flow diagram, mermaid drawn with the mermaid library from cdnjs (pinned version); " : "no UI (say so in one line); the Flow diagram; "}the PR stack as a table; open questions.${hasUi ? ` PROTOTYPES: copy each surviving prototype (${protos.filter((p) => !p.failed).map((p) => p.file).join(", ") || "none"}) into ${outDir()}/ and show it in an <iframe src="proto-<id>.html"> (relative src, never a leading /), side by side on wide screens and stacked on narrow, each with its name, idea and layout line and a "Known issues" list from knownIssues ("No known issues" when empty).${survivors().length < 3 ? ` Banner: only ${survivors().length} of 3 prototypes survived (${protos.filter((p) => p.failed).map((p) => p.id).join(", ") || "none ran"} failed); draw no frame for them.` : ""} PICK: one radio per surviving direction, ${chosen} preselected as the recommendation, with one sentence on why.` : ""}${writebackNote ? ` Banner at the top: ${writebackNote} Say plainly which happened, show the text as a diff, and ask what to do about it.` : ""}${!pre.has_design ? " Note at the top that DESIGN.md does not exist, so the UX section uses the app tokens only." : ""} ${runSummaryNote(memSlug(), "plan-feature")} End with ONE form: "Approve the plan" or "Request changes" with a text field per area (fit, ux, architect, stack, other); one submit that calls window.lavish.queuePrompt once with data { approved, pick, changes: [{ target, text }] }. Open it with \`npx -y lavish-axi ${planPage}\`, tell the user it is open, then run \`npx -y lavish-axi poll ${planPage}\` in the foreground and re-run it if it times out. Read the answer, post \`npx -y lavish-axi reply ${planPage} --agent-reply "<what happens next>"\`, then ${resumeHow(`plans: { ...earlier rounds, "${round}": { approved: true|false, pick: "<prototype id>", changes: [{ target: "fit"|"ux"|"architect"|"stack"|"other", text }] } }`)} If lavish will not start, show the same content in chat and ask there.`,
       }
     );
   }
@@ -1415,7 +1523,7 @@ if (hasUi && chosen) {
           items: seriousOpen,
           prototype: protoRel(chosen),
           review: sfile,
-          next: `Write the review page at ${sfile} (run \`npx -y lavish-axi playbook table\` and \`playbook input\` first; style it with the app's tokens from app/app.css). Copy ${protoRel(chosen)} into ${outDir()}/ and show it in an <iframe src="proto-${chosen}.html"> (relative src), list the findings, and end with ONE form: "Accept and publish (the findings go into the record's Open questions)" or "Stop", one submit that calls window.lavish.queuePrompt once with data { accept: true|false }. Open it with \`npx -y lavish-axi ${sfile}\`, tell the user it is open, run \`npx -y lavish-axi poll ${sfile}\` in the foreground (re-run on timeout), post \`npx -y lavish-axi reply ${sfile} --agent-reply "<what happens next>"\`, then ${resumeHow("accept: { states: true|false }")} If lavish will not start, ask in chat.`,
+          next: `Write the review page at ${sfile} (run \`npx -y lavish-axi playbook table\` and \`playbook input\` first; style it with the app's tokens from app/app.css). Copy ${protoRel(chosen)} into ${outDir()}/ and show it in an <iframe src="proto-${chosen}.html"> (relative src), list the findings. ${runSummaryNote(memSlug(), "plan-feature")} End with ONE form: "Accept and publish (the findings go into the record's Open questions)" or "Stop", one submit that calls window.lavish.queuePrompt once with data { accept: true|false }. Open it with \`npx -y lavish-axi ${sfile}\`, tell the user it is open, run \`npx -y lavish-axi poll ${sfile}\` in the foreground (re-run on timeout), post \`npx -y lavish-axi reply ${sfile} --agent-reply "<what happens next>"\`, then ${resumeHow("accept: { states: true|false }")} If lavish will not start, ask in chat.`,
         }
       );
     }
