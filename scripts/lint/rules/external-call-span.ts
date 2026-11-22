@@ -39,7 +39,9 @@ export const rule: FileRule = {
   matches:
     "An `Effect.tryPromise` (an awaited call to D1, R2, Better Auth or another service) that is not piped into `Effect.withSpan`, " +
     "directly, through `Effect.gen(...).pipe(...)`, or through a local helper that makes the span.",
-  covers: "`app/repositories/`, `app/services/` and `app/lib/effect-utils.ts`, except tests. The span exporter is a boundary.",
+  covers:
+    "`app/repositories/`, `app/services/` and `app/lib/effect-utils.ts`, except tests. " +
+    "`app/services/tracing.ts` is a boundary: the exporter cannot trace its own export.",
   fix:
     'pipe the call into a client span, `.pipe(Effect.withSpan("<service>.<operation>", { kind: "client" }))`, ' +
     "with the name in `app/lib/constants/spans.ts`, so a slow or failed outside call shows in the trace",
@@ -102,6 +104,11 @@ export const rule: FileRule = {
     {
       name: "a span added later in the same pipe is clean",
       files: inRepository(`${TRY}.pipe(Effect.map((x) => x), Effect.withSpan("x.get"))`),
+      expect: "clean",
+    },
+    {
+      name: "the pipe() function form is read",
+      files: inRepository(`pipe(${TRY}, Effect.withSpan("x.get"))`),
       expect: "clean",
     },
     {

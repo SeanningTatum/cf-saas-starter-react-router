@@ -193,15 +193,15 @@ export type FetchLike = (
   }
 ) => Promise<{ ok: boolean; status: number }>;
 
-/**
- * Drains the buffer and POSTs one OTLP request. Export failures are logged
- * (`tracing.export_failed`) and swallowed — tracing must never fail the app.
- */
 const forcedExportBudget = makeReportBudget({
   limit: FORCED_TRACE_EXPORT_WINDOW_LIMIT,
   windowMs: FORCED_TRACE_EXPORT_WINDOW_MS,
 });
 
+/**
+ * Drains the buffer and POSTs one OTLP request. Export failures are logged
+ * (`tracing.export_failed`) and swallowed — tracing must never fail the app.
+ */
 export const flushSpans = (
   config: TracingConfig,
   buffer: SpanBuffer,

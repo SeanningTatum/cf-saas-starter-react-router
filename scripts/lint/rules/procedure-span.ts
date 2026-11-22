@@ -19,7 +19,8 @@ const isProcedureBuilder = (receiver: ts.Expression): boolean =>
 
 function spanOptionProblem(call: ts.CallExpression): string | undefined {
   const options = call.arguments[2];
-  if (!options || !ts.isObjectLiteralExpression(options)) return "`runProcedure` call with no `{ span }` option";
+  if (!options) return "`runProcedure` call with no `{ span }` option";
+  if (!ts.isObjectLiteralExpression(options)) return "`runProcedure` options are not an object literal, so `span` cannot be read";
   const span = options.properties.find(
     (property) =>
       (ts.isPropertyAssignment(property) || ts.isShorthandPropertyAssignment(property)) &&
@@ -37,8 +38,9 @@ export const rule: FileRule = {
   id: "procedure-span",
   scope: "file",
   matches:
-    "A tRPC `.query`, `.mutation` or `.subscription` whose handler never reaches `runProcedure` or is passed by reference, " +
-    'a `runProcedure` call with no `span` option, or a literal span name that does not start with "trpc.".',
+"A tRPC `.query`, `.mutation` or `.subscription` on a `…Procedure` builder whose handler never reaches `runProcedure` or is passed by reference, " +
+    'a `runProcedure` call whose third argument is not an object literal with `span`, or a literal span name that does not start with "trpc.". ' +
+    "A builder kept in a variable with another name is not seen.",
   covers: "`app/trpc/routes/`, subfolders included, except tests.",
   fix:
     'write the handler inline and run it through `runProcedure(ctx.runtime, effect, { span: "trpc.<router>.<procedure>" })`, ' +
@@ -84,6 +86,11 @@ export const rule: FileRule = {
     { name: "runProcedure with no options is caught", files: procedure("runProcedure(ctx.runtime, e)"), expect: "finding" },
     { name: "options with no span are caught", files: procedure("runProcedure(ctx.runtime, e, {})"), expect: "finding" },
     {
+      name: "options passed as a variable are caught, since span cannot be read",
+      files: procedure("runProcedure(ctx.runtime, e, options)"),
+      expect: "finding",
+    },
+    {
       name: "a span that does not start with trpc. is caught",
       files: procedure('runProcedure(ctx.runtime, e, { span: "admin.p" })'),
       expect: "finding",
@@ -114,6 +121,11 @@ export const rule: FileRule = {
         "const run = (ctx: any, span: string) => runProcedure(ctx.runtime, e, { span });\n" +
           'export const r = { p: publicProcedure.input(s).mutation(({ ctx }) => run(ctx, "trpc.x.p")) };'
       ),
+      expect: "clean",
+    },
+    {
+      name: "a builder renamed to a name that does not end in Procedure is not seen (a known gap)",
+      files: inRoutes("const base = adminProcedure.use(mw);\nexport const r = { p: base.query(() => 1) };"),
       expect: "clean",
     },
     {
