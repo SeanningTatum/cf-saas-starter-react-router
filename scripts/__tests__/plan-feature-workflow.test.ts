@@ -35,11 +35,31 @@ const producer: Record<string, unknown> = {
   stack: { flow_mermaid: "flowchart LR", prs: [{ n: 1, branch: "feat/x/1", base: "main", title: "x", fence: ["app/"], size: "S", greptile_focus: "f" }] },
 };
 
-function run(plans: Record<string, unknown>) {
+type Fakes = {
+  hasUi?: boolean;
+  /** The fake ux re-plan keeps the direction a pin names; without one (or when false) it drifts to "b". */
+  uxKeepsPin?: boolean;
+  /** These judge labels fail on their first call. */
+  failOnce?: string[];
+};
+
+const ux = (recommended: string) => ({
+  has_ui: true,
+  surface: "app",
+  flow_mermaid: "flowchart LR",
+  screens: [{ route: "/admin/kitchen-sink", purpose: "p" }],
+  states: [{ screen: "s", empty: "e", loading: "l", error: "x", success: "ok" }],
+  wireframe_notes: `describes ${recommended}`,
+  directions: ["a", "b", "c"].map((id) => ({ id, name: id, idea: "i", layout: "l", feedback: "f", motion: false, recommended: id === recommended })),
+  decisions: [],
+});
+
+function run(plans: Record<string, unknown>, fakes: Fakes = {}) {
   const calls: Call[] = [];
   const logs: string[] = [];
   let record = "";
   let published: string | null = null;
+  const failed = new Set<string>();
   const reply = (label: string, prompt: string): unknown => {
     if (label === "preflight")
       return {
@@ -53,14 +73,32 @@ function run(plans: Record<string, unknown>) {
         has_to_spec: true,
         issue: { ref: "#47", number: 47, url: ISSUE, title: "T", body: "B", state: "OPEN", labels: [], updatedAt: "2026-11-01T00:00:00Z", comments: [] },
       };
-    if (label.startsWith("judge:")) return { verdict: "pass", items: [{ id: "c1", pass: true, evidence: "ok" }], fixes: [] };
+    if (label.startsWith("judge:")) {
+      const key = label.slice("judge:".length);
+      if (fakes.failOnce?.includes(key) && !failed.has(key)) {
+        failed.add(key);
+        return { verdict: "fail", items: [{ id: "r7", pass: false, evidence: "a request is missing" }], fixes: ["Open questions: add the missing request"] };
+      }
+      return { verdict: "pass", items: [{ id: "c1", pass: true, evidence: "ok" }], fixes: [] };
+    }
+    if (label.startsWith("proto:")) {
+      const id = label.split(":")[1];
+      return { id, file: `plans/agent-sandbox-seeding-proto-${id}.html`, summary: `prototype ${id}` };
+    }
+    if (label.startsWith("critic:")) return { id: label.split(":")[1], findings: [], audit_hard_fail: false, shots: [] };
+    if (label === "ux") return ux("a");
+    if (label === "ux:revise") {
+      const pin = /Keep (\w) the ONLY recommended direction/.exec(prompt);
+      return ux(fakes.uxKeepsPin && pin ? pin[1] : "b");
+    }
     if (label.startsWith("memory:")) return "recorded";
     if (label === "writeback:body") return { title: "T", body_file: "/repo/.verify/x/issue-body.md", comment_file: "/repo/.verify/x/change-comment.md" };
     if (label === "writeback") return { ok: true, failed_command: "", issue_url: ISSUE, issue_ref: "#47", stale_skipped: false, overwrote_concurrent_edit: false, conflict: "" };
     if (label === "check:assemble") {
       const asked = prompt.split("honour these requests:\n")[1];
       const honoured = asked ? asked.split("\n").filter((l) => l.startsWith("- [")) : [];
-      record = ["# Decision record", "## Non-goals", "- Replacing or changing /admin/kitchen-sink", ...honoured].join("\n");
+      const chosen = /Chosen: (\w)/.exec(prompt);
+      record = ["# Decision record", "## Non-goals", "- Replacing or changing /admin/kitchen-sink", ...honoured, ...(chosen ? [`Chosen: ${chosen[1]}`] : [])].join("\n");
       return { ok: true, failures: [], file: "/repo/.verify/x/record.md" };
     }
     if (label === "check:flush-accepted") return { ok: true, failures: [], file: "/repo/.verify/x/record.md" };
@@ -78,7 +116,7 @@ function run(plans: Record<string, unknown>) {
     return reply(opts.label, prompt);
   };
   const parallel = (fns: (() => Promise<unknown>)[]) => Promise.all(fns.map((f) => f()));
-  const args = { ticket: ISSUE, brief: { decision: "approve", answers: {}, hasUi: false, research: false }, plans };
+  const args = { ticket: ISSUE, brief: { decision: "approve", answers: {}, hasUi: fakes.hasUi === true, research: false }, plans };
   return workflow(args, agent, (m: string) => logs.push(m), () => {}, parallel).then((result) => ({ result, calls, logs, published: published as string | null }));
 }
 
@@ -112,6 +150,41 @@ describe("plan-feature plan loop", () => {
       expect(l).toContain(`judge:${k}:plan-round-1`);
     }
     expect(calls.find((c) => c.label === "fit:revise")?.prompt).toContain(`The human says: ${NOTE}`);
+  });
+
+  it("the record judge checks each approval note, and its revision keeps the notes (a revision without them would drop them)", async () => {
+    const { result, calls, published } = await run(
+      { "1": { approved: true, changes: [{ target: "other", text: NOTE }] } },
+      { failOnce: ["record:plan-round-1"] }
+    );
+
+    expect(result.record_comment_url).toBeTruthy();
+    expect(published).toContain(NOTE);
+    const judged = calls.find((c) => c.label === "judge:record:plan-round-1");
+    expect(judged?.prompt).toContain("r7 The record honours every one of these requests");
+    expect(judged?.prompt).toContain(`[other] ${NOTE}`);
+    const revision = calls.find((c) => c.label === "check:assemble" && c.prompt.includes("The whole-record judge failed the draft"));
+    expect(revision?.prompt).toContain(`Still honour these requests:\n- [other] ${NOTE}`);
+    expect(labels(calls)).toContain("judge:record:plan-round-1:2");
+  });
+
+  it("an approval with a ux note keeps the approved direction: the re-plan is told to, and the record says Chosen: a", async () => {
+    const { result, calls, published } = await run({ "1": { approved: true, pick: "a", changes: [{ target: "ux", text: NOTE }] } }, { hasUi: true, uxKeepsPin: true });
+
+    expect(result.record_comment_url).toBeTruthy();
+    expect(result.chosen).toBe("a");
+    expect(published).toContain("Chosen: a");
+    expect(calls.find((c) => c.label === "ux:revise")?.prompt).toContain("The human approved direction a. Keep a the ONLY recommended direction");
+    // Not redrawn after an approval: the three prototypes are drawn once, at Design.
+    expect(labels(calls).filter((x) => /^proto:\w:direction$/.test(x))).toHaveLength(3);
+  });
+
+  it("a ux re-plan that will not keep the approved direction stops the run instead of publishing a mismatched record", async () => {
+    const { result, calls } = await run({ "1": { approved: true, pick: "a", changes: [{ target: "ux", text: NOTE }] } }, { hasUi: true, uxKeepsPin: false });
+
+    expect(result.stopped).toBe("Plan");
+    expect(String(result.reason)).toContain("approved a");
+    expect(labels(calls)).not.toContain("publish");
   });
 
   it("an approval with no notes publishes the first assembly unchanged, as before", async () => {
