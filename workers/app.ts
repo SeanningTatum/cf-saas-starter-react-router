@@ -7,7 +7,9 @@ import { AuthApi } from "@/services/auth";
 import { makeAppRuntime, type AppRuntime } from "@/runtime";
 import { HTTP_STATUS_ATTRIBUTE } from "@/lib/constants/error-reporting";
 import type { ErrorCapture } from "@/lib/error-reporting/report";
+import { decideSampling, readSampling } from "@/lib/sampling";
 import {
+  readEnvironment,
   reportError,
   requestErrorReporter,
   type ErrorReporterShape,
@@ -113,7 +115,10 @@ export default {
   // context from the runtime instead.
   async fetch(request, env, ctx) {
     const nonce = makeNonce();
-    const requestContext = makeRequestContext(request);
+    const requestContext = makeRequestContext(
+      request,
+      decideSampling(readSampling(env, readEnvironment(env)))
+    );
     const errorReporter = requestErrorReporter(env, requestContext, (delivery) =>
       ctx.waitUntil(delivery)
     );

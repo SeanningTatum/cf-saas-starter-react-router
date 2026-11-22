@@ -17,6 +17,8 @@ vi.mock("@/auth/server", () => ({
 }));
 
 import type { AppLoadContext } from "react-router";
+import { Effect } from "effect";
+import { loggers } from "@/lib/logger";
 import worker from "../app";
 
 const rayId = () => "8f1a2b3c4d5e6f70-SJC";
@@ -123,5 +125,44 @@ describe("worker fetch, error capture", () => {
     expect(reported.waitUntil.mock.calls.length).toBe(
       quiet.waitUntil.mock.calls.length + 1
     );
+  });
+});
+
+describe("worker fetch, sampling", () => {
+  const sampledOut = () =>
+    fakeEnv({ LOG_SAMPLE_RATE: "0", TRACE_SAMPLE_RATE: "0" });
+
+  const infoMessages = () =>
+    lines.filter((line) => line.level === "info").map((line) => line.msg);
+
+  it("drops the plain and the Effect info lines of a request the env samples out, so the sampling rate reaches both log paths", async () => {
+    mocks.handle.mockImplementation(async (_request, context) => {
+      loggers.server.info("plain info");
+      await (context as AppLoadContext).runtime.runPromise(
+        Effect.logInfo("effect info")
+      );
+      return new Response("ok");
+    });
+
+    await serve();
+    const keptByDefault = infoMessages();
+    lines = [];
+    await serve(sampledOut());
+
+    expect(keptByDefault).toEqual(
+      expect.arrayContaining(["plain info", "effect info"])
+    );
+    expect(infoMessages()).toEqual([]);
+  });
+
+  it("still writes the error report of a sampled-out request whose handler throws, so sampling never hides a crash", async () => {
+    mocks.handle.mockRejectedValue(new Error("handler blew up"));
+
+    const { response } = await serve(sampledOut());
+
+    expect(response.status).toBe(500);
+    expect(reportLines()).toEqual([
+      expect.objectContaining({ source: "fetch", requestId: rayId(), kind: "defect" }),
+    ]);
   });
 });

@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { Effect, ManagedRuntime } from "effect";
 import { HTTP_STATUS_ATTRIBUTE } from "@/lib/constants/error-reporting";
-import { otlpStatusForResponse, TracingLayer, type FetchLike } from "../tracing";
+import { TracingLayer, type FetchLike } from "../tracing";
+import { otlpStatusForResponse } from "../tracing-otlp";
 
 const recordingFetch = () => {
   const bodies: string[] = [];

@@ -1,3 +1,10 @@
+import { Effect } from "effect";
+import {
+  ALWAYS_KEPT_ANNOTATION,
+  UNWRITABLE_LOG_LINE,
+} from "./constants/redaction";
+import { redactFields } from "./redact";
+
 export type LogLevel = "trace" | "debug" | "info" | "warn" | "error" | "fatal";
 
 const LEVEL_VALUE: Record<LogLevel, number> = {
@@ -48,21 +55,46 @@ export const setLogContext = (provider: LogContextProvider): void => {
   logContext = provider;
 };
 
+type LogSampler = () => boolean;
+
+let logSampler: LogSampler = () => true;
+
+export const setLogSampler = (sampler: LogSampler): void => {
+  logSampler = sampler;
+};
+
+const isKeptWhenUnsampled = (
+  level: LogLevel,
+  annotations: Record<string, unknown>
+): boolean =>
+  isLevelEnabled(level, "warn") || annotations[ALWAYS_KEPT_ANNOTATION] === true;
+
+const redactedLine = (
+  fields: () => Record<string, unknown>,
+  level: LogLevel,
+  time: string
+): Record<string, unknown> =>
+  Effect.runSync(
+    Effect.try(() => redactFields(fields())).pipe(
+      Effect.orElseSucceed(() => ({ level, time, msg: UNWRITABLE_LOG_LINE }))
+    )
+  );
+
 export function emitLog(
   level: LogLevel,
   message: string,
-  annotations: Record<string, unknown> = {}
+  annotations: Record<string, unknown> = {},
+  sampled: boolean = logSampler()
 ): void {
   if (!shouldLog(level)) return;
+  if (!sampled && !isKeptWhenUnsampled(level, annotations)) return;
 
   const time = new Date().toISOString();
-  const data: Record<string, unknown> = {
-    ...logContext(),
-    ...annotations,
+  const data = redactedLine(
+    () => ({ ...logContext(), ...annotations, level, time, msg: message }),
     level,
-    time,
-    msg: message,
-  };
+    time
+  );
 
   if (isDev) {
     // The request id leads the line, shortened; with no request, the trace
@@ -85,10 +117,12 @@ export function emitLog(
       Object.keys(rest).length > 3 ? ` ${JSON.stringify(rest)}` : "";
     const fn =
       level === "fatal" ? "error" : level === "trace" ? "debug" : level;
+    // biome-ignore lint/suspicious/noConsole: this function is the one log sink
     console[fn](
-      `${COLORS[level]}${level.toUpperCase().padEnd(5)}${RESET} ${prefix} ${message}${ctx}`
+      `${COLORS[level]}${level.toUpperCase().padEnd(5)}${RESET} ${prefix} ${data.msg}${ctx}`
     );
   } else {
+    // biome-ignore lint/suspicious/noConsole: this function is the one log sink
     console.log(JSON.stringify(data));
   }
 }

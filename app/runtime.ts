@@ -13,6 +13,7 @@ import {
   type ErrorReporterShape,
 } from "@/services/error-reporter";
 import { TracingLayer, type FetchLike } from "@/services/tracing";
+import { redactPath } from "@/lib/redact";
 import { CurrentRequest, type RequestContext } from "@/lib/request-context";
 import { UserRepository } from "@/repositories/user";
 import { AnalyticsRepository } from "@/repositories/analytics";
@@ -55,7 +56,7 @@ const requestLayer = (
         : undefined,
       attributes: {
         "http.request.method": request.method,
-        "url.path": request.path,
+        "url.path": redactPath(request.path),
       },
     })
   );

@@ -1,6 +1,7 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import { Context, Effect, Option } from "effect";
-import { setLogContext } from "./log-format";
+import { setLogContext, setLogSampler } from "./log-format";
+import type { SamplingDecision } from "./sampling";
 
 /**
  * One id and the signed-in user for every log line and span of a request.
@@ -35,6 +36,7 @@ export interface RequestContext {
   readonly parent?: TraceParent;
   /** Set once, when the session resolves. */
   userId?: string;
+  readonly sampling?: SamplingDecision;
 }
 
 /** The request, as a service in the per-request runtime. */
@@ -78,7 +80,10 @@ export const randomHex = (bytes: number): string => {
  * id = traceparent's trace id, else a well-formed `cf-ray`, else
  * randomHex(16).
  */
-export const makeRequestContext = (request: Request): RequestContext => {
+export const makeRequestContext = (
+  request: Request,
+  sampling?: SamplingDecision
+): RequestContext => {
   const parent = parseTraceparent(request.headers.get("traceparent"));
   const cfRay = request.headers.get("cf-ray");
   const requestId =
@@ -89,6 +94,7 @@ export const makeRequestContext = (request: Request): RequestContext => {
     method: request.method,
     path: new URL(request.url).pathname,
     ...(parent ? { parent } : {}),
+    ...(sampling ? { sampling } : {}),
   };
 };
 
@@ -138,3 +144,7 @@ export const setRequestUser = (
 // its id. `log-format.ts` cannot import this module itself (it must stay free
 // of Node imports), hence the registration from this side.
 setLogContext(() => requestLogFields(currentRequestContext()));
+export const keepsLogs = (request: RequestContext | undefined): boolean =>
+  request?.sampling?.logs ?? true;
+
+setLogSampler(() => keepsLogs(currentRequestContext()));

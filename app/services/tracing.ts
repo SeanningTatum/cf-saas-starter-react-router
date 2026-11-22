@@ -1,9 +1,14 @@
-import { Context, Effect, Exit, Layer, Option, Tracer } from "effect";
+import { Clock, Context, Effect, Exit, Layer, Option, Tracer } from "effect";
 import {
-  FIRST_SERVER_ERROR_STATUS,
-  HTTP_STATUS_ATTRIBUTE,
-} from "@/lib/constants/error-reporting";
+  FORCED_TRACE_EXPORT_WINDOW_LIMIT,
+  FORCED_TRACE_EXPORT_WINDOW_MS,
+} from "@/lib/constants/redaction";
+import {
+  makeReportBudget,
+  type ReportBudget,
+} from "@/lib/error-reporting/report-budget";
 import { randomHex, type RequestContext } from "@/lib/request-context";
+import { buildOtlpPayload, isErrorSpan } from "./tracing-otlp";
 
 /**
  * Env-driven OTLP span export for Effect's tracer.
@@ -177,110 +182,6 @@ export const makeOtlpTracer = (
     context: (f) => f(),
   });
 
-// --- OTLP JSON encoding --------------------------------------------------------
-
-type OtlpValue =
-  | { stringValue: string }
-  | { boolValue: boolean }
-  | { intValue: string }
-  | { doubleValue: number };
-
-export const toOtlpValue = (value: unknown): OtlpValue => {
-  switch (typeof value) {
-    case "string":
-      return { stringValue: value };
-    case "boolean":
-      return { boolValue: value };
-    case "bigint":
-      return { intValue: value.toString() };
-    case "number":
-      return Number.isInteger(value)
-        ? { intValue: value.toString() }
-        : { doubleValue: value };
-    default:
-      return { stringValue: JSON.stringify(value) ?? "undefined" };
-  }
-};
-
-const toOtlpAttributes = (
-  attributes: Iterable<readonly [string, unknown]>
-): Array<{ key: string; value: OtlpValue }> =>
-  Array.from(attributes, ([key, value]) => ({
-    key,
-    value: toOtlpValue(value),
-  }));
-
-const SPAN_KIND: Record<Tracer.SpanKind, number> = {
-  internal: 1,
-  server: 2,
-  client: 3,
-  producer: 4,
-  consumer: 5,
-};
-
-const spanToOtlp = (span: OtlpSpan) => {
-  const status = span.status;
-  const ended = status._tag === "Ended";
-  const failed = ended && Exit.isFailure(status.exit);
-  return {
-    traceId: span.traceId,
-    spanId: span.spanId,
-    ...(Option.isSome(span.parent)
-      ? { parentSpanId: span.parent.value.spanId }
-      : {}),
-    name: span.name,
-    kind: SPAN_KIND[span.kind],
-    startTimeUnixNano: status.startTime.toString(),
-    endTimeUnixNano: ended ? status.endTime.toString() : "0",
-    attributes: toOtlpAttributes(span.attributes),
-    events: span.events.map((e) => ({
-      name: e.name,
-      timeUnixNano: e.startTime.toString(),
-      attributes: toOtlpAttributes(Object.entries(e.attributes)),
-    })),
-    status: failed
-      ? { code: 2, message: exitMessage(status.exit) }
-      : otlpStatusForResponse(span.attributes.get(HTTP_STATUS_ATTRIBUTE)),
-  };
-};
-
-export const otlpStatusForResponse = (
-  httpStatus: unknown
-): { code: 1 } | { code: 2; message: string } =>
-  typeof httpStatus === "number" && httpStatus >= FIRST_SERVER_ERROR_STATUS
-    ? { code: 2, message: `HTTP ${httpStatus}` }
-    : { code: 1 };
-
-const exitMessage = (exit: Exit.Exit<unknown, unknown>): string =>
-  Exit.match(exit, {
-    onSuccess: () => "",
-    onFailure: (cause) => {
-      const message = String(cause);
-      return message.length > 512 ? message.slice(0, 512) : message;
-    },
-  });
-
-export const buildOtlpPayload = (
-  spans: ReadonlyArray<OtlpSpan>,
-  serviceName: string
-) => ({
-  resourceSpans: [
-    {
-      resource: {
-        attributes: [
-          { key: "service.name", value: { stringValue: serviceName } },
-        ],
-      },
-      scopeSpans: [
-        {
-          scope: { name: "effect-tracer" },
-          spans: spans.map(spanToOtlp),
-        },
-      ],
-    },
-  ],
-});
-
 // --- Export + layer -----------------------------------------------------------
 
 export type FetchLike = (
@@ -296,14 +197,25 @@ export type FetchLike = (
  * Drains the buffer and POSTs one OTLP request. Export failures are logged
  * (`tracing.export_failed`) and swallowed — tracing must never fail the app.
  */
+const forcedExportBudget = makeReportBudget({
+  limit: FORCED_TRACE_EXPORT_WINDOW_LIMIT,
+  windowMs: FORCED_TRACE_EXPORT_WINDOW_MS,
+});
+
 export const flushSpans = (
   config: TracingConfig,
   buffer: SpanBuffer,
-  fetchFn: FetchLike = (url, init) => fetch(url, init)
+  fetchFn: FetchLike = (url, init) => fetch(url, init),
+  sampled: boolean = true,
+  forced: ReportBudget = forcedExportBudget
 ): Effect.Effect<void> =>
-  Effect.suspend(() => {
+  Effect.flatMap(Clock.currentTimeMillis, (ms) => {
     const spans = buffer.spans.splice(0);
     if (spans.length === 0) return Effect.void;
+    if (!sampled && !(spans.some(isErrorSpan) && forced.take(ms))) {
+      buffer.dropped = 0;
+      return Effect.void;
+    }
     const dropped = buffer.dropped;
     buffer.dropped = 0;
     const body = JSON.stringify(buildOtlpPayload(spans, config.serviceName));
@@ -360,7 +272,9 @@ export const TracingLayer = (
   return Layer.merge(
     Layer.setTracer(makeOtlpTracer(buffer, request)),
     Layer.scopedDiscard(
-      Effect.addFinalizer(() => flushSpans(config, buffer, fetchFn))
+      Effect.addFinalizer(() =>
+        flushSpans(config, buffer, fetchFn, request?.sampling?.traces ?? true)
+      )
     )
   );
 };

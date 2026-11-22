@@ -149,6 +149,9 @@ const reporter = makeBrowserReporter({
   page: readPage,
 });
 
+export const reportHandledError = (error: unknown): void =>
+  reporter.report(error, "handled");
+
 export const reportRecoverableError = (error: unknown): void =>
   reporter.report(error, "recoverable");
 
