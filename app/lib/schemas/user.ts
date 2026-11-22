@@ -86,5 +86,3 @@ export const CreateWorkflowInput = Schema.Struct({
   metadata: Schema.Record({ key: Schema.String, value: Schema.String }),
 });
 export type CreateWorkflowInput = typeof CreateWorkflowInput.Type;
-
-export const DeleteUserSelfCheckInput = Schema.String;
