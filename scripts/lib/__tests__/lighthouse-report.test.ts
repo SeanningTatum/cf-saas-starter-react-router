@@ -67,7 +67,7 @@ describe("the Lighthouse section of the comment", () => {
   });
 
   it("puts the base beside this PR, shows a page the base lacks on its own, and states spread, limits and warnings", () => {
-    const text = renderLighthouse(head, base, LIMITS, 3);
+    const text = renderLighthouse(head, base, LIMITS);
     expect(text.split("\n").slice(0, 6)).toEqual([
       "## Lighthouse (mobile, median of 3 runs)",
       "",
@@ -82,9 +82,8 @@ describe("the Lighthouse section of the comment", () => {
   });
 
   it("says no page is past a limit when none is, and names the ref when there is no base", () => {
-    const text = renderLighthouse({ ref: "HEAD", pages: [summarize("/", [m(99, 900, 0, 0)])] }, undefined, LIMITS, 1);
+    const text = renderLighthouse({ ref: "HEAD", pages: [summarize("/", [m(99, 900, 0, 0)])] }, undefined, LIMITS);
     expect(text).toContain("Measured `HEAD`.");
     expect(text).toContain("No page is past a limit.");
-    expect(text).toContain("median of 1 runs");
   });
 });

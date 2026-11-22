@@ -62,15 +62,15 @@ function fake(options: { fail?: RegExp; signIn?: Either.Either<string, string>; 
 }
 
 describe("parseArgs", () => {
-  it("defaults to three runs on port 4173 and reads every flag", () => {
-    expect(parseArgs([])).toEqual(Either.right({ base: undefined, runs: 3, port: 4173, reports: undefined, json: undefined, markdown: undefined }));
-    expect(parseArgs(["--base", "origin/staging", "--runs", "5", "--port", "5000", "--reports", "r", "--json", "j", "--markdown", "m"])).toEqual(
-      Either.right({ base: "origin/staging", runs: 5, port: 5000, reports: "r", json: "j", markdown: "m" }),
+  it("reads --base, --reports, --json and --markdown", () => {
+    expect(parseArgs([])).toEqual(Either.right({ base: undefined, reports: undefined, json: undefined, markdown: undefined }));
+    expect(parseArgs(["--base", "origin/staging", "--reports", "r", "--json", "j", "--markdown", "m"])).toEqual(
+      Either.right({ base: "origin/staging", reports: "r", json: "j", markdown: "m" }),
     );
   });
 
-  it("refuses an unknown flag, a missing value and a run count that is not a positive whole number", () => {
-    for (const argv of [["--nope", "1"], ["--base"], ["--runs", "0"], ["--runs", "1.5"], ["--port", "x"]]) expect(Either.isLeft(parseArgs(argv))).toBe(true);
+  it("refuses an unknown flag and a missing value", () => {
+    for (const argv of [["--nope", "1"], ["--base"], ["--runs", "5"], ["--json", "--base"]]) expect(Either.isLeft(parseArgs(argv))).toBe(true);
   });
 });
 

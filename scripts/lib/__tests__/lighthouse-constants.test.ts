@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { devVars, heading, lighthouseArgs, previewArgs } from "../lighthouse-constants";
+import { devVars, lighthouseArgs, previewArgs } from "../lighthouse-constants";
 
 describe("lighthouse-constants", () => {
   it("runs Lighthouse with its mobile defaults, performance only, JSON and HTML out, and never reports errors home", () => {
@@ -22,9 +22,5 @@ describe("lighthouse-constants", () => {
   it("serves the production build on a fixed port, and writes the auth URL for that same port", () => {
     expect(previewArgs(4173)).toEqual(["x", "vite", "preview", "--port", "4173", "--strictPort"]);
     expect(devVars(5000, "secret")).toBe("BETTER_AUTH_URL=http://localhost:5000\nBETTER_AUTH_SECRET=secret\n");
-  });
-
-  it("names the run count in the heading", () => {
-    expect(heading(5)).toBe("## Lighthouse (mobile, median of 5 runs)");
   });
 });

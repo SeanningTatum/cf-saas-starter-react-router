@@ -1,29 +1,11 @@
 #!/usr/bin/env bun
 import { Either } from "effect";
-import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { join } from "node:path";
 import { gzipSync } from "node:zlib";
-import {
-  ASSET_URL_PREFIX,
-  BUILD_ARGS,
-  BUN_BIN,
-  CACHE_DIR,
-  CHILD_MAX_BUFFER_BYTES,
-  CLIENT_ASSETS_DIR,
-  DRY_RUN_ARGS,
-  EXIT_FAIL,
-  EXIT_OK,
-  EXIT_USAGE,
-  GIT_BIN,
-  GIT_ENV_PREFIX,
-  INSTALL_ARGS,
-  JSON_SUFFIX,
-  MANIFEST_PREFIX,
-  USAGE,
-  WORKTREE_PREFIX,
-} from "./lib/size-constants";
+import { addWorktree, realShell, removeWorktree, resolveCommit, step, type Shell } from "./lib/shell";
+import { BUILD_ARGS, BUN_BIN, EXIT_FAIL, EXIT_OK, EXIT_USAGE, GIT_BIN, INSTALL_ARGS } from "./lib/shell-constants";
+import { ASSET_URL_PREFIX, CACHE_DIR, CLIENT_ASSETS_DIR, DRY_RUN_ARGS, JSON_SUFFIX, MANIFEST_PREFIX, USAGE, WORKTREE_PREFIX } from "./lib/size-constants";
 import {
   compare,
   loadTimeLine,
@@ -37,23 +19,9 @@ import {
   type SizeReport,
 } from "./lib/size-report";
 
-export interface RunResult {
-  code: number;
-  stdout: string;
-  stderr: string;
-}
-
-export interface Deps {
-  cwd: string;
-  run: (command: string, args: string[], cwd: string) => RunResult;
-  read: (path: string) => string | undefined;
-  write: (path: string, text: string) => void;
+export interface Deps extends Shell {
   list: (dir: string) => string[];
   gzipSize: (path: string) => number;
-  tempDir: (prefix: string) => string;
-  remove: (path: string) => void;
-  out: (text: string) => void;
-  err: (text: string) => void;
 }
 
 export interface Options {
@@ -80,13 +48,6 @@ export function parseArgs(argv: string[]): Either.Either<Options, string> {
   return Either.right(options);
 }
 
-const tail = (result: RunResult): string => `${result.stderr}${result.stdout}`.trim().split("\n").slice(-5).join("\n");
-
-const step = (deps: Deps, command: string, args: string[], cwd: string): Either.Either<RunResult, string> => {
-  const result = deps.run(command, args, cwd);
-  return result.code === EXIT_OK ? Either.right(result) : Either.left(`\`${command} ${args.join(" ")}\` failed in ${cwd}:\n${tail(result)}`);
-};
-
 export const measureDir = (deps: Deps, dir: string): Either.Either<SizeReport, string> =>
   Either.gen(function* () {
     yield* step(deps, BUN_BIN, BUILD_ARGS, dir);
@@ -106,16 +67,14 @@ export const measureRef = (deps: Deps, ref: string): Either.Either<SizeReport, s
   Either.gen(function* () {
     const saved = ref.endsWith(JSON_SUFFIX) ? deps.read(ref) : undefined;
     if (saved !== undefined) return yield* parseReport(saved);
-    const sha = (yield* step(deps, GIT_BIN, ["rev-parse", "--verify", `${ref}^{commit}`], deps.cwd)).stdout.trim();
+    const sha = yield* resolveCommit(deps, ref);
     const cachePath = join(deps.cwd, CACHE_DIR, `${sha}${JSON_SUFFIX}`);
     const cached = deps.read(cachePath);
     const fromCache = cached === undefined ? undefined : parseReport(cached);
     if (fromCache !== undefined && Either.isRight(fromCache)) return fromCache.right;
-    const dir = deps.tempDir(WORKTREE_PREFIX);
-    yield* step(deps, GIT_BIN, ["worktree", "add", "--detach", dir, sha], deps.cwd);
+    const dir = yield* addWorktree(deps, sha, WORKTREE_PREFIX);
     const report = Either.flatMap(step(deps, BUN_BIN, INSTALL_ARGS, dir), () => measureDir(deps, dir));
-    deps.run(GIT_BIN, ["worktree", "remove", "--force", dir], deps.cwd);
-    deps.remove(dir);
+    removeWorktree(deps, dir);
     if (Either.isRight(report)) deps.write(cachePath, JSON.stringify(report.right));
     return yield* report;
   });
@@ -151,30 +110,11 @@ export function run(argv: string[], deps: Deps): number {
   return EXIT_OK;
 }
 
-const childEnv = (): Record<string, string> =>
-  Object.fromEntries(Object.entries(process.env).filter((entry): entry is [string, string] => !entry[0].startsWith(GIT_ENV_PREFIX) && entry[1] !== undefined));
-
-export function realDeps(): Deps {
-  return {
-    cwd: process.cwd(),
-    run: (command, args, cwd) => {
-      const result = spawnSync(command, args, { cwd, env: childEnv(), encoding: "utf8", maxBuffer: CHILD_MAX_BUFFER_BYTES });
-      if (result.error) return { code: EXIT_FAIL, stdout: "", stderr: result.error.message };
-      return { code: result.status ?? EXIT_FAIL, stdout: result.stdout ?? "", stderr: result.stderr ?? "" };
-    },
-    read: (path) => (existsSync(path) ? readFileSync(path, "utf8") : undefined),
-    write: (path, text) => {
-      mkdirSync(dirname(path), { recursive: true });
-      writeFileSync(path, text);
-    },
-    list: (dir) => (existsSync(dir) ? readdirSync(dir) : []),
-    gzipSize: (path) => gzipSync(readFileSync(path)).length,
-    tempDir: (prefix) => mkdtempSync(join(tmpdir(), prefix)),
-    remove: (path) => rmSync(path, { recursive: true, force: true }),
-    out: (text) => console.log(text),
-    err: (text) => console.error(text),
-  };
-}
+export const realDeps = (): Deps => ({
+  ...realShell(),
+  list: (dir) => (existsSync(dir) ? readdirSync(dir) : []),
+  gzipSize: (path) => gzipSync(readFileSync(path)).length,
+});
 
 if (import.meta.main) {
   process.exit(run(process.argv.slice(2), realDeps()));

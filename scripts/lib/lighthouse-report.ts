@@ -1,5 +1,6 @@
 import { Either, Schema } from "effect";
-import { ARROW, CLS_AUDIT, LCP_AUDIT, LIMITS_FILE, METRIC_KEYS as KEYS, NO_BREACH, NUMBER_LOCALE, SCORE_AUDIT, TBT_AUDIT, heading } from "./lighthouse-constants";
+import { ARROW, CLS_AUDIT, HEADING, LCP_AUDIT, LIMITS_FILE, METRIC_KEYS as KEYS, NO_BREACH, RUNS, SCORE_AUDIT, TBT_AUDIT } from "./lighthouse-constants";
+import { NUMBER_LOCALE } from "./shell-constants";
 
 const Audit = Schema.Struct({ numericValue: Schema.Number });
 
@@ -74,20 +75,20 @@ export function breaches(head: RefResult, limits: Limits): string[] {
   ]);
 }
 
-export function renderLighthouse(head: RefResult, base: RefResult | undefined, limits: Limits, runs: number): string {
+export function renderLighthouse(head: RefResult, base: RefResult | undefined, limits: Limits): string {
   const baseOf = (page: string): Metrics | undefined => base?.pages.find((p) => p.page === page)?.median;
   const rows = head.pages.map(({ page, median: m }) => `| \`${page}\` | ${KEYS.map((key) => pair(key, baseOf(page), m)).join(" | ")} |`);
   const spread = widestSpread(head.pages);
   const found = breaches(head, limits);
   return [
-    heading(runs),
+    HEADING,
     "",
     "| Page | Score | LCP | TBT | CLS |",
     "|---|---:|---:|---:|---:|",
     ...rows,
     "",
     base === undefined ? `Measured \`${head.ref}\`.` : `Each cell reads \`${base.ref}\`${ARROW}this PR.`,
-    `Run-to-run spread on this PR (the widest max − min over ${runs} runs on any page): score ${spread.score}, LCP ${ms(spread.lcp)}, TBT ${ms(spread.tbt)}, CLS ${cls(spread.cls)}.`,
+    `Run-to-run spread on this PR (the widest max − min over ${RUNS} runs on any page): score ${spread.score}, LCP ${ms(spread.lcp)}, TBT ${ms(spread.tbt)}, CLS ${cls(spread.cls)}.`,
     `Limits in \`${LIMITS_FILE}\` (warn only): score ≥ ${limits.minScore}, LCP ≤ ${ms(limits.maxLcpMs)}, TBT ≤ ${ms(limits.maxTbtMs)}, CLS ≤ ${cls(limits.maxCls)}.`,
     found.length === 0 ? NO_BREACH : found.map((line) => `- Warning: ${line}`).join("\n"),
   ].join("\n");

@@ -1,7 +1,3 @@
-export const EXIT_OK = 0;
-export const EXIT_FAIL = 1;
-export const EXIT_USAGE = 2;
-
 export const WORKER_KEY = "worker";
 export const ENTRY_KEY = "entry";
 export const ROOT_KEY = "root";
@@ -37,18 +33,11 @@ export const MISSING_CELL = "—";
 export const NEW_CELL = "new";
 export const REMOVED_CELL = "removed";
 export const UNCHANGED_CELL = "0";
-export const NUMBER_LOCALE = "en-US";
 
 export const CACHE_DIR = "node_modules/.cache/size";
 export const WORKTREE_PREFIX = "size-base-";
 export const JSON_SUFFIX = ".json";
-export const GIT_ENV_PREFIX = "GIT_";
-export const BUN_BIN = "bun";
-export const GIT_BIN = "git";
-export const INSTALL_ARGS = ["install", "--frozen-lockfile", "--ignore-scripts"];
-export const BUILD_ARGS = ["run", "build"];
 export const DRY_RUN_ARGS = ["x", "wrangler", "deploy", "--dry-run"];
-export const CHILD_MAX_BUFFER_BYTES = 64 * 1024 * 1024;
 
 export const USAGE =
   "usage: bun run size [--base <ref | saved.json>] [--json <file>] [--markdown <file>] [--pr-body]\n" +

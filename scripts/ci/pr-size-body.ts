@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 import { Either } from "effect";
 import { spawnSync } from "node:child_process";
-import { CHILD_MAX_BUFFER_BYTES, EXIT_FAIL, EXIT_OK, GIT_BIN } from "../lib/size-constants";
+import { CHILD_MAX_BUFFER_BYTES, EXIT_FAIL, EXIT_OK, GIT_BIN } from "../lib/shell-constants";
 import { checkBody } from "../lib/size-report";
 
 export interface Deps {

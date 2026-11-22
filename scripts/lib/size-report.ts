@@ -10,7 +10,6 @@ import {
   NEW_CELL,
   NO_SHIPPED_CODE,
   NO_SHIPPED_PATTERN,
-  NUMBER_LOCALE,
   REMOVED_CELL,
   ROOT_KEY,
   ROOT_LABEL,
@@ -29,6 +28,7 @@ import {
   routeKey,
   routeLabel,
 } from "./size-constants";
+import { NUMBER_LOCALE } from "./shell-constants";
 
 const Files = Schema.optionalWith(Schema.Array(Schema.String), { default: () => [] });
 
