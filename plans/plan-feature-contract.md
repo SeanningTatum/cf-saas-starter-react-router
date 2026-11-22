@@ -1,6 +1,7 @@
 # plan-feature — build contract
 
-The approved plan is `plans/plan-feature.html` (approved 2026-10-24 by sean, round 2). This file fixes the
+The approved plan was the review page `plans/plan-feature.html` (approved 2026-10-24 by sean, round 2), now in
+git history only. This file fixes the
 interfaces every build lane works against. If a lane needs something this file does not say, it stops and
 reports; it does not invent a second shape.
 
