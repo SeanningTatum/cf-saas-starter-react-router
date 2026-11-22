@@ -98,3 +98,5 @@ const redactValue = (value: unknown, ancestors: ReadonlyArray<object>): unknown 
 export const redactFields = (
   fields: Readonly<Record<string, unknown>>
 ): Record<string, unknown> => redactEntries(fields, [fields]);
+
+export const redactDeep = (value: unknown): unknown => redactValue(value, []);

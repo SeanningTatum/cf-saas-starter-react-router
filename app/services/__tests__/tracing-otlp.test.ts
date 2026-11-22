@@ -94,10 +94,43 @@ describe("span attributes that text patterns cannot judge", () => {
     expect(JSON.stringify(spans)).not.toContain("plain-value");
   });
 
-  it("write a marker for a value JSON cannot print, so one odd attribute cannot fail the whole export", () => {
+  it("write a marker for a value that cannot be read, so one odd attribute cannot fail the whole export", () => {
+    const hostile = Object.defineProperty({}, "boom", {
+      enumerable: true,
+      get: () => {
+        throw new Error("trap");
+      },
+    });
+
+    expect(toOtlpValue(hostile)).toEqual({ stringValue: "[unprintable]" });
+  });
+
+  it("print a cycle as a marker, so an object that holds itself still exports", () => {
     const circular: Record<string, unknown> = {};
     circular.self = circular;
 
-    expect(toOtlpValue(circular)).toEqual({ stringValue: "[unprintable]" });
+    expect(toOtlpValue(circular)).toEqual({ stringValue: '{"self":"[circular]"}' });
+  });
+});
+
+describe("object attributes", () => {
+  it("mask a nested key before the value is printed, so a session inside an object attribute cannot reach the trace backend", () => {
+    const printed = toOtlpValue({ session: { id: "plain-value" }, user: { email: "user@example.com" } });
+
+    expect(printed).toEqual({
+      stringValue: `{"session":"${REDACTED}","user":{"email":"${hashEmail("user@example.com")}"}}`,
+    });
+  });
+
+  it("mask a nested key in an event attribute too, so a logged event gets the same mask as a span attribute", async () => {
+    const spans = await exportFrom(
+      "https://app.test/",
+      Effect.logInfo("event").pipe(
+        Effect.annotateLogs("details", { token: "plain-value" }),
+        Effect.withSpan("upload.store_file")
+      )
+    );
+
+    expect(JSON.stringify(spans)).not.toContain("plain-value");
   });
 });

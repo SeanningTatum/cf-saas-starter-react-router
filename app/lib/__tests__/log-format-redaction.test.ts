@@ -151,3 +151,23 @@ describe("emitLog, lines that must always be written", () => {
     expect(JSON.stringify(lines()[0])).not.toContain("user@example.com");
   });
 });
+
+describe("emitLog, a line with more fields than the cap", () => {
+  it("still carries level, time and msg, so a huge field bag cannot produce a line that search and alerts miss", async () => {
+    const { format, lines } = await loadJsonFormat();
+    const many = Object.fromEntries(Array.from({ length: 150 }, (_, index) => [`field${index}`, index]));
+
+    format.emitLog("error", "too many fields", many);
+
+    expect(lines()[0]).toMatchObject({ level: "error", msg: "too many fields" });
+    expect(lines()[0]).toHaveProperty("time");
+  });
+
+  it("lets level, time and msg win over a field of the same name, so an annotation cannot rewrite the line's level", async () => {
+    const { format, lines } = await loadJsonFormat();
+
+    format.emitLog("error", "real message", { level: "info", msg: "spoofed" });
+
+    expect(lines()[0]).toMatchObject({ level: "error", msg: "real message" });
+  });
+});

@@ -91,7 +91,10 @@ export function emitLog(
 
   const time = new Date().toISOString();
   const data = redactedLine(
-    () => ({ ...logContext(), ...annotations, level, time, msg: message }),
+    () => {
+      const required = { level, time, msg: message };
+      return Object.assign({ ...required }, logContext(), annotations, required);
+    },
     level,
     time
   );

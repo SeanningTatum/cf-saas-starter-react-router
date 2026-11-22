@@ -10,7 +10,7 @@ import {
   SENSITIVE_KEY_PATTERN,
   UNPRINTABLE_ATTRIBUTE,
 } from "@/lib/constants/redaction";
-import { redactWithin } from "@/lib/redact";
+import { redactDeep, redactWithin } from "@/lib/redact";
 import type { OtlpSpan } from "./tracing";
 
 type OtlpValue =
@@ -21,7 +21,7 @@ type OtlpValue =
 
 const printable = (value: unknown): string =>
   Effect.runSync(
-    Effect.try(() => JSON.stringify(value) ?? "undefined").pipe(
+    Effect.try(() => JSON.stringify(redactDeep(value)) ?? "undefined").pipe(
       Effect.orElseSucceed(() => UNPRINTABLE_ATTRIBUTE)
     )
   );
@@ -39,7 +39,7 @@ export const toOtlpValue = (value: unknown): OtlpValue => {
         ? { intValue: value.toString() }
         : { doubleValue: value };
     default:
-      return { stringValue: redactWithin(printable(value), MAX_LOG_TEXT_LENGTH) };
+      return { stringValue: printable(value).slice(0, MAX_LOG_TEXT_LENGTH) };
   }
 };
 
