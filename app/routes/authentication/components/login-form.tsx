@@ -24,14 +24,21 @@ import { LoginSchema, type LoginInput } from "@/lib/schemas/auth"
 import { useState } from "react"
 import { useTranslation } from "react-i18next"
 import { useHydrated } from "@/hooks/use-hydrated"
+import { TurnstileWidget, useTurnstile } from "@/components/turnstile-widget"
+import { captchaFetchOptions } from "@/lib/turnstile-client"
+import { authRefusalFor } from "@/lib/auth-errors"
 
-interface LoginFormProps extends React.ComponentProps<"div"> { }
+interface LoginFormProps extends React.ComponentProps<"div"> {
+  turnstileSiteKey?: string | null
+}
 
-export function LoginForm({ className, ...props }: LoginFormProps) {
+export function LoginForm({ className, turnstileSiteKey = null, ...props }: LoginFormProps) {
   const navigate = useNavigate()
   const [authError, setAuthError] = useState<string>()
   const { t } = useTranslation("auth")
   const hydrated = useHydrated()
+  const turnstile = useTurnstile(turnstileSiteKey)
+  const awaitingCheck = turnstile.enabled && turnstile.token === null
 
   const form = useForm<LoginInput>({
     resolver: effectResolver(LoginSchema),
@@ -43,20 +50,25 @@ export function LoginForm({ className, ...props }: LoginFormProps) {
 
   async function onSubmit(data: LoginInput) {
     setAuthError(undefined)
+    if (awaitingCheck) return
 
     try {
       const result = await authClient.signIn.email({
         email: data.email,
         password: data.password,
+        fetchOptions: captchaFetchOptions(turnstile.token),
       })
 
       if (result.error) {
-        setAuthError(result.error.message || t("login.error_invalid"))
+        turnstile.reset()
+        const refusal = authRefusalFor(result.error, turnstile.enabled)
+        setAuthError(refusal ? t(`refusal.${refusal}`) : result.error.message || t("login.error_invalid"))
         return
       }
 
       navigate("/dashboard")
     } catch (err) {
+      turnstile.reset()
       setAuthError(err instanceof Error ? err.message : t("login.error_failed"))
     }
   }
@@ -118,6 +130,7 @@ export function LoginForm({ className, ...props }: LoginFormProps) {
                   </FormItem>
                 )}
               />
+              {turnstile.enabled && <TurnstileWidget turnstile={turnstile} />}
               {authError && (
                 <div
                   role="alert"
@@ -132,7 +145,7 @@ export function LoginForm({ className, ...props }: LoginFormProps) {
                   type="submit"
                   className="w-full"
                   data-testid="login-submit"
-                  disabled={!hydrated || form.formState.isSubmitting}
+                  disabled={!hydrated || form.formState.isSubmitting || awaitingCheck}
                 >
                   {form.formState.isSubmitting ? t("login.submitting") : t("login.submit")}
                 </Button>

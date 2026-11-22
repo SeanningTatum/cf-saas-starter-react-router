@@ -27,3 +27,14 @@ export const TURNSTILE_PUBLISHED_TEST_KEYS: ReadonlyArray<string> = [
   TURNSTILE_TEST_ALWAYS_FAIL_SECRET_KEY,
   "3x0000000000000000000000000000000AA",
 ];
+
+export const TURNSTILE_SCRIPT_TIMEOUT_MS = 15_000;
+export const TURNSTILE_FLEXIBLE_MIN_WIDTH_PX = 320;
+export const TURNSTILE_SCRIPT_SELECTOR = `script[src="${TURNSTILE_SCRIPT_URL}"]`;
+export const TURNSTILE_DEFAULT_LANGUAGE = "auto";
+export const TURNSTILE_LANGUAGES: Readonly<Record<string, string>> = { en: "en", zh: "zh-cn" };
+export const TURNSTILE_LOCALE_SEPARATOR = "-";
+
+export const TURNSTILE_FAILED_CODES: ReadonlyArray<string> = ["MISSING_RESPONSE", "VERIFICATION_FAILED"];
+export const TURNSTILE_UNAVAILABLE_CODE = "UNKNOWN_ERROR";
+export const TURNSTILE_UNAVAILABLE_STATUS = 500;
