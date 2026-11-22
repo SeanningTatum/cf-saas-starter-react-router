@@ -1,3 +1,9 @@
 # Who GitHub asks for a review. Asked, not required: see docs/ci/repo-rules.md.
 # In a fork, replace the handle below with your own.
 * @SeanningTatum
+
+# The gate files: a change here changes what the other gates let through.
+/scripts/verify.sh @SeanningTatum
+/scripts/secret-scan.ts @SeanningTatum
+/scripts/package-audit.ts @SeanningTatum
+/.github/audit-allow.json @SeanningTatum
