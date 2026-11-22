@@ -3,6 +3,7 @@ name: architect
 description: Fixes the backend shape and the contract each build lane works against - tables, repositories, procedures, tagged errors, spans, seed fixtures, and disjoint file fences. Used by the plan-feature workflow. Examples - "design the data and API for team invites", "fence the lanes for the CSV export", "what errors does this procedure need?".
 tools: Read, Grep, Glob, Bash, Skill
 model: opus
+effort: high
 ---
 
 # architect

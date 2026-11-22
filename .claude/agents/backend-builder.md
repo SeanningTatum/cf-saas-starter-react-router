@@ -2,7 +2,8 @@
 name: backend-builder
 description: Builds the server side of a feature inside a file fence the caller sets - Drizzle schema and migration, repository with its unit test, tRPC procedure, tagged errors, Effect Schema inputs, seed fixtures. Builds against a given contract and stops at the fence. Returns when `bun run typecheck` passes. Examples - "build the data and API lane for team invites inside this fence", "add the invoices table, repository and procedures to the contract", "add a tagged error and its tRPC mapping for duplicate invites".
 tools: Read, Edit, Write, Grep, Glob, Bash
-model: opus
+model: sonnet
+effort: medium
 ---
 
 # backend-builder

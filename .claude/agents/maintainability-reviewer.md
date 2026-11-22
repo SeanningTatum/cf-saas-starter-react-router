@@ -3,6 +3,7 @@ name: maintainability-reviewer
 description: Read-only review of a diff for DRY, maintainability and need - duplication of an existing helper, schema, prompt or component, code, files, options and exports the feature's acceptance does not require, speculative generality, single-use wrappers, dead code, over-long functions, restating comments and docs, near-duplicate tests. Every P0/P1 names the thing to reuse or delete. Examples - "is anything in the team-invites branch not needed?", "did we re-implement a helper that app/lib already has?", "lean review before we open the PR".
 tools: Read, Grep, Glob, Bash
 model: sonnet
+effort: medium
 ---
 
 # maintainability-reviewer

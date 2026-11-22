@@ -3,6 +3,7 @@ name: ui-prototyper
 description: Writes one self-contained HTML prototype of a UI direction under plans/, using the app's own tokens, so a human can look at it before any app code exists. Two modes - draw a direction, or add a state switcher to the chosen one. Used by the plan-feature workflow. Examples - "prototype direction b for the display-name settings screen", "add empty, loading, error and success states to the chosen prototype", "draw the three directions for team invites".
 tools: Read, Write, Bash, Skill
 model: opus
+effort: high
 ---
 
 # ui-prototyper

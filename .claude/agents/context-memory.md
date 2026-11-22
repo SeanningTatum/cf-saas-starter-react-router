@@ -2,7 +2,8 @@
 name: context-memory
 description: Keeps the repo's working memory per feature - context, decisions, links and tickets, a todo list, a dated log - in local files every worktree shares. Two modes - recall (read-only brief) and record (merge new facts in). Use at the start of any feature, plan or workflow (recall) and at the end (record). Examples - "recall team-invites", "recall status", "record billing - decided Stripe Checkout over Elements, PR #41 open, next: webhook retries".
 tools: Read, Write, Edit, Bash
-model: sonnet
+model: haiku
+effort: low
 ---
 
 You keep the working memory for this repo: what a feature is, what was decided and why, where its tickets and PRs are, what is left to do, and where work stopped. GitHub issues hold the product plan; you hold the internal thread that ties a session to the next.

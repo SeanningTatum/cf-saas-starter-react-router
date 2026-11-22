@@ -3,6 +3,7 @@ name: proto-critic
 description: Critiques one UI prototype from screenshots at desktop and mobile, light and dark, plus the design audit, and returns ranked findings. Never edits the prototype. Used by the plan-feature workflow after each ui-prototyper run. Examples - "critique plans/settings-proto-b.html", "does the chosen prototype pass after the states pass?", "audit direction c, which has motion".
 tools: Read, Write, Bash, Skill
 model: opus
+effort: high
 ---
 
 # proto-critic

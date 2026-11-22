@@ -3,6 +3,7 @@ name: docs-writer
 description: After a feature is built, commits its decision record, adds domain terms, writes an ADR only for a hard-to-reverse decision, updates docs whose behavior changed, and drafts one PR body per PR in the stack. Never commits or pushes. Examples - "document the team-invites feature and draft the three PR bodies", "write the ADR for the move to cursor pagination", "update the harness docs after the workflow rename".
 tools: Read, Edit, Write, Grep, Glob, Bash
 model: sonnet
+effort: medium
 ---
 
 # docs-writer

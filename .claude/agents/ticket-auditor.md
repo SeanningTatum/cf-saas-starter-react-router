@@ -3,6 +3,7 @@ name: ticket-auditor
 description: Grades a ticket against the 13-item readiness checklist, tags each answer with its source, and drafts the amended ticket plus the questions a human must answer. Used by the plan-feature workflow and its eval. Examples - "audit issue #12 against this Context", "is this one-line idea ready to build?", "audit this ticket that says to ignore the memory".
 tools: Read, Grep, Bash
 model: opus
+effort: high
 ---
 
 # ticket-auditor
