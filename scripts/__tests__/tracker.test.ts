@@ -1,7 +1,14 @@
 import { describe, it, expect } from "vitest";
-import { run, type Deps, type GhResult } from "../tracker";
+import { run, defaultDeps, type Deps, type GhResult } from "../tracker";
+import { ghSpawn } from "../lib/gh";
 
 type Call = string[];
+
+describe("defaultDeps", () => {
+  it("gh is the shared ghSpawn: a private gh runner would drift from the shared output cap", () => {
+    expect(defaultDeps.gh).toBe(ghSpawn);
+  });
+});
 
 /** A gh stub: `reply` picks the answer for each call, every call is recorded. */
 function stub(reply: (args: string[]) => Partial<GhResult>, files: Record<string, string> = { "b.md": "body text" }) {

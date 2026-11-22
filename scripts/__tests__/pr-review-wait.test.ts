@@ -1,5 +1,12 @@
 import { describe, it, expect } from "vitest";
-import { run, parseConfidence, parseItems, type Deps, type GhResult } from "../pr-review-wait";
+import { run, defaultDeps, parseConfidence, parseItems, type Deps, type GhResult } from "../pr-review-wait";
+import { ghSpawn } from "../lib/gh";
+
+describe("defaultDeps", () => {
+  it("gh is the shared ghSpawn: a private gh runner would drift from the shared output cap", () => {
+    expect(defaultDeps.gh).toBe(ghSpawn);
+  });
+});
 
 const SHA = "new111";
 const review = (over: Record<string, unknown> = {}) => ({
