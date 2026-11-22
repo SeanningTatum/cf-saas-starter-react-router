@@ -294,6 +294,7 @@ function checkSourceFile(file: string, sf: ts.SourceFile) {
       ts.isIdentifier(node.expression) &&
       node.expression.text === "require" &&
       node.arguments.length === 1 &&
+      node.arguments[0] !== undefined &&
       ts.isStringLiteralLike(node.arguments[0]) &&
       /^zod(\/|$)/.test(node.arguments[0].text)
     ) {
@@ -305,6 +306,7 @@ function checkSourceFile(file: string, sf: ts.SourceFile) {
       ts.isCallExpression(node) &&
       node.expression.kind === ts.SyntaxKind.ImportKeyword &&
       node.arguments.length >= 1 &&
+      node.arguments[0] !== undefined &&
       ts.isStringLiteralLike(node.arguments[0]) &&
       /^zod(\/|$)/.test(node.arguments[0].text)
     ) {
@@ -389,7 +391,8 @@ function checkSourceFile(file: string, sf: ts.SourceFile) {
   const before = violations.length;
   visit(sf);
   for (let i = violations.length - 1; i >= before; i--) {
-    if (violations[i].kind === "effect-promise" && exemptLines.has(violations[i].line)) {
+    const v = violations[i];
+    if (v?.kind === "effect-promise" && exemptLines.has(v.line)) {
       violations.splice(i, 1);
     }
   }
@@ -501,7 +504,7 @@ function checkTaggedErrorsMapped(root: string = ROOT) {
             if (!/TaggedError/.test(text)) return false;
             if (ts.isCallExpression(t.expression) && t.expression.arguments.length) {
               const arg = t.expression.arguments[0];
-              if (ts.isStringLiteralLike(arg)) tag = arg.text;
+              if (arg !== undefined && ts.isStringLiteralLike(arg)) tag = arg.text;
             }
             return true;
           })
@@ -543,7 +546,7 @@ function checkTaggedErrorsMapped(root: string = ROOT) {
  * an entry (by writing the test) is the only correct direction; adding one needs
  * a run-note justification.
  */
-const TEST_PARITY_GRANDFATHERED = new Set(["app/lib/effect-form.ts", "app/lib/logger.ts"]);
+const TEST_PARITY_GRANDFATHERED = new Set(["app/lib/logger.ts"]);
 
 function hasExportedValue(sf: ts.SourceFile): boolean {
   let found = false;
@@ -779,7 +782,7 @@ function selftest() {
       treeFailed++;
       console.error(
         `  selftest FAIL: ${label} — expected ${rule || "no violation"}, got ${got.join(",") || "none"}` +
-          (violations.length ? ` (${violations[0].detail})` : "")
+          (violations.length ? ` (${violations[0]?.detail})` : "")
       );
     }
   }
@@ -987,8 +990,9 @@ if (process.argv.includes("--selftest")) {
     console.error(`Five non-negotiables: ${violations.length} violation(s)`);
     const byRule = new Map<string, Violation[]>();
     for (const v of violations) {
-      if (!byRule.has(v.rule)) byRule.set(v.rule, []);
-      byRule.get(v.rule)!.push(v);
+      const list = byRule.get(v.rule);
+      if (list) list.push(v);
+      else byRule.set(v.rule, [v]);
     }
     for (const [rule, vs] of [...byRule.entries()].sort()) {
       console.error(`\n  ${rule} (${vs.length}):`);

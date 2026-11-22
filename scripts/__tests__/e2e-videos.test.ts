@@ -79,8 +79,8 @@ describe("run", () => {
   it("records with E2E_VIDEO and CI set, filtered to the tagged tests, on the given specs", () => {
     const { deps, calls } = stub();
     run(["--out", ".verify/x/video", "e2e/auth.spec.ts"], deps);
-    expect(calls[0].args).toEqual(["playwright", "test", "e2e/auth.spec.ts", "--grep", "@golden|@error", "--reporter=json"]);
-    expect(calls[0].env).toEqual({ E2E_VIDEO: "1", CI: "1" });
+    expect(calls[0]?.args).toEqual(["playwright", "test", "e2e/auth.spec.ts", "--grep", "@golden|@error", "--reporter=json"]);
+    expect(calls[0]?.env).toEqual({ E2E_VIDEO: "1", CI: "1" });
   });
 
   it("copies each video into --out under its kind and title", () => {

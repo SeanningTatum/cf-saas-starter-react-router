@@ -8,7 +8,7 @@ import { makeOtlpTracer, makeSpanBuffer } from "@/services/tracing";
 import { Database, DatabaseLive } from "@/services/database";
 import { CloudflareEnv } from "@/services/cloudflare";
 import type { AppServices } from "@/runtime";
-import type { AppError } from "@/models/errors";
+import type { AppError } from "@/models/errors/app-error";
 import {
   NotFoundError,
   ValidationError,
@@ -290,7 +290,7 @@ describe("runProcedure span option", () => {
 
     expect(result).toBe(42);
     expect(buffer.spans.map((s) => s.name)).toEqual(["trpc.user.getUsers"]);
-    expect(buffer.spans[0].kind).toBe("server");
+    expect(buffer.spans[0]?.kind).toBe("server");
     await runtime.dispose();
   });
 
@@ -321,10 +321,10 @@ describe("runProcedure span option", () => {
     const child = buffer.spans.find((s) => s.name === "db.query widget");
     expect(root).toBeDefined();
     expect(child).toBeDefined();
-    expect(child!.traceId).toBe(root!.traceId);
+    expect(child?.traceId).toBe(root?.traceId);
     expect(
-      Option.isSome(child!.parent) ? child!.parent.value.spanId : undefined
-    ).toBe(root!.spanId);
+      child && Option.isSome(child.parent) ? child.parent.value.spanId : undefined
+    ).toBe(root?.spanId);
     await runtime.dispose();
   });
 

@@ -40,9 +40,9 @@ describe("Analytics service", () => {
         }).pipe(Effect.provide(AnalyticsFrom(adapter)))
       );
       expect(batches).toHaveLength(1);
-      expect(batches[0].map((e) => e.event)).toEqual(["user_banned", "$identify"]);
-      expect(batches[0][0].timestamp).toBe("2026-03-04T05:06:07.000Z");
-      expect(batches[0][1].properties).toEqual({ $set: { plan: "pro" } });
+      expect(batches[0]?.map((e) => e.event)).toEqual(["user_banned", "$identify"]);
+      expect(batches[0]?.[0]?.timestamp).toBe("2026-03-04T05:06:07.000Z");
+      expect(batches[0]?.[1]?.properties).toEqual({ $set: { plan: "pro" } });
     })
   );
 

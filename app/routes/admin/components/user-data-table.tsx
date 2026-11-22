@@ -15,7 +15,6 @@ import {
 } from "@tabler/icons-react";
 import {
   type ColumnDef,
-  type ColumnFiltersState,
   flexRender,
   getCoreRowModel,
   getFacetedRowModel,
@@ -94,8 +93,7 @@ async function runAdminAction<T extends { error?: unknown } | null | undefined>(
     }
     toast.success(successMessage);
     onSuccess?.();
-  } catch (error) {
-    console.error(errorMessage, error);
+  } catch {
     toast.error(errorMessage);
   }
 }
@@ -119,6 +117,7 @@ export function UserDataTable({
     searchParams.get("search") || ""
   );
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: updateSearchParams is rebuilt on every render, so listing it would reset the 500ms debounce timer on each render
   React.useEffect(() => {
     const timer = setTimeout(() => {
       if (searchInput !== searchParams.get("search")) {
@@ -284,7 +283,7 @@ export function UserDataTable({
           </Badge>
         );
       },
-      filterFn: (row, id, value) => {
+      filterFn: (row, _id, value) => {
         if (value === "verified") return row.original.emailVerified === true;
         if (value === "unverified") return row.original.emailVerified === false;
         if (value === "banned") return row.original.banned === true;

@@ -34,7 +34,7 @@ describe("home route i18n keys", () => {
   // route still references, which renders the raw key on the landing page.
   const usedKeys = [
     ...fs.readFileSync(HOME_ROUTE, "utf8").matchAll(/\bt\("([a-z0-9_.]+)"/gi),
-  ].map((m) => m[1]);
+  ].flatMap((m) => (m[1] === undefined ? [] : [m[1]]));
 
   it("references at least the harness pillars", () => {
     expect(usedKeys).toEqual(

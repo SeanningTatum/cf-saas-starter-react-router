@@ -14,8 +14,8 @@ const isStatus = Schema.is(Status);
 export const loader = async ({ context, request }: Route.LoaderArgs) => {
   const url = new URL(request.url);
 
-  const page = parseInt(url.searchParams.get("page") || "1");
-  const pageSize = parseInt(url.searchParams.get("pageSize") || "10");
+  const page = parseInt(url.searchParams.get("page") || "1", 10);
+  const pageSize = parseInt(url.searchParams.get("pageSize") || "10", 10);
   const search = url.searchParams.get("search") || undefined;
   const roleParam = url.searchParams.get("role");
   const statusParam = url.searchParams.get("status");

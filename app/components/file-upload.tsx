@@ -1,4 +1,4 @@
-import { useEffect, useRef, type ChangeEvent, type DragEvent, type KeyboardEvent } from "react";
+import { useCallback, useEffect, useRef, type ChangeEvent, type DragEvent, type KeyboardEvent } from "react";
 import { useMachine } from "@xstate/react";
 import { useTranslation } from "react-i18next";
 import { cn } from "@/lib/utils";
@@ -47,16 +47,19 @@ export function FileUpload({
   const { file, key, error } = snapshot.context;
   const limit = toMB(snapshot.context.maxSize);
 
-  const describe = (failure: UploadFailure): string => {
-    switch (failure.reason) {
-      case "too_big":
-        return t("size_limit_exceeded", { size: limit });
-      case "rejected":
-        return failure.message;
-      case "unreachable":
-        return t("unreachable");
-    }
-  };
+  const describe = useCallback(
+    (failure: UploadFailure): string => {
+      switch (failure.reason) {
+        case "too_big":
+          return t("size_limit_exceeded", { size: limit });
+        case "rejected":
+          return failure.message;
+        case "unreachable":
+          return t("unreachable");
+      }
+    },
+    [t, limit]
+  );
 
   useEffect(() => {
     const uploaded = actorRef.on("uploaded", (e) => onUploadSuccess?.(e.key));
@@ -66,7 +69,7 @@ export function FileUpload({
       failed.unsubscribe();
     };
     // describe only reads t and the size limit, both listed here.
-  }, [actorRef, onUploadSuccess, onUploadError, t, limit]);
+  }, [actorRef, onUploadSuccess, onUploadError, describe]);
 
   // Focus can stay on the zone during an upload, and `uploading` takes no PICK,
   // so a file picked then would be dropped. Keep the picker shut.
@@ -155,6 +158,7 @@ export function FileUpload({
           </Button>
         </div>
       ) : (
+        // biome-ignore lint/a11y/useSemanticElements: the zone wraps a file input and the upload machine drives it, so swapping the element is a UI change for its own review
         <div
           role="button"
           tabIndex={uploading ? -1 : 0}

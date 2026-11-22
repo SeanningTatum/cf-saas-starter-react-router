@@ -1,6 +1,6 @@
 import { initTRPC, TRPCError } from "@trpc/server";
 import superjson from "superjson";
-import { Cause, Effect, Exit, ParseResult, Schema } from "effect";
+import { Cause, Effect, Exit, ParseResult } from "effect";
 import { Session, SessionLive } from "@/services/session";
 import type { AppRuntime } from "@/runtime";
 import { loggers } from "@/lib/logger";
@@ -175,5 +175,3 @@ export const adminProcedure = protectedProcedure.use(({ ctx, next }) => {
 export const createCallerFactory = t.createCallerFactory;
 
 export type Context = Awaited<ReturnType<typeof createTRPCContext>>;
-
-export { Schema };

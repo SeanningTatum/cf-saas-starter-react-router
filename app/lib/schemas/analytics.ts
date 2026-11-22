@@ -30,9 +30,3 @@ export const UserStats = Schema.Struct({
   verificationRate: Schema.Number,
 });
 export type UserStats = typeof UserStats.Type;
-
-export const DistributionPoint = Schema.Struct({
-  name: Schema.String,
-  value: Schema.Number,
-});
-export type DistributionPoint = typeof DistributionPoint.Type;

@@ -2,7 +2,6 @@ import { describe, it as itVitest, expect, vi } from "vitest";
 import { it } from "@effect/vitest";
 import { Effect, Layer, Exit, Cause } from "effect";
 import { UserRepository, isProtectedUser, buildUserConditions } from "../user";
-import { Database } from "@/services/database";
 import {
   chainable,
   chainableSpy,
@@ -35,10 +34,10 @@ const expectBanBatchedWithSessionDelete = (stub: ReturnType<typeof banStub>) => 
   expect(stub.delete).toHaveBeenCalledTimes(1);
   expect(stub.delete).toHaveBeenCalledWith(session);
   expect(stub.batch).toHaveBeenCalledTimes(1);
-  const statements = stub.batch.mock.calls[0][0];
+  const statements = stub.batch.mock.calls[0]?.[0];
   expect(statements).toHaveLength(2);
-  expect(statements).toContain(stub.update.mock.results[0].value);
-  expect(statements).toContain(stub.delete.mock.results[0].value);
+  expect(statements).toContain(stub.update.mock.results[0]?.value);
+  expect(statements).toContain(stub.delete.mock.results[0]?.value);
 };
 
 describe("isProtectedUser", () => {

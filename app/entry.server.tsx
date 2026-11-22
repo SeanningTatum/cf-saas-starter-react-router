@@ -5,7 +5,7 @@ import { renderToReadableStream } from "react-dom/server";
 import { createInstance } from "i18next";
 import { I18nextProvider, initReactI18next } from "react-i18next";
 import { i18nServer } from "./i18n/i18n.server";
-import { supportedLngs, fallbackLng, defaultNS } from "./i18n";
+import { supportedLngs, fallbackLng, defaultNS } from "./i18n/i18n";
 import resourcesToBackend from "i18next-resources-to-backend";
 import { loggers } from "@/lib/logger";
 import { NonceContext } from "@/lib/csp-nonce";

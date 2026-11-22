@@ -3,20 +3,8 @@ import { createCookie } from "react-router";
 export const supportedLngs = ["en", "zh"] as const;
 export const fallbackLng = "en" as const;
 export const defaultNS = "common" as const;
-export const namespaces = [
-  "common",
-  "auth",
-  "admin",
-  "dashboard",
-  "home",
-  "validation",
-  "upload",
-] as const;
 
-export const localeCookieName = "i18next";
-
-export type SupportedLocale = (typeof supportedLngs)[number];
-export type Namespace = (typeof namespaces)[number];
+const localeCookieName = "i18next";
 
 /**
  * Single source of truth for the i18n locale cookie config, shared by the

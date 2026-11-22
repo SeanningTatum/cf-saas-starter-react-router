@@ -29,8 +29,8 @@ describe("securityHeaders", () => {
     expect(securityHeaders({ nonce: NONCE, dev: true })).toEqual({
       ...prod,
       "Content-Security-Policy": prod["Content-Security-Policy"]
-        .replace("connect-src 'self'", "connect-src 'self' ws:")
-        .replace("; upgrade-insecure-requests", ""),
+        ?.replace("connect-src 'self'", "connect-src 'self' ws:")
+        ?.replace("; upgrade-insecure-requests", ""),
     });
   });
 

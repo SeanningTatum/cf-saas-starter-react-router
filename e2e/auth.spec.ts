@@ -126,7 +126,7 @@ test.describe("Auth forms before hydration", () => {
   const forms = [
     { path: "/sign-up", prefix: "signup", passwordFields: ["signup-password", "signup-confirm-password"] },
     { path: "/login", prefix: "login", passwordFields: ["login-password"] },
-  ];
+  ] as const;
 
   for (const { path, prefix, passwordFields } of forms) {
     test(`${path} ignores an early submit and keeps the password out of the URL`, async ({ page }) => {

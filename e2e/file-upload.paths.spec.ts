@@ -167,7 +167,9 @@ test.describe("FileUpload paths", () => {
         await expect(dropzone).toBeVisible();
       }
       // A path with no upload step must not have sent a request.
-      const uploads = statePath.steps.filter((s) => s.event.type === "xstate.done.actor.upload");
+      const uploads = (statePath.steps as ReadonlyArray<{ event: ModelEvent }>).filter(
+        (s) => s.event.type === "xstate.done.actor.upload"
+      );
       if (uploads.length === 0) expect(held).toHaveLength(0);
     });
   }

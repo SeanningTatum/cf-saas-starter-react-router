@@ -6,7 +6,7 @@ import { eq } from "drizzle-orm";
 import { getDb } from "@/db";
 import * as schema from "@/db/schema";
 
-export const drizzleConfig = {
+const drizzleConfig = {
   emailAndPassword: {
     enabled: true,
   },

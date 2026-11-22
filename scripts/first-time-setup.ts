@@ -41,8 +41,9 @@ function executeCommand(
       stdio: silent ? "pipe" : "inherit",
       env: env ? { ...process.env, ...env } : undefined,
     });
-  } catch (error: any) {
-    return { error: true, message: error.stdout || error.stderr };
+  } catch (error) {
+    const failure = error as { stdout?: string; stderr?: string };
+    return { error: true, message: failure.stdout || failure.stderr || "" };
   }
 }
 
@@ -114,7 +115,7 @@ function updatePackageJsonName(projectName: string) {
 
   const pkg = JSON.parse(fs.readFileSync(packageJsonPath, "utf-8"));
   pkg.name = projectName;
-  fs.writeFileSync(packageJsonPath, JSON.stringify(pkg, null, 2) + "\n");
+  fs.writeFileSync(packageJsonPath, `${JSON.stringify(pkg, null, 2)}\n`);
   console.log(`\x1b[32m✓ Updated ${path.basename(packageJsonPath)}\x1b[0m`);
 }
 
@@ -126,7 +127,7 @@ function removeWranglerFromGitignore() {
     return;
   }
 
-  let content = fs.readFileSync(gitignorePath, "utf-8");
+  const content = fs.readFileSync(gitignorePath, "utf-8");
   const lines = content.split("\n");
 
   // Remove the line that contains only "wrangler.jsonc" (with optional whitespace)
@@ -413,8 +414,9 @@ function setGhSecret(
       stdio: ["pipe", "pipe", "pipe"],
     });
     return undefined;
-  } catch (error: any) {
-    return error.stdout || error.stderr || String(error);
+  } catch (error) {
+    const failure = error as { stdout?: string; stderr?: string };
+    return failure.stdout || failure.stderr || String(error);
   }
 }
 

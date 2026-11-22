@@ -1,5 +1,5 @@
 import { data } from "react-router";
-import { localeCookie, supportedLngs } from "@/i18n";
+import { localeCookie, supportedLngs } from "@/i18n/i18n";
 import type { Route } from "./+types/set-locale";
 
 /**

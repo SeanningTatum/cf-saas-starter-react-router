@@ -8,7 +8,7 @@
  * fragments), never on how the script is laid out, so moving its helpers into a library keeps them green.
  */
 import { describe, expect, it } from "vitest";
-import { dryRun, labels, seq, type AgentCall, type AnswerRule, type DryRunResult } from "../../lib/workflow-dry-run";
+import { dryRun, labels, seq, type AgentCall, type AnswerInput, type AnswerRule, type DryRunResult } from "../../lib/workflow-dry-run";
 
 const ROOT = "/work/repo";
 const SLUG = "demo-widget";
@@ -75,7 +75,7 @@ function happy(over: AnswerRule[] = []): AnswerRule[] {
     ["contract:branch", { ok: true, reason: "" }],
     ["contract:map", { files: [] }],
     ["contract:schema", LANE_OK(`app/lib/schemas/${SLUG}.ts`)],
-    [/^build:pr\d+-(backend|ui)$/, (c) => LANE_OK(c.label)],
+    [/^build:pr\d+-(backend|ui)$/, (c: AnswerInput) => LANE_OK(c.label)],
     [/^build:typecheck:/, { pass: true, errors: [] }],
     ["write:impact", { changed: [], dependents: [] }],
     ["write:unit", "tests written"],
@@ -117,7 +117,7 @@ const fenced = (prompt: string, label: string): string | null => {
 /** The paths a build lane was told it owns. */
 const ownedPaths = (prompt: string): string[] => {
   const block = prompt.split("FILE FENCE")[1]?.split("A file outside them")[0] ?? "";
-  return [...block.matchAll(/^ {2}· (.+)$/gm)].map((m) => m[1]);
+  return [...block.matchAll(/^ {2}· (.+)$/gm)].map((m) => m[1] ?? "");
 };
 
 // The stop and the approved resume are shared by the happy-path and resume tests; run them once.
@@ -338,7 +338,7 @@ describe("ship-feature: fix rounds", () => {
       args: approve(),
       answers: happy([
         [/^local:code-review:1:/, { method: "code-review skill", findings: [finding] }],
-        [/^local:respond:code-review:1:/, (c) => ({ comments: [{ id: `cr-1-${c.label.split(":").pop()}-1`, action: "fixed", reply: "bound" }], commits: ["f1"], blocked: [] })],
+        [/^local:respond:code-review:1:/, (c: AnswerInput) => ({ comments: [{ id: `cr-1-${c.label.split(":").pop()}-1`, action: "fixed", reply: "bound" }], commits: ["f1"], blocked: [] })],
         [/^local:restack:/, { ok: true, failed_command: "" }],
       ]),
     });
@@ -352,7 +352,7 @@ describe("ship-feature: fix rounds", () => {
     expect(find(run.calls, "local:restack:code-review:1:1").prompt).toContain(PR2.branch);
     expect(l.indexOf("local:restack:code-review:1:2")).toBeLessThan(l.indexOf("open:prs"));
     expect(run.result).toMatchObject({ status: "shipped", local_open: [] });
-    expect((run.result as { localReview: { rounds: { replies: { action: string }[] }[] }[] }).localReview[0].rounds.map((r) => r.replies.map((x) => x.action))).toEqual([["fixed"], ["fixed"]]);
+    expect((run.result as { localReview: { rounds: { replies: { action: string }[] }[] }[] }).localReview[0]?.rounds.map((r) => r.replies.map((x) => x.action))).toEqual([["fixed"], ["fixed"]]);
   });
 
   it("a local P0/P1 the responder never answered stays open in the result (catches a dead responder read as a pass at the merge bar)", async () => {
@@ -375,9 +375,9 @@ describe("ship-feature: one instrumenter, no per-PR Greptile, memory by script",
     const { stopped } = await runHappy();
     const instr = stopped.calls.filter((c) => /^write:(instrument|spans|analytics)/.test(c.label));
     expect(instr.map((c) => c.label)).toEqual(["write:instrument"]);
-    expect(instr[0].opts.agentType).toBe("instrumenter");
-    expect(instr[0].prompt).toContain("add spans only");
-    expect(instr[0].prompt).not.toContain("Success metric:");
+    expect(instr[0]?.opts.agentType).toBe("instrumenter");
+    expect(instr[0]?.prompt).toContain("add spans only");
+    expect(instr[0]?.prompt).not.toContain("Success metric:");
     expect(stopped.result).toMatchObject({ analytics: null });
     // A metric alone is not enough: with no wrapper the call stays spans-only.
     const noWrapper = await dryRun("ship-feature", {
@@ -399,7 +399,7 @@ describe("ship-feature: one instrumenter, no per-PR Greptile, memory by script",
     });
     const calls = run.calls.filter((c) => c.label.startsWith("write:instrument"));
     expect(calls).toHaveLength(1);
-    expect(calls[0].prompt).toContain("Success metric: share of users who add a widget");
+    expect(calls[0]?.prompt).toContain("Success metric: share of users who add a widget");
     expect((run.result as { analytics: { events: unknown[] } }).analytics.events).toEqual([event]);
     expect(find(run.calls, "docs").prompt).toContain("widget_added (app/trpc/routes/widget.ts:30)");
   });

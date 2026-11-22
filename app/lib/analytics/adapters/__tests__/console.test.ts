@@ -17,7 +17,7 @@ describe("consoleAdapter", () => {
       });
       yield* consoleAdapter.send([mk("a"), mk("b")]);
       expect(info).toHaveBeenCalledTimes(2);
-      expect(info.mock.calls[0][0]).toMatchObject({ analytics: { event: "a" } });
+      expect(info.mock.calls[0]?.[0]).toMatchObject({ analytics: { event: "a" } });
       info.mockRestore();
     })
   );

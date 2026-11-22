@@ -29,7 +29,7 @@ const hex = (n: number) =>
 const idOf = (headers: Record<string, string>, where: string): string => {
   const id = headers[HEADER];
   expect(id, `${where}: no ${HEADER} header`).toBeTruthy();
-  return id;
+  return id ?? "";
 };
 
 /**
@@ -94,8 +94,8 @@ test.describe("Error page", () => {
 
   const loadErrorPage = async (page: Page) => {
     const response = await page.goto(MISSING);
-    expect(response, `${MISSING}: no document response`).not.toBeNull();
-    return response!;
+    if (response === null) throw new Error(`${MISSING}: no document response`);
+    return response;
   };
 
   // Catches: the error page without the id a user needs to report the fault,

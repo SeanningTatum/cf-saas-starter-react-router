@@ -25,7 +25,3 @@ export const i18nServer = new RemixI18Next({
     ),
   ],
 });
-
-export async function getLocale(request: Request): Promise<string> {
-  return i18nServer.getLocale(request);
-}

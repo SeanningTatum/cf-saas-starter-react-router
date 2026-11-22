@@ -110,7 +110,7 @@ export function writeWranglerJsonc(config: object): void {
   const wranglerJsonPath = path.join(__dirname, "..", "..", "wrangler.jsonc");
 
   const jsonContent =
-    `${HEADER_COMMENT}\n` + JSON.stringify(config, null, 2) + "\n";
+    `${HEADER_COMMENT}\n${JSON.stringify(config, null, 2)}\n`;
 
   fs.writeFileSync(wranglerJsonPath, jsonContent);
 }

@@ -63,8 +63,10 @@ function parseFrontmatter(markdown: string): Parsed {
     const m = /^([A-Za-z_][\w-]*):\s*(.*)$/.exec(line);
     if (!m) continue;
     // Drop a trailing ` # comment`, then surrounding quotes.
-    const value = m[2].replace(/\s+#.*$/, "").trim().replace(/^["']|["']$/g, "");
-    front[m[1]] = value;
+    const key = m[1];
+    if (key === undefined) continue;
+    const value = (m[2] ?? "").replace(/\s+#.*$/, "").trim().replace(/^["']|["']$/g, "");
+    front[key] = value;
   }
   return { front, body: lines.slice(end + 1) };
 }
@@ -83,7 +85,7 @@ function splitSections(body: string[]): Section[] {
     if (/^\s*```/.test(line)) fenced = !fenced;
     const h = !fenced && /^##\s+(.+?)\s*$/.exec(line);
     if (h) {
-      cur = { name: h[1], lines: [] };
+      cur = { name: h[1] ?? "", lines: [] };
       out.push(cur);
     } else if (cur) {
       cur.lines.push(line);
@@ -115,7 +117,7 @@ function mermaidBlocks(s: Section): string[] {
 function mermaidProblem(code: string): string | null {
   const lines = code.split("\n").filter((l) => l.trim() !== "");
   if (lines.length === 0) return "block is empty";
-  const first = lines[0].trim().split(/\s+/)[0];
+  const first = lines[0]?.trim().split(/\s+/)[0] ?? "";
   if (!DIAGRAM_TYPES.includes(first)) return `unknown diagram type "${first}"`;
   const pairs: Record<string, string> = { ")": "(", "]": "[", "}": "{" };
   // Strip what may hold brackets legitimately: comments, quoted labels, ER cardinality ends.
@@ -142,7 +144,7 @@ function parseTable(s: Section): { header: string[]; rows: string[][] } | null {
       .map((c) => c.trim());
   const start = s.lines.findIndex((l) => l.trim().startsWith("|"));
   if (start === -1) return null;
-  const header = cells(s.lines[start]);
+  const header = cells(s.lines[start] ?? "");
   const rows: string[][] = [];
   for (const l of s.lines.slice(start + 1)) {
     if (!l.trim().startsWith("|")) break;
@@ -156,7 +158,7 @@ function checkDecisions(s: Section, fail: (rule: string, detail: string) => void
   const blocks: { title: string; lines: string[] }[] = [];
   for (const line of s.lines) {
     const h = /^###\s+(.+?)\s*$/.exec(line);
-    if (h) blocks.push({ title: h[1], lines: [] });
+    if (h) blocks.push({ title: h[1] ?? "", lines: [] });
     else blocks.at(-1)?.lines.push(line);
   }
   const decisions = blocks.filter((b) => /^D\d+ — /.test(b.title));
@@ -204,7 +206,7 @@ function checkPrototypes(s: Section, slug: string, fail: (rule: string, detail: 
     }
     if (m[1] !== m[5]) fail("prototypes", `id "${m[1]}" does not match the file name's "-proto-${m[5]}.html"`);
     if (slug && m[4] !== slug) fail("prototypes", `file "${m[3]}" should be plans/${slug}-proto-${m[1]}.html (frontmatter slug)`);
-    ids.push(m[1]);
+    ids.push(m[1] ?? "");
   }
   if (ids.length === 3 && [...ids].sort().join(",") !== "a,b,c") fail("prototypes", `ids must be a, b, c; found ${ids.join(", ")}`);
   const chosen = block.map((l) => /^\s*Chosen:\s*(\S+)\s*$/.exec(l)?.[1]).find((v) => v);
@@ -233,7 +235,7 @@ function checkStack(s: Section, base: string, fail: (rule: string, detail: strin
   const want = ["#", "Branch", "Base", "Fence", "Size", "Greptile focus"];
   if (table.header.length !== want.length || want.some((h, i) => table.header[i] !== h))
     fail("stack", `PR stack header must be exactly: ${want.join(" | ")}`);
-  const seen = new Set<string>();
+  const seen = new Set<string | undefined>();
   const fences: { n: number; path: string }[] = [];
   table.rows.forEach((row, i) => {
     const n = i + 1;
@@ -243,21 +245,24 @@ function checkStack(s: Section, base: string, fail: (rule: string, detail: strin
     if (num !== String(n)) fail("stack", `row ${n}: # is "${num}", expected ${n}`);
     if (seen.has(branch)) fail("stack", `row ${n}: branch "${branch}" is repeated`);
     seen.add(branch);
-    const wantBase = i === 0 ? base : table.rows[i - 1][1];
+    const wantBase = i === 0 ? base : table.rows[i - 1]?.[1];
     if (rowBase !== wantBase) fail("stack", `row ${n}: base is "${rowBase}", expected "${wantBase}"`);
-    const paths = [...(fence ?? "").matchAll(/`([^`]+)`/g)].map((m) => m[1]);
+    const paths = [...(fence ?? "").matchAll(/`([^`]+)`/g)].map((m) => m[1] ?? "");
     if (paths.length === 0) fail("stack", `row ${n}: fence has no backticked path`);
     for (const raw of paths) {
       const path = normPath(raw);
       if (path === null) fail("stack", `row ${n}: fence path "${raw}" is absolute or contains ".."`);
       else fences.push({ n, path });
     }
-    if (!["S", "M", "L"].includes(size)) fail("stack", `row ${n}: Size is "${size}", expected S, M or L`);
+    if (size === undefined || !["S", "M", "L"].includes(size)) fail("stack", `row ${n}: Size is "${size}", expected S, M or L`);
   });
   for (let i = 0; i < fences.length; i++)
-    for (let j = i + 1; j < fences.length; j++)
-      if (fences[i].n !== fences[j].n && overlaps(fences[i].path, fences[j].path))
-        fail("fence-overlap", `PR ${fences[i].n} \`${fences[i].path}\` overlaps PR ${fences[j].n} \`${fences[j].path}\``);
+    for (let j = i + 1; j < fences.length; j++) {
+      const a = fences[i];
+      const b = fences[j];
+      if (a && b && a.n !== b.n && overlaps(a.path, b.path))
+        fail("fence-overlap", `PR ${a.n} \`${a.path}\` overlaps PR ${b.n} \`${b.path}\``);
+    }
 }
 
 export function checkFeatureDoc(markdown: string): Failure[] {

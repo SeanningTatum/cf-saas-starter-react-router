@@ -1,4 +1,4 @@
-import type { Insight } from "@/components/analytics";
+import type { Insight } from "@/components/analytics/insights-card";
 import type { UserStats, UserGrowthPoint } from "@/lib/schemas/analytics";
 
 /** Translator shape needed to build insight copy — matches `useTranslation("admin").t`. */
@@ -14,7 +14,7 @@ export const VERIFICATION_RATE_MODERATE_THRESHOLD = 50;
 /** Banned-user share (%) above which the banned-users insight reads as "negative" instead of "neutral". */
 export const BANNED_PERCENT_HIGH_THRESHOLD = 5;
 /** Trailing window (days) used to sum "recent signups" from the growth series. */
-export const RECENT_SIGNUPS_WINDOW_DAYS = 7;
+const RECENT_SIGNUPS_WINDOW_DAYS = 7;
 
 /**
  * Derives the admin dashboard's insight list from user stats + growth series.

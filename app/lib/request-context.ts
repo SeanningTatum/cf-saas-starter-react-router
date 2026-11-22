@@ -61,6 +61,14 @@ export const parseTraceparent = (
   const match = TRACEPARENT.exec(header);
   if (!match) return undefined;
   const [, version, traceId, spanId, flags] = match;
+  if (
+    version === undefined ||
+    traceId === undefined ||
+    spanId === undefined ||
+    flags === undefined
+  ) {
+    return undefined;
+  }
   if (version === "ff" || ALL_ZERO.test(traceId) || ALL_ZERO.test(spanId)) {
     return undefined;
   }

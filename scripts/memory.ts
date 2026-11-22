@@ -100,17 +100,19 @@ export function parseFields(stdin: string): { fields: Fields } | { error: string
     if (!raw.trim()) continue;
     const m = /^\s*([A-Za-z_-]+)\s*:\s?(.*)$/.exec(raw);
     if (!m) return { error: `not a "key: value" line: ${raw.trim().slice(0, 60)}` };
-    const key = m[1].toLowerCase() as Key;
+    const key = (m[1] ?? "").toLowerCase() as Key;
     if (!KEYS.includes(key)) return { error: `unknown key "${m[1]}" (keys: ${KEYS.join(", ")})` };
-    const value = m[2].trim();
+    const value = (m[2] ?? "").trim();
     if (!value) continue;
-    (fields[key] ??= []).push(value);
+    const list = fields[key] ?? [];
+    list.push(value);
+    fields[key] = list;
   }
   const status = fields.status?.at(-1);
   if (status !== undefined && !(STATUSES as readonly string[]).includes(status))
     return { error: `bad status "${status}" (one of: ${STATUSES.join(", ")})` };
-  if (fields.issue) {
-    const issue = fields.issue.at(-1)!;
+  const issue = fields.issue?.at(-1);
+  if (issue) {
     if (/^\d+$/.test(issue)) fields.issue = [`#${issue}`];
     else if (!/^(#\d+|none|https?:\/\/\S+)$/.test(issue)) return { error: `bad issue "${issue}" (#12 or a URL)` };
   }
@@ -138,8 +140,8 @@ const blank = (l: string) => !l.trim();
 function trimBlank(lines: string[]): string[] {
   let a = 0;
   let b = lines.length;
-  while (a < b && blank(lines[a])) a++;
-  while (b > a && blank(lines[b - 1])) b--;
+  while (a < b && blank(lines[a] ?? "")) a++;
+  while (b > a && blank(lines[b - 1] ?? "")) b--;
   return lines.slice(a, b);
 }
 
@@ -157,10 +159,11 @@ function parseDoc(text: string): Doc {
   const preamble: string[] = [];
   const sections: Section[] = [];
   for (; i < lines.length; i++) {
-    const h = /^##\s+(.+?)\s*$/.exec(lines[i]);
-    if (h) sections.push({ name: h[1].toLowerCase(), heading: lines[i].trim(), body: [] });
-    else if (sections.length) sections[sections.length - 1].body.push(lines[i]);
-    else preamble.push(lines[i]);
+    const line = lines[i] ?? "";
+    const h = /^##\s+(.+?)\s*$/.exec(line);
+    if (h) sections.push({ name: (h[1] ?? "").toLowerCase(), heading: line.trim(), body: [] });
+    else if (sections.length) sections.at(-1)?.body.push(line);
+    else preamble.push(line);
   }
   for (const s of sections) s.body = trimBlank(s.body);
   return { fm, preamble: trimBlank(preamble), sections };
@@ -188,11 +191,12 @@ function fmAt(d: Doc, key: string): number {
 }
 function getFm(d: Doc, key: string): string | undefined {
   const at = fmAt(d, key);
-  return at < 0 ? undefined : d.fm[at].slice(d.fm[at].indexOf(":") + 1).trim();
+  const line = d.fm[at] ?? "";
+  return at < 0 ? undefined : line.slice(line.indexOf(":") + 1).trim();
 }
 function setFm(d: Doc, key: string, value: string) {
   const at = fmAt(d, key);
-  if (at >= 0) d.fm[at] = `${d.fm[at].match(/^\s*/)![0]}${key}: ${value}`;
+  if (at >= 0) d.fm[at] = `${/^\s*/.exec(d.fm[at] ?? "")?.[0] ?? ""}${key}: ${value}`;
   else d.fm.push(`${key}: ${value}`);
 }
 
@@ -240,8 +244,8 @@ function readTodos(body: string[]): Todo[] {
   body.forEach((l, at) => {
     const m = TODO_LINE.exec(l);
     if (!m) return;
-    const date = new RegExp(`\\((${DATE.source})\\)\\s*$`).exec(m[3])?.[1];
-    out.push({ at, ticked: m[2] !== " ", text: m[3].trim().replace(new RegExp(`\\s*\\(${DATE.source}\\)\\s*$`), ""), date });
+    const date = new RegExp(`\\((${DATE.source})\\)\\s*$`).exec(m[3] ?? "")?.[1];
+    out.push({ at, ticked: m[2] !== " ", text: (m[3] ?? "").trim().replace(new RegExp(`\\s*\\(${DATE.source}\\)\\s*$`), ""), date });
   });
   return out;
 }
@@ -254,14 +258,14 @@ function readLog(body: string[]): { head: string[]; entries: string[][] } {
   const entries: string[][] = [];
   for (const l of body) {
     if (/^-\s/.test(l)) entries.push([l]);
-    else if (entries.length) entries[entries.length - 1].push(l);
+    else if (entries.length) entries.at(-1)?.push(l);
     else head.push(l);
   }
   return { head, entries };
 }
 /** One folded entry: its date and its first clause. */
 function foldedForm(entry: string[]): string {
-  const [date, what] = entry[0].replace(/^-\s*/, "").split(" — ");
+  const [date, what] = (entry[0] ?? "").replace(/^-\s*/, "").split(" — ");
   return [date, what].filter(Boolean).join(" ").trim();
 }
 
@@ -298,7 +302,7 @@ function mergeTodos(todo: Section, fields: Fields, today: string): { todos: numb
 /** Puts one entry (text after the "- ") at the top of Log, keeps the newest ten, folds the rest. Returns how many it folded. */
 function mergeLog(log: Section, entry: string): number {
   const { head, entries } = readLog(log.body);
-  const earlierAt = entries.findIndex((e) => /^-\s*earlier:/i.test(e[0]));
+  const earlierAt = entries.findIndex((e) => /^-\s*earlier:/i.test(e[0] ?? ""));
   const earlier = earlierAt >= 0 ? entries.splice(earlierAt, 1)[0] : null;
   entries.unshift([`- ${entry}`]);
   const keep = entries.slice(0, KEEP_LOG);
@@ -332,7 +336,7 @@ export function mergeRecord(existing: string | null, slug: string, fields: Field
   const isNew = existing === null;
   if (getFm(d, "feature") === undefined) d.fm.unshift(`feature: ${slug}`);
   if (getFm(d, "status") === undefined) d.fm.push("status: in-progress");
-  const was = getFm(d, "status")!;
+  const was = getFm(d, "status") ?? "in-progress";
   const status = fields.status?.at(-1) ?? was;
   setFm(d, "status", status);
   const wasIssue = getFm(d, "issue");
@@ -417,7 +421,7 @@ function parseIndex(text: string | null): { head: string[]; lines: IndexLine[]; 
     const m = FEATURE_LINE.exec(raw);
     if (m) {
       const [status = "", issue = "", ...rest] = raw.slice(m[0].length).replace(/^\s*—\s*/, "").split(" — ");
-      lines.push({ slug: m[1], status: status.trim(), issue: issue.trim(), blurb: rest.join(" — ").trim(), raw });
+      lines.push({ slug: m[1] ?? "", status: status.trim(), issue: issue.trim(), blurb: rest.join(" — ").trim(), raw });
     } else if (lines.length) {
       if (raw.trim()) tail.push(raw);
     } else head.push(raw);
@@ -462,15 +466,15 @@ function updateMemoryLine(text: string | null, link: string, indexText: string, 
 function levenshtein(a: string, b: string): number {
   const row = Array.from({ length: b.length + 1 }, (_, j) => j);
   for (let i = 1; i <= a.length; i++) {
-    let prev = row[0];
+    let prev = row[0] ?? 0;
     row[0] = i;
     for (let j = 1; j <= b.length; j++) {
-      const tmp = row[j];
-      row[j] = Math.min(row[j] + 1, row[j - 1] + 1, prev + (a[i - 1] === b[j - 1] ? 0 : 1));
+      const tmp = row[j] ?? 0;
+      row[j] = Math.min(tmp + 1, (row[j - 1] ?? 0) + 1, prev + (a[i - 1] === b[j - 1] ? 0 : 1));
       prev = tmp;
     }
   }
-  return row[b.length];
+  return row[b.length] ?? 0;
 }
 /** Up to three stored slugs nearest to `slug`: a shared word or a small edit distance. */
 export function closestSlugs(slug: string, all: string[]): string[] {
@@ -501,7 +505,7 @@ function brief(text: string, slug: string): string {
     `Decisions:\n${list(decisions)}`,
     `Open todos:\n${list(open)}`,
     `Links:\n${list(get("links"))}`,
-    `Last log: ${readLog(get("log")).entries[0]?.[0].replace(/^-\s*/, "") ?? "none"}`,
+    `Last log: ${readLog(get("log")).entries[0]?.[0]?.replace(/^-\s*/, "") ?? "none"}`,
   ].join("\n");
 }
 

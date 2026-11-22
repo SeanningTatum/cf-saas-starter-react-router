@@ -120,7 +120,10 @@ describe("twice", () => {
   it("retries once when the agent returns nothing, passes the attempt number, and logs the first miss", async () => {
     const { lib, logs } = wired();
     const seen: number[] = [];
-    const r = await lib.twice(async (n: number) => (seen.push(n), n === 2 ? { done: true } : null), "step");
+    const r = await lib.twice(async (n: number) => {
+      seen.push(n);
+      return n === 2 ? { done: true } : null;
+    }, "step");
     expect(r).toEqual({ done: true });
     expect(seen).toEqual([1, 2]);
     expect(logs).toEqual(["step: attempt 1 returned nothing"]);
@@ -191,27 +194,27 @@ describe("asker", () => {
     const opts = { label: "l", phase: "P" };
     expect(await ask("do it", opts)).toBe("r");
     expect(calls).toEqual([{ prompt: "ROOT = /r\n\ndo it", opts }]);
-    expect(calls[0].opts).toBe(opts);
+    expect(calls[0]?.opts).toBe(opts);
   });
 
   it("sh() runs on the runner at low effort and the caller cannot hand a shell step to another agent type", () => {
     const { lib, calls } = wired();
     const { sh } = lib.asker("P");
     sh("x", { label: "l", agentType: "ui-builder" });
-    expect(calls[0].opts).toEqual({ effort: "low", label: "l", agentType: "runner" });
+    expect(calls[0]?.opts).toEqual({ effort: "low", label: "l", agentType: "runner" });
   });
 
   it("sh() lets the caller raise the effort: one runner step needs more than low", () => {
     const { lib, calls } = wired();
     lib.asker("P").sh("x", { effort: "high" });
-    expect((calls[0].opts as { effort: string }).effort).toBe("high");
+    expect((calls[0]?.opts as { effort: string } | undefined)?.effort).toBe("high");
   });
 
   it("remember() goes to the runner, never to context-memory: no model edits the store, and the options keep their order so a resumed run matches its cached stop", () => {
     const { lib, calls } = wired();
     lib.asker("P").remember("demo", { log: "built" }, "memory:record:demo", "Brief");
-    expect(JSON.stringify(calls[0].opts)).toBe('{"effort":"low","label":"memory:record:demo","phase":"Brief","agentType":"runner"}');
-    expect(calls[0].prompt).toBe(
+    expect(JSON.stringify(calls[0]?.opts)).toBe('{"effort":"low","label":"memory:record:demo","phase":"Brief","agentType":"runner"}');
+    expect(calls[0]?.prompt).toBe(
       "P\n\nRun this command from ROOT exactly as written and return what it prints. Change nothing in it and run nothing else.\n\nbun scripts/memory.ts record demo <<'MEMORY_EOF'\nlog: built\nMEMORY_EOF"
     );
   });
@@ -228,8 +231,8 @@ describe("asker", () => {
   it("recall() goes to the runner and runs `recall <what>`", () => {
     const { lib, calls } = wired();
     lib.asker("P").recall("status", "memory:recall", "Brief");
-    expect(calls[0].opts).toEqual({ effort: "low", label: "memory:recall", phase: "Brief", agentType: "runner" });
-    expect(calls[0].prompt).toContain("`bun scripts/memory.ts recall status`");
+    expect(calls[0]?.opts).toEqual({ effort: "low", label: "memory:recall", phase: "Brief", agentType: "runner" });
+    expect(calls[0]?.prompt).toContain("`bun scripts/memory.ts recall status`");
   });
 });
 
@@ -309,7 +312,7 @@ describe("lib.js as text", () => {
   const text = stripLib(readFileSync(LIB_PATH, "utf8"));
 
   it("runs in a context with only JS built-ins, so it holds no free variable (a workflow's globals are passed in, never assumed)", () => {
-    const lib = runInNewContext(`${text}\n({ workflowLib, parseArgs, haltOrThrow, obj, STR, makeFence })`) as Record<string, (...a: unknown[]) => unknown>;
+    const lib = runInNewContext(`${text}\n({ workflowLib, parseArgs, haltOrThrow, obj, STR, makeFence })`) as { workflowLib: (...a: unknown[]) => unknown };
     expect(typeof lib.workflowLib).toBe("function");
     const logs: string[] = [];
     const { twice } = lib.workflowLib({ agent: async () => null, log: (m: string) => void logs.push(m) }) as { twice: (f: () => unknown, w: string) => Promise<unknown> };

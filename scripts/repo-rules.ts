@@ -207,7 +207,7 @@ function jobNames(yml: string): string[] {
     if (/^jobs:\s*$/.test(line)) inJobs = true;
     else if (/^[^\s#]/.test(line)) inJobs = false;
     const m = inJobs ? /^ {4}name:\s*(.+?)\s*$/.exec(line) : null;
-    if (m) names.push(m[1].replace(/^(["'])(.*)\1$/, "$2"));
+    if (m?.[1] !== undefined) names.push(m[1].replace(/^(["'])(.*)\1$/, "$2"));
   }
   return names;
 }

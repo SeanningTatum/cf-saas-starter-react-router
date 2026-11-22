@@ -108,7 +108,7 @@ function parseArgs(argv: string[]): Parsed | string {
   const flags = new Map<string, string[]>();
   const positional: string[] = [];
   for (let i = 0; i < argv.length; i++) {
-    const a = argv[i];
+    const a = argv[i] ?? "";
     if (a.startsWith("--")) {
       const v = argv[i + 1];
       if (v === undefined || v.startsWith("--")) return `${a} needs a value`;
@@ -136,13 +136,14 @@ const repoArgs = (ref: Ref) => (ref.repo ? ["-R", ref.repo] : []);
 
 const ISSUE_FIELDS = "number,url,title,body,state,labels,updatedAt,comments";
 
+// biome-ignore lint/suspicious/noExplicitAny: gh returns a different JSON shape for each --json field list, and callers read different subsets of it
 async function viewJson(ref: Ref, deps: Deps, fields = ISSUE_FIELDS): Promise<Outcome & { data?: any }> {
   const r = deps.gh(["issue", "view", String(ref.number), ...repoArgs(ref), "--json", fields]);
   if (r.code !== 0) return ghFailure(r);
   try {
     return { code: 0, data: JSON.parse(r.stdout) };
   } catch {
-    return bad(2, "NOT_FOUND", "gh returned unreadable JSON", "run: gh issue view <n> --json " + fields);
+    return bad(2, "NOT_FOUND", "gh returned unreadable JSON", `run: gh issue view <n> --json ${fields}`);
   }
 }
 
@@ -180,7 +181,7 @@ async function view(ref: Ref, deps: Deps): Promise<Outcome> {
     state: d.state,
     labels: (d.labels ?? []).map((l: { name: string }) => l.name),
     updatedAt: d.updatedAt,
-    comments: (d.comments ?? []).map((c: any) => ({
+    comments: (d.comments ?? []).map((c: { id: unknown; author?: { login?: string } | null; body: unknown; url: unknown }) => ({
       id: c.id,
       author: c.author?.login ?? "",
       body: c.body,
@@ -268,7 +269,7 @@ async function edit(ref: Ref, p: Parsed, deps: Deps): Promise<Outcome> {
         `${other.editor?.login ?? "someone"} edited the issue at ${other.editedAt}, after ${expect} and before our write finished; our write may have overwritten it`,
         "the write landed; restore or merge the text in `body` (that edit's diff), then edit again",
       );
-      err.err!.body = other.diff ?? "";
+      if (err.err) err.err.body = other.diff ?? "";
       return err;
     }
   }
@@ -357,8 +358,8 @@ export async function run(argv: string[], deps: Deps = defaultDeps): Promise<Out
   if (p.backend !== "gh") return usage(`unknown backend "${p.backend}"`);
 
   if (!(p.verb in FLAGS)) return usage(p.verb ? `unknown verb "${p.verb}"` : "a verb is required");
-  const unknown = [...p.flags.keys()].filter((f) => f !== "--backend" && !FLAGS[p.verb].includes(f));
-  if (unknown.length) return usage(`unknown flag ${unknown.join(", ")} for ${p.verb}; accepts ${FLAGS[p.verb].join(" ") || "no flags"}`);
+  const unknown = [...p.flags.keys()].filter((f) => f !== "--backend" && !(FLAGS[p.verb] ?? []).includes(f));
+  if (unknown.length) return usage(`unknown flag ${unknown.join(", ")} for ${p.verb}; accepts ${(FLAGS[p.verb] ?? []).join(" ") || "no flags"}`);
   if (p.verb === "create") return create(p, deps);
   const ref = parseRef(p.positional[0]);
   if (!ref) return usage(`<ref> must be 12, #12 or an issue URL, got "${p.positional[0] ?? ""}"`);

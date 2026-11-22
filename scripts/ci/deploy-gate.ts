@@ -133,9 +133,10 @@ function findTopLevelDatabase(raw: unknown): Either.Either<Found, string> {
   if (Either.isLeft(shape)) return Either.left("wrangler.jsonc has a malformed d1_databases list");
   const entries = shape.right.d1_databases ?? [];
   const index = entries.findIndex((d) => d.binding === "DATABASE");
-  return index < 0
+  const entry = entries[index];
+  return entry === undefined
     ? Either.left('wrangler.jsonc has no top-level d1_databases entry with binding "DATABASE"')
-    : Either.right({ index, id: entries[index].database_id });
+    : Either.right({ index, id: entry.database_id });
 }
 
 /** The id of the top-level DATABASE binding, or an error when the file is unreadable. */
@@ -153,7 +154,8 @@ export function withProductionD1(text: string, id: string): Either.Either<string
   return Either.flatMap(parseJsonc(text), (raw) =>
     Either.map(findTopLevelDatabase(raw), ({ index }) => {
       const config = raw as { d1_databases: { database_id?: string }[] };
-      config.d1_databases[index].database_id = id;
+      const target = config.d1_databases[index];
+      if (target) target.database_id = id;
       return `${PATCH_HEADER}\n${JSON.stringify(config, null, 2)}\n`;
     }),
   );

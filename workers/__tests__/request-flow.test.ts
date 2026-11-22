@@ -142,11 +142,11 @@ describe("one request through loader, tRPC and repository", () => {
     const traceIds = new Set(spans.map((s) => s.traceId));
     expect(traceIds.size).toBe(1);
 
-    const root = spans.find((s) => s.name === "http.request")!;
+    const root = spans.find((s) => s.name === "http.request");
     if ("traceparent" in headers) {
       expect(requestId).toBe(TRACE_ID);
       expect([...traceIds]).toEqual([TRACE_ID]);
-      expect(root.parentSpanId).toBe(PARENT_SPAN_ID);
+      expect(root?.parentSpanId).toBe(PARENT_SPAN_ID);
     } else {
       expect(requestId).toBe("8f1a2b3c4d5e6f70-SJC");
       expect(root).not.toHaveProperty("parentSpanId");
@@ -179,6 +179,6 @@ describe("one request through loader, tRPC and repository", () => {
       );
       expect(new Set(walked.spans.map((s) => attr(s, "user.id")))).toEqual(new Set([user]));
     }
-    expect(a.spans[0]!.traceId).not.toBe(b.spans[0]!.traceId);
+    expect(a.spans[0]?.traceId).not.toBe(b.spans[0]?.traceId);
   });
 });

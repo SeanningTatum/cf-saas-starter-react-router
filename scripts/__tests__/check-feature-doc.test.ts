@@ -95,7 +95,7 @@ describe("checkFeatureDoc edge cases", () => {
     expect(checkFeatureDoc(good.replace("`app/trpc/routes/invites.ts`", "`/etc/x`")).map((f) => f.rule)).toEqual(["stack"]);
   });
 
-  const withFlow = (diagram: string) => good.replace(/```mermaid\nflowchart TD\n  P1[\s\S]*?```/, "```mermaid\n" + diagram + "\n```");
+  const withFlow = (diagram: string) => good.replace(/```mermaid\nflowchart TD\n {2}P1[\s\S]*?```/, `\`\`\`mermaid\n${diagram}\n\`\`\``);
 
   it("an erDiagram cardinality like ||--o{ passes: its { is not an open bracket", () => {
     expect(checkFeatureDoc(withFlow("erDiagram\n  TEAM ||--o{ MEMBER : has\n  A }|..|{ B : uses"))).toEqual([]);
@@ -166,7 +166,7 @@ describe("checkFeatureDoc edge cases", () => {
   });
 
   it("an empty mermaid block fails: an empty fence passes a presence-only check", () => {
-    const doc = good.replace(/```mermaid\nflowchart TD\n  P1[\s\S]*?```/, "```mermaid\n```");
+    const doc = good.replace(/```mermaid\nflowchart TD\n {2}P1[\s\S]*?```/, "```mermaid\n```");
     expect(checkFeatureDoc(doc).map((f) => f.rule)).toEqual(["mermaid"]);
   });
 

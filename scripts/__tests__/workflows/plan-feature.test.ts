@@ -301,7 +301,7 @@ describe("plan-feature: happy path", () => {
       expect(r.live).toEqual([]);
     }
     const overridden = await plan({ brief: { ...BRIEF, decision: "override" } }, reject, blocked);
-    expect(overridden.live[0].label).toBe("writeback:body");
+    expect(overridden.live[0]?.label).toBe("writeback:body");
   });
 
   it("untrusted ticket text reaches an agent only inside a DATA fence, and every agent after preflight gets the ROOT preamble", async () => {
@@ -353,7 +353,7 @@ describe("plan-feature: stop and resume", () => {
     const stopAt = atBrief.calls.length - 1;
     expect(atPlan.calls.slice(0, stopAt).every((c) => c.cached)).toBe(true);
     expect(labels(atPlan.calls)).not.toContain("memory:record:needs-input:brief");
-    expect(atPlan.live[0].label).toBe("writeback:body");
+    expect(atPlan.live[0]?.label).toBe("writeback:body");
 
     // The needs-plan stop sits after parallel design work and background prototypes: replay must still be call for call.
     const againAtPlan = await plan({ brief: BRIEF }, rules(), atPlan);
@@ -405,7 +405,7 @@ describe("plan-feature: judge gate", () => {
     const fix = { audit: "fix: link the PRD in Context" };
     const fixed = await plan({ escalations: fix }, failing, atEscalation);
     expect(labels(fixed.live)).toEqual(["audit:revise", "judge:audit:3", "memory:record:needs-input:escalation:audit final"]);
-    expect(fixed.live[0].prompt).toContain("- The human says: link the PRD in Context");
+    expect(fixed.live[0]?.prompt).toContain("- The human says: link the PRD in Context");
     expect(fixed.result).toMatchObject({ status: "needs-input", stage: "escalation", label: "audit final" });
     // Catches an unbounded human fix loop: a second "fix:" is not honoured, no agent runs again.
     const fixAgain = await plan({ escalations: { ...fix, "audit final": "fix: try once more" } }, failing, fixed);

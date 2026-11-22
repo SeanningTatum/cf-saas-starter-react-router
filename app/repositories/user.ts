@@ -16,7 +16,7 @@ import type {
   BulkUpdateUserRolesInput,
 } from "@/lib/schemas/user";
 
-export interface FilterProtectedInput {
+interface FilterProtectedInput {
   readonly userIds: ReadonlyArray<string>;
   readonly currentUserId: string;
 }

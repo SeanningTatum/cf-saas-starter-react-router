@@ -8,12 +8,12 @@ import { HealthRepository } from "@/repositories/health";
  * `ok: false` with the error's tag in `error`, never as a thrown error, so
  * a caller can show a red status instead of an error toast.
  */
-export interface DbHealth {
+type DbHealth = {
   ok: boolean;
   latencyMs: number;
   checkedAt: string;
   error?: string;
-}
+};
 
 /**
  * `admin.dbHealth` — admin-only query, no input. Runs `select 1` against D1

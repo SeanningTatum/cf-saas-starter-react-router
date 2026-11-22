@@ -132,8 +132,8 @@ describe("db spans", () => {
           "client",
           "client",
         ]);
-        expect(buffer.spans[0].attributes.get("db.operation")).toBe("query");
-        expect(buffer.spans[0].attributes.get("db.entity")).toBe("widget");
+        expect(buffer.spans[0]?.attributes.get("db.operation")).toBe("query");
+        expect(buffer.spans[0]?.attributes.get("db.entity")).toBe("widget");
       }).pipe(Effect.provide(layer));
     }
   );
@@ -160,9 +160,9 @@ describe("db spans", () => {
           }
         }
         expect(buffer.spans).toHaveLength(1);
-        const status = buffer.spans[0].status;
-        expect(status._tag).toBe("Ended");
-        if (status._tag === "Ended") {
+        const status = buffer.spans[0]?.status;
+        expect(status?._tag).toBe("Ended");
+        if (status?._tag === "Ended") {
           expect(Exit.isFailure(status.exit)).toBe(true);
         }
       }).pipe(Effect.provide(layer));

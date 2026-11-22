@@ -71,8 +71,24 @@ export const defaultDeps: Deps = {
   now: () => Date.now(),
 };
 
+type ApiItem = {
+  id?: unknown;
+  user?: { login?: unknown };
+  app?: { slug?: unknown };
+  status?: unknown;
+  commit_id?: unknown;
+  submitted_at?: unknown;
+  state?: unknown;
+  body?: unknown;
+  pull_request_review_id?: unknown;
+  path?: unknown;
+  line?: unknown;
+  original_line?: unknown;
+  html_url?: unknown;
+};
+
 /** Items from `gh api --paginate`: one array, several arrays back to back, or one object per line. */
-export function parseItems(text: string): any[] {
+export function parseItems(text: string): ApiItem[] {
   const t = text.trim();
   if (!t) return [];
   try {
@@ -81,7 +97,7 @@ export function parseItems(text: string): any[] {
   } catch {
     // fall through
   }
-  const items: any[] = [];
+  const items: ApiItem[] = [];
   for (const line of t.split("\n")) {
     const l = line.trim().replace(/^\]\[/, "");
     if (!l) continue;
@@ -116,7 +132,7 @@ export async function run(argv: string[], deps: Deps = defaultDeps): Promise<Out
   const flags = new Map<string, string>();
   const positional: string[] = [];
   for (let i = 0; i < argv.length; i++) {
-    const a = argv[i];
+    const a = argv[i] ?? "";
     if (a.startsWith("--")) {
       const v = argv[i + 1];
       if (v === undefined || v.startsWith("--")) return usage(`${a} needs a value`);
@@ -149,12 +165,12 @@ export async function run(argv: string[], deps: Deps = defaultDeps): Promise<Out
     const ir = deps.gh(["api", "--paginate", `repos/${repo}/issues/${pr}/comments`]);
     if (ir.code !== 0) return ghFailure(ir, "gh api issue comments");
     return parseItems(ir.stdout)
-      .filter((c) => isBot(c?.user?.login) && typeof c?.body === "string" && c.body.includes(MARKER) && c.body.includes(sha))
+      .filter((c): c is ApiItem & { body: string } => isBot(c?.user?.login) && typeof c?.body === "string" && c.body.includes(MARKER) && c.body.includes(sha))
       .pop()?.body ?? "";
   };
   const start = deps.now();
   let retriggered = false;
-  let review: any = null;
+  let review: ApiItem | null = null;
   let summary: string | null = null;
 
   for (;;) {
@@ -198,10 +214,11 @@ export async function run(argv: string[], deps: Deps = defaultDeps): Promise<Out
 
   let comments: { id: unknown; path: unknown; line: unknown; body: unknown; url: unknown }[] = [];
   if (review) {
+    const reviewId = review.id;
     const pc = deps.gh(["api", "--paginate", `repos/${repo}/pulls/${pr}/comments`]);
     if (pc.code !== 0) return ghFailure(pc, "gh api pull comments");
     comments = parseItems(pc.stdout)
-      .filter((c) => c?.pull_request_review_id === review.id)
+      .filter((c) => c?.pull_request_review_id === reviewId)
       .map((c) => ({ id: c.id, path: c.path, line: c.line ?? c.original_line ?? null, body: c.body, url: c.html_url }));
   }
   if (summary === null) {

@@ -42,7 +42,7 @@ declare global {
 const nonceOf = (csp: string | undefined): string => {
   const match = /'nonce-([^']+)'/.exec(csp ?? "");
   expect(match, `no 'nonce-…' in the CSP: ${csp}`).not.toBeNull();
-  return match![1];
+  return match?.[1] ?? "";
 };
 
 /** The set the Worker must send, as Playwright reports it (lower-case names). */
@@ -147,8 +147,8 @@ const loadHydrated = async (page: Page, url: string, ready: (page: Page) => Loca
     response = await page.reload();
     expect(await hydrated(ready(page), 30_000), `${url} never hydrated`).toBe(true);
   }
-  expect(response, `${url}: no document response`).not.toBeNull();
-  return response!;
+  if (response === null) throw new Error(`${url}: no document response`);
+  return response;
 };
 
 const watchers = new WeakMap<Page, Awaited<ReturnType<typeof watchViolations>>>();
