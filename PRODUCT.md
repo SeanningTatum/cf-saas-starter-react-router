@@ -2,45 +2,48 @@
 
 <!-- impeccable:product-schema 1 -->
 
+This file describes the starter itself. In a fork, replace these answers or delete this file before you run `brand-init`: it takes an existing `PRODUCT.md` as settled and asks nothing.
+
 ## Platform
 
 web
 
-<!-- Not answered in the review. Taken from the repo: React Router v7 SSR on Cloudflare Workers, no native code. -->
+React Router v7 with server rendering on Cloudflare Workers. No native code.
 
 ## Users
 
-Tech-savvy people, such as developers and designers. They open the product to get a calm place to focus.
+Two kinds of people:
+
+- **The developer who forks the starter** to build their own SaaS, often through a coding agent. They open the repo to get a working base and rules an agent can follow.
+- **The end users of the SaaS that developer builds.** They sign up, use the dashboard and upload files. Admins manage users.
 
 ## Product Purpose
 
-A productivity dashboard. The user opens it and gets a calm dashboard to focus on, built from widgets such as a pomodoro timer, a todo list and a calendar.
+A SaaS starter that a developer forks and extends. It ships email and password auth, an admin area (user list, ban and unban, an analytics overview), file upload to R2, i18n (en, zh) and dark mode. It also ships the harness that keeps agents on track: issues as the plan, gates in `scripts/verify.sh`, sub-agents and workflows.
 
 ## Positioning
 
-Calm, aesthetic and optimized. Other dashboard apps are heavy, bloated and unfocused; this one is not.
+Harness-first and AI-first. The same Workers runtime runs on a laptop and at the edge. Other starters hand over code; this one also hands over the checks and the workflow that keep the code right as agents change it.
 
 ## Capabilities and Constraints
 
-- The dashboard holds multiple widgets (pomodoro timer, todo, calendar, and others to come).
-- Aesthetics are the main constraint future work must preserve.
-- Technical base (from the repo): Cloudflare Workers, React Router v7, tRPC, D1/Drizzle, Better Auth, Effect TS, ShadCN/Tailwind. English and Chinese locales, dark mode.
+- Stack: Cloudflare Workers, React Router v7, tRPC, D1 with Drizzle, Better Auth, Effect TS, ShadCN and Tailwind.
+- The screens are a base to build on, not a sample product. A feature belongs here when most forks would keep it.
+- Lean is a constraint: a package, file or rule stays only while something uses it.
 
 ## Brand Commitments
 
-No name yet. Identity: professional, sleek, calm, minimalist, hipster, better.
+The starter has a name and no brand. Its look is the neutral token set in `app/app.css`.
 
 ## Evidence on Hand
 
-None. No customers, testimonials, benchmarks or pricing exist; future work must not invent them.
+Two public apps built on the starter, listed in the README under "In the wild". No customers, testimonials, benchmarks or pricing exist; future work must not invent them.
 
 ## Product Principles
 
-- Calm first: nothing on the dashboard competes for attention.
-- Light over heavy: fast and lean, against bloated dashboards.
-- Widgets are the unit: each does one job and sits well beside the others.
-- Aesthetics are a feature, not a finish.
+- The developer and their agent are both users. A flow that works only for one is not done.
+- What ships to the end user stays small and fast.
 
 ## Accessibility & Inclusion
 
-WCAG 2.1 AA as a floor: keyboard-operable, visible focus, 4.5:1 text contrast in light and dark, respects reduced motion. Bilingual (en, zh) from the start. (This was the prefilled answer in the brief; the user's response kept it.)
+WCAG 2.1 AA as a floor: keyboard-operable, visible focus, 4.5:1 text contrast in light and dark, respects reduced motion. Bilingual (en, zh) from the start.
