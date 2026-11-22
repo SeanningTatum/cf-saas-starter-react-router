@@ -17,5 +17,3 @@ export function walkNodes(root: ts.Node, visit: (node: ts.Node) => void): void {
   visit(root);
   root.forEachChild((child) => walkNodes(child, visit));
 }
-
-export const inApp = (code: string): Record<string, string> => ({ "app/selftest.ts": code });

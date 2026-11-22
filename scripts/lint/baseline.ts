@@ -33,7 +33,7 @@ export const BASELINE_CHECKS = {
   },
   base: {
     id: "baseline-base",
-    matches: "In CI, the branch a pull request merges into cannot be read, so the shrink-only check cannot run.",
+    matches: "The baseline to compare with cannot be read: in CI the base branch is missing, or the base holds the linter with no baseline, or its baseline does not parse.",
     fix: "set `fetch-depth: 0` on the checkout step of the job that runs this gate, so git has the base branch",
   },
 } as const;

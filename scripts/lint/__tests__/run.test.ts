@@ -70,7 +70,7 @@ describe("runRules", () => {
   });
 
   it("adds up the suppression markers with a reason across every file", () => {
-    const rule = badWordRule({ suppression: { marker: "bad-ok:" } });
+    const rule = badWordRule({ suppressionMarker: "bad-ok:" });
     const repo = memoryRepo({ "app/a.ts": "// bad-ok: one\nBAD", "app/b.ts": "// bad-ok: two\nBAD" });
 
     expect(runRules([rule], repo, roots())).toMatchObject({ findings: [], suppressions: 2 });
@@ -78,7 +78,7 @@ describe("runRules", () => {
 });
 
 describe("applySuppression", () => {
-  const suppressible = () => badWordRule({ suppression: { marker: "bad-ok:" } });
+  const suppressible = () => badWordRule({ suppressionMarker: "bad-ok:" });
   const hitsIn = (text: string): FileHit[] => suppressible().check(sourceOf(text), memoryRepo({}));
   const suppress = (text: string) => applySuppression(suppressible(), sourceOf(text), hitsIn(text));
 

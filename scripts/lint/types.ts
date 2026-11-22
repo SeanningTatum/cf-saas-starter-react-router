@@ -27,10 +27,6 @@ export interface Case {
   expect: "finding" | "clean";
 }
 
-export interface Suppression {
-  marker: string;
-}
-
 interface RuleBase {
   id: string;
   nonNegotiable?: number;
@@ -44,7 +40,7 @@ interface RuleBase {
 export interface FileRule extends RuleBase {
   scope: "file";
   applies(path: string): boolean;
-  suppression?: Suppression;
+  suppressionMarker?: string;
   check(source: Source, repo: Repo): FileHit[];
 }
 

@@ -1,6 +1,7 @@
 import ts from "typescript";
 import { insideEffectTry } from "../effect-ast";
-import { inApp, isOwnShippedSource, lineOf, walkNodes } from "../source";
+import { inApp } from "../cases";
+import { isOwnShippedSource, lineOf, walkNodes } from "../source";
 import type { FileHit, FileRule } from "../types";
 
 const FRAMEWORK_THROW_CALLEES = new Set(["redirect", "redirectDocument", "data"]);

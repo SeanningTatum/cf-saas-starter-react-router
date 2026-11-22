@@ -10,6 +10,7 @@ export const UNIT_TEST_DIRS = ["app/lib", "app/repositories"] as const;
 export const MIN_TEST_FILE_CHARS = 40;
 
 export const BASELINE_PATH = "scripts/lint/baseline.json";
+export const LINTER_ENTRY = "scripts/lint/cli.ts";
 export const RULES_DIR = "scripts/lint/rules";
 export const RULES_PAGE = "docs/agents/lint-rules.md";
 export const RULES_START = "<!-- lint-rules:start -->";

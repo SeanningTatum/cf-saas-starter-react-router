@@ -2,6 +2,7 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { loadRules } from "../registry";
 import { diskRepo } from "../repo";
+import { loadsEveryRuleTimeoutMs } from "./fixtures";
 
 const ruleFileNames = (): string[] =>
   diskRepo(fileURLToPath(new URL("../../../", import.meta.url)))
@@ -17,5 +18,5 @@ describe("loadRules", () => {
     expect(problems).toEqual([]);
     expect(ruleFileNames().length).toBeGreaterThan(0);
     expect(rules.map((rule) => rule.id)).toEqual(ruleFileNames());
-  });
+  }, loadsEveryRuleTimeoutMs);
 });

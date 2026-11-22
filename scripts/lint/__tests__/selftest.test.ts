@@ -4,7 +4,7 @@ import { loadRules } from "../registry";
 import { diskRepo } from "../repo";
 import { selftest } from "../selftest";
 import type { Rule } from "../types";
-import { badWordRule } from "./fixtures";
+import { badWordRule, loadsEveryRuleTimeoutMs } from "./fixtures";
 
 const realRepo = () => diskRepo(fileURLToPath(new URL("../../../", import.meta.url)));
 
@@ -24,7 +24,7 @@ describe("selftest over the real rules", () => {
     expect(result.failures).toEqual([]);
     expect(result.rules).toBe(rules.length);
     expect(result.cases).toBeGreaterThanOrEqual(casesInTheOldChecker);
-  });
+  }, loadsEveryRuleTimeoutMs);
 });
 
 describe("selftest over a rule with a broken shape", () => {

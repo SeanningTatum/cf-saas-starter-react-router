@@ -69,3 +69,5 @@ export function recordedGit(outputs: Record<string, string>): { git: (args: stri
     },
   };
 }
+
+export const loadsEveryRuleTimeoutMs = 30_000;

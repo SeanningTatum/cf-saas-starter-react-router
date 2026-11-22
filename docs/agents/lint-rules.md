@@ -45,7 +45,7 @@ Checks on the baseline file itself:
 | `baseline-grew` | An entry, a count or the suppression total in the baseline is higher than on the branch this one merges into. | fix the code the entry excuses and take the entry back out; a baseline only shrinks |
 | `baseline-stale` | A baseline entry excuses more than the code now holds: the file is clean, gone, or has fewer findings than the count. | lower the count to what the linter finds, or delete the entry when it finds nothing |
 | `baseline-shape` | The baseline cannot be read, names a rule that does not exist, or has no `debt` key for a rule that does. | keep `suppressions`, `boundaries` and `debt` in the file, with one `"<rule-id>": {}` key under `debt` for every rule |
-| `baseline-base` | In CI, the branch a pull request merges into cannot be read, so the shrink-only check cannot run. | set `fetch-depth: 0` on the checkout step of the job that runs this gate, so git has the base branch |
+| `baseline-base` | The baseline to compare with cannot be read: in CI the base branch is missing, or the base holds the linter with no baseline, or its baseline does not parse. | set `fetch-depth: 0` on the checkout step of the job that runs this gate, so git has the base branch |
 <!-- lint-rules:end -->
 
 ## Add a rule
@@ -53,7 +53,8 @@ Checks on the baseline file itself:
 One new file, `scripts/lint/rules/<id>.ts`, and nothing else to register: the runner loads every file in that folder. The file exports `rule`, and the file name is the rule's id.
 
 ```ts
-import { inApp, isShippedSource, lineOf, walkNodes } from "../source";
+import { inApp } from "../cases";
+import { isShippedSource, lineOf, walkNodes } from "../source";
 import type { FileHit, FileRule } from "../types";
 
 export const rule: FileRule = {
@@ -82,7 +83,7 @@ export const rule: FileRule = {
 - **Cases are the rule's test.** Each case is a small tree of files held in memory and what the rule should say about it. The self-test fails a rule with no `fix`, no "finding" case, no "clean" case, an `example` path that does not exist, or a finding that does not print in the house shape. Write a case for each way round the rule that you can think of; a bypass found later becomes a new case.
 - A hit can carry its own `fix` when the rule's general one would not help.
 - Then: add `"<id>": {}` under `debt` in `scripts/lint/baseline.json`, run `bun run lint:house --write-docs`, and run `bun run lint:house`. If the repo already breaks the new rule, list today's findings under that key in the same pull request; that is the only time a baseline may gain entries.
-- To let a rule take a comment that excuses one line, set `suppression: { marker: "some-marker:" }`. See below.
+- To let a rule take a comment that excuses one line, set `suppressionMarker: "some-marker:"`. See below.
 
 ## The baseline
 
@@ -100,7 +101,7 @@ A baseline only shrinks. The gate fails when:
 - an entry excuses more than the code holds (`baseline-stale`): fix one finding and you must lower the count, so the room cannot be used again;
 - an entry, a count or the suppression total is higher than on the branch the work merges into (`baseline-grew`), even when every entry applies. Editing the file by hand to make room does not pass.
 
-The comparison is with the merge base. The base branch comes from `GITHUB_BASE_REF` in CI; else from the pull request's target (`git config branch.<name>.gh-merge-base`, then `gh pr view`); else from the default branch (`origin/HEAD`). It needs no network: with no base to be found, the gate says so and still checks that every entry applies. In CI the base is required: a job that cannot read it fails with `baseline-base`, and the fix is `fetch-depth: 0` on its checkout step.
+The comparison is with the merge base. The base branch comes from `GITHUB_BASE_REF` in CI; else from the pull request's target (`git config branch.<name>.gh-merge-base`, then `gh pr view`); else from the default branch (`origin/HEAD`). It works offline: `gh` is the only step that uses the network, and when it fails the next source is tried. With no base to be found, the gate says so and still checks that every entry applies. In CI the base is required: a job that cannot read it fails with `baseline-base`, and the fix is `fetch-depth: 0` on its checkout step. A base that holds the linter but no baseline, or a baseline that does not parse, fails the same way.
 
 A rule that is new on a branch may bring its own entries, since the base has no key for it. A new boundary under an existing rule is the owner's call: the gate stays red on that pull request, and the owner merges it knowingly.
 

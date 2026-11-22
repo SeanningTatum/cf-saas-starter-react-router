@@ -103,20 +103,28 @@ describe("lint: whole repo", () => {
     expect(outcome.stderr[0]).toMatch(/^scripts\/lint\/baseline\.json:1 baseline-grew: debt\["no-bad"\]\["app\/a\.ts"\] is 1/);
   });
 
-  it("returns 0 and says so when the base has no baseline yet", () => {
+  it("returns 0 and says the base predates the linter when the base has neither the linter nor a baseline", () => {
     const { git } = recordedGit(mainAt(undefined));
     const outcome = cli(withBaseline({ "app/a.ts": "const GOOD = 1;" }), { git }).run();
 
     expect(outcome.code).toBe(0);
-    expect(outcome.stdout.join("\n")).toContain("2222222 (the default branch, main) has no baseline yet");
+    expect(outcome.stdout.join("\n")).toContain("2222222 (the default branch, main) predates the linter");
   });
 
-  it("returns 0 and says the base was not compared when the base's baseline does not parse", () => {
+  it("returns 1 with baseline-base when the base has the linter and no baseline, so moving the baseline file does not skip the compare", () => {
+    const { git } = recordedGit({ ...mainAt(undefined), "cat-file -e 2222222222222222:scripts/lint/cli.ts": "" });
+    const outcome = cli(withBaseline({ "app/a.ts": "const GOOD = 1;" }), { git }).run();
+
+    expect(outcome.code).toBe(1);
+    expect(outcome.stderr[0]).toMatch(/^scripts\/lint\/baseline\.json:1 baseline-base: .*has the linter and no baseline/);
+  });
+
+  it("returns 1 with baseline-base when the base's baseline does not parse, so a broken base does not skip the compare", () => {
     const { git } = recordedGit(mainAt("{ broken"));
     const outcome = cli(withBaseline({ "app/a.ts": "const GOOD = 1;" }), { git }).run();
 
-    expect(outcome.code).toBe(0);
-    expect(outcome.stdout.join("\n")).toContain("does not parse, so it was not compared");
+    expect(outcome.code).toBe(1);
+    expect(outcome.stderr[0]).toMatch(/^scripts\/lint\/baseline\.json:1 baseline-base: .*does not parse/);
   });
 });
 

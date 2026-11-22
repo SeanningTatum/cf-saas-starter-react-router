@@ -1,5 +1,6 @@
 import ts from "typescript";
-import { inApp, isShippedSource, lineOf, walkNodes } from "../source";
+import { inApp } from "../cases";
+import { isShippedSource, lineOf, walkNodes } from "../source";
 import type { FileHit, FileRule } from "../types";
 
 const GLOBAL_OBJECTS = new Set(["globalThis", "global"]);

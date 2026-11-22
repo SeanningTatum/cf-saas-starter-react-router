@@ -11,7 +11,7 @@ SaaS starter on **Cloudflare Workers + React Router v7 + tRPC + D1/Drizzle + Bet
 | What | Where |
 |------|-------|
 | Work, specs, tickets | GitHub issues ([`docs/agents/issue-tracker.md`](docs/agents/issue-tracker.md)); `--label ready-for-agent` |
-| Domain terms | `GLOSSARY.md`  |
+| Domain terms | `GLOSSARY.md`; add each new term |
 | Hard-to-reverse decisions | `docs/adr/NNNN-<slug>.md` ([`docs/agents/domain.md`](docs/agents/domain.md)) |
 | Proof a flow works | `.verify/<slug>/` (screenshots, videos + `verdict.md`, gitignored), pasted in the PR; smoke videos from the `@golden`/`@error` specs, demos via `scripts/lib/record.ts` ([videos](docs/agents/harness.md#walkthrough-videos)) |
 | Working memory per feature | [`context-memory`](.claude/agents/context-memory.md) store outside the repo (`./scripts/memory-dir.sh`) |
@@ -25,7 +25,7 @@ SaaS starter on **Cloudflare Workers + React Router v7 + tRPC + D1/Drizzle + Bet
 2. **Plan** (when a decision is involved): `/grill-me` or `/grill-with-docs`, then `/to-spec`, then `/to-tickets`.
 3. **Work:** one ticket at a time (`gh issue edit <n> --add-assignee @me`), lanes in parallel (below).
 4. **Verify:** `feature-verifier` browser-walks any user-visible flow.
-5. **Done:** `./scripts/verify.sh` green, PASS verdict in the PR, PR has `Closes #<n>`, one `context-memory` record. A stacked feature merges on the [merge bar](docs/agents/harness.md#review-loop-and-merge-bar): local reviews with no open P0/P1, Greptile 5/5 on the roll-up's current head only (not per stacked PR).
+5. **Done:** `./scripts/verify.sh` green, PASS verdict in the PR (user-visible work), PR has `Closes #<n>`, one `context-memory` record. A stacked feature merges on the [merge bar](docs/agents/harness.md#review-loop-and-merge-bar): local reviews with no open P0/P1, Greptile 5/5 on the roll-up's current head only (not per stacked PR).
 
 Trivial edits (typo, one line) skip the bookends, but never skip `./scripts/verify.sh` on user-visible work. `./scripts/verify.sh` runs every gate, `--baseline` the quick set; the list is in `scripts/verify.sh`. **Scope creep:** a diff that touches more than two tickets stops and splits; a cross-feature refactor is its own ticket.
 

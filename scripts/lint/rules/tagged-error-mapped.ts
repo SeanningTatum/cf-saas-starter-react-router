@@ -1,6 +1,6 @@
 import ts from "typescript";
 import { ERROR_MAP_FILE, ERRORS_DIR } from "../constants";
-import { isSourcePath, isTestPath, lineOf } from "../source";
+import { isSourcePath, isTestPath, lineOf, walkNodes } from "../source";
 import type { Hit, RepoRule, Source } from "../types";
 
 const MAPPER_NAMES = ["tagToTRPC", "appErrorToTRPC", "toTRPC"];
@@ -12,13 +12,10 @@ const isFunctionNode = (node: ts.Node): boolean =>
 
 function mapperNodes(ast: ts.SourceFile): ts.Node[] {
   const found: ts.Node[] = [];
-  const visit = (node: ts.Node): void => {
-    const name =
-      ts.isFunctionDeclaration(node) || ts.isVariableDeclaration(node) ? node.name : undefined;
+  walkNodes(ast, (node) => {
+    const name = ts.isFunctionDeclaration(node) || ts.isVariableDeclaration(node) ? node.name : undefined;
     if (name && ts.isIdentifier(name) && MAPPER_NAMES.includes(name.text)) found.push(node);
-    node.forEachChild(visit);
-  };
-  visit(ast);
+  });
   return found;
 }
 

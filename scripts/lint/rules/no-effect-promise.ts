@@ -1,6 +1,7 @@
 import ts from "typescript";
 import { isEffectReceiver } from "../effect-ast";
-import { inApp, isShippedSource, lineOf, walkNodes } from "../source";
+import { inApp } from "../cases";
+import { isShippedSource, lineOf, walkNodes } from "../source";
 import type { FileHit, FileRule } from "../types";
 
 const MARKER = "effect-promise-ok:";
@@ -16,7 +17,7 @@ export const rule: FileRule = {
     `Only when the promise cannot reject, keep the call and write \`// ${MARKER} <why it cannot reject>\` on the line above it`,
   example: "app/repositories/bucket.ts",
   applies: isShippedSource,
-  suppression: { marker: MARKER },
+  suppressionMarker: MARKER,
   check({ ast }) {
     const hits: FileHit[] = [];
     walkNodes(ast, (node) => {

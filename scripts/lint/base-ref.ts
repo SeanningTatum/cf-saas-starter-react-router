@@ -48,7 +48,3 @@ export function resolveBase(deps: BaseDeps): Base {
   }
   return { found: false, required: ciBase !== undefined, tried };
 }
-
-export function readAtBase(git: BaseDeps["git"], sha: string, path: string): string | undefined {
-  return git(["show", `${sha}:${path}`]);
-}

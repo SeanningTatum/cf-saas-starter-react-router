@@ -22,8 +22,8 @@ function markers(source: Source, marker: string): Marker[] {
 }
 
 export function applySuppression(rule: FileRule, source: Source, hits: FileHit[]): Suppressed {
-  if (!rule.suppression) return { hits, count: 0 };
-  const { marker } = rule.suppression;
+  const marker = rule.suppressionMarker;
+  if (!marker) return { hits, count: 0 };
   const found = markers(source, marker);
   const withReason = found.filter((entry) => entry.reason !== "");
   const excusedBy = (hit: FileHit): Marker | undefined =>

@@ -1,12 +1,12 @@
 #!/usr/bin/env bun
-import { spawnSync } from "node:child_process";
 import { writeFileSync } from "node:fs";
 import { dirname, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { Either } from "effect";
-import { readAtBase, resolveBase, type BaseDeps } from "./base-ref";
+import { resolveBase, type BaseDeps } from "./base-ref";
 import { applyBaseline, BASELINE_CHECKS, baselineFinding, baselineSize, compareWithBase, parseBaseline, type Baseline } from "./baseline";
-import { BASELINE_PATH, GH_TIMEOUT_MS, LINT_ROOTS, RULES_PAGE, SHORT_SHA_LENGTH, USAGE } from "./constants";
+import { BASELINE_PATH, GH_TIMEOUT_MS, LINTER_ENTRY, LINT_ROOTS, RULES_PAGE, SHORT_SHA_LENGTH, USAGE } from "./constants";
+import { runCommand } from "./command";
 import { formatFinding } from "./format";
 import { loadRules, type Registry } from "./registry";
 import { diskRepo } from "./repo";
@@ -38,10 +38,18 @@ function ratchet(deps: CliDeps, head: Baseline): { findings: Finding[]; note: st
     return { findings: [baselineFinding(BASELINE_CHECKS.base, message)], note: "" };
   }
   const where = `${base.sha.slice(0, SHORT_SHA_LENGTH)} (${base.from})`;
-  const text = readAtBase(deps.git, base.sha, BASELINE_PATH);
-  if (text === undefined) return { findings: [], note: `${where} has no baseline yet, so every entry here is new` };
+  const text = deps.git(["show", `${base.sha}:${BASELINE_PATH}`]);
+  if (text === undefined) {
+    const linterAtBase = deps.git(["cat-file", "-e", `${base.sha}:${LINTER_ENTRY}`]) !== undefined;
+    if (!linterAtBase) return { findings: [], note: `${where} predates the linter, so every entry here is new` };
+    const message = `${where} has the linter and no baseline at ${BASELINE_PATH}, so the shrink-only check did not run`;
+    return { findings: [baselineFinding(BASELINE_CHECKS.base, message, `keep the baseline at ${BASELINE_PATH} on both branches`)], note: "" };
+  }
   return Either.match(parseBaseline(text), {
-    onLeft: () => ({ findings: [], note: `the baseline at ${where} does not parse, so it was not compared` }),
+    onLeft: () => {
+      const message = `the baseline at ${where} does not parse, so the shrink-only check did not run`;
+      return { findings: [baselineFinding(BASELINE_CHECKS.base, message, "repair the baseline on that branch first")], note: "" };
+    },
     onRight: (atBase) => ({ findings: compareWithBase(atBase, head), note: `compared with ${where}` }),
   });
 }
@@ -115,11 +123,6 @@ export function lint(argv: string[], deps: CliDeps): Outcome {
   return check(deps, files);
 }
 
-function runCommand(root: string, command: string, args: string[], timeout?: number): string | undefined {
-  const result = spawnSync(command, args, { cwd: root, encoding: "utf8", timeout, stdio: ["ignore", "pipe", "ignore"] });
-  return result.status === 0 ? result.stdout.trim() : undefined;
-}
-
 export async function main(argv: string[]): Promise<number> {
   const root = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
   const outcome = lint(argv, {
@@ -128,9 +131,10 @@ export async function main(argv: string[]): Promise<number> {
     repo: diskRepo(root),
     registry: await loadRules(),
     env: process.env,
-    git: (args) => runCommand(root, "git", args),
+    git: (args) => runCommand("git", args, { cwd: root, env: process.env }),
     pullRequestTarget: () =>
-      runCommand(root, "gh", ["pr", "view", "--json", "baseRefName", "--jq", ".baseRefName"], GH_TIMEOUT_MS) || undefined,
+      runCommand("gh", ["pr", "view", "--json", "baseRefName", "--jq", ".baseRefName"], { cwd: root, env: process.env, timeout: GH_TIMEOUT_MS }) ||
+      undefined,
     writeFile: (path, text) => writeFileSync(join(root, path), text),
   });
   for (const line of outcome.stdout) console.log(line);
