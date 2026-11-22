@@ -15,12 +15,13 @@ export const meta = {
 //   flagged: item status must be missing, guess or fails; not_flagged: present, filled or n/a.
 //   mentions (optional): field is "amended" (title + body), "amended.body", "questions" (any question's text) or "items.<id>.note" or "items.*.note" (any item's note or the top-level reason);
 //   text must appear in that field, case-insensitive substring. A listed mention that is absent fails the case.
-// args: { degrade?: boolean, only?: string[], includeHeldOut?: boolean (default true) }
+// args: { degrade?: boolean, only?: string[], includeHeldOut?: boolean (default true), reload?: number (see the "differs" stop) }
 // @lib
 const opts = (args && typeof args === 'object') ? args : {}
 const degrade = opts.degrade === true
 const includeHeldOut = opts.includeHeldOut !== false
 const only = Array.isArray(opts.only) ? opts.only : null
+const reload = Number.isInteger(opts.reload) && opts.reload > 0 ? opts.reload : 0
 
 const GOOD = ['present', 'filled', 'n/a']
 const BAD = ['missing', 'guess', 'fails']
@@ -54,7 +55,8 @@ const loaded = await agent(
   'Run these two commands in bash and return the results as JSON, copied exactly:\n' +
   `1. jq -c '${META_PROJ}' evals/plan-feature/tickets.jsonl   -> cases: one object per output line, in file order.\n` +
   `2. jq -c '${SRC_PROJ}' evals/plan-feature/context.json   -> sources: that object.\n` +
-  'Return {cases, sources}. Do not read the files any other way, do not run gh, do not interpret anything.',
+  'Return {cases, sources}. Do not read the files any other way, do not run gh, do not interpret anything.' +
+  (reload ? `\nThis is reload ${reload}: an earlier copy differed from the files. Run both commands again now.` : ''),
   { label: 'load metadata', phase: 'Load', agentType: 'runner', effort: 'low', schema: LOAD_SCHEMA },
 )
 if (!loaded || !Array.isArray(loaded.cases) || !loaded.sources) {
@@ -76,7 +78,7 @@ const check = await agent(
   },
 )
 if (!check || check.identical !== true) {
-  return { stopped: 'Load', reason: 'loaded metadata differs from the files on disk', diff: check ? String(check.diff).slice(0, 2000) : 'verifier returned nothing' }
+  return { stopped: 'Load', reason: 'loaded metadata differs from the files on disk', diff: check ? String(check.diff).slice(0, 2000) : 'verifier returned nothing', next: 'fix what differs, then re-run with resumeFromRunId and args.reload set to a number this run has not used (1, then 2, ...); without it the old load is replayed and the run stops here again' }
 }
 
 let cases = loaded.cases

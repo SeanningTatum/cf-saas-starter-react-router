@@ -297,6 +297,7 @@ Return the ABSOLUTE comp.html path, the tokens object you wrote, and the ABSOLUT
 
 async function critique(comp) {
   const dir = comp.dir;
+  const pass = comp.redrawn ? ":redraw" : "";
   // The taste loop edits comp.html (look, fix, look), so it runs alone first. The two critics
   // after it only read the finished pixels, so they run together.
   const taste = await ask(
@@ -312,7 +313,7 @@ At 1920 the content must sit in a max-width page container; edge to edge is a de
 Return the final score (a number), short notes on what changed and what still bites, and \`tokens\`: the exact
 contents of ${dir}/tokens.json after your last edit (read the file back).`,
     {
-      label: `critique:${comp.id}:taste`,
+      label: `critique:${comp.id}:taste${pass}`,
       phase: "Critique",
       agentType: "ui-builder",
       schema: obj({ score: NUM, notes: STR, tokens: { type: "object" } }),
@@ -332,7 +333,7 @@ Also check WCAG AA contrast for body text, muted text, primary-on-primary-foregr
 against ${dir}/tokens.json, in the light theme and the dark theme separately. Report contrastAA.light
 and contrastAA.dark as booleans (true only if every pair passes AA).`,
         {
-          label: `critique:${comp.id}:impeccable`,
+          label: `critique:${comp.id}:impeccable${pass}`,
           phase: "Critique",
           // general-purpose: read-only critique that loads `impeccable` (Skill) and computes contrast; proto-critic
           // retakes its own shots and returns a fixed shape.
@@ -349,7 +350,7 @@ Load the \`emil-design-eng\` skill and judge the motion by its rules (\`review-a
 user-only: the Skill tool refuses it). Check easing, duration, purpose, and that
 prefers-reduced-motion collapses the motion. Return verdict PASS or FAIL with notes.`,
         {
-          label: `critique:${comp.id}:motion`,
+          label: `critique:${comp.id}:motion${pass}`,
           phase: "Critique",
           // general-purpose: read-only motion review that loads `emil-design-eng` (Skill); no project agent reviews motion.
           agentType: "general-purpose",

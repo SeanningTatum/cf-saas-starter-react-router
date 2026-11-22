@@ -1,13 +1,27 @@
 export const LINT_ROOTS = ["app", "workers"] as const;
 export const SKIPPED_DIRS = ["node_modules", ".react-router", "build"] as const;
 export const SOURCE_FILE = /\.tsx?$/;
-export const TEST_PATH = /__tests__|\.test\.tsx?$|\.test-layer\.ts$/;
+export const TEST_PATH = /(^|\/)__tests__\/|\.test\.tsx?$|\.test-layer\.ts$/;
 
 export const VENDORED_UI = "app/components/ui/";
 export const ERRORS_DIR = "app/models/errors";
 export const ERROR_MAP_FILE = "app/lib/effect-trpc.ts";
-export const UNIT_TEST_DIRS = ["app/lib", "app/repositories"] as const;
 export const MIN_TEST_FILE_CHARS = 40;
+
+export const TEST_MAP_PATH = "scripts/lint/test-map.json";
+export const TEST_MAP_ROOTS = ["app", "workers", "scripts", "e2e"] as const;
+export const TEST_MAP_KINDS = ["unit", "machine", "procedure", "route", "component", "primitive", "declaration", "spec-helper", "covered-by"] as const;
+export const APP_ALIAS = "@/";
+export const APP_DIR = "app/";
+export const ROUTES_FILE = "app/routes.ts";
+export const ROUTER_FILE = "app/trpc/router.ts";
+export const LEVELS_FILE = "app/trpc/__tests__/router.test.ts";
+export const LEVELS_NAME = "LEVELS";
+export const E2E_DIR = "e2e";
+export const E2E_SPEC = /\.spec\.ts$/;
+export const SMOKE_TAGS = ["@golden", "@error"] as const;
+export const SANDBOX_DIR = "app/routes/sandbox";
+export const SANDBOX_ISSUE = "#135";
 
 export const BASELINE_PATH = "scripts/lint/baseline.json";
 export const LINTER_ENTRY = "scripts/lint/cli.ts";
