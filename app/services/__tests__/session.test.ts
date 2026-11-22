@@ -11,6 +11,7 @@ const authLayer = (api: Api) =>
   Layer.succeed(AuthApi, {
     auth: {} as never,
     api: api as never,
+    turnstileSiteKey: null,
   });
 
 const provide = (api: Api) =>

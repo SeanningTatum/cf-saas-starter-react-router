@@ -182,3 +182,25 @@ describe("createAuth client IP", () => {
     expect(row?.ipAddress).toBe("203.0.113.7");
   });
 });
+
+describe("createAuth rate limit", () => {
+  const OLD_SIGN_IN_RULE_MAX = 3;
+
+  it("switches Better Auth's own per-isolate limiter off, so only the shared limiter at the route counts", async () => {
+    const baseURL = "http://localhost";
+    const auth = authFor({ BETTER_AUTH_URL: baseURL });
+    expect(auth.options.rateLimit).toEqual({ enabled: false });
+    expect((await auth.$context).rateLimit.enabled).toBe(false);
+
+    const email = nextEmail();
+    await auth.api.signUpEmail({ body: { name: "Server Test", email, password: PASSWORD } });
+    const statuses: number[] = [];
+    for (let attempt = 0; attempt <= OLD_SIGN_IN_RULE_MAX; attempt++) {
+      const response = await auth.handler(
+        post(baseURL, "/sign-in/email", { email, password: PASSWORD }, { "cf-connecting-ip": "203.0.113.70" })
+      );
+      statuses.push(response.status);
+    }
+    expect(statuses).toEqual(Array(OLD_SIGN_IN_RULE_MAX + 1).fill(200));
+  });
+});

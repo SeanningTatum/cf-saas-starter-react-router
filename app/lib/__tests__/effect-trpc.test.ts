@@ -28,6 +28,8 @@ import {
   BucketListError,
   BucketValidationError,
 } from "@/models/errors/bucket";
+import { RateLimitError } from "@/models/errors/rate-limit";
+import { RATE_LIMITED_MESSAGE } from "@/lib/constants/rate-limit";
 
 const failExit = <E>(e: E) => Effect.exit(tagToTRPC(Effect.fail(e)));
 
@@ -157,6 +159,15 @@ describe("tagToTRPC error mapping", () => {
     Effect.gen(function* () {
       const exit = yield* failExit(new BucketValidationError({ message: "x" }));
       expectTRPC(exit, "BAD_REQUEST");
+    })
+  );
+
+  it.effect("RateLimitError → TOO_MANY_REQUESTS with the plain wait message, so an over-limit caller is not told it hit a server fault", () =>
+    Effect.gen(function* () {
+      const exit = yield* failExit(new RateLimitError({ rule: "upload", retryAfterSeconds: 60 }));
+      expectTRPC(exit, "TOO_MANY_REQUESTS");
+      const failure = Exit.isFailure(exit) ? Cause.failureOption(exit.cause) : Option.none();
+      expect(Option.map(failure, (e) => e.message)).toEqual(Option.some(RATE_LIMITED_MESSAGE));
     })
   );
 

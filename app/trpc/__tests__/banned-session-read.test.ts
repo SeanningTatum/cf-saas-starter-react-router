@@ -1,6 +1,4 @@
 import { TRPCError } from "@trpc/server";
-import { Layer, ManagedRuntime } from "effect";
-import type { AppLoadContext } from "react-router";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { redirectIfAuthenticated, requireSession } from "@/lib/session";
 import { action as uploadAction } from "@/routes/api/upload-file";
@@ -16,7 +14,6 @@ const LONG_AGO_MS = Date.parse("2000-01-01T00:00:00Z");
 const FAR_AHEAD_MS = Date.parse("2999-01-01T00:00:00Z");
 
 let app: RealApp;
-const emptyRuntime = ManagedRuntime.make(Layer.empty);
 
 const probeRouter = createTRPCRouter({ ping: protectedProcedure.query(() => "ok") });
 
@@ -67,8 +64,7 @@ const uploadStatus = async (headers: Headers): Promise<number> => {
     headers,
     body: new FormData(),
   });
-  const context = { ...app.loadContext, runtime: emptyRuntime } as unknown as AppLoadContext;
-  const result = await uploadAction({ request, context, params: {} } as unknown as Parameters<
+  const result = await uploadAction({ request, context: app.loadContext, params: {} } as unknown as Parameters<
     typeof uploadAction
   >[0]);
   return (result as { init: ResponseInit | null }).init?.status ?? 200;
@@ -106,7 +102,6 @@ beforeAll(async () => {
 }, 60_000);
 
 afterAll(async () => {
-  await emptyRuntime.dispose();
   await app?.dispose();
 });
 

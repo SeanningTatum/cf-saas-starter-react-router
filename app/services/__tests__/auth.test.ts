@@ -2,6 +2,7 @@ import { describe, expect, vi } from "vitest";
 import { it } from "@effect/vitest";
 import { Effect, Exit, Cause, Layer, Option } from "effect";
 import type { AuthConfig } from "@/auth/config";
+import { TURNSTILE_TEST_SITE_KEY } from "@/lib/constants/turnstile";
 
 const SECRET = "auth-service-test-secret-not-real-000000";
 const THROWING_SECRET = "auth-service-test-secret-makes-createauth-throw";
@@ -35,6 +36,12 @@ const configOf = (env: Partial<Env>, options: Parameters<typeof AuthApiLive>[0])
     return (api as unknown as { config: AuthConfig }).config;
   }).pipe(Effect.provide(AuthApiLive(options).pipe(Layer.provide(envLayer(env)))));
 
+const siteKeyOf = (env: Partial<Env>, options: Parameters<typeof AuthApiLive>[0]) =>
+  Effect.map(
+    AuthApi.pipe(Effect.provide(AuthApiLive(options).pipe(Layer.provide(envLayer(env))))),
+    (service) => service.turnstileSiteKey
+  );
+
 const failureOf = (env: Partial<Env>, options: Parameters<typeof AuthApiLive>[0]) =>
   Effect.gen(function* () {
     const exit = yield* Effect.exit(configOf(env, options));
@@ -51,6 +58,7 @@ describe("AuthApiLive", () => {
         baseURL: "https://app.example.test",
         trustedOrigins: [],
         secureCookies: true,
+        turnstile: null,
       });
     })
   );
@@ -90,6 +98,28 @@ describe("AuthApiLive", () => {
           field: "BETTER_AUTH_URL",
         });
       }
+    })
+  );
+
+  it.effect("hands the configured Turnstile site key to loaders, so the widget and the server use one pair", () =>
+    Effect.gen(function* () {
+      const siteKey = yield* siteKeyOf(
+        { ...prodEnv, TURNSTILE_SITE_KEY: "0x4AAAAAAA-fake-site-key", TURNSTILE_SECRET_KEY: "0x4AAAAAAA-fake-secret" },
+        { dev: false }
+      );
+      expect(siteKey).toBe("0x4AAAAAAA-fake-site-key");
+    })
+  );
+
+  it.effect("gives a null site key when Turnstile is off, so the forms render no widget", () =>
+    Effect.gen(function* () {
+      expect(yield* siteKeyOf(prodEnv, { dev: false })).toBeNull();
+    })
+  );
+
+  it.effect("gives the always-pass test site key in dev when no keys are set", () =>
+    Effect.gen(function* () {
+      expect(yield* siteKeyOf(prodEnv, { dev: true })).toBe(TURNSTILE_TEST_SITE_KEY);
     })
   );
 

@@ -4,6 +4,12 @@ import { BucketRepository } from "@/repositories/bucket";
 import { activeSession } from "@/auth/ban";
 import { ExternalServiceError, ValidationError } from "@/models/errors/repository";
 import { BucketValidationError } from "@/models/errors/bucket";
+import { RateLimiter } from "@/services/rate-limit";
+import {
+  HTTP_TOO_MANY_REQUESTS,
+  RETRY_AFTER_HEADER,
+  UPLOAD_RATE_LIMITED_MESSAGE,
+} from "@/lib/constants/rate-limit";
 import {
   MAX_UPLOAD_SIZE_BYTES,
   ALLOWED_UPLOAD_CONTENT_TYPES,
@@ -30,9 +36,13 @@ export async function action({ request, context }: Route.ActionArgs) {
       try: () => context.auth.api.getSession({ headers: request.headers }),
       catch: (cause) => new ExternalServiceError({ service: "BetterAuth", cause }),
     });
-    if (!activeSession(session, new Date(yield* Clock.currentTimeMillis))) {
+    const signedIn = activeSession(session, new Date(yield* Clock.currentTimeMillis));
+    if (!signedIn) {
       return data({ success: false as const, error: "Unauthorized" }, { status: 401 });
     }
+
+    const limiter = yield* RateLimiter;
+    yield* limiter.check("upload", signedIn.user.id);
 
     if (!(file instanceof File)) {
       return yield* Effect.fail(
@@ -86,6 +96,16 @@ export async function action({ request, context }: Route.ActionArgs) {
       BucketValidationError: (e) =>
         Effect.succeed(
           data({ success: false as const, error: e.message }, { status: 400 })
+        ),
+      RateLimitError: (e) =>
+        Effect.succeed(
+          data(
+            { success: false as const, error: UPLOAD_RATE_LIMITED_MESSAGE },
+            {
+              status: HTTP_TOO_MANY_REQUESTS,
+              headers: { [RETRY_AFTER_HEADER]: String(e.retryAfterSeconds) },
+            }
+          )
         ),
       // Transient upstream failure (Better Auth session lookup, file read) —
       // 503 so clients can distinguish "retry later" from a real 500.

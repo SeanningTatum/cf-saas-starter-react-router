@@ -7,6 +7,7 @@ import { ExternalServiceError } from "@/models/errors/repository";
 export interface AuthApiShape {
   readonly auth: Auth;
   readonly api: Auth["api"];
+  readonly turnstileSiteKey: string | null;
 }
 
 export class AuthApi extends Context.Tag("app/AuthApi")<
@@ -25,6 +26,6 @@ export const AuthApiLive = (options: AuthRuntimeOptions) =>
         catch: (cause) =>
           new ExternalServiceError({ service: "BetterAuth", cause }),
       });
-      return { auth, api: auth.api };
+      return { auth, api: auth.api, turnstileSiteKey: config.turnstile?.siteKey ?? null };
     })
   );

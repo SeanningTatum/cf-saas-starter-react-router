@@ -6,6 +6,7 @@ import { AuthApiLive, type AuthApi as AuthApiTag } from "@/services/auth";
 import type { AuthRuntimeOptions } from "@/auth/config";
 import { LoggerLive, MinLogLevelLive } from "@/services/logger";
 import { AnalyticsLive, type Analytics } from "@/services/analytics";
+import { RateLimiterLive, type RateLimiter } from "@/services/rate-limit";
 import { TracingLayer, type FetchLike } from "@/services/tracing";
 import { CurrentRequest, type RequestContext } from "@/lib/request-context";
 import { UserRepository } from "@/repositories/user";
@@ -18,6 +19,7 @@ export type AppServices =
   | Bucket
   | AuthApiTag
   | Analytics
+  | RateLimiter
   | UserRepository
   | AnalyticsRepository
   | BucketRepository
@@ -88,7 +90,8 @@ export const makeAppRuntime = (
     DatabaseLive,
     BucketLive,
     AuthApiLive(auth),
-    AnalyticsLive
+    AnalyticsLive,
+    RateLimiterLive
   );
   const reposLayer = Layer.mergeAll(
     UserRepository.Default,
