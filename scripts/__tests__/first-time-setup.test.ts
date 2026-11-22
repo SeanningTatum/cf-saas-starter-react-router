@@ -31,13 +31,13 @@ vi.mock("@clack/prompts", () => ({
 }));
 
 import { execSync, spawnSync } from "node:child_process";
-import { password } from "@clack/prompts";
 import {
   buildAccountIdVariableArgs,
   executeArgv,
   setupGitHubCiCredentials,
   upsertEnvLine,
 } from "../first-time-setup";
+import { password } from "@clack/prompts";
 
 // A grab-bag of classic shell-injection payloads. If any of these were ever
 // concatenated into a shell command string, they would execute arbitrary
