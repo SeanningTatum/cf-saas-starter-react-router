@@ -1,0 +1,14 @@
+staged_code=$(git diff --cached --name-only --diff-filter=ACMR | grep -E '\.(ts|tsx|js|jsx)$' || true)
+
+if [ -z "$staged_code" ]; then
+  echo "pre-commit: no code staged, skipping lint and typecheck"
+  exit 0
+fi
+
+if grep -q '"lint:staged"' package.json; then
+  bun run lint:staged
+else
+  ./scripts/verify.sh --only non-negotiables
+fi
+
+./scripts/verify.sh --only typecheck

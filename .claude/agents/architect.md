@@ -82,6 +82,7 @@ Return exactly these fields:
 - Order by compile dependency: data, then api, then ui. A PR never needs code from a later one.
 - `fence` lists the architect's fence paths plus the fixed PR-1 docs set, which you add yourself because the architect does not supply it: `docs/features/<slug>.md`, and `plans/<slug>-proto-<id>.html` for each prototype. Add no other path. A path appears in exactly one PR, and none is a directory prefix of another PR's path.
 - Size: S under about 100 changed lines, M up to about 400, L above. Split an L when a lane allows it.
+- `title`: a Conventional Commits subject per `.commitlintrc.json`: `type(scope): subject`, a type and scope from that file, 100 characters at most (for example `feat(db): add the invites table`). A PR is squashed into its base, the title becomes the commit subject, and release versions are read from it.
 - `greptile_focus`: one line on what a reviewer should look hardest at in that PR (a migration, an auth check, an error mapping).
 - `flow_mermaid`: a `flowchart TD` or `sequenceDiagram` of the request path across the PRs' pieces. Balanced brackets.
 

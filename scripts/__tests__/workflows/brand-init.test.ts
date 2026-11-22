@@ -8,6 +8,7 @@
 import { readdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
+import { lintTitle } from "../helpers/lint-title";
 import { dryRun, labels, ledgerAt, callShape, rowShape, RUN_OK, seq, type AgentCall, type AnswerInput, type AnswerRule, type DryRunResult } from "../../lib/workflow-dry-run";
 
 /** The workflow returns untyped JSON. */
@@ -585,5 +586,16 @@ describe("brand-init: run ledger", () => {
     expect(res(r2).next).toContain("`bun scripts/run-telemetry.ts summary brand-init`");
     const stopped = await run(SHIP_ARGS, rules([["check:gates", { verdict: "FAIL", findings: [], evidence: "typecheck: 3 errors" }]]));
     expect(res(stopped).next).toContain("ingest brand-init brand-init <this run's transcript directory>");
+  });
+});
+
+describe("brand-init: the commit subject it dictates passes the repo's commitlint config", () => {
+  it("names a subject in the list of scopes: the old 'feat(brand)' scope would fail the commit-msg hook and the PR title job", async () => {
+    const { r3 } = await happyPath();
+    const prompt = one(r3, "ship:record-commit-pr").prompt;
+    const subject = prompt.match(/`(feat\([a-z-]+\): [^`]*)`/)?.[1] ?? "";
+    expect(subject).toContain("feat(design): ");
+    expect((await lintTitle(subject)).problems).toEqual([]);
+    expect(prompt).toContain("the PR title is the same line");
   });
 });

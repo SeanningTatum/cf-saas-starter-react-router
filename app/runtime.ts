@@ -6,6 +6,12 @@ import { AuthApiLive, type AuthApi as AuthApiTag } from "@/services/auth";
 import type { AuthRuntimeOptions } from "@/auth/config";
 import { LoggerLive, MinLogLevelLive } from "@/services/logger";
 import { AnalyticsLive, type Analytics } from "@/services/analytics";
+import {
+  ErrorReporterFrom,
+  requestErrorReporter,
+  type ErrorReporter,
+  type ErrorReporterShape,
+} from "@/services/error-reporter";
 import { TracingLayer, type FetchLike } from "@/services/tracing";
 import { CurrentRequest, type RequestContext } from "@/lib/request-context";
 import { UserRepository } from "@/repositories/user";
@@ -18,6 +24,7 @@ export type AppServices =
   | Bucket
   | AuthApiTag
   | Analytics
+  | ErrorReporter
   | UserRepository
   | AnalyticsRepository
   | BucketRepository
@@ -82,13 +89,15 @@ export const observabilityLayer = (
 export const makeAppRuntime = (
   env: Env,
   auth: AuthRuntimeOptions,
-  request?: RequestContext
+  request?: RequestContext,
+  errorReporter: ErrorReporterShape = requestErrorReporter(env, request)
 ) => {
   const baseLayer = Layer.mergeAll(
     DatabaseLive,
     BucketLive,
     AuthApiLive(auth),
-    AnalyticsLive
+    AnalyticsLive,
+    ErrorReporterFrom(errorReporter)
   );
   const reposLayer = Layer.mergeAll(
     UserRepository.Default,

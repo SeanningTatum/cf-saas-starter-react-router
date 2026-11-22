@@ -383,6 +383,31 @@ let BASE = input.base || "";
 const shq = (v) => `'${String(v).replace(/'/g, `'\\''`)}'`;
 const REVIEW_ROUNDS = Math.max(0, Math.min(3, input.reviewRounds ?? 2));
 const ROLLUP_ROUNDS = Math.max(0, Math.min(5, input.rollupRounds ?? 3));
+// A PR title is the commit subject once squashed, and release versions are read from subjects: `type(scope)?!?: subject`
+// (types and scopes live in .commitlintrc.json). The architect writes conventional titles; a title without the shape gets
+// "feat: " here. This checks the shape only, not the scope list: an unlisted scope is caught by the commit-msg hook and the PR title job.
+const TITLE_PARTS = /^([a-z]+)(?:\([a-z0-9-]+\))?(!)?: (\S.*)$/;
+const COMMITLINTRC_HEADER_MAX_LENGTH = 100;
+// Cuts only the subject: at a word boundary when there is one, with no trailing space or full stop.
+const fitHeader = (prefix, subject) => {
+  const room = COMMITLINTRC_HEADER_MAX_LENGTH - prefix.length;
+  if (subject.length <= room) return prefix + subject;
+  let cut = subject.slice(0, room);
+  const space = cut.lastIndexOf(" ");
+  if (subject[room] !== " " && space > 0) cut = cut.slice(0, space);
+  return prefix + cut.replace(/[\s.]+$/, "");
+};
+const asConventional = (title) => {
+  const m = TITLE_PARTS.exec(title);
+  return m ? fitHeader(title.slice(0, title.length - m[3].length), m[3]) : fitHeader("feat: ", title);
+};
+// The roll-up squashes into the base branch: a feat when any stacked PR is one, else the last PR's type, with "!" when any PR is breaking.
+const rollupTitle = (title, stacked) => {
+  const parts = stacked.map((p) => TITLE_PARTS.exec(p.title) || ["", "feat", "", ""]);
+  const type = parts.some((m) => m[1] === "feat") ? "feat" : parts[parts.length - 1][1];
+  const subject = (TITLE_PARTS.exec(title) || [])[3] || title;
+  return fitHeader(`${type}${parts.some((m) => m[2]) ? "!" : ""}: `, subject);
+};
 // The e2e dev server must not collide with another on 5173 (a second checkout, another project's dev server):
 // every gate or e2e run gets a free port. playwright.config.ts reads E2E_PORT.
 const E2E_ENV = `E2E_PORT=$(bun -e 'const s=Bun.listen({hostname:"localhost",port:0,socket:{data(){}}});console.log(s.port);s.stop(true)')`;
@@ -552,7 +577,7 @@ if (pre.record_path) {
 - golden_path / error_path: one sentence each, the main user flow and its most likely failure, from UX and Flow.
 - contract: the Contract section's code block, verbatim.
 - seed_fixtures: from Architecture.
-- prs: the PR stack table rows: n, branch, base, title (a short PR title you write from the fence and the Summary), fence (the backticked paths, without backticks), greptile_focus.
+- prs: the PR stack table rows: n, branch, base, title (a short PR title you write from the fence and the Summary, as a Conventional Commits subject per .commitlintrc.json: \`type(scope): subject\`, 100 characters at most), fence (the backticked paths, without backticks), greptile_focus.
 ${input.slug ? `The caller fixed the slug: ${input.slug}.` : ""}
 ${DATA_FENCE}`,
         { label: "intake:record", phase: "Intake", agentType: "context-scout", schema: PLAN }
@@ -636,7 +661,7 @@ ${fence("audited ticket", JSON.stringify(audit.amended, null, 1))}`,
 
 slug = input.slug || plan.slug || slug;
 if (!SLUG.test(slug)) return { stopped: "Intake", reason: `no usable slug (${JSON.stringify(slug)})` };
-const prs = [...plan.prs].sort((a, b) => a.n - b.n);
+const prs = [...plan.prs].sort((a, b) => a.n - b.n).map((p) => ({ ...p, title: asConventional(p.title) }));
 if (!prs.length) return { stopped: "Intake", reason: "the plan has no PRs" };
 // A stack merges into review/<slug> and reaches the base through the roll-up, so PR 1 targets review/<slug>.
 const rollupBranch = prs.length > 1 ? `review/${slug}` : "";
@@ -720,7 +745,7 @@ const stackPlan = {
     branch: p.branch,
     title: p.title,
     fence: p.fence.map(norm),
-    message: `feat(${slug}): ${p.title}\n\n${issue ? `${p.n === prs.length ? "Closes" : "Part of"} ${issue.url}\n\n` : ""}${COAUTHOR}`,
+    message: `${p.title}\n\n${issue ? `${p.n === prs.length ? "Closes" : "Part of"} ${issue.url}\n\n` : ""}${COAUTHOR}`,
   })),
 };
 
@@ -1372,7 +1397,7 @@ ${fence("rollup.md", body)}
      Record each merged PR's number in merged.
   3. \`git fetch -q origin\`, then \`git diff --quiet origin/${rollupBranch} ${top.branch}\` must exit 0: ${rollupBranch} must hold exactly the top branch's tree.
   4. \`git branch -f ${rollupBranch} origin/${rollupBranch}\`.
-  5. \`gh pr create --base ${shq(BASE)} --head ${rollupBranch} --title ${shq(`${plan.title} (roll-up)`)} --body-file ${outDir()}/rollup.md\` -> number and url.
+  5. \`gh pr create --base ${shq(BASE)} --head ${rollupBranch} --title ${shq(rollupTitle(plan.title, prs))} --body-file ${outDir()}/rollup.md\` -> number and url.
   6. For each of ${openPrs.map((p) => `#${p.number}`).join(", ")}: \`gh pr comment <n> --body ${shq(`Merged into ${rollupBranch}; it lands on ${BASE} with the roll-up #<roll-up number>.`)}\`
 Return ok, failed_command, merged, number, url.`,
     { label: "rollup:pr", phase: "Rollup", schema: obj({ ok: BOOL, failed_command: STR, merged: arr(NUM), number: NUM, url: STR }, ["ok", "failed_command", "merged"]) }
@@ -1389,7 +1414,7 @@ Return ok, failed_command, merged, number, url.`,
       prs: openPrs,
       merged_into_rollup: merged,
       rollup: opened ? opened.url : null,
-      next: `${merged.length ? `Merged into ${rollupBranch}: ${merged.map((n) => `#${n}`).join(", ")}. ` : ""}${rest.length ? `Merge the rest in order: for each of ${rest.map((p) => `#${p.number}`).join(", ")}, \`gh pr edit <n> --base ${rollupBranch}\` then \`gh pr merge <n> --merge\`. ` : ""}${opened ? `The roll-up is open: ${opened.url}; do not create another.` : `Then open the roll-up: \`gh pr create --base ${shq(BASE)} --head ${rollupBranch} --title ${shq(`${plan.title} (roll-up)`)} --body-file ${outDir()}/rollup.md\`.`} On each stacked PR that lacks it, ${comment}. Then post "@greptileai review" on the roll-up.`,
+      next: `${merged.length ? `Merged into ${rollupBranch}: ${merged.map((n) => `#${n}`).join(", ")}. ` : ""}${rest.length ? `Merge the rest in order: for each of ${rest.map((p) => `#${p.number}`).join(", ")}, \`gh pr edit <n> --base ${rollupBranch}\` then \`gh pr merge <n> --merge\`. ` : ""}${opened ? `The roll-up is open: ${opened.url}; do not create another.` : `Then open the roll-up: \`gh pr create --base ${shq(BASE)} --head ${rollupBranch} --title ${shq(rollupTitle(plan.title, prs))} --body-file ${outDir()}/rollup.md\`.`} On each stacked PR that lacks it, ${comment}. Then post "@greptileai review" on the roll-up.`,
     };
   }
   log(`Rollup: ${openPrs.length} stacked PRs merged into ${rollupBranch}; ${rollup.url}`);

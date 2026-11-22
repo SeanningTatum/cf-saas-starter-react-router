@@ -113,7 +113,8 @@ const t = initTRPC.context<typeof createTRPCContext>().create({
         ...shape,
         data: {
           ...shape.data,
-          schemaError: formatSchemaError(error.cause),
+          schemaError:
+            error.code === "BAD_REQUEST" ? formatSchemaError(error.cause) : null,
         },
       },
       isDev

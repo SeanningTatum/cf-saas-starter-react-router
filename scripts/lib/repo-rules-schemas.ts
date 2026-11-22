@@ -33,13 +33,24 @@ const DeclaredEnv = Schema.Struct({
   deployment_branches: Schema.Array(PathSafe),
 });
 
+const PendingReason = Schema.String.pipe(
+  Schema.filter((s) => s.trim().length > 0, { message: () => "pending must be a non-empty string" }),
+);
+
+const DeclaredRepository = Schema.Struct({
+  squash_merge_commit_title: Schema.Literal("PR_TITLE", "COMMIT_OR_PR_TITLE"),
+  pending: Schema.optional(PendingReason),
+});
+
 export const Config = Schema.Struct({
   rulesets: Schema.Array(DeclaredRuleset).pipe(Schema.minItems(1)),
   environments: Schema.Array(DeclaredEnv),
+  repository: Schema.optional(DeclaredRepository),
 });
 
 export type Ruleset = typeof DeclaredRuleset.Type;
 export type DeclaredEnvironment = typeof DeclaredEnv.Type;
+export type DeclaredRepositoryT = typeof DeclaredRepository.Type;
 export type ConfigT = typeof Config.Type;
 
 const OldShape = Schema.Struct({ ruleset: Schema.Unknown, rulesets: Schema.optional(Schema.Unknown) });
@@ -51,6 +62,7 @@ export const hasOldShape = (text: string): boolean => {
 
 export const RepoInfo = Schema.Struct({
   default_branch: Schema.String,
+  squash_merge_commit_title: Schema.optional(Schema.String),
   owner: Schema.Struct({ login: Schema.String, id: Schema.Number, type: Schema.String }),
   permissions: Schema.optional(Schema.Struct({ admin: Schema.optional(Schema.Boolean) })),
 });
@@ -108,14 +120,39 @@ export const BranchPolicies = Schema.Struct({
 
 export const IdOnly = Schema.Struct({ id: Schema.Number });
 
-const CheckEntries = Schema.Array(
-  Schema.Struct({ context: Schema.String, integration_id: Schema.optional(Schema.Number) }),
-);
+const CheckEntry = Schema.Struct({
+  context: Schema.String,
+  integration_id: Schema.optional(Schema.Number),
+  pending: Schema.optional(PendingReason),
+});
+const CheckEntries = Schema.Array(CheckEntry);
 
-export const checkEntriesOf = (v: unknown) => {
+export type CheckEntryT = typeof CheckEntry.Type;
+
+export const checkEntriesOf = (v: unknown): readonly CheckEntryT[] => {
   const d = Schema.decodeUnknownEither(CheckEntries)(v);
   return Either.isRight(d) ? d.right : [];
 };
+
+const ContextOnly = Schema.Struct({ context: Schema.String });
+
+export function checkProblems(rulesets: readonly Ruleset[]): string[] {
+  return rulesets.flatMap((rs) =>
+    rs.rules.flatMap((r) => {
+      const value = r.type === "required_status_checks" ? r.parameters?.required_status_checks : undefined;
+      if (value === undefined) return [];
+      const list = Schema.decodeUnknownEither(Schema.Array(Schema.Unknown))(value);
+      if (Either.isLeft(list)) return [`ruleset "${rs.name}" required_status_checks must be a list of checks`];
+      return list.right.flatMap((e) => {
+        const bad = Schema.decodeUnknownEither(CheckEntry)(e);
+        if (Either.isRight(bad)) return [];
+        const name = Schema.decodeUnknownEither(ContextOnly)(e);
+        const label = Either.isRight(name) ? name.right.context : "?";
+        return [`ruleset "${rs.name}" check "${label}" is not valid: ${bad.left.message.replace(/\s+/g, " ").trim()}`];
+      });
+    }),
+  );
+}
 
 export type LiveRulesetT = typeof LiveRuleset.Type;
 export type LiveEnvT = typeof LiveEnv.Type;
