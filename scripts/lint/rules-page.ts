@@ -2,7 +2,12 @@ import { BASELINE_CHECKS } from "./baseline";
 import { RULES_END, RULES_PAGE, RULES_START, WRITE_DOCS_COMMAND } from "./constants";
 import type { Rule } from "./types";
 
-const cell = (text: string): string => text.replace(/\|/g, "\\|").replace(/\s*\n\s*/g, " ").trim();
+const cell = (text: string): string =>
+  text
+    .replace(/\\/g, "\\\\")
+    .replace(/\|/g, "\\|")
+    .replace(/\s*\n\s*/g, " ")
+    .trim();
 
 const row = (cells: string[]): string => `| ${cells.map(cell).join(" | ")} |`;
 
