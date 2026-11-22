@@ -59,7 +59,7 @@ export function parseArgs(argv: readonly string[]): Request {
   return {
     staged: argv.includes("--staged"),
     fix: argv.includes("--fix"),
-    files: argv.filter((arg) => !arg.startsWith("--")),
+    files: argv.filter((arg) => !arg.startsWith("--")).map((file) => path.posix.normalize(file)),
   };
 }
 
@@ -100,6 +100,7 @@ function runBiome(deps: Deps, request: Request, files: readonly string[]): ToolO
       "--error-on-warnings",
       "--no-errors-on-unmatched",
       ...(request.fix ? ["--write"] : []),
+      "--",
       ...targets,
     ]),
   );

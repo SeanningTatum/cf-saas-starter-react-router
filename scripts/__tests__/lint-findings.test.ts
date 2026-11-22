@@ -155,6 +155,8 @@ describe("parseKnip", () => {
     ["knip's preamble line", "Using latest D1 database: miniflare-D1DatabaseObject/abc.sqlite"],
     ["no issues key", '{"files":[]}'],
     ["an issue without a file", '{"issues":[{"exports":[]}]}'],
+    ["a kind whose list has a shape the parser does not know", '{"issues":[{"file":"app/a.ts","exports":[{"symbol":"x"}]}]}'],
+    ["a kind that is not a list", '{"issues":[{"file":"app/a.ts","dependencies":"lodash"}]}'],
   ])("returns left for %s, so a parse failure never reads as no findings", (_name, stdout) => {
     expect(Either.isLeft(parseKnip(stdout))).toBe(true);
   });

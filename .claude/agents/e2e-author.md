@@ -47,7 +47,7 @@ skipped: [string]                   flows not covered, and why (also app bugs fo
 
 ## Rules
 
-- Write only under `e2e/`. If the app is wrong, add it to `skipped` as an app bug and leave the spec failing honestly or mark the single test `test.fixme` with the reason - never edit source.
+- Write only under `e2e/`. If the app is wrong, add it to `skipped` as an app bug and leave the spec failing honestly - never edit source.
 - Run only your own specs, never the whole suite, never `bun run dev` by hand.
 - Never weaken an assertion to pass.
 - Paste failing output verbatim. Never report green on a red run.

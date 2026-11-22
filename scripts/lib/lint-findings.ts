@@ -90,8 +90,9 @@ export function parseKnip(stdout: string): Either.Either<Finding[], string> {
   const findings: Finding[] = [];
   for (const issue of decoded.right.issues) {
     for (const kind of DEAD_CODE_KINDS) {
+      if (issue[kind] === undefined) continue;
       const items = Schema.decodeUnknownEither(KnipItems)(issue[kind]);
-      if (Either.isLeft(items)) continue;
+      if (Either.isLeft(items)) return Either.left(`knip printed a \`${kind}\` list in a shape this parser does not know`);
       for (const item of items.right) {
         const group = "name" in item ? [item] : item;
         const [first] = group;

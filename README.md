@@ -174,8 +174,6 @@ Triggered on `git commit`. Skips entirely if no `.ts/.tsx/.js/.jsx` files are st
 
 ```bash
 bun run typecheck     # cf-typegen + react-router typegen + tsc -b (app, workers, scripts, e2e, configs)
-bun run lint          # Biome + house linter + dead code, one finding per line
-bun run format        # format every file Biome covers
 bun run test          # vitest run (123+ unit tests)
 ```
 

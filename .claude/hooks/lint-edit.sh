@@ -17,6 +17,7 @@ command -v bun >/dev/null 2>&1 || exit 0
 file=$(jq -r '.tool_input.file_path // empty' 2>/dev/null) || exit 0
 [ -n "$file" ] && [ -f "$file" ] || exit 0
 
+# The same extensions as LINTABLE_FILE in scripts/lib/lint-constants.ts; checked here to save a bun start.
 case "$file" in
   *.ts | *.tsx | *.js | *.jsx | *.mjs | *.cjs | *.json | *.jsonc | *.css) ;;
   *) exit 0 ;;
