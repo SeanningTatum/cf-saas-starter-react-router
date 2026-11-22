@@ -1,7 +1,8 @@
 import { describe, it as itVitest, expect, vi } from "vitest";
 import { it } from "@effect/vitest";
 import { Effect, Layer, Exit, Cause } from "effect";
-import { UserRepository, isProtectedUser, buildUserConditions } from "../user";
+import { UserRepository, buildUserConditions } from "../user";
+import { isProtectedUser } from "@/auth/protected-user";
 import { Database } from "@/services/database";
 import {
   chainable,

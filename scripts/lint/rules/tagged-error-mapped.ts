@@ -71,11 +71,12 @@ function unmappedErrors(source: Source, mapped: Set<string>): Hit[] {
       hits.push({
         file: source.path,
         line,
+        related: [ERROR_MAP_FILE],
         message: `class ${name} has the runtime tag "${tag}", and ${ERROR_MAP_FILE} has no branch on "${tag}"`,
         fix: `add \`case "${tag}":\` to the switch in \`appErrorToTRPC\` in ${ERROR_MAP_FILE}; the switch reads the runtime tag, not the class name`,
       });
     } else if (tagged && !mapped.has(name)) {
-      hits.push({ file: source.path, line, message: `tagged error ${name} has no branch in ${ERROR_MAP_FILE}` });
+      hits.push({ file: source.path, line, related: [ERROR_MAP_FILE], message: `tagged error ${name} has no branch in ${ERROR_MAP_FILE}` });
     }
   }
   return hits;

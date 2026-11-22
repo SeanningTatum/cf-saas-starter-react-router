@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { Schema } from "effect";
 import { LoginSchema, SignupSchema, Email, Password } from "../auth";
+import { PASSWORD_MAX_LENGTH, PASSWORD_MIN_LENGTH } from "@/lib/constants/auth";
 
 const decode = <A, I>(schema: Schema.Schema<A, I>) =>
   Schema.decodeUnknownEither(schema);
@@ -17,11 +18,19 @@ describe("Email", () => {
 });
 
 describe("Password", () => {
-  it("accepts 8+ characters", () => {
-    expect(decode(Password)("12345678")._tag).toBe("Right");
+  it("accepts the shared minimum and rejects one under it, so the form never passes a password Better Auth refuses", () => {
+    expect(decode(Password)("a".repeat(PASSWORD_MIN_LENGTH))._tag).toBe("Right");
+    expect(decode(Password)("a".repeat(PASSWORD_MIN_LENGTH - 1))._tag).toBe("Left");
   });
-  it("rejects shorter passwords", () => {
-    expect(decode(Password)("short")._tag).toBe("Left");
+  it("names the shared limits in its messages", () => {
+    const messageFor = (value: string) => {
+      const result = Schema.decodeUnknownEither(Password, { errors: "first" })(value);
+      return result._tag === "Left" ? result.left.message : "";
+    };
+    expect(messageFor("short")).toContain(`at least ${PASSWORD_MIN_LENGTH} characters`);
+    expect(messageFor("a".repeat(PASSWORD_MAX_LENGTH + 1))).toContain(
+      `at most ${PASSWORD_MAX_LENGTH} characters`
+    );
   });
 });
 
@@ -67,11 +76,11 @@ describe("form caps: at the cap decodes, one over fails", () => {
     ]
   > = [
     ["Email", decode(Email), 254, email],
-    ["Password", decode(Password), 128, s],
+    ["Password", decode(Password), PASSWORD_MAX_LENGTH, s],
     [
       "LoginSchema.password",
       decode(LoginSchema),
-      128,
+      PASSWORD_MAX_LENGTH,
       (n) => ({ email: "a@b.co", password: s(n) }),
     ],
     ["SignupSchema.name", decode(SignupSchema), 100, (n) => signup({ name: s(n) })],

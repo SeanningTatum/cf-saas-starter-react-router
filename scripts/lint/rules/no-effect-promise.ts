@@ -57,6 +57,21 @@ export const rule: FileRule = {
       expect: "finding",
     },
     {
+      name: "the marker's text inside a string is not a suppression and excuses nothing",
+      files: inApp(`export const note = "${MARKER} example"; export const a = Effect.promise(() => p());`),
+      expect: "finding",
+    },
+    {
+      name: "a string that only holds the marker's text is ordinary code",
+      files: inApp(`export const note = "${MARKER} example";`),
+      expect: "clean",
+    },
+    {
+      name: "the marker at the end of the call's own line excuses it",
+      files: inApp(`export const a = Effect.promise(() => p()); // ${MARKER} cannot reject`),
+      expect: "clean",
+    },
+    {
       name: "the marker with no reason excuses nothing",
       files: inApp(`// ${MARKER}\nexport const a = Effect.promise(() => p());`),
       expect: "finding",

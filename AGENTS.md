@@ -72,6 +72,7 @@ One line each, as orientation. The `non-negotiables` gate (`bun run lint:house`)
 
 | Change | Do |
 |--------|----|
+| New / changed migration | Add, backfill, switch reads and writes, drop later, each in its own deploy: every migration must work with the code before it and the code after it. Never edit a merged migration. A `DROP`, `RENAME` or `NOT NULL` column with no default needs `drizzle/<name>.reason.md`. Way back: [`docs/ci/rollback.md`](docs/ci/rollback.md) |
 | New / changed DB table or user-visible data | Extend the fixtures in `scripts/seed-preview.ts` |
 | New / changed component driven by a `*.machine.ts` | Unit tests on the machine own the logic: every transition, guard and reachable state. The e2e spec owns the wiring: generated paths that hit each DOM binding and each state's view once, never one per transition (model: `e2e/file-upload.paths.spec.ts`) |
 | New / changed workflow | Edit `.claude/workflow-src/`, never `.claude/workflows/`; `bun scripts/workflows.ts build`; a dry-run test for the new branch ([how](docs/agents/harness.md#editing-a-workflow)) |

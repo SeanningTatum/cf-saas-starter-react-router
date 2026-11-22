@@ -23,6 +23,8 @@ path:line rule-id: what is wrong. Do this instead: what to write. See a/file/wit
 
 Exit codes: 0 clean, 1 findings, 2 a bad option or a named file that does not exist. A named file that is not `.ts` or `.tsx` is skipped, so a hook can pass every changed path.
 
+Naming files does not hide a finding that lands elsewhere: a rule that compares files says which other files each finding depends on, and the finding is kept when any of them is named. Edit `app/lib/effect-trpc.ts` so an error loses its mapping, and `bun run lint:house app/lib/effect-trpc.ts` reports the error class.
+
 ## The rules
 
 This table is generated from `scripts/lint/rules/`. Do not edit it by hand; run `bun run lint:house --write-docs`.
@@ -127,7 +129,9 @@ A rule that is new on a branch may bring its own entries, since the base has no 
 
 One exists today: `// effect-promise-ok: <why the promise cannot reject>`, on the line of an `Effect.promise` call or the line above it. The rules for every such marker:
 
+- It is read only from a comment, and the comment must start with it. The same text in a string is ordinary code.
+
 - It needs a reason. A marker with nothing after the colon excuses nothing and is itself a finding.
-- It excuses its own line and the next, no further.
+- It excuses the lines its comment is on and the one after, no further.
 - A marker that excuses nothing is a finding, so none is left behind.
 - Each one counts toward `suppressions` in the baseline, and that total cannot rise.
