@@ -16,8 +16,17 @@ export function resolveSpecifier(specifier: string, from: string): string | unde
   return withoutExtension(posix.normalize(posix.join(posix.dirname(from), specifier)).replace(TRAILING_SLASH, ""));
 }
 
+function isTypeOnlyImport(clause: ts.ImportClause | undefined): boolean {
+  if (!clause) return false;
+  if (clause.isTypeOnly) return true;
+  const bindings = clause.namedBindings;
+  if (clause.name || !bindings || !ts.isNamedImports(bindings) || bindings.elements.length === 0) return false;
+  return bindings.elements.every((element) => element.isTypeOnly);
+}
+
 function specifierOf(node: ts.Node): string | undefined {
-  if (ts.isImportDeclaration(node) && node.importClause?.isTypeOnly) return undefined;
+  if (ts.isImportDeclaration(node) && isTypeOnlyImport(node.importClause)) return undefined;
+  if (ts.isExportDeclaration(node) && node.isTypeOnly) return undefined;
   if (ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) {
     return node.moduleSpecifier && ts.isStringLiteralLike(node.moduleSpecifier) ? node.moduleSpecifier.text : undefined;
   }

@@ -47,6 +47,9 @@ const ROUTE = [
 const ROUTE_TABLE =
   'import { layout, prefix, route } from "@react-router/dev/routes";\n' +
   'export default [...prefix("admin", [layout("routes/admin/_layout.tsx", [route("/users", "routes/admin/users.tsx")])])] satisfies RouteConfig;\n';
+const PARAM_TABLE =
+  'import { prefix, route } from "@react-router/dev/routes";\n' +
+  'export default [...prefix("admin", [route("/users", "routes/admin/users.tsx"), route("/users/new", "routes/admin/new.tsx"), route("/users/:id", "routes/admin/user.tsx")])];\n';
 const PAGE = "export default function Page() { return null; }\n";
 const smokeSpec = (target: string, tags: string[]): string =>
   'import { test, expect } from "@playwright/test";\n' +
@@ -167,6 +170,26 @@ export const testMapCases: Case[] = [
     expect: "clean",
   },
   { name: "unit: a module that only exports types needs no test", files: mapped(UNIT, { "app/lib/kinds.ts": "export type A = { a: number };\n" }), expect: "clean" },
+  {
+    name: "unit: a module that holds only literal constants needs no test, since a test would restate them",
+    files: mapped(UNIT, { "app/lib/limits.ts": 'export const MAX = 10 * 1024;\nexport const NAMES = ["a", "b"] as const;\nexport const SLUG = /^[a-z-]+$/;\n' }),
+    expect: "clean",
+  },
+  {
+    name: "unit: one function beside the constants brings the test back",
+    files: mapped(UNIT, { "app/lib/limits.ts": "export const MAX = 10;\nexport const fits = (n: number) => n <= MAX;\n" }),
+    expect: "finding",
+  },
+  {
+    name: "unit: a test that only re-exports the file's types does not count",
+    files: unit('import { expect, it } from "vitest";\nexport type { helper } from "../helper";\nit("x", () => { expect(1).toBe(1); });\n'),
+    expect: "finding",
+  },
+  {
+    name: "unit: an import whose every binding is marked type does not count",
+    files: unit('import { expect, it } from "vitest";\nimport { type helper } from "../helper";\nit("x", () => { expect(1 as unknown as ReturnType<typeof helper>).toBe(1); });\n'),
+    expect: "finding",
+  },
   { name: "unit: a module that only re-exports needs no test", files: mapped(UNIT, { "app/lib/barrel.ts": 'export { x } from "somewhere";\n' }), expect: "clean" },
   { name: "unit: a default export of a value needs a test", files: mapped(UNIT, { "app/lib/client.ts": "export default make();\n" }), expect: "finding" },
   { name: "unit: a script with no export still needs a test", files: mapped([{ match: "scripts/**", kind: "unit" }], { "scripts/job.ts": "run();\n" }), expect: "finding" },
@@ -205,6 +228,16 @@ export const testMapCases: Case[] = [
     expect: "finding",
   },
   {
+    name: "procedure: a call with the same name on something that is not the router does not count",
+    files: procedure(LEVELS, { "app/trpc/routes/__tests__/notes.test.ts": PROCEDURE_TEST.replace("caller(appRouter).notes.list()", "repository.list()") }),
+    expect: "finding",
+  },
+  {
+    name: "procedure: a call under another router's key does not count",
+    files: procedure(LEVELS, { "app/trpc/routes/__tests__/notes.test.ts": PROCEDURE_TEST.replace("caller(appRouter).notes.list()", "caller(appRouter).tags.list()") }),
+    expect: "finding",
+  },
+  {
     name: "procedure: a test that never imports the router does not count",
     files: procedure(LEVELS, { "app/trpc/routes/__tests__/notes.test.ts": PROCEDURE_TEST.replace("@/trpc/router", "@/somewhere/else") }),
     expect: "finding",
@@ -238,6 +271,16 @@ export const testMapCases: Case[] = [
   { name: "route: a spec with only a golden test is not enough", files: route({ "e2e/users.spec.ts": smokeSpec('"/admin/users"', ["@golden"]) }), expect: "finding" },
   { name: "route: a tagged spec that visits another page does not count", files: route({ "e2e/users.spec.ts": smokeSpec('"/admin"', ["@golden", "@error"]) }), expect: "finding" },
   { name: "route: a path that only extends this one does not count", files: route({ "e2e/users.spec.ts": smokeSpec('"/admin/users/7"', ["@golden", "@error"]) }), expect: "finding" },
+  {
+    name: "route: a page with a parameter is proven by a visit to a concrete URL",
+    files: route({ "app/routes/admin/user.tsx": PAGE, "e2e/users.spec.ts": smokeSpec('"/admin/users"', ["@golden", "@error"]), "e2e/user.spec.ts": smokeSpec('"/admin/users/7"', ["@golden", "@error"]) }, PARAM_TABLE),
+    expect: "clean",
+  },
+  {
+    name: "route: a visit to another registered page does not prove the page with a parameter beside it",
+    files: route({ "app/routes/admin/user.tsx": PAGE, "e2e/users.spec.ts": smokeSpec('"/admin/users"', ["@golden", "@error"]) + smokeSpec('"/admin/users/new"', ["@golden", "@error"]).split("\n").slice(1).join("\n"), "app/routes/admin/new.tsx": PAGE }, PARAM_TABLE),
+    expect: "finding",
+  },
   { name: "route: a page with no spec is caught", files: route({}), expect: "finding" },
   { name: "route: a page the route table does not list is caught", files: route({ "e2e/users.spec.ts": smokeSpec('"/admin/users"', ["@golden", "@error"]) }, "export default [];\n"), expect: "finding" },
   {
@@ -255,6 +298,32 @@ export const testMapCases: Case[] = [
   { name: "primitive: a file in the sandbox that renders it is clean", files: component("primitive", { "app/routes/sandbox/button.tsx": 'import { Button } from "@/components/button";\nexport type Shown = typeof Button;\n' }), expect: "clean" },
   { name: "primitive: a primitive with no sandbox entry is caught", files: component("primitive", {}), expect: "finding" },
 
+  {
+    name: "spec-helper: a helper that a spec imports is clean",
+    files: mapped([{ match: "e2e/lib/**", kind: "spec-helper" }], {
+      "e2e/lib/session.ts": "export const login = async () => undefined;\n",
+      "e2e/home.spec.ts": 'import { test, expect } from "@playwright/test";\nimport { login } from "./lib/session";\ntest("x", async () => { await login(); expect(1).toBe(1); });\n',
+    }),
+    expect: "clean",
+  },
+  {
+    name: "spec-helper: a helper no spec imports is caught",
+    files: mapped([{ match: "e2e/lib/**", kind: "spec-helper" }], {
+      "e2e/lib/session.ts": "export const login = async () => undefined;\n",
+      "e2e/home.spec.ts": 'import { test, expect } from "@playwright/test";\ntest("x", async () => { expect(1).toBe(1); });\n',
+    }),
+    expect: "finding",
+  },
+  {
+    name: "spec-helper: a helper imported only by another helper is caught",
+    files: mapped([{ match: "e2e/lib/**", kind: "spec-helper" }], {
+      "e2e/lib/session.ts": "export const login = async () => undefined;\n",
+      "e2e/lib/other.ts": 'import { login } from "./session";\nexport const again = login;\n',
+      "e2e/home.spec.ts": 'import { test, expect } from "@playwright/test";\nimport { again } from "./lib/other";\ntest("x", async () => { await again(); expect(1).toBe(1); });\n',
+    }),
+    expect: "finding",
+  },
+  { name: "e2e specs need no entry, since they are the proof", files: mapped(UNIT, { "app/lib/helper.ts": HELPER, "app/lib/__tests__/helper.test.ts": REAL_TEST, "e2e/home.spec.ts": 'import { test, expect } from "@playwright/test";\ntest("x", async () => { expect(1).toBe(1); });\n' }), expect: "clean" },
   { name: "declaration: a file of types is clean", files: mapped([{ match: "app/**/*.d.ts", kind: "declaration" }, { match: "app/lib/kinds.ts", kind: "declaration" }], { "app/lib/kinds.ts": "export interface A { a: number }\n", "app/i18n/i18n.d.ts": "declare module 'x' { const a: number; }\n" }), expect: "clean" },
   { name: "declaration: a file that holds code is caught", files: mapped([{ match: "app/lib/kinds.ts", kind: "declaration" }], { "app/lib/kinds.ts": "export const a = 1;\n" }), expect: "finding" },
 

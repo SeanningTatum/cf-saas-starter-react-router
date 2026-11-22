@@ -47,7 +47,7 @@ describe("parseTestMap problems", () => {
     const problems = problemsOf(mapText([{ match: "app/lib/**", kind: "unit" }, { match: "app/x/**", kind: "vibes" }]));
 
     expect(problems).toEqual([
-      'the entry for "app/x/**" has the kind "vibes"; the kinds are unit, machine, procedure, route, component, primitive, declaration, covered-by',
+      'the entry for "app/x/**" has the kind "vibes"; the kinds are unit, machine, procedure, route, component, primitive, declaration, spec-helper, covered-by',
     ]);
   });
 

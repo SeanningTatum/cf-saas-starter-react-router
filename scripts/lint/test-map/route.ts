@@ -6,9 +6,14 @@ import { asserts, type Problem } from "./proofs";
 import { routePaths } from "./routes";
 
 interface SpecFacts {
+  path: string;
   smoke: boolean;
   visits: string[];
 }
+
+const PARAMETER = /^:/;
+const WILDCARD = "*";
+const segmentsOf = (path: string): string[] => path.split("/").filter(Boolean);
 
 const specsByRepo = new WeakMap<Repo, SpecFacts[]>();
 
@@ -27,7 +32,7 @@ function readSpecs(repo: Repo): SpecFacts[] {
         const [target] = node.arguments;
         if (node.expression.name.text === "goto" && target && ts.isStringLiteralLike(target)) visits.push(target.text);
       });
-      return [{ smoke: asserts(spec) && SMOKE_TAGS.every((tag) => strings.has(tag)), visits }];
+      return [{ path, smoke: asserts(spec) && SMOKE_TAGS.every((tag) => strings.has(tag)), visits }];
     });
 }
 
@@ -37,21 +42,36 @@ function specFacts(repo: Repo): SpecFacts[] {
   return known;
 }
 
-export const visitsPath = (visited: string, path: string): boolean => visited.split(/[?#]/)[0] === path;
+export function visitsPath(visited: string, pattern: string): boolean {
+  const url = segmentsOf(visited.split(/[?#]/)[0] ?? "");
+  const route = segmentsOf(pattern);
+  const open = route.at(-1) === WILDCARD;
+  const fixed = open ? route.slice(0, -1) : route;
+  if (open ? url.length < fixed.length : url.length !== fixed.length) return false;
+  return fixed.every((segment, index) => PARAMETER.test(segment) || segment === url[index]);
+}
+
+const isPattern = (path: string): boolean => segmentsOf(path).some((segment) => PARAMETER.test(segment) || segment === WILDCARD);
 
 export function routeProblems(repo: Repo, path: string): Problem[] {
   const table = repo.source(ROUTES_FILE);
-  const paths = (table ? routePaths(table).get(path) : undefined) ?? [];
+  const served = table ? routePaths(table) : new Map<string, string[]>();
+  const paths = served.get(path) ?? [];
+  const fixedPaths = new Set([...served.values()].flat().filter((own) => !isPattern(own)));
+  const proves = (visited: string, own: string): boolean =>
+    visitsPath(visited, own) && !(isPattern(own) && fixedPaths.has(`/${segmentsOf(visited.split(/[?#]/)[0] ?? "").join("/")}`));
   if (paths.length === 0) {
     return [{ message: `is classified as a route and ${ROUTES_FILE} does not list it`, fix: `add it to ${ROUTES_FILE}, or give it another kind in ${TEST_MAP_PATH}` }];
   }
-  const proven = specFacts(repo).some((spec) => spec.smoke && spec.visits.some((visited) => paths.some((own) => visitsPath(visited, own))));
+  const specs = specFacts(repo);
+  const proven = specs.some((spec) => spec.smoke && spec.visits.some((visited) => paths.some((own) => proves(visited, own))));
   if (proven) return [];
   const [first] = paths;
   return [
     {
       message: `no e2e spec that holds an ${SMOKE_TAGS.join(" and an ")} test visits ${paths.join(" or ")}`,
       fix: `add ${E2E_DIR}/<feature>.spec.ts with \`page.goto("${first}")\`, one test tagged \`{ tag: "@golden" }\` and one \`{ tag: "@error" }\`, each with an assertion`,
+      related: [ROUTES_FILE, ...specs.map((spec) => spec.path)],
     },
   ];
 }

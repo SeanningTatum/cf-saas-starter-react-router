@@ -7,6 +7,7 @@ import { emptyTest, splitPath, type Problem } from "./proofs";
 
 const PROCEDURE_BUILDER = /Procedure$/;
 const ROUTER_FACTORY = "createTRPCRouter";
+const LEVEL_SOURCES = [LEVELS_FILE, ROUTER_FILE];
 
 function routerObjects(source: Source): ts.ObjectLiteralExpression[] {
   const objects: ts.ObjectLiteralExpression[] = [];
@@ -83,10 +84,13 @@ function levelKeys(repo: Repo): string[] {
   return keys;
 }
 
-function calls(test: Source, names: string[]): boolean {
+function callsThroughRouter(test: Source, names: string[], router: string | undefined): boolean {
   let found = false;
   walkNodes(test.ast, (node) => {
-    if (ts.isCallExpression(node) && ts.isPropertyAccessExpression(node.expression)) found ||= names.includes(node.expression.name.text);
+    if (!ts.isCallExpression(node) || !ts.isPropertyAccessExpression(node.expression)) return;
+    const owner = node.expression.expression;
+    if (!names.includes(node.expression.name.text) || !ts.isPropertyAccessExpression(owner)) return;
+    found ||= router === undefined || owner.name.text === router;
   });
   return found;
 }
@@ -102,24 +106,29 @@ export function procedureProblems(repo: Repo, path: string): Problem[] {
   const router = routerKey(repo, path);
   const unlistedRouted = routed
     .filter((name) => (router ? !keys.includes(`${router}.${name}`) : !keys.some((key) => key.split(".").pop() === name)))
-    .map((name) => ({ message: `the procedure \`${name}\` has no entry in \`${LEVELS_NAME}\``, fix: levelsFix(`${router ?? "<router>"}.${name}`) }));
+    .map((name) => ({ message: `the procedure \`${name}\` has no entry in \`${LEVELS_NAME}\``, fix: levelsFix(`${router ?? "<router>"}.${name}`), related: LEVEL_SOURCES }));
   const unlistedStandalone = standalone
     .filter((name) => !keys.some((key) => key.split(".").pop() === name))
-    .map((name) => ({ message: `the procedure \`${name}\` has no entry in \`${LEVELS_NAME}\``, fix: levelsFix(`<router>.${name}`) }));
+    .map((name) => ({ message: `the procedure \`${name}\` has no entry in \`${LEVELS_NAME}\``, fix: levelsFix(`<router>.${name}`), related: LEVEL_SOURCES }));
   const unlisted = [...unlistedRouted, ...unlistedStandalone];
 
   const { dir, name } = splitPath(path);
   const expected = `${dir}/__tests__/${name}.test.ts`;
   const test = repo.source(expected);
   const fix = `add ${expected}: call each procedure through \`createCallerFactory(appRouter)\` and assert on the result and on each tagged error`;
-  if (!test) return [...unlisted, { message: `has no procedure test at ${expected}`, fix }];
+  if (!test) return [...unlisted, { message: `has no procedure test at ${expected}`, fix, related: [expected] }];
   const empty = emptyTest(test);
   if (empty) return [...unlisted, empty];
   const modules = importedModules(test);
   const reaches = modules.includes(withoutExtension(ROUTER_FILE)) || modules.includes(withoutExtension(path));
-  if (reaches && calls(test, [...routed, ...standalone])) return unlisted;
+  if (reaches && (callsThroughRouter(test, routed, router) || callsThroughRouter(test, standalone, undefined))) return unlisted;
   return [
     ...unlisted,
-    { file: test.path, message: `this test does not call a procedure of ${path} through the router`, fix: `import \`appRouter\` from ${ROUTER_FILE} here, call a procedure of ${path} and assert on the result` },
+    {
+      file: test.path,
+      message: `this test does not call a procedure of ${path} through the router`,
+      fix: `import \`appRouter\` from ${ROUTER_FILE} here, call a procedure of ${path} as \`caller.<router>.<name>()\` and assert on the result`,
+      related: [path],
+    },
   ];
 }
