@@ -16,11 +16,13 @@ const checksOf = (ruleset: { rules: Ruleset["rules"] }): readonly CheckEntryT[] 
 
 const rewriteChecks = (ruleset: Ruleset, f: (entries: readonly CheckEntryT[]) => CheckEntryT[]): Ruleset => ({
   ...ruleset,
-  rules: ruleset.rules.map((r) =>
-    r.type === "required_status_checks" && r.parameters?.required_status_checks !== undefined
-      ? { ...r, parameters: { ...r.parameters, required_status_checks: f(checkEntriesOf(r.parameters.required_status_checks)) } }
-      : r,
-  ),
+  rules: ruleset.rules.map((r) => {
+    const value = r.type === "required_status_checks" ? r.parameters?.required_status_checks : undefined;
+    if (!Array.isArray(value)) return r;
+    const entries = checkEntriesOf(value);
+    if (entries.length !== value.length) return r;
+    return { ...r, parameters: { ...r.parameters, required_status_checks: f(entries) } };
+  }),
 });
 
 export function pendingChecks(ruleset: Ruleset): PendingCheck[] {

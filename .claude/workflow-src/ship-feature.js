@@ -108,13 +108,26 @@ const COAUTHOR = "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>";
 // (types and scopes live in .commitlintrc.json). The architect writes conventional titles; a title without the shape gets
 // "feat: " here. This checks the shape only, not the scope list: an unlisted scope is caught by the commit-msg hook and the PR title job.
 const TITLE_PARTS = /^([a-z]+)(?:\([a-z0-9-]+\))?(!)?: (\S.*)$/;
-const asConventional = (title) => (TITLE_PARTS.test(title) ? title : `feat: ${title}`);
+const COMMITLINTRC_HEADER_MAX_LENGTH = 100;
+// Cuts only the subject: at a word boundary when there is one, with no trailing space or full stop.
+const fitHeader = (prefix, subject) => {
+  const room = COMMITLINTRC_HEADER_MAX_LENGTH - prefix.length;
+  if (subject.length <= room) return prefix + subject;
+  let cut = subject.slice(0, room);
+  const space = cut.lastIndexOf(" ");
+  if (subject[room] !== " " && space > 0) cut = cut.slice(0, space);
+  return prefix + cut.replace(/[\s.]+$/, "");
+};
+const asConventional = (title) => {
+  const m = TITLE_PARTS.exec(title);
+  return m ? fitHeader(title.slice(0, title.length - m[3].length), m[3]) : fitHeader("feat: ", title);
+};
 // The roll-up squashes into the base branch: a feat when any stacked PR is one, else the last PR's type, with "!" when any PR is breaking.
 const rollupTitle = (title, stacked) => {
   const parts = stacked.map((p) => TITLE_PARTS.exec(p.title) || ["", "feat", "", ""]);
   const type = parts.some((m) => m[1] === "feat") ? "feat" : parts[parts.length - 1][1];
   const subject = (TITLE_PARTS.exec(title) || [])[3] || title;
-  return `${type}${parts.some((m) => m[2]) ? "!" : ""}: ${subject}`;
+  return fitHeader(`${type}${parts.some((m) => m[2]) ? "!" : ""}: `, subject);
 };
 // The e2e dev server must not collide with another on 5173 (a second checkout, another project's dev server):
 // every gate or e2e run gets a free port. playwright.config.ts reads E2E_PORT.

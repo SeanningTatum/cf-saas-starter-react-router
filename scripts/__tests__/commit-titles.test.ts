@@ -89,6 +89,15 @@ const runWorkflowCommand = (title: string) =>
     env: envWithoutGit(),
   });
 
+describe("the header limit ship-feature cuts titles to", () => {
+  it("equals header-max-length in .commitlintrc.json: two numbers that drift apart would cut too long or too short", () => {
+    const config = JSON.parse(fs.readFileSync(path.join(ROOT, ".commitlintrc.json"), "utf-8"));
+    const source = fs.readFileSync(path.join(ROOT, ".claude", "workflow-src", "ship-feature.js"), "utf-8");
+    const limit = Number(source.match(/COMMITLINTRC_HEADER_MAX_LENGTH = (\d+);/)?.[1]);
+    expect(limit).toBe(config.rules["header-max-length"][2]);
+  });
+});
+
 describe("the command line the PR title job runs", () => {
   it("exits non-zero for a bad title, so the roll-up title that reads as a patch is stopped", () => {
     expect(runWorkflowCommand("v3.0 wave 0: guardrails, trim and foundations").status).not.toBe(0);

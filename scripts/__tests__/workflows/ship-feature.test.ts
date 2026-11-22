@@ -566,4 +566,35 @@ describe("ship-feature: every commit subject and PR title it writes passes the r
     expect(title).toBe("feat: Demo widget");
     expect(JSON.stringify(run.result)).toContain(`--title '${title}'`);
   });
+
+  const chars = (n: number) => "word ".repeat(Math.ceil(n / 5)).slice(0, n).trimEnd();
+  const MAX = 100;
+
+  it("keeps a roll-up of a 95-character plain plan title within 100 characters and lint clean: 'feat: ' plus 95 is 101 and the roll-up PR would fail its title check", async () => {
+    const run = await shipWith({ ...PLAN, title: chars(95) });
+    const [title] = quotedAfter(find(run.calls, "rollup:pr").prompt, "--title");
+    expect((title ?? "").length).toBeLessThanOrEqual(MAX);
+    expect(title).toMatch(/^feat: word/);
+    expect((await lintTitle(title ?? "")).problems).toEqual([]);
+  });
+
+  it("keeps a 100-character conventional stacked title as written", async () => {
+    const exact = `fix(ui): ${chars(MAX - 9)}`;
+    expect(exact).toHaveLength(MAX);
+    const run = await shipWith({ ...PLAN, prs: [{ ...PR1, title: exact }, { ...PR2, title: "fix(ui): show the error" }] });
+    expect(stackPlanOf(run.calls).prs[0]?.message.split("\n")[0]).toBe(exact);
+  });
+
+  it("cuts a long stacked title in the subject only and leaves it lint clean, with the breaking mark kept", async () => {
+    const long = `feat(db)!: ${chars(150)}`;
+    const run = await shipWith({ ...PLAN, prs: [{ ...PR1, title: long }, { ...PR2, title: "fix(ui): show the error" }] });
+    const subject = stackPlanOf(run.calls).prs[0]?.message.split("\n")[0] ?? "";
+    expect(subject.length).toBeLessThanOrEqual(MAX);
+    expect(subject).toMatch(/^feat\(db\)!: word/);
+    expect(subject).not.toMatch(/[\s.]$/);
+    expect((await lintTitle(subject)).problems).toEqual([]);
+    const [rollup] = quotedAfter(find(run.calls, "rollup:pr").prompt, "--title");
+    expect(rollup).toMatch(/^feat!: /);
+    expect((await lintTitle(rollup ?? "")).problems).toEqual([]);
+  });
 });

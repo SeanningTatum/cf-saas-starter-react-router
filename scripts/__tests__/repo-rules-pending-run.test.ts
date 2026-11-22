@@ -236,6 +236,33 @@ describe("config errors for pending", () => {
     expect(calls).toEqual([]);
   });
 
+  it.each([
+    ["a string", "Build"],
+    ["an object", { context: "Build" }],
+    ["null", null],
+  ])("required_status_checks set to %s is an error that names the ruleset, with no gh call, in --check and --apply: it must never apply as an empty check list", (_n, value) => {
+    const config = declared({});
+    const params = config.rulesets[0]?.rules[1]?.parameters as Record<string, unknown>;
+    params.required_status_checks = value;
+    for (const argv of [["--check"], ["--apply"]]) {
+      const { o, calls } = go({}, argv, config);
+      expect(o.code).toBe(1);
+      expect(lines(o.stdout, "error")).toEqual(['error: ruleset "default-branch" required_status_checks must be a list of checks']);
+      expect(calls).toEqual([]);
+    }
+  });
+
+  it("a required_status_checks rule with no checks parameter is not an error and its body is sent as written", () => {
+    const config = declared({});
+    const rule = config.rulesets[0]?.rules[1];
+    if (rule) rule.parameters = { strict_required_status_checks_policy: false } as never;
+    const { o, calls } = go({ liveTitle: "PR_TITLE" }, ["--apply"], config);
+    expect(lines(o.stdout, "error")).toEqual([]);
+    expect(o.code).toBe(0);
+    const put = writes(calls)[0];
+    expect(put?.input).not.toContain('"required_status_checks":[');
+  });
+
   it("a repository with an empty pending is an error", () => {
     const { o, calls } = go({ repository: { squash_merge_commit_title: "PR_TITLE", pending: "" } });
     expect(o.code).toBe(1);

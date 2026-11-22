@@ -137,22 +137,20 @@ export const checkEntriesOf = (v: unknown): readonly CheckEntryT[] => {
 const ContextOnly = Schema.Struct({ context: Schema.String });
 
 export function checkProblems(rulesets: readonly Ruleset[]): string[] {
-  const rawEntries = (v: unknown): readonly unknown[] => {
-    const d = Schema.decodeUnknownEither(Schema.Array(Schema.Unknown))(v);
-    return Either.isRight(d) ? d.right : [];
-  };
   return rulesets.flatMap((rs) =>
-    rs.rules.flatMap((r) =>
-      r.type !== "required_status_checks"
-        ? []
-        : rawEntries(r.parameters?.required_status_checks).flatMap((e) => {
-            const bad = Schema.decodeUnknownEither(CheckEntry)(e);
-            if (Either.isRight(bad)) return [];
-            const name = Schema.decodeUnknownEither(ContextOnly)(e);
-            const label = Either.isRight(name) ? name.right.context : "?";
-            return [`ruleset "${rs.name}" check "${label}" is not valid: ${bad.left.message.replace(/\s+/g, " ").trim()}`];
-          }),
-    ),
+    rs.rules.flatMap((r) => {
+      const value = r.type === "required_status_checks" ? r.parameters?.required_status_checks : undefined;
+      if (value === undefined) return [];
+      const list = Schema.decodeUnknownEither(Schema.Array(Schema.Unknown))(value);
+      if (Either.isLeft(list)) return [`ruleset "${rs.name}" required_status_checks must be a list of checks`];
+      return list.right.flatMap((e) => {
+        const bad = Schema.decodeUnknownEither(CheckEntry)(e);
+        if (Either.isRight(bad)) return [];
+        const name = Schema.decodeUnknownEither(ContextOnly)(e);
+        const label = Either.isRight(name) ? name.right.context : "?";
+        return [`ruleset "${rs.name}" check "${label}" is not valid: ${bad.left.message.replace(/\s+/g, " ").trim()}`];
+      });
+    }),
   );
 }
 
