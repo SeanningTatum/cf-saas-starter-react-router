@@ -1,4 +1,5 @@
 import ts from "typescript";
+import { unwrapExpression } from "./source";
 
 const ARITHMETIC = new Set([
   ts.SyntaxKind.PlusToken,
@@ -12,11 +13,6 @@ const SIGNS = new Set([ts.SyntaxKind.MinusToken, ts.SyntaxKind.PlusToken]);
 const COLLECTIONS = new Set(["Set", "Map", "RegExp"]);
 const WRAPPERS = new Set(["String", "Number", "RegExp", "Object.freeze"]);
 
-function unwrap(node: ts.Expression): ts.Expression {
-  if (ts.isAsExpression(node) || ts.isSatisfiesExpression(node) || ts.isParenthesizedExpression(node)) return unwrap(node.expression);
-  return node;
-}
-
 function isScalar(node: ts.Expression): boolean {
   if (ts.isNumericLiteral(node) || ts.isBigIntLiteral(node) || ts.isStringLiteral(node)) return true;
   if (ts.isNoSubstitutionTemplateLiteral(node) || ts.isRegularExpressionLiteral(node)) return true;
@@ -29,7 +25,7 @@ function isLiteralMember(property: ts.ObjectLiteralElementLike): boolean {
 }
 
 export function isLiteralValue(expression: ts.Expression): boolean {
-  const node = unwrap(expression);
+  const node = unwrapExpression(expression);
   if (isScalar(node)) return true;
   if (ts.isArrayLiteralExpression(node)) return node.elements.length > 0 && node.elements.every(isLiteralValue);
   if (ts.isObjectLiteralExpression(node)) return node.properties.length > 0 && node.properties.every(isLiteralMember);

@@ -1,5 +1,4 @@
 import { commentsIn } from "./comments";
-import { isSourcePath } from "./source";
 import type { FileHit, FileRule, Finding, Hit, Repo, Rule, RunResult, Source } from "./types";
 
 interface Marker {
@@ -54,6 +53,7 @@ const toFinding = (rule: Rule, hit: Hit): Finding => ({
   message: hit.message,
   fix: hit.fix ?? rule.fix,
   example: hit.example ?? rule.example,
+  weight: hit.weight,
 });
 
 const byText = (a: string, b: string): number => Number(a > b) - Number(a < b);
@@ -61,7 +61,7 @@ const byText = (a: string, b: string): number => Number(a > b) - Number(a < b);
 const byPlace = (a: Finding, b: Finding): number => byText(a.file, b.file) || a.line - b.line || byText(a.rule, b.rule);
 
 export function runRules(rules: Rule[], repo: Repo, roots: readonly string[], only?: ReadonlySet<string>): RunResult {
-  const paths = (only ? [...only] : roots.flatMap((root) => repo.files(root))).filter(isSourcePath).sort();
+  const paths = (only ? [...only] : roots.flatMap((root) => repo.files(root))).sort();
   const findings: Finding[] = [];
   let suppressions = 0;
   let filesChecked = 0;
