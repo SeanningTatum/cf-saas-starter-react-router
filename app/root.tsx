@@ -16,6 +16,7 @@ import { TRPCProvider } from "./trpc/client";
 import { useTranslation } from "react-i18next";
 import { useChangeLanguage } from "remix-i18next/react";
 import { i18nServer } from "./i18n/i18n.server";
+import { useNonce } from "./lib/csp-nonce";
 
 export const handle = { i18n: ["common"] };
 
@@ -42,6 +43,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
     | { locale: string }
     | undefined;
   const locale = loaderData?.locale ?? "en";
+  const nonce = useNonce();
 
   return (
     <html lang={locale} suppressHydrationWarning>
@@ -53,8 +55,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
       </head>
       <body>
         {children}
-        <ScrollRestoration />
-        <Scripts />
+        <ScrollRestoration nonce={nonce} />
+        <Scripts nonce={nonce} />
       </body>
     </html>
   );
@@ -62,9 +64,15 @@ export function Layout({ children }: { children: React.ReactNode }) {
 
 export default function App({ loaderData }: Route.ComponentProps) {
   useChangeLanguage(loaderData.locale);
+  const nonce = useNonce();
 
   return (
-    <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
+    <ThemeProvider
+      attribute="class"
+      defaultTheme="system"
+      enableSystem
+      nonce={nonce}
+    >
       <TRPCProvider>
         <Outlet />
       </TRPCProvider>

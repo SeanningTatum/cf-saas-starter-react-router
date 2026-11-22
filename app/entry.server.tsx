@@ -8,14 +8,16 @@ import { i18nServer } from "./i18n/i18n.server";
 import { supportedLngs, fallbackLng, defaultNS } from "./i18n";
 import resourcesToBackend from "i18next-resources-to-backend";
 import { loggers } from "@/lib/logger";
+import { NonceContext } from "@/lib/csp-nonce";
 
 export default async function handleRequest(
   request: Request,
   responseStatusCode: number,
   responseHeaders: Headers,
   routerContext: EntryContext,
-  _loadContext: AppLoadContext
+  loadContext: AppLoadContext
 ) {
+  const nonce = loadContext.cspNonce;
   let shellRendered = false;
   const userAgent = request.headers.get("user-agent");
 
@@ -40,10 +42,17 @@ export default async function handleRequest(
     });
 
   const body = await renderToReadableStream(
-    <I18nextProvider i18n={instance}>
-      <ServerRouter context={routerContext} url={request.url} />
-    </I18nextProvider>,
+    <NonceContext.Provider value={nonce}>
+      <I18nextProvider i18n={instance}>
+        <ServerRouter
+          context={routerContext}
+          url={request.url}
+          nonce={nonce}
+        />
+      </I18nextProvider>
+    </NonceContext.Provider>,
     {
+      nonce,
       onError(error: unknown) {
         responseStatusCode = 500;
         if (shellRendered) {
