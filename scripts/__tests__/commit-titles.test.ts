@@ -2,7 +2,7 @@ import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { lintTitle } from "./helpers/lint-title";
+import { lintPrTitle, lintTitle } from "./helpers/lint-title";
 
 const ROOT = path.join(__dirname, "..", "..");
 const AGENTS_DIR = path.join(ROOT, ".claude", "agents");
@@ -82,12 +82,28 @@ const envWithoutGit = (): NodeJS.ProcessEnv =>
   Object.fromEntries(Object.entries(process.env).filter(([key]) => !key.startsWith(GIT_ENV_PREFIX)));
 
 const runWorkflowCommand = (title: string) =>
-  spawnSync("bunx", ["--no-install", "commitlint"], {
+  spawnSync("bunx", ["--no-install", "commitlint", "--config", ".commitlintrc.title.json"], {
     cwd: ROOT,
     input: `${title}\n`,
     encoding: "utf-8",
     env: envWithoutGit(),
   });
+
+describe("the PR title config", () => {
+  it.each(["Merge pull request #12 from o/b", "Merge branch 'staging' into x"])(
+    "refuses the merge-shaped title %s, which the commit-msg config lets through for real merge commits",
+    async (title) => {
+      expect((await lintTitle(title)).valid).toBe(true);
+      expect((await lintPrTitle(title)).valid).toBe(false);
+    },
+  );
+
+  it("holds titles to the same types, scopes and length as commit subjects", async () => {
+    expect((await lintPrTitle("feat(auth): add passkeys")).valid).toBe(true);
+    expect((await lintPrTitle("feat(nonsense-scope): x")).valid).toBe(false);
+    expect((await lintPrTitle(padTo("feat: ", HEADER_LIMIT + 1))).valid).toBe(false);
+  });
+});
 
 describe("the header limit ship-feature cuts titles to", () => {
   it("equals header-max-length in .commitlintrc.json: two numbers that drift apart would cut too long or too short", () => {

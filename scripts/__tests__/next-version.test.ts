@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
@@ -7,6 +7,9 @@ import { envOutsideAnyHook, GIT_IDENTITY as IDENTITY, NO_GLOBAL_CONFIG, useGitSa
 
 const SCRIPT = path.join(__dirname, "..", "..", ".github", "scripts", "next-version.sh");
 const LONG_BODY_BYTES = 600_000;
+const REAL_GIT_TIMEOUT_MS = 60_000;
+
+vi.setConfig({ testTimeout: REAL_GIT_TIMEOUT_MS });
 
 const { repos, hookDecoy } = useGitSandbox("next-version");
 
