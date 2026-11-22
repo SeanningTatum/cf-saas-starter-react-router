@@ -12,6 +12,11 @@ export const CLIENT_IP_HEADER = "cf-connecting-ip";
 
 export const AUTH_SECRET_MIN_LENGTH = 32;
 export const DEV_ONLY_AUTH_SECRET = "dev-only-auth-secret-never-use-outside-local-dev";
+export const BETTER_AUTH_BUILT_IN_SECRET = "better-auth-secret-12345678901234567890";
+export const PUBLISHED_AUTH_SECRETS: ReadonlyArray<string> = [
+  DEV_ONLY_AUTH_SECRET,
+  BETTER_AUTH_BUILT_IN_SECRET,
+];
 
 export const LOCAL_HTTP_HOSTNAMES: ReadonlyArray<string> = ["localhost", "127.0.0.1"];
 

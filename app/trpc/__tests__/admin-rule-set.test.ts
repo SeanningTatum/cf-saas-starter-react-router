@@ -164,6 +164,32 @@ describe("Better Auth's admin endpoints follow the repository's rule", { timeout
     expect(await refusalOf(res)).toEqual({ status: 401, code: "BANNED_USER" });
     expect((await rowOf(target.userId))?.banned).toBe(0);
   });
+
+  it("an admin whose ban was set by hand cannot lift their own ban through Better Auth", async () => {
+    const bannedAdmin = await freshAdmin();
+    await app.db.prepare("UPDATE user SET banned = 1 WHERE id = ?").bind(bannedAdmin.userId).run();
+
+    const res = await callAuth("/admin/unban-user", bannedAdmin.headers, { userId: bannedAdmin.userId });
+
+    expect(await refusalOf(res)).toEqual({ status: 401, code: "BANNED_USER" });
+    expect((await rowOf(bannedAdmin.userId))?.banned).toBe(1);
+  });
+
+  it("an admin whose ban was set by hand cannot make a new admin through Better Auth", async () => {
+    const bannedAdmin = await freshAdmin();
+    await app.db.prepare("UPDATE user SET banned = 1 WHERE id = ?").bind(bannedAdmin.userId).run();
+    const email = `spare${++userCount}@rules.test`;
+
+    const res = await callAuth("/admin/create-user", bannedAdmin.headers, {
+      email,
+      name: "Spare",
+      password: NEW_PASSWORD,
+      role: "admin",
+    });
+
+    expect(await refusalOf(res)).toEqual({ status: 401, code: "BANNED_USER" });
+    expect(await app.db.prepare("SELECT id FROM user WHERE email = ?").bind(email).first()).toBeNull();
+  });
 });
 
 describe("tRPC admin procedures read the role list the way the guard does", { timeout: 60_000 }, () => {
@@ -201,14 +227,14 @@ describe("Better Auth's ban road ends the target's sessions", { timeout: 60_000 
   it("/admin/update-user with banned: true ends the sessions through Better Auth's own delete", async () => {
     const target = await freshUser();
     const { internalAdapter } = await app.auth.$context;
-    const deleteSessions = vi.spyOn(internalAdapter, "deleteSessions");
+    const deleteUserSessions = vi.spyOn(internalAdapter, "deleteUserSessions");
 
     const res = await callAuth("/admin/update-user", admin.headers, {
       userId: target.userId,
       data: { banned: true },
     });
-    const calls = [...deleteSessions.mock.calls];
-    deleteSessions.mockRestore();
+    const calls = [...deleteUserSessions.mock.calls];
+    deleteUserSessions.mockRestore();
 
     expect(res.status).toBe(200);
     expect(calls).toContainEqual([target.userId]);

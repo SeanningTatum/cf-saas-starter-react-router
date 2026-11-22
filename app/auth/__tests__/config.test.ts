@@ -1,7 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { Effect, Either } from "effect";
 import { resolveAuthConfig, type AuthConfigSource, type AuthRuntimeOptions } from "../config";
-import { AUTH_SECRET_MIN_LENGTH, DEV_ONLY_AUTH_SECRET } from "@/lib/constants/auth";
+import {
+  AUTH_SECRET_MIN_LENGTH,
+  BETTER_AUTH_BUILT_IN_SECRET,
+  DEV_ONLY_AUTH_SECRET,
+} from "@/lib/constants/auth";
 import { ConfigurationError } from "@/models/errors/repository";
 
 const SECRET = "test-secret-not-real-0000000000000000";
@@ -84,6 +88,13 @@ describe("resolveAuthConfig outside dev", () => {
     expect(failedField({ ...prodEnv, BETTER_AUTH_SECRET: DEV_ONLY_AUTH_SECRET }, prod)).toBe(
       "BETTER_AUTH_SECRET"
     );
+  });
+
+  it("never accepts Better Auth's own published fallback secret outside dev, though it is long enough", () => {
+    expect(BETTER_AUTH_BUILT_IN_SECRET.length).toBeGreaterThanOrEqual(AUTH_SECRET_MIN_LENGTH);
+    expect(
+      failedField({ ...prodEnv, BETTER_AUTH_SECRET: BETTER_AUTH_BUILT_IN_SECRET }, prod)
+    ).toBe("BETTER_AUTH_SECRET");
   });
 
   it.each([

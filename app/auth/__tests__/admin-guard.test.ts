@@ -7,6 +7,7 @@ import {
   ADMIN_PATHS_TARGETING_USER_ID,
 } from "@/lib/constants/admin";
 import {
+  isAdminPath,
   readAdminTarget,
   refusalError,
   withEmailVerificationReset,
@@ -54,6 +55,25 @@ describe("readAdminTarget", () => {
     "%s: is left to Better Auth's own checks",
     (path) => {
       expect(readAdminTarget(path, { userId: "u1" })).toEqual({ _tag: "Open" });
+    }
+  );
+});
+
+describe("isAdminPath", () => {
+  it.each(
+    [
+      ...ADMIN_PATHS_TARGETING_USER_ID,
+      ...ADMIN_PATHS_TARGETING_SESSION_TOKEN,
+      ...ADMIN_PATHS_REVIEWED_AS_OPEN,
+    ].map((p) => [p])
+  )("%s: counts as an admin path, so a banned admin is refused there too", (path) => {
+    expect(isAdminPath(path)).toBe(true);
+  });
+
+  it.each(["/sign-in/email", "/get-session", "/update-user", "/admin"].map((p) => [p]))(
+    "%s: is not an admin path, so the guard skips the session read",
+    (path) => {
+      expect(isAdminPath(path)).toBe(false);
     }
   );
 });

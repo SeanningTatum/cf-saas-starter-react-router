@@ -31,20 +31,20 @@ describe("endSessionsOnBan", () => {
   };
 
   const endpointContext = () => {
-    const deleteSessions = vi.fn(async (_userId: string) => undefined);
+    const deleteUserSessions = vi.fn(async (_userId: string) => undefined);
     const context = {
-      context: { internalAdapter: { deleteSessions } },
+      context: { internalAdapter: { deleteUserSessions } },
     } as unknown as GenericEndpointContext;
-    return { deleteSessions, context };
+    return { deleteUserSessions, context };
   };
 
   it("ends the user's sessions through Better Auth's own delete when an endpoint is running", async () => {
     const { del, store } = storeSpy();
-    const { deleteSessions, context } = endpointContext();
+    const { deleteUserSessions, context } = endpointContext();
 
     await endSessionsOnBan(store)({ id: "u1", banned: true }, context);
 
-    expect(deleteSessions).toHaveBeenCalledWith("u1");
+    expect(deleteUserSessions).toHaveBeenCalledWith("u1");
     expect(del).not.toHaveBeenCalled();
   });
 
@@ -64,12 +64,12 @@ describe("endSessionsOnBan", () => {
     ["a ban that has run out", { id: "u1", banned: true, banExpires: LONG_AGO }],
   ])("leaves sessions alone on an update with %s", async (_label, user) => {
     const { del, store } = storeSpy();
-    const { deleteSessions, context } = endpointContext();
+    const { deleteUserSessions, context } = endpointContext();
 
     await endSessionsOnBan(store)(user, context);
     await endSessionsOnBan(store)(user, null);
 
-    expect(deleteSessions).not.toHaveBeenCalled();
+    expect(deleteUserSessions).not.toHaveBeenCalled();
     expect(del).not.toHaveBeenCalled();
   });
 

@@ -3,6 +3,7 @@ import type { GenericEndpointContext } from "better-auth";
 import { Option, Schema } from "effect";
 import {
   ADMIN_GUARD_REFUSALS,
+  ADMIN_PATHS_REVIEWED_AS_OPEN,
   ADMIN_PATHS_TARGETING_SESSION_TOKEN,
   ADMIN_PATHS_TARGETING_USER_ID,
   ADMIN_UPDATE_USER_PATH,
@@ -67,9 +68,14 @@ const findTargetUser = async (internalAdapter: InternalAdapter, target: NamedTar
     ? internalAdapter.findUserById(target.userId)
     : ((await internalAdapter.findSession(target.sessionToken))?.user ?? null);
 
+export const isAdminPath = (path: string): boolean =>
+  ADMIN_PATHS_TARGETING_USER_ID.includes(path) ||
+  ADMIN_PATHS_TARGETING_SESSION_TOKEN.includes(path) ||
+  ADMIN_PATHS_REVIEWED_AS_OPEN.includes(path);
+
 export const adminGuard = createAuthMiddleware(async (ctx) => {
+  if (!isAdminPath(ctx.path)) return;
   const target = readAdminTarget(ctx.path, ctx.body);
-  if (target._tag === "Open") return;
 
   const session = await getSessionFromCtx(ctx);
   if (!session || !hasAdminRole(session.user.role)) return;
@@ -80,6 +86,7 @@ export const adminGuard = createAuthMiddleware(async (ctx) => {
   if (isBanActive(callerBan, new Date())) {
     return Promise.reject(refusalError(ADMIN_GUARD_REFUSALS.bannedCaller));
   }
+  if (target._tag === "Open") return;
   if (target._tag === "Unreadable") {
     return Promise.reject(refusalError(ADMIN_GUARD_REFUSALS.unreadableTarget));
   }

@@ -3,6 +3,7 @@ import {
   AUTH_SECRET_MIN_LENGTH,
   DEV_ONLY_AUTH_SECRET,
   LOCAL_HTTP_HOSTNAMES,
+  PUBLISHED_AUTH_SECRETS,
   SHARED_HOSTING_SUFFIXES,
   TRUSTED_ORIGINS_SEPARATOR,
   WILDCARD_ORIGIN_PATTERN,
@@ -102,7 +103,7 @@ const setSecret = (env: AuthConfigSource): string | undefined =>
   nonBlank(env.BETTER_AUTH_SECRET) === undefined ? undefined : env.BETTER_AUTH_SECRET;
 
 const isStrongSecret = (secret: string) =>
-  secret.length >= AUTH_SECRET_MIN_LENGTH && secret !== DEV_ONLY_AUTH_SECRET;
+  secret.length >= AUTH_SECRET_MIN_LENGTH && !PUBLISHED_AUTH_SECRETS.includes(secret);
 
 const deployedSecret = (env: AuthConfigSource) => {
   const secret = setSecret(env);
