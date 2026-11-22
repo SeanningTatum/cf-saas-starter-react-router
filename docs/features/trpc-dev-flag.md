@@ -24,3 +24,5 @@ is the same pattern as `isLevelEnabled` in `lib/log-format.ts`.
 `stripStackOutsideDev` casts its result `as S`, so TypeScript cannot verify that required `data` fields survive the
 spread. The "preserves every data key except stack" test is that guarantee: an edit that drops an extra key fails there
 and does not compile silently.
+
+The fix passes `isDev` from `import.meta.env.DEV`, which Vite replaces at build time, to `initTRPC.create`. `stripStackOutsideDev` is defence in depth on top: it keeps stacks out of client payloads even if that config regresses. `timingMiddleware` reads the same module-level `isDev`, not `t._config.isDev`, so both call sites share one source and stay off tRPC's internal config shape. `app/trpc/__tests__/production-error-payload.test.ts` builds the router with `DEV` false and checks that it holds `isDev: false` and that a 500 carries no stack.

@@ -17,13 +17,6 @@ import {
 } from "@/lib/schemas/user";
 import { dbHealth } from "./health";
 
-/**
- * Shared shape for the three `bulk*` procedures below: filter out
- * protected users (self/admin) → bail early with a zero-affected result if
- * nothing is left → run the repo action on the remaining ids → log a
- * structured `logEvent` with actor/targets/affectedCount/skippedCount (plus
- * any `extraLogFields`, e.g. the new role for `bulkUpdateUserRoles`).
- */
 function runBulkUserAction<E>(
   ctx: { runtime: AppRuntime; auth: { user: { id: string } } },
   userIds: readonly string[],
