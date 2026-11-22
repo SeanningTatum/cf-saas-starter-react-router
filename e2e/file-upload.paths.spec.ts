@@ -2,6 +2,7 @@ import { test, expect, type BrowserContext, type Route } from "@playwright/test"
 import path from "node:path";
 import { Either } from "effect";
 import { describePath, fileUploadEdgePaths, type ModelEvent } from "@/components/file-upload.model";
+import uploadText from "@/locales/en/upload.json" with { type: "json" };
 
 /**
  * FileUpload wiring, on paths generated from app/components/file-upload.machine.ts
@@ -14,8 +15,9 @@ import { describePath, fileUploadEdgePaths, type ModelEvent } from "@/components
  *
  * Each test replays its path on /admin/kitchen-sink#upload and checks
  * `data-state` after every step. The upload request is held open by a route
- * mock and released when the path reaches the upload actor's done event, so
- * `uploading` is observable and the reply (ok or refused) comes from the model.
+ * mock and released when the path reaches the upload actor's done or error event, so
+ * `uploading` is observable and the reply (ok, refused or a dropped connection)
+ * comes from the model.
  * The real upload to R2 is walked by feature-verifier, not here.
  *
  * Catches: a DOM event that no longer reaches the machine, a state the markup
@@ -35,6 +37,7 @@ const WIRING = [
   "PICK small.txt → upload ok → RESET → idle", // "Upload another" (the old reset bug)
   "PICK small.txt → upload refused → failed", // the route's refusal message
   "PICK small.txt → upload refused → RESET → idle", // "Try again"
+  "PICK small.txt → upload unreachable → failed", // a dropped connection, the unreachable message
   "PICK big.bin → failed", // the size limit, with no request sent
 ] as const;
 
@@ -143,6 +146,11 @@ test.describe("FileUpload paths", () => {
             });
             break;
           }
+          case "xstate.error.actor.upload": {
+            await expect.poll(() => held.length).toBe(1);
+            await (held.shift() as Route).abort("failed");
+            break;
+          }
         }
         await expect(root).toHaveAttribute("data-state", String(step.state.value));
       }
@@ -154,6 +162,9 @@ test.describe("FileUpload paths", () => {
       }
       if (end === "failed") {
         await expect(page.getByTestId("file-upload-error")).toBeVisible();
+        if (context.error?.reason === "unreachable") {
+          await expect(page.getByTestId("file-upload-error")).toContainText(uploadText.unreachable);
+        }
       } else {
         await expect(page.getByTestId("file-upload-error")).toHaveCount(0);
       }
@@ -161,7 +172,7 @@ test.describe("FileUpload paths", () => {
         await expect(dropzone).toBeVisible();
       }
       // A path with no upload step must not have sent a request.
-      const uploads = statePath.steps.filter((s) => s.event.type === "xstate.done.actor.upload");
+      const uploads = statePath.steps.filter((s) => /^xstate\.(done|error)\.actor\.upload$/.test(s.event.type));
       if (uploads.length === 0) expect(held).toHaveLength(0);
     });
   }

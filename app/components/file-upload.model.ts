@@ -20,7 +20,10 @@ import {
 /** The event xstate sends when the invoked `upload` actor resolves. */
 export type UploadDoneEvent = { readonly type: "xstate.done.actor.upload"; readonly output: UploadResult };
 
-export type ModelEvent = FileUploadEvent | UploadDoneEvent;
+/** The event xstate sends when the invoked `upload` actor rejects. */
+export type UploadErrorEvent = { readonly type: "xstate.error.actor.upload"; readonly error: unknown };
+
+export type ModelEvent = FileUploadEvent | UploadDoneEvent | UploadErrorEvent;
 
 export const UPLOAD_OK: UploadResult = Either.right({ key: "uploads/model-test.txt" });
 export const UPLOAD_REFUSED: UploadResult = Either.left(
@@ -36,8 +39,8 @@ export const fileUploadTraversal = (opts: {
   readonly big: File;
 }) => ({
   input: { maxSize: opts.maxSize },
-  // Done events are not in the machine's event type; the traversal needs them
-  // to leave `uploading`, so they are cast in here.
+  // Actor done and error events are not in the machine's event type; the
+  // traversal needs them to leave `uploading`, so they are cast in here.
   events: [
     { type: "DRAG_ENTER" },
     { type: "DRAG_LEAVE" },
@@ -46,6 +49,7 @@ export const fileUploadTraversal = (opts: {
     { type: "RESET" },
     { type: "xstate.done.actor.upload", output: UPLOAD_OK },
     { type: "xstate.done.actor.upload", output: UPLOAD_REFUSED },
+    { type: "xstate.error.actor.upload", error: new Error("network unreachable") },
   ] as unknown as FileUploadEvent[],
   // The default key is JSON.stringify, and a File stringifies to {}, which
   // makes every PICK the same edge. Key a pick by the file's name and size.
@@ -86,7 +90,9 @@ export const describePath = (
       ? `PICK ${e.file.name}`
       : e.type === "xstate.done.actor.upload"
         ? `upload ${Either.isRight(e.output) ? "ok" : "refused"}`
-        : e.type;
+        : e.type === "xstate.error.actor.upload"
+          ? "upload unreachable"
+          : e.type;
   const events = steps
     .map((s) => s.event)
     .filter((e) => (e as { type: string }).type !== "xstate.init");

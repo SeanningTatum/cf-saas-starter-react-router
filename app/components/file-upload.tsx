@@ -68,7 +68,11 @@ export function FileUpload({
     // describe only reads t and the size limit, both listed here.
   }, [actorRef, onUploadSuccess, onUploadError, t, limit]);
 
-  const openPicker = () => fileInputRef.current?.click();
+  // Focus can stay on the zone during an upload, and `uploading` takes no PICK,
+  // so a file picked then would be dropped. Keep the picker shut.
+  const openPicker = () => {
+    if (!snapshot.matches("uploading")) fileInputRef.current?.click();
+  };
 
   const handleDragOver = (e: DragEvent<HTMLDivElement>) => {
     e.preventDefault();
