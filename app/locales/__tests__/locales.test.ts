@@ -8,7 +8,6 @@ const HOME_ROUTE = path.resolve(__dirname, "../../routes/home.tsx");
 const readNamespace = (lng: string, ns: string): Record<string, unknown> =>
   JSON.parse(fs.readFileSync(path.join(LOCALES_DIR, lng, `${ns}.json`), "utf8"));
 
-// Dotted paths of every string leaf, e.g. "harness.pillars.skills.title".
 const leafKeys = (obj: Record<string, unknown>, prefix = ""): string[] =>
   Object.entries(obj).flatMap(([k, v]) =>
     v !== null && typeof v === "object"
@@ -29,9 +28,7 @@ describe("locale parity (en ↔ zh)", () => {
   });
 });
 
-describe("home route i18n keys", () => {
-  // Catches a renamed key (e.g. harness.pillars.recipes → skills) that the
-  // route still references, which renders the raw key on the landing page.
+describe("home route i18n keys, so a renamed key the route still references cannot render the raw key on the landing page", () => {
   const usedKeys = [
     ...fs.readFileSync(HOME_ROUTE, "utf8").matchAll(/\bt\("([a-z0-9_.]+)"/gi),
   ].map((m) => m[1]);

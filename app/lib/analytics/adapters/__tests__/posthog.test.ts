@@ -21,9 +21,8 @@ const stubFetch = (impl: () => Promise<{ ok: boolean; status: number }>) => {
 describe("posthogAdapter", () => {
   afterEach(() => vi.unstubAllGlobals());
 
-  it.effect("posts one {api_key, batch} body with snake_case keys, to the US cloud by default", () =>
+  it.effect("posts one {api_key, batch} body with snake_case keys, to the US cloud by default, so the endpoint, the distinct_id rename and one request per batch hold", () =>
     Effect.gen(function* () {
-      // Catches: wrong endpoint, distinctId sent un-renamed, or one request per event.
       const fetchFn = stubFetch(async () => ({ ok: true, status: 200 }));
       yield* posthogAdapter({ apiKey: "phc_x" }).send([sample, { ...sample, event: "b" }]);
       expect(fetchFn).toHaveBeenCalledTimes(1);
@@ -39,9 +38,8 @@ describe("posthogAdapter", () => {
     })
   );
 
-  it.effect("fails with AnalyticsDeliveryError on a non-2xx status or a rejected fetch", () =>
+  it.effect("fails with AnalyticsDeliveryError on a non-2xx status or a rejected fetch, so a 401 or 500 is not success and a network error is typed", () =>
     Effect.gen(function* () {
-      // Catches: a 401/500 treated as success, or a network error escaping untyped.
       stubFetch(async () => ({ ok: false, status: 503 }));
       const bad = yield* Effect.flip(posthogAdapter({ apiKey: "k" }).send([sample]));
       expect(bad).toBeInstanceOf(AnalyticsDeliveryError);
@@ -53,9 +51,8 @@ describe("posthogAdapter", () => {
     })
   );
 
-  it.effect("fails with AnalyticsDeliveryError when fetch never responds", () =>
+  it.effect("fails with AnalyticsDeliveryError when fetch never responds, so a stalled PostHog connection cannot hold runtime.dispose() open forever", () =>
     Effect.gen(function* () {
-      // Catches: a stalled PostHog connection holding runtime.dispose() open forever.
       vi.stubGlobal(
         "fetch",
         vi.fn(

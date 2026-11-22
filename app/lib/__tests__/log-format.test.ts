@@ -86,9 +86,7 @@ describe("emitLog", () => {
     expect(String(infoSpy.mock.calls[0]![0])).toContain('"userId":"u1"');
   });
 
-  it("starts every line from the registered context provider", () => {
-    // Catches `emitLog` ignoring the provider: plain `loggers.x.info(...)`
-    // lines inside a request would lose their requestId and userId.
+  it("starts every line from the registered context provider, so plain logger calls inside a request keep their requestId and userId", () => {
     setLogContext(() => ({ requestId: "0123456789abcdef", userId: "u1", extra: 1 }));
     emitLog("info", "msg", { layer: "x" });
     const line = String(infoSpy.mock.calls[0]![0]);
@@ -96,9 +94,7 @@ describe("emitLog", () => {
     expect(line).toContain('"extra":1');
   });
 
-  it("lets explicit annotations win over provider fields", () => {
-    // Catches spreading the provider last: a log that names its own userId
-    // (an admin acting on another user) would be overwritten by the caller's.
+  it("lets explicit annotations win over provider fields, so a log naming its own userId (an admin acting on another user) is not overwritten", () => {
     setLogContext(() => ({ userId: "from-store", extra: 1 }));
     emitLog("info", "msg", { userId: "explicit" });
     const line = String(infoSpy.mock.calls[0]![0]);
@@ -106,10 +102,7 @@ describe("emitLog", () => {
     expect(line).not.toContain("from-store");
   });
 
-  it("prefixes a dev line with the short request id and moves the trace id to the JSON", () => {
-    // Catches leading with the trace id instead of the request id, dumping
-    // the 32-character request id into every dev line, and dropping the trace
-    // id altogether (a developer could no longer find the trace).
+  it("prefixes a dev line with the short request id and moves the trace id to the JSON, so dev lines stay short and the trace stays findable", () => {
     setLogContext(() => ({ requestId: "0123456789abcdef0123456789abcdef" }));
     emitLog("info", "msg", { layer: "x", traceId: "t-1" });
     const line = String(infoSpy.mock.calls[0]![0]);
@@ -120,18 +113,14 @@ describe("emitLog", () => {
   });
 });
 
-describe("emitLog outside dev", () => {
-  // `isDev` is read from `import.meta.env.DEV` when the module loads, and is
-  // always true under vitest; stub it and load a fresh copy of the module.
+describe("emitLog outside dev (isDev is read from import.meta.env.DEV at module load and is always true under vitest, so each test stubs it and loads a fresh module)", () => {
   afterEach(() => {
     vi.unstubAllEnvs();
     vi.resetModules();
     vi.restoreAllMocks();
   });
 
-  it("writes one JSON line carrying the full requestId and userId", async () => {
-    // Catches the production line dropping the provider fields: the JSON
-    // line is the one log search runs against.
+  it("writes one JSON line carrying the full requestId and userId, the line log search runs against", async () => {
     vi.stubEnv("DEV", false);
     vi.resetModules();
     const fresh = await import("../log-format");

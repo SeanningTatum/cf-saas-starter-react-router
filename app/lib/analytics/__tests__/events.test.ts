@@ -3,9 +3,7 @@ import { Either, Schema } from "effect";
 import { AnalyticsEvent } from "../events";
 
 describe("AnalyticsEvent", () => {
-  it("decodes user_banned and rejects a wrong property type", () => {
-    // Catches: a catalog edit loosening a property type, renaming the event
-    // (which splits the provider's history), or dropping it from the union.
+  it("decodes user_banned and rejects a wrong property type, so a catalog edit cannot loosen a type, rename the event (splitting the history) or drop it from the union", () => {
     const ok = {
       _tag: "user_banned",
       distinctId: "a",
