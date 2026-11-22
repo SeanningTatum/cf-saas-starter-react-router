@@ -56,7 +56,7 @@ export const meta = {
  *   (plus the git diff) against the fences. A lane that edits outside its fence is a P0.
  *
  * MEMORY
- *   The context-memory agent keeps the thread between sessions. Preflight runs one read-only recall
+ *   The working memory (scripts/memory.ts) keeps the thread between sessions. Preflight runs one read-only recall
  *   (logged and returned, never fed to a later prompt, so resumed runs keep their cache). Each stop
  *   records where it stopped and what it waits for, and Ship records the outcome.
  *
@@ -151,19 +151,15 @@ outDir = `${ROOT}/.verify/brand-init`;
 const ROOT_PREAMBLE = `ROOT = ${ROOT}
 Work only inside ${ROOT}. cd there first. Every path in this task is relative to ${ROOT}. Never read or write another checkout.
 That covers the comp and screenshot dirs (${ROOT}/.verify/...), PRODUCT.md, DESIGN.md, git commands and dev servers.`;
-const { ask, remember } = asker(ROOT_PREAMBLE);
+const { ask, remember, recall } = asker(ROOT_PREAMBLE);
 log(`Pre-flight green on ${pre.branch}, root ${ROOT}`);
 
-// ---- Working memory (context-memory agent) ----------------------------------------------------
+// ---- Working memory (scripts/memory.ts, run by the runner) -------------------------------------
 // recall is read-only. Its brief is logged and returned in the final result, and goes into NO later
 // prompt: a re-run (resumeFromRunId) replays agents from cache only when their prompt is unchanged,
-// and recall output can differ between runs. The record calls below follow asker's rule (library);
-// the agent adds the date.
-const recalled = await remember(
-  `Mode: recall. Slug: ${slug}. Read-only: change nothing. Return the brief for this feature (what was decided, what is open, where the last brand-init run stopped), or "nothing recorded".`,
-  "memory:recall",
-  "Preflight"
-);
+// and recall output can differ between runs. The record calls below follow asker's rule (library):
+// a script merges each record and stamps the date, and a record holds only values the run already has.
+const recalled = await recall(slug, "memory:recall", "Preflight");
 log(`Memory recall: ${recalled ? String(recalled).slice(0, 300).replace(/\s+/g, " ") : "returned nothing"}`);
 
 // =============================================================================================
@@ -197,6 +193,8 @@ will be asked about those.`,
   {
     label: "brief:interview",
     phase: "Brief",
+    // general-purpose: loads `impeccable` (Skill) and reads the repo; no project agent has that job.
+    agentType: "general-purpose",
     schema: obj({ questions: arr(obj({ id: STR, question: STR, draft: STR, confident: BOOL })) }),
   }
 );
@@ -211,12 +209,15 @@ const unanswered = resumed ? [] : interview.questions.filter((q) => !q.confident
 if (unanswered.length) {
   log(`Brief: ${unanswered.length} question(s) need the user. Stopping; re-run with args.answers.`);
   const memInput = await remember(
-    `Mode: record. Slug: ${slug}. Status: in-progress.
-Where it stopped: Brief phase, status needs-input. PRODUCT.md is not written yet.
-Waiting for: the user's answers to ${unanswered.length} interview question(s), ids ${unanswered.map((q) => q.id).join(", ")}.
-Next step: re-run Workflow brand-init with resumeFromRunId set to this run and args.answers = { <id>: "<answer>" }.
-Context: redo=${redo}; args.brief=${JSON.stringify(input.brief ?? null)}; args.sector=${JSON.stringify(input.sector ?? null)}; checkout ${ROOT}.
-Todo: answer the open interview questions.`,
+    slug,
+    {
+      status: "in-progress",
+      log: `Brief phase stopped for input; PRODUCT.md is not written yet. redo=${redo}; args.brief=${JSON.stringify(input.brief ?? null)}; args.sector=${JSON.stringify(input.sector ?? null)}; checkout ${ROOT}.`,
+      stopped: "Brief phase, status needs-input",
+      waiting: `the user's answers to ${unanswered.length} interview question(s), ids ${unanswered.map((q) => q.id).join(", ")}`,
+      next: "re-run Workflow brand-init with resumeFromRunId set to this run and args.answers = { <id>: \"<answer>\" }",
+      todo: "answer the open interview questions",
+    },
     "memory:record:needs-input",
     "Brief"
   );
@@ -241,6 +242,7 @@ Return a one-line "oneLine" describing the product for a taste brief, and the cl
   {
     label: "brief:write",
     phase: "Brief",
+    agentType: "docs-writer", // it writes one document from settled answers, as plan-feature's product:write does
     schema: obj({ oneLine: STR, sector: STR }),
   }
 );
@@ -312,6 +314,7 @@ contents of ${dir}/tokens.json after your last edit (read the file back).`,
     {
       label: `critique:${comp.id}:taste`,
       phase: "Critique",
+      agentType: "ui-builder",
       schema: obj({ score: NUM, notes: STR, tokens: { type: "object" } }),
     }
   );
@@ -331,6 +334,9 @@ and contrastAA.dark as booleans (true only if every pair passes AA).`,
         {
           label: `critique:${comp.id}:impeccable`,
           phase: "Critique",
+          // general-purpose: read-only critique that loads `impeccable` (Skill) and computes contrast; proto-critic
+          // retakes its own shots and returns a fixed shape.
+          agentType: "general-purpose",
           schema: obj({ findings: FINDINGS, contrastAA: obj({ light: BOOL, dark: BOOL }) }),
         }
       ),
@@ -345,6 +351,8 @@ prefers-reduced-motion collapses the motion. Return verdict PASS or FAIL with no
         {
           label: `critique:${comp.id}:motion`,
           phase: "Critique",
+          // general-purpose: read-only motion review that loads `emil-design-eng` (Skill); no project agent reviews motion.
+          agentType: "general-purpose",
           schema: obj({ verdict: { type: "string", enum: ["PASS", "FAIL"] }, notes: STR }),
         }
       ),
@@ -368,6 +376,7 @@ async function drawAndCritique(d, extra, redrawn) {
       ask(drawPrompt(d, n > 1 ? `\nYour first attempt failed. First clear everything inside ${outDir}/${d.dirName ?? d.id}/ (your own directory only), then keep it smaller and finish.\n${extra ?? ""}` : extra), {
         label: `draw:${d.id}${redrawn ? ":redraw" : ""}`,
         phase: "Draw",
+        agentType: "ui-builder",
         schema: DRAW_SCHEMA,
       }),
     `comp ${d.id}`
@@ -409,6 +418,7 @@ Write only under ${outDir}/directions/. Return the printed draw ids and the thre
     {
       label: `draw:directions:${firstId}`,
       phase: "Draw",
+      agentType: "runner",
       schema: obj({ drawIds: STRS, directions: arr(obj({ id: NUM, sheet: STR })) }),
     }
   );
@@ -438,6 +448,8 @@ Return the pairs of comp ids a stranger would call the same brand. Empty list if
       {
         label: "critique:sameness",
         phase: "Critique",
+        // general-purpose: a read-only judgment over screenshots; runner does not judge and plan-judge grades checklists.
+        agentType: "general-purpose",
         schema: obj({ pairs: arr(arr(NUM)) }),
       }
     );
@@ -498,14 +510,14 @@ for (let round = 1; round <= 2; round++) {
     phase("Pick");
     log(`Pick: round ${round}, ${r.comps.length} comp(s) ready. Stopping; re-run with ${needs.map((n) => "args." + n).join(" and ")}.`);
     const memPick = await remember(
-      `Mode: record. Slug: ${slug}. Status: in-progress.
-Where it stopped: Pick phase, round ${round}, status needs-pick. PRODUCT.md is written; ${r.comps.length} comp(s) drawn and critiqued.
-Waiting for: the user's choice (${needs.join(" and ")}): a comp id or "none", ${needs.includes("rebuildHome") ? "and whether to rebuild the home page" : "rebuildHome already answered"}.
-Comps (id, name, html, taste score):
-${r.comps.map((c) => `  · ${c.id}, ${(c.tokens && c.tokens.name) || "unnamed"}, ${c.html}, taste ${c.critique.taste.score}`).join("\n")}
-Comps that failed to draw: ${r.failed.length ? r.failed.map((f) => f.id).join(", ") : "none"}. Flagged as look-alikes: ${r.similar.length ? JSON.stringify(r.similar) : "none"}.
-Comp files live under ${outDir}/ (local, not committed).
-Next step: re-run Workflow brand-init with resumeFromRunId set to this run and args.${needs.includes("rebuildHome") && needs.length === 1 ? "rebuildHome" : needs.join(" and args.")}.`,
+      slug,
+      {
+        status: "in-progress",
+        log: `Pick phase, round ${round}: PRODUCT.md is written; ${r.comps.length} comp(s) drawn and critiqued. Comps (id, name, html, taste score): ${r.comps.map((c) => `${c.id}, ${(c.tokens && c.tokens.name) || "unnamed"}, ${c.html}, taste ${c.critique.taste.score}`).join("; ")}. Comps that failed to draw: ${r.failed.length ? r.failed.map((f) => f.id).join(", ") : "none"}. Flagged as look-alikes: ${r.similar.length ? JSON.stringify(r.similar) : "none"}. Comp files live under ${outDir}/ (local, not committed). Checkout ${ROOT}.`,
+        stopped: `Pick phase, round ${round}, status needs-pick`,
+        waiting: `the user's choice (${needs.join(" and ")}): a comp id or "none", ${needs.includes("rebuildHome") ? "and whether to rebuild the home page" : "rebuildHome already answered"}`,
+        next: `re-run Workflow brand-init with resumeFromRunId set to this run and args.${needs.includes("rebuildHome") && needs.length === 1 ? "rebuildHome" : needs.join(" and args.")}`,
+      },
       "memory:record:needs-pick",
       "Pick"
     );
@@ -976,7 +988,13 @@ ${browserRules("impeccable-critique", 5281)}
 ${SKILL_RULE}
 Load \`impeccable\` and run \`critique\` on the screenshots. Judge pixels. Does it match the chosen comp
 (${compDir}/shots/)? ${WIDE_CHECK} Report every issue P0-P3. ${FIND_NOTE}`,
-        { label: "check:impeccable-critique", phase: "Check", schema: VERDICT_SCHEMA }
+        {
+          label: "check:impeccable-critique",
+          phase: "Check",
+          // general-purpose: drives the live app and loads `impeccable` (Skill); feature-verifier has no Skill tool.
+          agentType: "general-purpose",
+          schema: VERDICT_SCHEMA,
+        }
       ),
   },
   ...(rebuildHome
@@ -996,7 +1014,13 @@ ${SKILL_RULE}
 Load \`design-taste-frontend\` and run its references/critique.md loop, at most 3 rounds, scoring only (no
 fixing). ${WIDE_CHECK} A score under 7.5 is reported as scored and is a P1; never round up. Put the score and the
 last critique in evidence.`,
-              { label: "check:taste-critique", phase: "Check", schema: VERDICT_SCHEMA }
+              {
+                label: "check:taste-critique",
+                phase: "Check",
+                // general-purpose: drives the live app and loads `design-taste-frontend` (Skill).
+                agentType: "general-purpose",
+                schema: VERDICT_SCHEMA,
+              }
             ),
         },
       ]
@@ -1015,7 +1039,13 @@ ${SKILL_RULE}
 Load the \`emil-design-eng\` skill (not \`review-animations\`, which the Skill tool refuses) and judge by its rules the primitives that move (dialog, sheet, dropdown-menu, tabs, accordion, button
 press states). Check that the durations and easings come from the --duration-* / --ease-* tokens and
 that prefers-reduced-motion collapses them. ${FIND_NOTE}`,
-        { label: "check:review-animations", phase: "Check", schema: VERDICT_SCHEMA }
+        {
+          label: "check:review-animations",
+          phase: "Check",
+          // general-purpose: drives the live app and loads `emil-design-eng` (Skill); no project agent reviews motion.
+          agentType: "general-purpose",
+          schema: VERDICT_SCHEMA,
+        }
       ),
   },
   {
@@ -1089,13 +1119,15 @@ async function escalate(items, why, tag) {
   if (said === null) {
     log(`${items.length} item(s) ${why} — stopping to ask the user (${tag})`);
     const memAccept = await remember(
-      `Mode: record. Slug: ${slug}. Status: in-progress.
-Where it stopped: needs-accept (${tag}) with winning comp ${winner.id} ("${(winner.tokens && winner.tokens.name) || "unnamed"}", taste ${winner.critique.taste.score}) built on ${ROOT}.
-Waiting for: the user to accept the risk and ship, or stop. These findings ${why}:
-${items.map((i) => `  · [${i.severity}] ${i.source}: ${i.issue}${i.file ? ` (${i.file})` : ""}`).join("\n")}
-Evidence: ${outDir}/check/ (local screenshots).
-Next step: re-run Workflow brand-init with resumeFromRunId set to this run and args.accept = { ...args.accept, "${tag}": true|false }.
-Todo: decide on the open findings above.`,
+      slug,
+      {
+        status: "in-progress",
+        log: `needs-accept (${tag}) with winning comp ${winner.id} ("${(winner.tokens && winner.tokens.name) || "unnamed"}", taste ${winner.critique.taste.score}) built on ${ROOT}. These findings ${why}: ${items.map((i) => `[${i.severity}] ${i.source}: ${i.issue}${i.file ? ` (${i.file})` : ""}`).join("; ")}. Evidence: ${outDir}/check/ (local screenshots).`,
+        stopped: `needs-accept (${tag})`,
+        waiting: "the user to accept the risk and ship, or stop",
+        next: `re-run Workflow brand-init with resumeFromRunId set to this run and args.accept = { ...args.accept, "${tag}": true|false }`,
+        todo: "decide on the open findings recorded in the log",
+      },
       "memory:record:needs-accept:" + tag,
       tag === "post-fix" ? "Fix" : "Close"
     );
@@ -1479,7 +1511,13 @@ Produce, in this order:
    decide these yourself.
 
 Be blunt about what is unfinished.`,
-  { label: "close:synthesis", phase: "Close", effort: "high" }
+  {
+    label: "close:synthesis",
+    phase: "Close",
+    // general-purpose: no project agent has this job (a blunt report from the run's own results), and a narrower type would bring the wrong instructions.
+    agentType: "general-purpose",
+    effort: "high",
+  }
 );
 
 // ---------------------------------------------------------------------------------------------
@@ -1554,6 +1592,8 @@ the PR url, and a reason when shipped is false or anything went wrong.`,
     {
       label: "ship:record-commit-pr",
       phase: "Ship",
+      // general-purpose: writes the verdict, stops on a red gate, commits, and opens the PR with a skill (Skill tool); runner makes no judgment.
+      agentType: "general-purpose",
       schema: obj({ shipped: BOOL, reason: STR, gatesGreen: BOOL, verdictWritten: BOOL, commit: STR, pr: STR }, ["shipped"]),
     }
   );
@@ -1562,18 +1602,22 @@ the PR url, and a reason when shipped is false or anything went wrong.`,
 
 // One writer, once, after every other lane. Status is done only when a PR exists.
 const memFinal = await remember(
-  `Mode: record. Slug: ${slug}. Status: ${ship.shipped ? "done (PR open, not merged: the user merges)" : "blocked"}.
-Winner: comp ${winner.id} ("${tokens.name ?? "unnamed"}"), taste score ${winner.critique.taste.score} (scored, not rounded). Rebuilt home: ${rebuildHome ? "yes" : "no"}. Redo of an existing brand: ${redo}.
-Why it won: the user picked it on the review page after the critiques; taste notes: ${JSON.stringify(winner.critique.taste.notes ?? "")}
-Rejected comps and why:
-${rejected.length ? rejected.map((r) => `  · comp ${r.id}: ${r.why}`).join("\n") : "  · (none)"}
-Links: PR ${ship.pr ?? "none"}; commit ${ship.commit ?? "none"}; verdict ${ship.verdictWritten ? outDir + "/verdict.md (local, not committed)" : "not written"}; DESIGN.md ${mayShip ? "written" : "not written"}.
-Ship: shipped=${ship.shipped}${ship.reason ? `; reason: ${ship.reason}` : ""}.
-Todo (follow-ups still owed):
-${finalBlocking.length ? finalBlocking.map((f) => `  · [${f.severity}] ${f.source}: ${f.issue}`).join("\n") : "  · no open blocking findings"}
-${unresolved.length ? unresolved.map((u) => `  · ${u.file}: ${u.why}`).join("\n") : ""}
-${ship.shipped ? "  · merge the PR after review" : "  · resolve the blockers above and re-run, or fix by hand"}
-Next step: ${ship.shipped ? "user reviews and merges the PR" : "see Todo"}.`,
+  slug,
+  {
+    status: ship.shipped ? "done" : "blocked",
+    log: `${ship.shipped ? "PR open, not merged: the user merges." : "Not shipped."} Winner: comp ${winner.id} ("${tokens.name ?? "unnamed"}"), taste score ${winner.critique.taste.score} (scored, not rounded). Rebuilt home: ${rebuildHome ? "yes" : "no"}. Redo of an existing brand: ${redo}. Ship: shipped=${ship.shipped}${ship.reason ? `; reason: ${ship.reason}` : ""}. Verdict ${ship.verdictWritten ? outDir + "/verdict.md (local, not committed)" : "not written"}; DESIGN.md ${mayShip ? "written" : "not written"}.${finalBlocking.length ? "" : " No open blocking findings."}`,
+    next: ship.shipped ? "user reviews and merges the PR" : "resolve the blockers in the todo list and re-run, or fix by hand",
+    decision: [
+      `comp ${winner.id} ("${tokens.name ?? "unnamed"}") is the brand — the user picked it on the review page after the critiques; taste ${winner.critique.taste.score}; taste notes: ${JSON.stringify(winner.critique.taste.notes ?? "")} — brand-init run`,
+      ...rejected.map((r) => `comp ${r.id} was not picked — ${r.why} — brand-init run`),
+    ],
+    link: [ship.pr ? `PR: ${ship.pr}` : "", ship.commit ? `commit: ${ship.commit}` : ""],
+    todo: [
+      ...finalBlocking.map((f) => `[${f.severity}] ${f.source}: ${f.issue}`),
+      ...unresolved.map((u) => `${u.file}: ${u.why}`),
+      ship.shipped ? "merge the PR after review" : "resolve the blockers above and re-run, or fix by hand",
+    ],
+  },
   "memory:record:ship",
   "Ship"
 );

@@ -55,4 +55,4 @@ On `fail`, put the last ~10 lines of output in `blocked`.
 - Write only inside the fence. A file you need outside it: stop, add it to `blocked`, return what you have.
 - No `any` to dodge a type.
 - No dev server, no browser, no commits, no `db:migrate:*`. `bun run db:generate` is the only database command.
-- Do not add spans beyond the procedure span; `span-instrumenter` and `analytics-instrumenter` run later.
+- Do not add spans beyond the procedure span; `instrumenter` runs later.

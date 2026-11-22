@@ -12,12 +12,12 @@ export const meta = {
     { title: "Audit", detail: "ticket-auditor against the fixed checklist; plan-judge gate" },
     { title: "Brief", detail: "the run stops: amended ticket, one question per gap, approve or stop; you answer in chat" },
     { title: "Write back", detail: "writer edits the issue body; runner posts it and the change comment" },
-    { title: "Fit", detail: "product-strategist: user, job, fit, metric, non-goals; judge gate" },
+    { title: "Fit", detail: "ticket-auditor in fit mode: user, job, fit, metric, non-goals; judge gate" },
     { title: "Design", detail: "ux-planner and architect in parallel; three UI prototypes start after the ux gate; judge gate on each" },
-    { title: "Stack", detail: "stack-planner: the PR stack on disjoint fences; judge gate" },
+    { title: "Stack", detail: "architect in stack mode: the PR stack on disjoint fences; judge gate" },
     { title: "Check", detail: "wait for the prototypes, assemble the decision record, run the format checker, judge the whole record" },
     { title: "Plan", detail: "the run stops on a lavish plan page with the three prototypes and a pick card, up to two rounds; states added to the chosen prototype" },
-    { title: "Publish", detail: "issue comment and one context-memory record; never commits" },
+    { title: "Publish", detail: "issue comment and one working-memory record; never commits" },
     { title: "Escalation", detail: "any phase: a gate failed twice, so the run records where it stopped and asks you to fix, accept or stop" },
   ],
 };
@@ -45,7 +45,7 @@ export const meta = {
  *     needs-input, stage "brief"       The audit is done. Returns the verdict, original and amended ticket, the checklist and the
  *                                      questions. Re-run with args.brief = { decision: "approve" | "override" | "stop", answers:
  *                                      { <question id>: option }, hasUi, research, title?, body? }.
- *     needs-input, stage "fit"         product-strategist ruled the feature does not fit. Re-run with args.fit = "override" | "stop".
+ *     needs-input, stage "fit"         the fit step (ticket-auditor, fit mode) ruled the feature does not fit. Re-run with args.fit = "override" | "stop".
  *     needs-input, stage "escalation"  A quality gate failed twice. Returns the label and the judge's open fixes. Re-run with
  *                                      args.escalations = { ...earlier, "<label>": "accept" | "stop" | "fix: <words>" }.
  *     needs-plan                       The record and the prototypes are ready. Returns review (the page path), the record, the
@@ -54,7 +54,8 @@ export const meta = {
  *     needs-accept                     The chosen prototype's states pass left serious findings. Re-run with args.accept = { states: true|false }.
  *
  * THE JUDGE GATE
- *   After each producer, plan-judge (sonnet) reads the producer's checklist. Fail: the producer revises
+ *   After each producer, plan-judge reads the producer's checklist: the `## Checklist` heading of its agent file, or
+ *   `## Fit checklist` and `## Stack checklist` for the two modes that ticket-auditor and architect now have. Fail: the producer revises
  *   once with the judge's fixes. Fail again: the run stops with an escalation (fix, accept as is,
  *   stop). Nothing is capped silently; every skip, stop and escalation is logged.
  *
@@ -62,9 +63,14 @@ export const meta = {
  *   Nothing leaves the machine before the brief is approved. A ticket whose updatedAt moved since
  *   Intake is not overwritten; the conflict goes to the plan page.
  *
+ * TWO MODES
+ *   Fit is ticket-auditor with the first line "Mode: fit."; Stack is architect with "Mode: stack.". A call
+ *   with no mode line is the agent's first job (audit, design). Both modes keep their phase and schema.
+ *
  * MEMORY
  *   context-scout reads the memory store as part of its context lookup (no separate recall agent).
- *   Each stop records where it stopped; Publish records the outcome.
+ *   Each stop records where it stopped; Publish records the outcome. A record is one command that
+ *   scripts/memory.ts runs on the runner (lib remember()); no model edits the store.
  *
  * args:
  *   a string: a ticket ref (12, #12, a github issue URL) or an idea
@@ -199,13 +205,16 @@ const SCHEMAS = {
 };
 
 // Fixed per-producer settings. `key` names the record slot the output lands in.
+// `mode` is the first line of the prompt (none: the agent's first job). `heading` is the checklist the judge
+// reads in the agent's file. `name` is what logs and stop reasons call the step.
+const who = (agentType, heading = "## Checklist") => ({ agentType, heading });
 const PRODUCERS = {
-  context: { agentType: "context-scout", phase: "Context", label: "context" },
-  audit: { agentType: "ticket-auditor", phase: "Audit", label: "audit" },
-  fit: { agentType: "product-strategist", phase: "Fit", label: "fit" },
-  ux: { agentType: "ux-planner", phase: "Design", label: "ux" },
-  architect: { agentType: "architect", phase: "Design", label: "architect" },
-  stack: { agentType: "stack-planner", phase: "Stack", label: "stack" },
+  context: { ...who("context-scout"), name: "context-scout", phase: "Context", label: "context" },
+  audit: { ...who("ticket-auditor"), name: "ticket-auditor", phase: "Audit", label: "audit" },
+  fit: { ...who("ticket-auditor", "## Fit checklist"), mode: "fit", name: "ticket-auditor (fit)", phase: "Fit", label: "fit" },
+  ux: { ...who("ux-planner"), name: "ux-planner", phase: "Design", label: "ux" },
+  architect: { ...who("architect"), name: "architect", phase: "Design", label: "architect" },
+  stack: { ...who("architect", "## Stack checklist"), mode: "stack", name: "architect (stack)", phase: "Stack", label: "stack" },
 };
 
 // =============================================================================================
@@ -262,15 +271,18 @@ const { ask, sh, remember } = asker(ROOT_PREAMBLE);
 log(`Pre-flight green, root ${ROOT}, ${DATE}, backend ${pre.backend}${input.ticket ? `, ticket ${pre.issue.ref || input.ticket}` : ", idea input"}`);
 
 // ---- Working memory and stops -------------------------------------------------------------------
-// Each stop first records where the run stopped (context-memory, record mode), then throws `halt`.
+// Each stop first records where the run stopped (scripts/memory.ts, run by the runner), then throws `halt`.
 const memSlug = () => slug || "plan-feature";
 async function stop(label, phaseName, where, waiting, nextStep, result, status = "in-progress") {
   const memory = await remember(
-    `Mode: record. Slug: ${memSlug()}. Status: ${status}.
-Where it stopped: ${where}.
-Waiting for: ${waiting}.
-Next step: ${nextStep}
-Context: ${input.ticket ? `ticket ${input.ticket}` : "idea input"}; checkout ${ROOT}. Pages and drafts live in ${outDir()}/ (local, not committed).`,
+    memSlug(),
+    {
+      status,
+      log: `plan-feature stopped (${label}). ${input.ticket ? `Ticket ${input.ticket}` : "Idea input"}; checkout ${ROOT}. Pages and drafts live in ${outDir()}/ (local, not committed).`,
+      stopped: where,
+      waiting,
+      next: nextStep,
+    },
     `memory:record:${label}`,
     phaseName
   );
@@ -294,6 +306,7 @@ Return every question with a short stable id, the question text, your draft answ
     {
       label: "product:interview",
       phase: "Product",
+      agentType: "general-purpose", // loads the impeccable skill and reads the repo: no project agent has that job
       schema: obj({ questions: arr(obj({ id: STR, question: STR, draft: STR, confident: BOOL })) }),
     }
   );
@@ -324,7 +337,7 @@ Return every question with a short stable id, the question text, your draft answ
 ${DATA_FENCE}
 ${fence("answers", JSON.stringify(interview.questions.map((q) => ({ id: q.id, question: q.question, answer: given && typeof given[q.id] === "string" ? given[q.id] : q.draft })), null, 1))}
 Return written=true once PRODUCT.md exists.`,
-    { label: "product:write", phase: "Product", schema: obj({ written: BOOL, note: STR }) }
+    { label: "product:write", phase: "Product", agentType: "docs-writer", schema: obj({ written: BOOL, note: STR }) }
   );
   if (!wrote || !wrote.written) {
     log("Stopped at Product: PRODUCT.md was not written");
@@ -427,13 +440,13 @@ let finalTicket = null;
 let briefAnswers = [];
 const briefData = () => fence("approved brief", JSON.stringify({ title: finalTicket && finalTicket.title, body: finalTicket && finalTicket.body, answers: briefAnswers }, null, 1));
 
-const runProducer = (key, extra) =>
-  ask(promptFor(key) + (extra || ""), {
-    label: PRODUCERS[key].label + (extra ? ":revise" : ""),
-    phase: PRODUCERS[key].phase,
-    agentType: PRODUCERS[key].agentType,
-    schema: SCHEMAS[key],
-  });
+// A mode producer's prompt opens with its mode line, before the ROOT preamble, so the agent reads it first.
+const runProducer = (key, extra) => {
+  const p = PRODUCERS[key];
+  const opts = { label: p.label + (extra ? ":revise" : ""), phase: p.phase, agentType: p.agentType, schema: SCHEMAS[key] };
+  const body = promptFor(key) + (extra || "");
+  return p.mode ? agent(`Mode: ${p.mode}.\n${ROOT_PREAMBLE}\n\n${body}`, opts) : ask(body, opts);
+};
 
 rec.context = await twice(() => runProducer("context"), "context-scout");
 if (!rec.context) {
@@ -446,17 +459,17 @@ log(`Context: ${rec.context.related_features.length} related feature(s), ${rec.c
 // The judge gate. Returns { out } or { stop }.
 const reviseNote = (prev, fixes) => `\n\nREVISE. Your previous output is below, and the judge failed it. Fix every item and return the FULL corrected object.\n${fence("your previous output", JSON.stringify(prev, null, 1))}\nFixes required:\n${fixes.map((f) => `- ${f}`).join("\n")}`;
 
-async function judge(producerName, out, scopeNote, label) {
+async function judge(producer, out, scopeNote, label) {
   return twice(
     () =>
       ask(
         scopeNote ||
-          `Judge the output of the producer "${producerName}" against the ## Checklist section of ${ROOT}/.claude/agents/${producerName}.md. Return one items entry per checklist id, a verdict, and concrete fixes when it fails.
+          `Judge the output of the producer "${producer.agentType}" against the ${producer.heading} section of ${ROOT}/.claude/agents/${producer.agentType}.md. Return one items entry per checklist id, a verdict, and concrete fixes when it fails.
 ${out && out.file ? `\nThe output names a file: ${out.file}. Open it with Read before judging and cite path:line in the evidence.` : ""}
 ${DATA_FENCE}
 
-${fence(`${producerName} output`, JSON.stringify(out, null, 1))}`,
-        { label: `judge:${label}`, agentType: "plan-judge", model: "sonnet", schema: SCHEMAS.judge }
+${fence(`${producer.agentType} output`, JSON.stringify(out, null, 1))}`,
+        { label: `judge:${label}`, agentType: "plan-judge", schema: SCHEMAS.judge }
       ),
     `judge ${label}`
   );
@@ -518,10 +531,10 @@ const failFixes = (j) => {
   return f.length ? f : ["the judge returned an empty pass; re-check every checklist item and show evidence"];
 };
 
-// producerName: agent file of the producer. revise(fixes): returns a new output or null.
-async function gate(label, producerName, out, revise, scopeNote, soft) {
+// producer: who(...) of the producer: its agent file and checklist heading. revise(fixes): returns a new output or null.
+async function gate(label, producer, out, revise, scopeNote, soft) {
   let cur = out;
-  let j = await judge(producerName, cur, scopeNote, label);
+  let j = await judge(producer, cur, scopeNote, label);
   if (judgePassed(j, label)) {
     log(`Judge ${label}: pass`);
     return { out: cur };
@@ -531,7 +544,7 @@ async function gate(label, producerName, out, revise, scopeNote, soft) {
   const again = await revise(fixes);
   if (again) cur = again;
   else log(`Revise of ${label} returned nothing — keeping the first output`);
-  j = await judge(producerName, cur, scopeNote, `${label}:2`);
+  j = await judge(producer, cur, scopeNote, `${label}:2`);
   if (judgePassed(j, `${label}:2`)) {
     log(`Judge ${label}: pass after revise`);
     return { out: cur };
@@ -552,7 +565,7 @@ async function gate(label, producerName, out, revise, scopeNote, soft) {
     const fixed = await revise([`The human says: ${e.note}`, ...fixes]);
     if (fixed) {
       cur = fixed;
-      j = await judge(producerName, cur, scopeNote, `${label}:3`);
+      j = await judge(producer, cur, scopeNote, `${label}:3`);
       if (judgePassed(j, `${label}:3`)) {
         log(`Judge ${label}: pass after the human's fix`);
         return { out: cur };
@@ -576,7 +589,7 @@ async function gate(label, producerName, out, revise, scopeNote, soft) {
 }
 
 {
-  const g = await gate("context", "context-scout", rec.context, (fixes) => runProducer("context", reviseNote(rec.context, fixes)));
+  const g = await gate("context", PRODUCERS.context, rec.context, (fixes) => runProducer("context", reviseNote(rec.context, fixes)));
   if (g.stop) return { stopped: "Context", reason: g.stop };
   rec.context = g.out;
   log(`Context after judge: ${rec.context.related_features.length} related feature(s), ${rec.context.unknowns.length} unknown(s)`);
@@ -596,7 +609,7 @@ if (!rec.audit) {
   if (missing.length) log(`WARNING: auditor omitted checklist id(s): ${missing.join(", ")} — the judge will see it`);
 }
 {
-  const g = await gate("audit", "ticket-auditor", rec.audit, async (fixes) => runProducer("audit", reviseNote(rec.audit, fixes)));
+  const g = await gate("audit", PRODUCERS.audit, rec.audit, async (fixes) => runProducer("audit", reviseNote(rec.audit, fixes)));
   if (g.stop) return { stopped: "Audit", reason: g.stop };
   rec.audit = g.out;
 }
@@ -660,7 +673,7 @@ const answerMap = brief.answers && typeof brief.answers === "object" ? brief.ans
 briefAnswers = rec.audit.questions.map((q) => ({ id: q.id, answer: typeof answerMap[q.id] === "string" ? answerMap[q.id] : q.recommended }));
 const hasUi = brief.hasUi === true;
 research = research || brief.research === true;
-if (research) log(`Research on${input.research === true ? " (forced by args.research)" : ""}: product-strategist will run deep-research`);
+if (research) log(`Research on${input.research === true ? " (forced by args.research)" : ""}: the fit step will run deep-research`);
 log(`Brief approved${decision === "override" ? " (rejection overridden)" : ""}. UI: ${hasUi}`);
 
 // =============================================================================================
@@ -688,7 +701,7 @@ Evidence for the body's audit section and the comment:
 ${fence("audit items", JSON.stringify(rec.audit.items.map((i) => ({ id: i.id, status: i.status, note: i.note, source: i.source || null }))))}
 ${fence("human answers", JSON.stringify(briefAnswers))}
 Return the edited title and the two file paths (the comment path is the empty string for an idea).`,
-  { label: "writeback:body", phase: "Write back", schema: obj({ title: STR, body_file: STR, comment_file: STR }) }
+  { label: "writeback:body", phase: "Write back", agentType: "docs-writer", schema: obj({ title: STR, body_file: STR, comment_file: STR }) }
 );
 if (!written || !written.body_file) {
   log("Stopped at Write back: the writer returned nothing. Nothing was written to the tracker.");
@@ -741,13 +754,13 @@ const issueUrl = writeback.issue_url; // every later tracker call takes the full
 // =============================================================================================
 phase("Fit");
 
-rec.fit = await twice(() => runProducer("fit"), "product-strategist");
+rec.fit = await twice(() => runProducer("fit"), PRODUCERS.fit.name);
 if (!rec.fit) {
-  log("Stopped at Fit: product-strategist returned nothing twice");
-  return { stopped: "Fit", reason: "product-strategist returned nothing twice" };
+  log(`Stopped at Fit: ${PRODUCERS.fit.name} returned nothing twice`);
+  return { stopped: "Fit", reason: `${PRODUCERS.fit.name} returned nothing twice` };
 }
 {
-  const g = await gate("fit", "product-strategist", rec.fit, (fixes) => runProducer("fit", reviseNote(rec.fit, fixes)));
+  const g = await gate("fit", PRODUCERS.fit, rec.fit, (fixes) => runProducer("fit", reviseNote(rec.fit, fixes)));
   if (g.stop) return { stopped: "Fit", reason: g.stop };
   rec.fit = g.out;
 }
@@ -762,7 +775,7 @@ if (rec.fit.fit.verdict === "no") {
     await stop(
       "needs-input:fit",
       "Fit",
-      "Fit phase, status needs-input. product-strategist ruled the feature does not fit the product; the issue is already amended",
+      "Fit phase, status needs-input. The fit step (ticket-auditor, fit mode) ruled the feature does not fit the product; the issue is already amended",
       'the user\'s call: "override" (plan it anyway) or "stop"',
       resumeHow('fit: "override" | "stop"'),
       {
@@ -800,7 +813,7 @@ if (!rec.architect) {
 }
 // Gates run one after the other: an escalation is a human step, and two pages at once would confuse them.
 if (hasUi) {
-  const g = await gate("ux", "ux-planner", rec.ux, (fixes) => runProducer("ux", reviseNote(rec.ux, fixes)));
+  const g = await gate("ux", PRODUCERS.ux, rec.ux, (fixes) => runProducer("ux", reviseNote(rec.ux, fixes)));
   if (g.stop) return { stopped: "Design", reason: g.stop };
   rec.ux = g.out;
 }
@@ -870,7 +883,7 @@ const protoJob = async () => {
         log(`Prototype ${d.id} dropped: ui-prototyper returned nothing twice`);
         return { id: d.id, name: d.name, file: protoRel(d.id), summary: "", failed: true };
       }
-      const g = await gate(`proto-${d.id}`, "ui-prototyper", first, (fixes) => runProto(d, "direction", reviseNote(first, fixes)), undefined, true);
+      const g = await gate(`proto-${d.id}`, who("ui-prototyper"), first, (fixes) => runProto(d, "direction", reviseNote(first, fixes)), undefined, true);
       if (g.failed) {
         log(`Prototype ${d.id} dropped: failed its gate twice`);
         return { id: d.id, name: d.name, file: protoRel(d.id), summary: "", failed: true };
@@ -884,7 +897,7 @@ const protoJob = async () => {
 };
 const protoPromise = hasUi ? protoJob() : Promise.resolve([]);
 {
-  const g = await gate("architect", "architect", rec.architect, (fixes) => runProducer("architect", reviseNote(rec.architect, fixes)));
+  const g = await gate("architect", PRODUCERS.architect, rec.architect, (fixes) => runProducer("architect", reviseNote(rec.architect, fixes)));
   if (g.stop) return { stopped: "Design", reason: g.stop };
   rec.architect = g.out;
 }
@@ -892,13 +905,13 @@ const protoPromise = hasUi ? protoJob() : Promise.resolve([]);
 // =============================================================================================
 phase("Stack");
 
-rec.stack = await twice(() => runProducer("stack"), "stack-planner");
+rec.stack = await twice(() => runProducer("stack"), PRODUCERS.stack.name);
 if (!rec.stack) {
-  log("Stopped at Stack: stack-planner returned nothing twice");
-  return { stopped: "Stack", reason: "stack-planner returned nothing twice" };
+  log(`Stopped at Stack: ${PRODUCERS.stack.name} returned nothing twice`);
+  return { stopped: "Stack", reason: `${PRODUCERS.stack.name} returned nothing twice` };
 }
 {
-  const g = await gate("stack", "stack-planner", rec.stack, (fixes) => runProducer("stack", reviseNote(rec.stack, fixes)));
+  const g = await gate("stack", PRODUCERS.stack, rec.stack, (fixes) => runProducer("stack", reviseNote(rec.stack, fixes)));
   if (g.stop) return { stopped: "Stack", reason: g.stop };
   rec.stack = g.out;
 }
@@ -959,7 +972,7 @@ ${rec.architect.ai ? `This feature is AI: under Architecture add a "### Prompts 
 ${rec.fit.prior_art && rec.fit.prior_art.length ? "Add each prior_art finding to Context as a bullet ending \" — source: <url>\"." : ""}
 ${extra || ""}
 Return ok (the checker exit code was 0), the checker's failures verbatim as "rule: detail" strings, and the file path.`,
-    { label: "check:assemble", phase: "Check", schema: obj({ ok: BOOL, failures: STRS, file: STR }) }
+    { label: "check:assemble", phase: "Check", agentType: "docs-writer", schema: obj({ ok: BOOL, failures: STRS, file: STR }) }
   );
 
 let checked = await twice(() => assemble(""), "assemble record");
@@ -1011,7 +1024,7 @@ Return a verdict, items and concrete fixes (each fix names the section to change
 {
   const g = await gate(
     "record",
-    "stack-planner",
+    who("record"), // unused: the whole-record check carries its own items
     { record: draft },
     async (fixes) => {
       let r = await assemble(`\nThe whole-record judge failed the draft. Edit ${draft} in place to fix every item, then re-run the checker:\n${fixes.map((f) => `- ${f}`).join("\n")}`);
@@ -1048,7 +1061,7 @@ async function flushAccepted() {
 ${DATA_FENCE}
 ${fence("accepted items", pending.map((x) => `- ${x}`).join("\n"))}
 Return ok (the checker exit code was 0), the failures verbatim as "rule: detail" strings, and the file path.`,
-    { label: "check:flush-accepted", phase: "Check", effort: "low", schema: obj({ ok: BOOL, failures: STRS, file: STR }) }
+    { label: "check:flush-accepted", phase: "Check", agentType: "docs-writer", effort: "low", schema: obj({ ok: BOOL, failures: STRS, file: STR }) }
   );
   if (!r) {
     // Dropping an accepted finding from the record is not allowed: fail loudly instead of going on.
@@ -1162,10 +1175,10 @@ for (let round = 1; round <= maxRounds; round++) {
     }
     if (!out) {
       log(`Stopped at Plan: ${k} returned nothing twice in the re-plan; a partial re-plan is never shown`);
-      return { stopped: "Plan", reason: `${PRODUCERS[k].agentType} returned nothing twice in the re-plan; the record would mix old and new output` };
+      return { stopped: "Plan", reason: `${PRODUCERS[k].name} returned nothing twice in the re-plan; the record would mix old and new output` };
     }
     rec[k] = out;
-    const g = await gate(`${k}:plan-round-${round}`, PRODUCERS[k].agentType, rec[k], (fixes) => runProducer(k, reviseNote(rec[k], fixes)));
+    const g = await gate(`${k}:plan-round-${round}`, PRODUCERS[k], rec[k], (fixes) => runProducer(k, reviseNote(rec[k], fixes)));
     if (g.stop) return { stopped: "Plan", reason: g.stop };
     rec[k] = g.out;
   }
@@ -1205,7 +1218,7 @@ if (hasUi && chosen) {
     log(`Stopped at Plan: ui-prototyper returned nothing twice for the states of ${chosen}`);
     return { stopped: "Plan", reason: `ui-prototyper returned nothing twice for the states of prototype ${chosen}` };
   }
-  const g = await gate(`proto-${chosen}-states`, "ui-prototyper", first, (fixes) => runProto(d, "states", reviseNote(first, fixes)));
+  const g = await gate(`proto-${chosen}-states`, who("ui-prototyper"), first, (fixes) => runProto(d, "states", reviseNote(first, fixes)));
   if (g.stop) return { stopped: "Plan", reason: g.stop };
   const cr = await critiqueRound(d, "states", g.out);
   critique[chosen] = cr.open;
@@ -1266,7 +1279,7 @@ phase("Publish");
 const polished = await ask(
   `Plain-language pass on the decision record ${draft}. Load the \`no-ai-slop\` skill (plain name; the plugin-qualified one if it says "Unknown skill"). \`cp "${draft}" "${draft}.pre-slop"\`, then edit ONLY the record's prose (Summary, Context bullets, User and job, Fit, Success metric, Non-goals text, Architecture prose, Decision Why lines, Open questions). Keep byte-identical: the frontmatter, every heading, every table, every mermaid block, every code block, every id, path, and "— source:" suffix. Write the result back to ${draft}, then run \`bun run scripts/check-feature-doc.ts "${draft}"\`. If it fails now and the copy passed, restore with \`cp "${draft}.pre-slop" "${draft}"\` and say "slop pass reverted" in note. Delete "${draft}.pre-slop" afterwards. Touch nothing else.
 Return reverted (true when you restored the copy) and note.`,
-  { label: "publish:polish", phase: "Publish", schema: obj({ reverted: BOOL, note: STR }) }
+  { label: "publish:polish", phase: "Publish", agentType: "docs-writer", schema: obj({ reverted: BOOL, note: STR }) }
 );
 if (!polished) log("Publish: the plain-language pass returned nothing — publishing the record as assembled");
 
@@ -1295,15 +1308,16 @@ log(`Published: ${published.record_comment_url}`);
 // The one record of the run: decisions, links and where work stopped, for the next session.
 const decisionLines = [...(rec.fit.decisions || []), ...((hasUi && rec.ux && rec.ux.decisions) || []), ...(rec.architect.decisions || [])];
 const memory = await remember(
-  `Mode: record. Slug: ${slug}. Status: planned.
-Issue: ${writeback.issue_url}. Decision record comment: ${published.record_comment_url}.
-Where it stopped: plan-feature finished. The plan is approved and published to the issue; nothing is committed. The record draft is ${draft} (local).
-Decisions (dated ${DATE}; source: plan-feature record on the issue):
-${decisionLines.map((d) => `  · ${d.question} — chose "${d.chosen}" — ${d.why} (${d.decided_by})`).join("\n") || "  · none"}
-Links: issue ${writeback.issue_url}; decision record ${published.record_comment_url}.
-PR stack (${rec.stack.prs.length}): ${rec.stack.prs.map((p) => `#${p.n} ${p.branch} (${p.size})`).join("; ")}.
-Todo: review the PR stack, then build it (PR 1 first)${hasUi && chosen ? `; build prototype ${chosen}` : ""}.
-Next step: run Workflow ship-feature with the ticket to build and open the PR stack.`,
+  slug,
+  {
+    status: "planned",
+    issue: writeback.issue_url,
+    log: `plan-feature finished. The plan is approved and published to the issue; nothing is committed. The record draft is ${draft} (local). PR stack (${rec.stack.prs.length}): ${rec.stack.prs.map((p) => `#${p.n} ${p.branch} (${p.size})`).join("; ")}.`,
+    decision: decisionLines.map((d) => `${d.question} \u2014 chose "${d.chosen}" (${d.decided_by}) \u2014 ${d.why} \u2014 plan-feature record on the issue`),
+    link: [`issue: ${writeback.issue_url}`, `decision record: ${published.record_comment_url}`],
+    todo: [`review the PR stack, then build it (PR 1 first)${hasUi && chosen ? `; build prototype ${chosen}` : ""}`],
+    next: "run Workflow ship-feature with the ticket to build and open the PR stack",
+  },
   "memory:record:published",
   "Publish"
 );

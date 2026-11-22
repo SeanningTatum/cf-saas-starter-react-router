@@ -15,6 +15,7 @@ import {
   parseArgs,
   haltOrThrow,
   workflowLib,
+  memoryRecordCommand,
   // lib.js is plain JavaScript: a workflow script pastes it in, so it carries no types
 } from "../../../.claude/workflow-src/lib.js";
 import { stripLib } from "../../workflows";
@@ -206,11 +207,62 @@ describe("asker", () => {
     expect((calls[0].opts as { effort: string }).effort).toBe("high");
   });
 
-  it("remember() is a context-memory call whose options keep their order, so a resumed run still matches its cached stop", () => {
+  it("remember() goes to the runner, never to context-memory: no model edits the store, and the options keep their order so a resumed run matches its cached stop", () => {
     const { lib, calls } = wired();
-    lib.asker("P").remember("Mode: record.", "memory:record:x", "Brief");
-    expect(JSON.stringify(calls[0].opts)).toBe('{"label":"memory:record:x","phase":"Brief","agentType":"context-memory","effort":"low"}');
-    expect(calls[0].prompt).toBe("P\n\nMode: record.");
+    lib.asker("P").remember("demo", { log: "built" }, "memory:record:demo", "Brief");
+    expect(JSON.stringify(calls[0].opts)).toBe('{"effort":"low","label":"memory:record:demo","phase":"Brief","agentType":"runner"}');
+    expect(calls[0].prompt).toBe(
+      "P\n\nRun this command from ROOT exactly as written and return what it prints. Change nothing in it and run nothing else.\n\nbun scripts/memory.ts record demo <<'MEMORY_EOF'\nlog: built\nMEMORY_EOF"
+    );
+  });
+
+  it("remember() returns what the script printed and logs its over-150-lines notice: no workflow calls a model to shorten a file, so without the log line nobody would see it", async () => {
+    const big = wired(async () => "/store/demo.md\nover 150 lines: ask context-memory to shorten Context and the earlier log");
+    expect(await big.lib.asker("P").remember("demo", { log: "built" }, "m", "Brief")).toContain("/store/demo.md");
+    expect(big.logs).toEqual(["Memory: demo is over 150 lines; ask context-memory to shorten it"]);
+    const small = wired(async () => "/store/demo.md\nlog: new entry at the top; file is 21 lines");
+    await small.lib.asker("P").remember("demo", { log: "built" }, "m", "Brief");
+    expect(small.logs).toEqual([]);
+  });
+
+  it("recall() goes to the runner and runs `recall <what>`", () => {
+    const { lib, calls } = wired();
+    lib.asker("P").recall("status", "memory:recall", "Brief");
+    expect(calls[0].opts).toEqual({ effort: "low", label: "memory:recall", phase: "Brief", agentType: "runner" });
+    expect(calls[0].prompt).toContain("`bun scripts/memory.ts recall status`");
+  });
+});
+
+describe("memoryRecordCommand", () => {
+  const body = (cmd: string) => cmd.split("\n").slice(1, -1);
+
+  it("flattens a multi-line value to one line: a second line must not read as a second field", () => {
+    expect(body(memoryRecordCommand("demo", { log: "first\nsecond\r\n  third" }))).toEqual(["log: first second third"]);
+  });
+
+  it("a value holding the heredoc word cannot end the heredoc early", () => {
+    const cmd = memoryRecordCommand("demo", { log: "x\nMEMORY_EOF\nrm -rf /" });
+    expect(cmd.split("\n").filter((l) => l === "MEMORY_EOF")).toHaveLength(1);
+    expect(cmd.endsWith("\nMEMORY_EOF")).toBe(true);
+    expect(cmd).not.toContain("\nrm -rf");
+  });
+
+  it("skips empty, null and undefined values, inside a list too, so a missing field never prints `key: `", () => {
+    const cmd = memoryRecordCommand("demo", { status: "done", log: "", next: null, stopped: undefined, todo: ["", "a", null] });
+    expect(body(cmd)).toEqual(["status: done", "todo: a"]);
+  });
+
+  it("writes a list as one line per item", () => {
+    const cmd = memoryRecordCommand("demo", { decision: ["a — b — c", "d — e — f"], link: ["PR: #1"] });
+    expect(body(cmd)).toEqual(["decision: a — b — c", "decision: d — e — f", "link: PR: #1"]);
+  });
+
+  it("keeps a value that looks like `todo: x` inside its own field", () => {
+    expect(body(memoryRecordCommand("demo", { log: "todo: x" }))).toEqual(["log: todo: x"]);
+  });
+
+  it("quotes the heredoc word so the shell expands nothing in a value", () => {
+    expect(memoryRecordCommand("demo", { log: "$(whoami) `id`" })).toContain("<<'MEMORY_EOF'\nlog: $(whoami) `id`\nMEMORY_EOF");
   });
 });
 

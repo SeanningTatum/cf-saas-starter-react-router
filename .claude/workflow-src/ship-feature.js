@@ -9,18 +9,17 @@ export const meta = {
     { title: "Intake", detail: "a decision record is read into the plan; without one the ticket-auditor must rate the ticket ready, then the architect fixes the contract" },
     { title: "Contract", detail: "working branch, lanes cut from the PR fences, the shared schema file written first" },
     { title: "Build", detail: "backend-builder and ui-builder lanes on disjoint fences, in parallel; owners fix their own typecheck errors" },
-    { title: "Write", detail: "test-author ‖ e2e-author ‖ analytics-instrumenter then span-instrumenter" },
+    { title: "Write", detail: "test-author ‖ e2e-author ‖ instrumenter (spans, plus analytics events when there is a metric)" },
     { title: "Review", detail: "all gates vs the baseline ‖ effect-ts-enforcer ‖ security-reviewer ‖ scale-reviewer ‖ maintainability-reviewer (lean) ‖ browser walk then design critique" },
     { title: "Fix", detail: "each P0/P1 goes back to the lane that owns the file; failed checks re-run; two rounds" },
     { title: "Docs", detail: "docs-writer: the record, glossary, ADR, changed docs and one PR body per PR" },
     { title: "Ship", detail: "the @golden and @error specs re-run on video; the run stops on a lavish page: the stack, the verdicts, the open findings, the videos; you approve or ask for changes" },
     { title: "Split", detail: "split into stacked branches by fence, typecheck and test each on its own" },
-    { title: "Local review", detail: "per stacked branch in order, before any push: the code-review skill (high) on its diff against the branch below, review-responder fixes or declines each P0/P1, restack, re-check; two rounds (opt-in: the Greptile CLI too)" },
+    { title: "Local review", detail: "per stacked branch in order, before any push: the code-review skill (high) on its diff against the branch below, review-responder fixes or declines each P0/P1, restack, re-check; two rounds" },
     { title: "Open", detail: "more than one PR: push review/<slug> at the base first, PR 1 targets it; push, open the PRs, wait for every PR's checks and the seeded preview, walk the preview" },
-    { title: "Greptile", detail: "off by default (greptileRounds 0): per stacked PR on GitHub, review-responder, merge forward, plain push" },
     { title: "Rollup", detail: "more than one PR: merge the stacked PRs bottom-up into review/<slug> (merge commits, each retargeted first), then one roll-up PR review/<slug> -> base for the human, all in one step" },
     { title: "Roll-up Greptile", detail: "Greptile on the roll-up (or the single PR) only: one trigger, fixes committed on review/<slug> inside the fence of the stacked PR that owns each file, fast-forward pushed, every GitHub write of a round in one step; three rounds, to 5/5 or every comment declined" },
-    { title: "Close", detail: "the roll-up's CI and a walk of its own preview; one context-memory record; the PR links" },
+    { title: "Close", detail: "the roll-up's CI and a walk of its own preview; one working-memory record; the PR links" },
   ],
 };
 
@@ -43,14 +42,13 @@ export const meta = {
  *   first push. Greptile then reviews ONE PR: the roll-up (the single PR when there is one), up to three
  *   rounds. Per feature that is 1-3 Greptile reviews, down from 30+ when every stacked PR was reviewed by
  *   the CLI and on GitHub and re-scored on every rebase (Sola, Nov 2026: six features of 8-11 stacked PRs).
- *   Opt back in with args.localRounds (Greptile CLI per branch) and args.greptileRounds (Greptile per PR).
  *   Merge bar: docs/agents/harness.md#review-loop-and-merge-bar.
  *
  * PUSHES
  *   .claude/settings.json denies `git push --force` (and so --force-with-lease). After the first push no branch
- *   is rewritten: an opt-in per-PR Greptile fix is MERGED forward through the branches above it, and a roll-up
- *   fix is a new commit on review/<slug>, so every push is a fast-forward. Each round's GitHub writes (pushes,
- *   thread replies, the Greptile trigger) run in one step, so the human approves them once a round, not once a PR.
+ *   is rewritten: a roll-up fix is a new commit on review/<slug>, so every push is a fast-forward. Each round's
+ *   GitHub writes (push, thread replies, the Greptile trigger) run in one step, so the human approves them once
+ *   a round.
  *
  * REGRESSIONS
  *   Preflight runs every gate (unit, e2e, build, non-negotiables, harness) on the untouched base. At
@@ -79,14 +77,12 @@ export const meta = {
  *   { ticket?, prompt?, record?: path to a decision record, slug?, base?: "main", root?,
  *     ready?: "override" | "stop", ships?: { "1": { approved, changes? } },
  *     reviewRounds?: number (code-review rounds per stacked branch before push; default 2, 0 skips),
- *     localRounds?: number (Greptile CLI rounds per stacked branch before push; default 0),
- *     greptileRounds?: number (Greptile rounds per stacked PR on GitHub; default 0),
  *     rollupRounds?: number (Greptile rounds on the roll-up, or the single PR; default 3, 0 skips) }
  */
 // @lib
 const { twice, checkArgs, asker } = workflowLib({ agent, log });
 
-const ARG_TYPES = [["ticket", "string"], ["prompt", "string"], ["record", "string"], ["slug", "string"], ["base", "string"], ["root", "string"], ["ready", "string"], ["ships", "object"], ["reviewRounds", "number"], ["localRounds", "number"], ["greptileRounds", "number"], ["rollupRounds", "number"]];
+const ARG_TYPES = [["ticket", "string"], ["prompt", "string"], ["record", "string"], ["slug", "string"], ["base", "string"], ["root", "string"], ["ready", "string"], ["ships", "object"], ["reviewRounds", "number"], ["rollupRounds", "number"]];
 const input = parseArgs(args, "prompt");
 if (!input) {
   log("ship-feature: args must be a string or an object. Nothing ran.");
@@ -105,8 +101,6 @@ const BASE = input.base || "main";
 // POSIX single-quote: nothing inside is expanded, so ticket or plan text can never run as a command.
 const shq = (v) => `'${String(v).replace(/'/g, `'\\''`)}'`;
 const REVIEW_ROUNDS = Math.max(0, Math.min(3, input.reviewRounds ?? 2));
-const LOCAL_ROUNDS = Math.max(0, Math.min(5, input.localRounds ?? 0));
-const GREPTILE_ROUNDS = Math.max(0, Math.min(5, input.greptileRounds ?? 0));
 const ROLLUP_ROUNDS = Math.max(0, Math.min(5, input.rollupRounds ?? 3));
 const COAUTHOR = "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>";
 // The e2e dev server must not collide with another on 5173 (a second checkout, another project's dev server):
@@ -127,6 +121,8 @@ const DECISION = obj({ question: STR, chosen: STR, why: STR });
 const VERDICT = obj({ verdict: { type: "string", enum: ["PASS", "FAIL", "BLOCKED"] }, findings: arr(FINDING), evidence: STR });
 const LANE_OUT = obj({ files: arr(obj({ path: STR, summary: STR })), typecheck: { type: "string", enum: ["pass", "fail"] }, blocked: STRS });
 const GATES = obj({ gates: arr(obj({ name: STR, pass: BOOL, tail: STR })) });
+// greptile_focus keeps its name: decision records carry it as the "Greptile focus" column (docs/features/FORMAT.md).
+// It is the line a reviewer, local or Greptile on the roll-up, looks hardest at.
 const PR = obj({ n: NUM, branch: STR, base: STR, title: STR, fence: STRS, greptile_focus: STR });
 const PLAN = obj({
   slug: STR,
@@ -223,7 +219,7 @@ if (baselineRed.length) {
 log(`Preflight green: ${ROOT}, ${DATE}, base ${BASE}@${pre.base_sha.slice(0, 8)}, ${pre.baseline.length} gates green${issue ? `, ticket ${issue.ref}` : ""}${pre.record_path ? `, record ${pre.record_path}` : ""}${pre.moved_nested_modules ? ", moved this worktree's nested node_modules symlink aside" : ""}`);
 
 const PREAMBLE = `ROOT = ${ROOT}. Work only inside it; cd there first; every path is relative to it.
-Give every long command (verify.sh, test:e2e, gh pr checks --watch, pr-review-wait, greptile-local) the maximum Bash timeout, 600000 ms.
+Give every long command (verify.sh, test:e2e, gh pr checks --watch, pr-review-wait) the maximum Bash timeout, 600000 ms.
 Prefix every run that starts the e2e server (verify.sh, test:e2e, playwright test) with \`${E2E_ENV}\`, so it never collides with another dev server on 5173.
 Never run git commit, push, switch, checkout, stash, reset or rebase unless your task says so. Never post to GitHub unless your task says so.`;
 const { ask, sh, remember } = asker(PREAMBLE);
@@ -231,10 +227,14 @@ const { ask, sh, remember } = asker(PREAMBLE);
 // ---- Stops ----------------------------------------------------------------------------------------
 async function stop(label, phaseName, where, nextStep, result) {
   const memory = await remember(
-    `Mode: record. Slug: ${slug}. Status: in-progress.
-Where it stopped: ship-feature, ${where}.
-Next step: ${nextStep}
-Context: ${issue ? `issue ${issue.url}` : "prompt input"}; checkout ${ROOT}; working branch ship/${slug}. Nothing has been pushed.`,
+    slug,
+    {
+      status: "in-progress",
+      issue: issue ? issue.url : "",
+      log: `${issue ? `issue ${issue.url}` : "prompt input"}; checkout ${ROOT}; working branch ship/${slug}. Nothing has been pushed.`,
+      stopped: `ship-feature, ${where}`,
+      next: nextStep,
+    },
     `memory:${label}`,
     phaseName
   );
@@ -272,7 +272,7 @@ if (pre.record_path) {
 - prs: the PR stack table rows: n, branch, base, title (a short PR title you write from the fence and the Summary), fence (the backticked paths, without backticks), greptile_focus.
 ${input.slug ? `The caller fixed the slug: ${input.slug}.` : ""}
 ${DATA_FENCE}`,
-        { label: "intake:record", phase: "Intake", agentType: "context-scout", model: "sonnet", schema: PLAN }
+        { label: "intake:record", phase: "Intake", agentType: "context-scout", schema: PLAN }
       ),
     "intake"
   );
@@ -583,30 +583,26 @@ const writers = await parallel([
           ),
       ]
     : []),
-  // Both edit procedures, so they run one after the other.
-  async () => {
-    const events = wantsAnalytics
-      ? await ask(
-          `${FEATURE}\n\nInstrument the success metric with analytics events through the Analytics wrapper.\nSuccess metric: ${plan.metric}\nYou may edit app/lib/analytics/events.ts and the procedure and repository files this feature changed (\`git diff --name-only ${pre.base_sha}\` plus untracked under app/trpc/ and app/repositories/). \`bun run typecheck\` must pass.`,
-          {
-            label: "write:analytics",
-            phase: "Write",
-            agentType: "analytics-instrumenter",
-            schema: obj({ events: arr(obj({ name: STR, where: STR, metric: STR })), files: STRS, skipped: STRS }),
-          }
-        )
-      : null;
-    const spans = await ask(`${FEATURE}\n\nAdd or correct tracing spans on this feature's new procedures, repository methods and service calls (\`git diff --name-only ${pre.base_sha}\` plus untracked under app/). Edit source only, never tests.`, {
-      label: "write:spans",
-      phase: "Write",
-      agentType: "span-instrumenter",
-    });
-    return { events, spans };
-  },
+  // One agent does both jobs: spans always, analytics events when there is a metric and the wrapper exists.
+  () =>
+    ask(
+      `${FEATURE}\n\nAdd or correct tracing spans on this feature's new procedures, repository methods and service calls (\`git diff --name-only ${pre.base_sha}\` plus untracked under app/). Edit source only, never tests.${
+        wantsAnalytics
+          ? `\n\nThen instrument the success metric with analytics events through the Analytics wrapper.\nSuccess metric: ${plan.metric}\nYou may also edit app/lib/analytics/events.ts and the procedure and repository files this feature changed (\`git diff --name-only ${pre.base_sha}\` plus untracked under app/trpc/ and app/repositories/).`
+          : "\n\nNo success metric, or no Analytics wrapper: add spans only and return events [] (no analytics edits)."
+      } \`bun run typecheck\` must pass.`,
+      {
+        label: "write:instrument",
+        phase: "Write",
+        agentType: "instrumenter",
+        schema: obj({ events: arr(obj({ name: STR, where: STR, metric: STR })), files: STRS, skipped: STRS, spans: STRS }, ["events"]),
+      }
+    ),
 ]);
 const e2eOut = hasUi ? writers[1] : null;
-const instr = writers[writers.length - 1] || {};
-if (instr.events) log(`Analytics: ${instr.events.events.map((e) => e.name).join(", ") || "no events"}`);
+const instr = writers[writers.length - 1] || { events: [] };
+const instrEvents = wantsAnalytics && instr.events && instr.events.length ? { events: instr.events, files: instr.files || [], skipped: instr.skipped || [] } : null;
+if (wantsAnalytics) log(`Analytics: ${instr.events ? instr.events.map((e) => e.name).join(", ") || "no events" : "no result"}`);
 
 // =============================================================================================
 phase("Review");
@@ -644,7 +640,8 @@ const CHECKS = {
     );
     const critique = await ask(
       `Critique the rendered surface of ${slug} from the screenshots in ${shotsDir}/ only: no browser, no server, no source. Load the lead design skill by its plain name (on "Unknown skill" the plugin name): ${plan.surface === "public" ? "`design-taste-frontend` and its references/critique.md loop; a page under 7.5 is a P1" : "`impeccable` and run `critique`"}. Each issue is a finding with P0-P3 and the file of the component to change. No screenshots = one P1 and stop.`,
-      { label: `review:critique:${round}`, phase: "Review", schema: VERDICT }
+      // general-purpose: it loads a design skill (Skill tool) and judges given screenshots; proto-critic takes its own shots of one prototype file.
+      { label: `review:critique:${round}`, phase: "Review", agentType: "general-purpose", schema: VERDICT }
     );
     return { walk, critique };
   },
@@ -764,7 +761,7 @@ ${issue ? `Issue: ${issue.url} — "Closes ${issue.url}" on PR ${lastPr.n} only,
 Verdicts to quote:
 ${verdictLines()}
 ${hasUi ? `Browser walk verdict file: ${outDir()}/verdict.md (quote its table).` : "No UI: say the change is server-side and how to exercise it."}
-${instr.events ? `Analytics events added: ${instr.events.events.map((e) => `${e.name} (${e.where})`).join(", ")}.` : ""}
+${instrEvents ? `Analytics events added: ${instrEvents.events.map((e) => `${e.name} (${e.where})`).join(", ")}.` : ""}
 Leave out the stack navigation section; the run adds it once the PR numbers exist.`,
       {
         label: "docs",
@@ -824,7 +821,7 @@ for (; shipRound <= 3; shipRound++) {
       open_findings: open,
       other_findings: allFindings().filter((f) => !open.includes(f)),
       blocked: blockedNotes,
-      analytics: instr.events || null,
+      analytics: instrEvents,
       e2e: e2eOut,
       docs,
       shots: hasUi ? `${shotsDir}/` : null,
@@ -881,115 +878,94 @@ if (!split || !split.ok) {
 // =============================================================================================
 phase("Local review");
 
-// Each stacked branch is reviewed on its own diff against the branch below it, before the first push.
-// The code-review skill runs by default; the Greptile CLI only when args.localRounds asks for it. Both feed
-// review-responder in LOCAL mode, and a fix restacks the later branches (nothing is pushed yet).
-const LOCAL = obj({
-  status: STR,
-  confidence: { type: ["number", "null"] },
-  summary: STR,
-  comments: arr(obj({ id: STR, path: STR, line: { type: ["number", "null"] }, severity: STR, body: STR }, ["id", "path", "body"])),
-}, ["status", "comments"]);
+// Each stacked branch is reviewed on its own diff against the branch below it, before the first push, by the
+// code-review skill. review-responder answers in LOCAL mode, and a fix restacks the later branches (nothing is
+// pushed yet).
 const CODE_REVIEW = obj({ method: STR, findings: arr(FINDING) }, ["method", "findings"]);
 const RESPONSE = obj({ comments: arr(obj({ id: { type: ["number", "string"] }, action: { type: "string", enum: ["fixed", "declined", "duplicate"] }, reply: STR })), commits: STRS, blocked: STRS });
 const localReview = [];
-// Comments declined locally, per PR n; later loops hand them to review-responder so it answers the same way.
+// Comments declined locally, per PR n; the roll-up loop hands them to review-responder so it answers the same way.
 const localDeclined = new Map();
 const stackOrder = [...prs].sort((a, b) => a.n - b.n);
 const above = (pr) => stackOrder.filter((x) => x.n > pr.n).map((x) => x.branch);
 const describe = (c) => `${c.path}${c.line ? `:${c.line}` : ""} — ${String(c.body).split("\n")[0]}`;
 
-// One round of a local reviewer: returns { status, confidence?, comments, rest? } with comments in the LOCAL shape.
-const LOCAL_SOURCES = {
-  "code-review": {
-    rounds: REVIEW_ROUNDS,
-    async review(pr, base, round) {
-      const r = await ask(
-        `\`git switch ${pr.branch}\`, then review it against ${base}: only the commits on this branch, \`git diff ${base}...HEAD\`. After the switch you are read-only: do not switch again, edit, commit or post anything.
+// One round of the code-review skill on a branch: returns { status, method?, comments, rest? } with the P0/P1 findings as comments.
+async function codeReviewRound(pr, base, round) {
+  const r = await ask(
+    `\`git switch ${pr.branch}\`, then review it against ${base}: only the commits on this branch, \`git diff ${base}...HEAD\`. After the switch you are read-only: do not switch again, edit, commit or post anything.
 Load the \`code-review\` skill with the Skill tool, args \`high\`, and have it review that diff. Never pass --comment or --fix. If the skill cannot be loaded, or cannot be pointed at that diff, review \`git diff ${base}...HEAD\` yourself for correctness bugs at the same bar and set method "manual".
 Keep only findings inside that diff. Severity: P0 breaks data, security or the build; P1 a real bug a user or caller hits; P2 a smaller defect; P3 a cleanup. The branch's focus: ${pr.greptile_focus}.
 Return method ("code-review skill" or "manual") and findings [{ severity, file, line, detail, fix }].`,
-        { label: `local:code-review:${pr.n}:${round}`, phase: "Local review", schema: CODE_REVIEW }
-      );
-      if (!r) return { status: "no result", comments: [] };
-      const fs = r.findings;
-      const comments = blocking(fs).map((f, i) => ({ id: `cr-${pr.n}-${round}-${i + 1}`, path: norm(f.file || ""), line: f.line ?? null, severity: f.severity, body: `${f.detail}\nFix: ${f.fix}` }));
-      return { status: "reviewed", method: r.method, comments, rest: fs.filter((f) => !blocking([f]).length).map((f) => `[${f.severity}] ${f.file || ""}${f.line ? `:${f.line}` : ""} ${f.detail.split("\n")[0]}`) };
-    },
-  },
-  "greptile-cli": {
-    rounds: LOCAL_ROUNDS,
-    async review(pr, base, round) {
-      const w = await sh(
-        `\`git switch ${pr.branch}\`, then run \`bun run scripts/greptile-local.ts --base ${base} --focus ${shq(pr.greptile_focus)} --timeout 540\` with a 600000 ms Bash timeout. Return its stdout JSON (exit 0: as printed; exit 5: status "timeout"; any other exit: status "error", the stderr JSON's error and help as summary, comments []).`,
-        { label: `local:greptile:${pr.n}:${round}`, phase: "Local review", schema: LOCAL }
-      );
-      return w || { status: "no result", comments: [] };
-    },
-  },
-};
+    // general-purpose: the step needs the Skill tool (to load code-review) and Bash (git switch, git diff); no project agent has both and this job.
+    { label: `local:code-review:${pr.n}:${round}`, phase: "Local review", agentType: "general-purpose", schema: CODE_REVIEW }
+  );
+  if (!r) return { status: "no result", comments: [] };
+  const fs = r.findings;
+  const comments = blocking(fs).map((f, i) => ({ id: `cr-${pr.n}-${round}-${i + 1}`, path: norm(f.file || ""), line: f.line ?? null, severity: f.severity, body: `${f.detail}\nFix: ${f.fix}` }));
+  return { status: "reviewed", method: r.method, comments, rest: fs.filter((f) => !blocking([f]).length).map((f) => `[${f.severity}] ${f.file || ""}${f.line ? `:${f.line}` : ""} ${f.detail.split("\n")[0]}`) };
+}
 
+const source = "code-review";
 for (const [i, pr] of stackOrder.entries()) {
   // PR numbers may have gaps; the branch below is the previous one in stack order.
   const base = i === 0 ? pre.base_sha : stackOrder[i - 1].branch;
   const rounds = [];
   const declined = [];
-  for (const [source, src] of Object.entries(LOCAL_SOURCES)) {
-    for (let round = 1; round <= src.rounds; round++) {
-      const w = await src.review(pr, base, round);
-      if (w.status !== "reviewed") {
-        rounds.push({ source, round, status: w.status });
-        log(`Local ${source} ${pr.branch}: ${w.status}${w.summary ? ` — ${w.summary.split("\n")[0]}` : ""} — moving on`);
-        break;
-      }
-      const entry = { source, round, confidence: w.confidence ?? null, method: w.method, comments: w.comments.length, advisory: w.rest || [], replies: [], blocked: [] };
-      rounds.push(entry);
-      if (!w.comments.length) {
-        log(`Local ${source} ${pr.branch}: clean${w.confidence ? ` (confidence ${w.confidence})` : ""}${entry.advisory.length ? `, ${entry.advisory.length} P2/P3 kept as advisory` : ""}`);
-        break;
-      }
-      const resp = await ask(
-        `LOCAL review: ${source === "code-review" ? "the code-review skill's P0/P1 findings" : "Greptile's CLI review"} on branch ${pr.branch} against ${base}, which is checked out. No PR exists yet, so there are no threads: do not call gh, and put the reply you would have posted in each comment's reply field. The branch's fence: ${pr.fence.join(", ")}. Its review focus: ${pr.greptile_focus}.
-${w.summary ? `Confidence ${w.confidence ?? "n/a"}/5. Summary:\n${fence("review summary", w.summary)}\n` : ""}${fence("review comments", w.comments.map((c) => `id ${c.id} — ${c.severity ? `${c.severity} — ` : ""}${c.path}${c.line ? `:${c.line}` : ""}\n${c.body}`).join("\n\n"))}
+  for (let round = 1; round <= REVIEW_ROUNDS; round++) {
+    const w = await codeReviewRound(pr, base, round);
+    if (w.status !== "reviewed") {
+      rounds.push({ source, round, status: w.status });
+      log(`Local ${source} ${pr.branch}: ${w.status} — moving on`);
+      break;
+    }
+    const entry = { source, round, method: w.method, comments: w.comments.length, advisory: w.rest || [], replies: [], blocked: [] };
+    rounds.push(entry);
+    if (!w.comments.length) {
+      log(`Local ${source} ${pr.branch}: clean${entry.advisory.length ? `, ${entry.advisory.length} P2/P3 kept as advisory` : ""}`);
+      break;
+    }
+    const resp = await ask(
+      `LOCAL review: the code-review skill's P0/P1 findings on branch ${pr.branch} against ${base}, which is checked out. No PR exists yet, so there are no threads: do not call gh, and put the reply you would have posted in each comment's reply field. The branch's fence: ${pr.fence.join(", ")}. Its review focus: ${pr.greptile_focus}.
+${fence("review comments", w.comments.map((c) => `id ${c.id} — ${c.severity ? `${c.severity} — ` : ""}${c.path}${c.line ? `:${c.line}` : ""}\n${c.body}`).join("\n\n"))}
 ${declined.length ? `You declined these in earlier rounds; a comment that repeats one is a duplicate, with the same reason:\n${fence("declined earlier", declined.map((d) => `${d.comment}\n→ ${d.reply}`).join("\n\n"))}\n` : ""}Commit trailer: ${COAUTHOR}`,
-        { label: `local:respond:${source}:${pr.n}:${round}`, phase: "Local review", agentType: "review-responder", schema: RESPONSE }
-      );
-      if (resp) {
-        entry.blocked = resp.blocked;
-        // No GitHub threads hold these, so the result keeps them.
-        for (const c of resp.comments) {
-          const srcC = w.comments.find((x) => String(x.id) === String(c.id));
-          const comment = srcC ? describe(srcC) : `id ${c.id}`;
-          entry.replies.push({ comment, action: c.action, reply: c.reply });
-          if (c.action === "declined") declined.push({ comment, reply: c.reply });
-        }
+      { label: `local:respond:${source}:${pr.n}:${round}`, phase: "Local review", agentType: "review-responder", schema: RESPONSE }
+    );
+    if (resp) {
+      entry.blocked = resp.blocked;
+      // No GitHub threads hold these, so the result keeps them.
+      for (const c of resp.comments) {
+        const srcC = w.comments.find((x) => String(x.id) === String(c.id));
+        const comment = srcC ? describe(srcC) : `id ${c.id}`;
+        entry.replies.push({ comment, action: c.action, reply: c.reply });
+        if (c.action === "declined") declined.push({ comment, reply: c.reply });
       }
-      if (!resp || !resp.commits.length) {
-        log(`Local ${source} ${pr.branch}: no fix commits (${resp ? resp.comments.map((c) => c.action).join(", ") : "no result"})`);
-        break;
-      }
-      const later = above(pr);
-      if (later.length) {
-        const re = await sh(
-          `In order, stop at the first failure:
+    }
+    if (!resp || !resp.commits.length) {
+      log(`Local ${source} ${pr.branch}: no fix commits (${resp ? resp.comments.map((c) => c.action).join(", ") : "no result"})`);
+      break;
+    }
+    const later = above(pr);
+    if (later.length) {
+      const re = await sh(
+        `In order, stop at the first failure:
   1. \`bun run scripts/stack.ts restack --from ${pr.n} --plan "${stackPlanFile}"\` (nothing is pushed yet, so a rebase is safe here).
   2. For each later branch (${later.join(", ")}), in stack order: \`git switch <branch>\`, then \`bun run typecheck\` and \`bun run test\` (a lower branch can break a caller that lives only in a later one with no git conflict). Stop at the first failure, with that command as failed_command.
 Do not push. Return ok and failed_command.`,
-          { label: `local:restack:${source}:${pr.n}:${round}`, phase: "Local review", schema: obj({ ok: BOOL, failed_command: STR }) }
-        );
-        if (!re || !re.ok) {
-          // Local reviews leave no GitHub thread, so the stop carries every reply and blocked fix so far.
-          localReview.push({ branch: pr.branch, rounds });
-          return { stopped: "Local review", reason: `restack failed after fixing ${pr.branch}: ${re ? re.failed_command : "no result"}`, localReview, next: "Nothing was pushed. Fix the stacked branches by hand, then push and open the PRs." };
-        }
+        { label: `local:restack:${source}:${pr.n}:${round}`, phase: "Local review", schema: obj({ ok: BOOL, failed_command: STR }) }
+      );
+      if (!re || !re.ok) {
+        // Local reviews leave no GitHub thread, so the stop carries every reply and blocked fix so far.
+        localReview.push({ branch: pr.branch, rounds });
+        return { stopped: "Local review", reason: `restack failed after fixing ${pr.branch}: ${re ? re.failed_command : "no result"}`, localReview, next: "Nothing was pushed. Fix the stacked branches by hand, then push and open the PRs." };
       }
     }
   }
   localDeclined.set(pr.n, declined);
   localReview.push({ branch: pr.branch, rounds });
 }
-if (REVIEW_ROUNDS + LOCAL_ROUNDS > 0) await sh(`\`git switch ${prs[prs.length - 1].branch}\`.`, { label: "local:home", phase: "Local review" });
-else log("Local review: skipped (reviewRounds and localRounds are 0)");
+if (REVIEW_ROUNDS > 0) await sh(`\`git switch ${prs[prs.length - 1].branch}\`.`, { label: "local:home", phase: "Local review" });
+else log("Local review: skipped (reviewRounds is 0)");
 
 // =============================================================================================
 phase("Open");
@@ -1041,9 +1017,7 @@ async function checkAndWalk(tag, phaseName, watch = openPrs, home = top) {
 }
 await checkAndWalk("open", "Open");
 
-// =============================================================================================
-phase("Greptile");
-
+// ---- Reading a Greptile review (used by the roll-up loop) -------------------------------------
 const WAIT = obj({
   status: STR,
   sha: STR,
@@ -1062,78 +1036,7 @@ const waitFor = async (number, label, phaseName, head) => {
   return w;
 };
 
-// After the first push a branch is never rewritten: a fix on one stacked branch is MERGED into each branch
-// above it, so every later push is a fast-forward. The stack is not in review/<slug> yet: Rollup merges it later.
-async function mergeForward(from, label, phaseName) {
-  const fromPr = stackOrder.find((x) => x.branch === from);
-  const later = fromPr ? above(fromPr) : [];
-  return sh(
-    `Carry the fix on ${from} up the stack. In order, stop at the first failure (ok=false, failed_command):
-  1. ${later.length ? `For each branch in order (${later.join(", ")}): \`git switch <branch>\`, then \`git merge --no-edit <the branch before it>\` (the first merges ${from}). On a conflict run \`git merge --abort\` and fail with that merge.` : "No branches above: skip."}
-  2. ${later.length ? `For each of ${later.join(", ")}: \`git switch <branch>\`, \`bun run typecheck\`, \`bun run test\`.` : "Skip."}
-Never rebase, reset or push. Return ok and failed_command.`,
-    { label, phase: phaseName, schema: obj({ ok: BOOL, failed_command: STR }) }
-  );
-}
-
-const greptile = [];
 let fixesPushed = false;
-if (GREPTILE_ROUNDS === 0) log("Greptile per PR: skipped (greptileRounds 0); Greptile reviews the roll-up only");
-for (const p of GREPTILE_ROUNDS > 0 ? openPrs : []) {
-  const pr = prs.find((x) => x.n === p.n);
-  const seen = new Set();
-  const rounds = [];
-  let head = "";
-  for (let round = 1; round <= GREPTILE_ROUNDS; round++) {
-    if (round === 1) await sh(`\`gh pr comment ${p.number} --body "@greptileai review"\`.`, { label: `greptile:trigger:${p.n}`, phase: "Greptile" });
-    const w = await waitFor(p.number, `greptile:wait:${p.n}:${round}`, "Greptile", head);
-    if (!w || w.status !== "reviewed") {
-      rounds.push({ round, status: w ? w.status : "no result" });
-      log(`Greptile #${p.number}: ${w ? w.status : "no result"} — a stop, not a pass; moving on`);
-      break;
-    }
-    const fresh = w.comments.filter((c) => !seen.has(c.id));
-    fresh.forEach((c) => seen.add(c.id));
-    rounds.push({ round, confidence: w.confidence, comments: fresh.length });
-    if (!fresh.length) {
-      log(`Greptile #${p.number}: clean (confidence ${w.confidence ?? "n/a"})`);
-      break;
-    }
-    const sw = await sh(`\`git switch ${p.branch}\`. Return ok.`, { label: `greptile:switch:${p.n}:${round}`, phase: "Greptile", schema: obj({ ok: BOOL }) });
-    if (!sw || !sw.ok) return { stopped: "Greptile", reason: `could not switch to ${p.branch}`, prs: openPrs };
-    const resp = await ask(
-      `Review comments from Greptile on PR #${p.number} (${p.url}), branch ${p.branch}, which is checked out. The PR's fence: ${pr.fence.join(", ")}. Its review focus: ${pr.greptile_focus}.
-Confidence ${w.confidence ?? "n/a"}/5. Summary:
-${fence("greptile summary", w.summary)}
-${fence("greptile comments", fresh.map((c) => `id ${c.id} — ${c.path}${c.line ? `:${c.line}` : ""} — ${c.url}\n${c.body}`).join("\n\n"))}
-${(localDeclined.get(p.n) || []).length ? `The local review before push raised these and you declined them; answer a repeat the same way:\n${fence("declined locally", localDeclined.get(p.n).map((d) => `${d.comment}\n→ ${d.reply}`).join("\n\n"))}\n` : ""}Commit trailer: ${COAUTHOR}`,
-      {
-        label: `greptile:respond:${p.n}:${round}`,
-        phase: "Greptile",
-        agentType: "review-responder",
-        schema: RESPONSE,
-      }
-    );
-    if (!resp || !resp.commits.length) {
-      log(`Greptile #${p.number}: no fix commits (${resp ? resp.comments.map((c) => c.action).join(", ") : "no result"})`);
-      break;
-    }
-    const mf = await mergeForward(p.branch, `greptile:forward:${p.n}:${round}`, "Greptile");
-    if (!mf || !mf.ok) return { stopped: "Greptile", reason: `merging the fix on ${p.branch} forward failed: ${mf ? mf.failed_command : "no result"}`, prs: openPrs };
-    const later = openPrs.filter((x) => x.n > p.n).map((x) => x.branch);
-    const pushed = await sh(
-      `\`git push origin ${[p.branch, ...later].join(" ")}\` (fast-forwards only; never --force), then \`gh pr comment ${p.number} --body "@greptileai review"\`. Return ok, failed_command, and head = \`git rev-parse ${p.branch}\`.`,
-      { label: `greptile:push:${p.n}:${round}`, phase: "Greptile", schema: obj({ ok: BOOL, failed_command: STR, head: STR }, ["ok", "failed_command"]) }
-    );
-    head = (pushed && pushed.head) || "";
-    if (!pushed || !pushed.ok) return { stopped: "Greptile", reason: `push failed after fixing #${p.number}: ${pushed ? pushed.failed_command : "no result"}`, prs: openPrs };
-    fixesPushed = true;
-  }
-  greptile.push({ pr: p.number, url: p.url, rounds });
-}
-if (GREPTILE_ROUNDS > 0) await sh(`\`git switch ${top.branch}\`.`, { label: "greptile:home", phase: "Greptile" });
-// The checks and walk from Open describe the commits before the fixes; report on what is pushed now.
-if (fixesPushed) await checkAndWalk("greptile", "Greptile");
 
 // =============================================================================================
 phase("Rollup");
@@ -1331,7 +1234,7 @@ const open = blocking(allFindings());
 const localBlocked = localReview.flatMap((b) => b.rounds.flatMap((r) => (r.blocked || []).map((x) => `${b.branch}: ${x}`)));
 const rollupBlocked = rollupReview.rounds.flatMap((r) => r.blocked || []);
 // Merge bar item 2: a local P0/P1 that got no fix, decline or duplicate reply is still open.
-// A code-review round that never finished is open too; the opt-in Greptile CLI is extra and does not count.
+// A code-review round that never finished is open too.
 const localOpen = localReview.flatMap((b) => [
   ...b.rounds.filter((r) => r.comments > (r.replies || []).length).map((r) => `${b.branch}: ${r.comments - (r.replies || []).length} ${r.source} finding(s) unanswered in round ${r.round}`),
   ...b.rounds.filter((r) => r.source === "code-review" && r.status).map((r) => `${b.branch}: code-review round ${r.round} did not finish (${r.status})`),
@@ -1342,14 +1245,38 @@ const rollupLine = !target
   : rollupPassed
     ? `Greptile ${rollupReview.confidence ?? "n/a"}/5 on #${target.number} at ${rollupReview.sha.slice(0, 8)}${rollupReview.status === "declined" ? " (remaining comments declined with reasons)" : ""}`
     : `Greptile on #${target.number} did not pass (${rollupReview.status}); re-trigger it with "@greptileai review" and loop to 5/5 before merging`;
-const memory = await ask(
-  `Mode: record. Slug: ${slug}. Status: in review.
-Where it stopped: ship-feature finished. ${rollup ? `Stacked PRs merged into ${rollupBranch}: ${openPrs.map((p) => `#${p.number} ${p.url}`).join("; ")}. Roll-up PR for the human: #${rollup.number} ${rollup.url}; merging it lands the feature.` : `PR open: #${openPrs[0].number} ${openPrs[0].url}.`}
-Links: ${issue ? `issue ${issue.url}; ` : ""}${previewUrl ? `preview ${previewUrl}; ` : ""}${pre.record_path ? `record docs/features/${slug}.md (PR 1).` : ""}
-Decisions (${DATE}): built from ${pre.record_path ? "the plan-feature decision record" : `the ticket directly (auditor: ${audit ? audit.verdict : "n/a"}${input.ready === "override" ? ", overridden by the human" : ""})`}.${architect ? ` Architecture: ${architect.decisions.map((d) => `${d.question} → ${d.chosen} (${d.why})`).join("; ")}.` : ""}
-Todo: ${open.length ? `${open.length} P0/P1 still open: ${open.map((f) => `${f.source} ${f.file}: ${f.detail.split("\n")[0]}`).join("; ")}; ` : ""}${shipReel && !shipReel.passed ? `smoke videos failed and were accepted at the ship review: ${shipReel.reason}; ` : ""}${redChecks.length ? `red checks: ${redChecks.join(", ")}; ` : ""}${localBlocked.length ? `local review fixes not made: ${localBlocked.join("; ")}; ` : ""}${rollupBlocked.length ? `roll-up review fixes not made: ${rollupBlocked.join("; ")}; ` : ""}${localOpen.length ? `local P0/P1 still open: ${localOpen.join("; ")}; ` : ""}${rollupLine}; ${mergeCmd ? `merge with \`${mergeCmd}\`` : "merge after Greptile passes"}.
-Next step: human review of ${rollup ? rollup.url : openPrs[0].url}.`,
-  { label: "memory:record", phase: "Close", agentType: "context-memory", effort: "low" }
+const todos = [
+  open.length ? `${open.length} P0/P1 still open: ${open.map((f) => `${f.source} ${f.file}: ${f.detail.split("\n")[0]}`).join("; ")}` : "",
+  shipReel && !shipReel.passed ? `smoke videos failed and were accepted at the ship review: ${shipReel.reason}` : "",
+  redChecks.length ? `red checks: ${redChecks.join(", ")}` : "",
+  localBlocked.length ? `local review fixes not made: ${localBlocked.join("; ")}` : "",
+  rollupBlocked.length ? `roll-up review fixes not made: ${rollupBlocked.join("; ")}` : "",
+  localOpen.length ? `local P0/P1 still open: ${localOpen.join("; ")}` : "",
+  `${rollupLine}; ${mergeCmd ? `merge with \`${mergeCmd}\`` : "merge after Greptile passes"}`,
+].filter(Boolean);
+const memory = await remember(
+  slug,
+  {
+    status: "in-progress",
+    issue: issue ? issue.url : "",
+    log: `ship-feature finished from checkout ${ROOT}.`,
+    stopped: `ship-feature finished. ${rollup ? `Stacked PRs merged into ${rollupBranch}: ${openPrs.map((p) => `#${p.number} ${p.url}`).join("; ")}. Roll-up PR for the human: #${rollup.number} ${rollup.url}; merging it lands the feature.` : `PR open: #${openPrs[0].number} ${openPrs[0].url}.`}`,
+    waiting: `human review of ${rollup ? rollup.url : openPrs[0].url}`,
+    next: `human review of ${rollup ? rollup.url : openPrs[0].url}`,
+    link: [
+      ...(previewUrl ? [`preview: ${previewUrl}`] : []),
+      ...(pre.record_path ? [`record: docs/features/${slug}.md (PR 1)`] : []),
+      ...(rollup ? [`roll-up PR: ${rollup.url}`] : []),
+      ...openPrs.map((p) => `PR ${p.n}: ${p.url}`),
+    ],
+    decision: [
+      `built from ${pre.record_path ? "the plan-feature decision record" : `the ticket directly (auditor: ${audit ? audit.verdict : "n/a"}${input.ready === "override" ? ", overridden by the human" : ""})`} — ship-feature's intake — ${issue ? issue.url : "prompt input"}`,
+      ...(architect ? architect.decisions.map((d) => `${d.question} → ${d.chosen} — ${d.why} — architect`) : []),
+    ],
+    todo: todos,
+  },
+  "memory:record",
+  "Close"
 );
 
 return {
@@ -1365,11 +1292,10 @@ return {
   localReview,
   local_blocked: localBlocked,
   local_open: localOpen,
-  greptile,
   rollupReview,
   verdicts: verdictLines(),
   open_findings: open,
-  analytics: instr.events || null,
+  analytics: instrEvents,
   memory,
   // Merge bar item 1: Greptile passing does not excuse a red check; say so next to the merge command.
   next: `${rollupLine}.${redChecks.length ? ` Red checks: ${redChecks.join(", ")}; the merge bar needs them green, so fix or re-run them before merging.` : ""} ${mergeCmd ? `Review ${target.url}, then merge with \`${mergeCmd}\`.` : rollup ? `Review the roll-up ${rollup.url}; merge it once Greptile passes.` : `Review ${openPrs[0].url}; merge it once Greptile passes.`}${rollup ? ` The stacked PRs are already merged into ${rollupBranch}; nothing to close.` : ""}${open.length ? ` ${open.length} P0/P1 were accepted open at the ship review.` : ""}${localOpen.length ? ` Local review left P0/P1 unanswered (${localOpen.join("; ")}); the merge bar needs none open.` : ""}${shipReel && !shipReel.passed ? ` The smoke videos failed (${shipReel.reason}) and were accepted at the ship review.` : ""}`,

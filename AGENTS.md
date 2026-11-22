@@ -19,7 +19,7 @@ SaaS starter on **Cloudflare Workers + React Router v7 + tRPC + D1/Drizzle + Bet
 | Working memory per feature | [`context-memory`](.claude/agents/context-memory.md) store outside the repo (`./scripts/memory-dir.sh`) |
 | Symbol graph of the code | `./scripts/codegraph.sh explore "<q>"` before grep; optional, per checkout ([`docs/agents/harness.md`](docs/agents/harness.md#codegraph)) |
 
-`context-memory`: **recall** is read-only, run it at the start of any task. **record** merges decisions, todos and where work stopped; run it once at the end, from the main thread, never in lanes. Never run `lavish-axi share` (public host). Workflow agents cannot poll the user: the workflow returns a `review` page path; the main thread polls it.
+`context-memory`: **recall** is read-only, run it at the start of any task. **record** merges decisions, todos and where work stopped (`scripts/memory.ts` does the merge); run it once at the end, from the main thread, never in lanes. Never run `lavish-axi share` (public host). Workflow agents cannot poll the user: the workflow returns a `review` page path; the main thread polls it.
 
 ## Workflow
 
@@ -37,7 +37,7 @@ Any change beyond one file runs as parallel sub-agents, not one long thread.
 
 1. **Fix the contract:** types, procedure signatures, lane path fences. The only sequential step.
 2. **Build lanes:** one `Agent` call per lane, all in one message: data (schema + repository + tests) · api (tRPC procedure + tests) · UI (`ui-builder`). Lanes own disjoint paths; a lane needing a file it does not own stops and reports.
-3. **Writers:** `test-author` ‖ `span-instrumenter`.
+3. **Writers:** `test-author` ‖ `instrumenter`.
 4. **Checkers:** `effect-ts-enforcer` ‖ `feature-verifier` ‖ design critique ‖ `./scripts/verify.sh`. Read-only; each browser lane owns its port (`CI=1 bun run dev --port <free>`).
 5. **Converge:** the main thread reads every report, re-dispatches the owner of each P0/P1, then runs Done. Lanes never record.
 

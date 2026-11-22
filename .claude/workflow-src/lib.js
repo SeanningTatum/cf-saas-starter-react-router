@@ -56,7 +56,7 @@ export function parseArgs(args, textKey) {
  *   The main thread asks the user, then runs the workflow again with the answer added to `args` and
  *   `resumeFromRunId` set to the stopped run's id: every agent that already finished returns its
  *   cached result, so the run picks up where it stopped. Keep every other arg the same on the re-run.
- *   Each stop first records where it stopped with context-memory.
+ *   Each stop first records where it stopped in the working memory (`remember`, below).
  *
  *   A stop about words is asked in chat. A stop about something to look at also returns `review`: an
  *   HTML page path under .verify/<slug>/ for the main thread to write, open with lavish
@@ -71,6 +71,22 @@ export function parseArgs(args, textKey) {
 export function haltOrThrow(e) {
   if (e && e.halt) return e.halt;
   throw e;
+}
+
+// ---- Working memory -------------------------------------------------------------------------------
+/**
+ * The shell command that merges one record into the working memory (scripts/memory.ts reads the
+ * fields from stdin, one `key: value` per line). `fields` maps a key to a string or a list of
+ * strings: status, issue, context, log, stopped, waiting, next, decision, link, todo, done. Empty
+ * values are left out, and each value is flattened to one line, so text from a ticket cannot end
+ * the heredoc or add a field.
+ */
+export function memoryRecordCommand(slug, fields) {
+  const oneLine = (v) => String(v).replace(/\s*[\r\n]+\s*/g, " ").split("MEMORY_EOF").join("MEMORY-EOF");
+  const lines = Object.entries(fields).flatMap(([key, value]) =>
+    [value].flat().filter((v) => v !== undefined && v !== null && v !== "").map((v) => `${key}: ${oneLine(v)}`)
+  );
+  return `bun scripts/memory.ts record ${slug} <<'MEMORY_EOF'\n${lines.join("\n")}\nMEMORY_EOF`;
 }
 
 // ---- Helpers that need the runtime ----------------------------------------------------------------
@@ -104,17 +120,24 @@ export function workflowLib({ agent, log }) {
   }
 
   /**
-   * The three ways a run talks to an agent once the checkout is known. Workflow agents start in the
+   * The ways a run talks to an agent once the checkout is known. Workflow agents start in the
    * launching session's cwd, which can be another checkout, so every prompt after Preflight opens
-   * with `preamble`. `sh` is a shell-only step for the runner; `remember` is a context-memory call.
-   * A memory prompt holds only values the run already has (cached results, args) and no clock, so a
-   * resumed run replays it from cache instead of writing twice.
+   * with `preamble`. `sh` is a shell-only step for the runner. `remember` and `recall` are the
+   * working memory: the runner runs scripts/memory.ts, which merges the record or prints the brief,
+   * so no model edits the store. A record holds only values the run already has (cached results,
+   * args) and no clock, so a resumed run replays it from cache instead of writing twice.
    */
   function asker(preamble) {
     const ask = (prompt, opts) => agent(`${preamble}\n\n${prompt}`, opts);
     const sh = (prompt, opts) => ask(prompt, { effort: "low", ...opts, agentType: "runner" });
-    const remember = (prompt, label, phaseName) => ask(prompt, { label, phase: phaseName, agentType: "context-memory", effort: "low" });
-    return { ask, sh, remember };
+    const remember = async (slug, fields, label, phaseName) => {
+      const out = await sh(`Run this command from ROOT exactly as written and return what it prints. Change nothing in it and run nothing else.\n\n${memoryRecordCommand(slug, fields)}`, { label, phase: phaseName });
+      // The script says so when a file has outgrown its limit; only a person can ask for the summary.
+      if (/over 150 lines/.test(String(out))) log(`Memory: ${slug} is over 150 lines; ask context-memory to shorten it`);
+      return out;
+    };
+    const recall = (what, label, phaseName) => sh(`Run \`bun scripts/memory.ts recall ${what}\` from ROOT and return what it prints. Change nothing.`, { label, phase: phaseName });
+    return { ask, sh, remember, recall };
   }
 
   /**
