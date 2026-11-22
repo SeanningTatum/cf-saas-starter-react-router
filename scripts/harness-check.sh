@@ -13,6 +13,7 @@
 #           parses and names itself by filename, brand-init fences cover app/components/ui once
 #        J. The workflow scripts are what their sources build (.claude/workflow-src + the shared library)
 #        K. The repo's ruleset and production environment match .github/repo-rules.json
+#        L. The rule table in docs/agents/lint-rules.md is what scripts/lint/rules generates
 
 set -uo pipefail
 
@@ -210,6 +211,15 @@ elif grep -q '^notice:' <<<"$RR_OUT"; then
   grep '^::notice::' <<<"$RR_OUT" || true
 else
   ok "repo rules match .github/repo-rules.json"
+fi
+
+# L. The house lint rules page. Its table is generated from scripts/lint/rules; a rule added
+#    or reworded without a rewrite leaves the page stale. The script prints the fix.
+if LINT_DOCS_OUT=$(bun scripts/lint/cli.ts --check-docs 2>&1); then
+  ok "$LINT_DOCS_OUT"
+else
+  fail "lint rules page is stale:"
+  printf '%s\n' "$LINT_DOCS_OUT" | sed 's/^/      /'
 fi
 
 echo ""

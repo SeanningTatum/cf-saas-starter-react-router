@@ -1,0 +1,32 @@
+export const LINT_ROOTS = ["app", "workers"] as const;
+export const SKIPPED_DIRS = ["node_modules", ".react-router", "build"] as const;
+export const SOURCE_FILE = /\.tsx?$/;
+export const TEST_PATH = /__tests__|\.test\.tsx?$|\.test-layer\.ts$/;
+
+export const VENDORED_UI = "app/components/ui/";
+export const ERRORS_DIR = "app/models/errors";
+export const ERROR_MAP_FILE = "app/lib/effect-trpc.ts";
+export const UNIT_TEST_DIRS = ["app/lib", "app/repositories"] as const;
+export const MIN_TEST_FILE_CHARS = 40;
+
+export const BASELINE_PATH = "scripts/lint/baseline.json";
+export const RULES_DIR = "scripts/lint/rules";
+export const RULES_PAGE = "docs/agents/lint-rules.md";
+export const RULES_START = "<!-- lint-rules:start -->";
+export const RULES_END = "<!-- lint-rules:end -->";
+export const WRITE_DOCS_COMMAND = "bun run lint:house --write-docs";
+
+export const FIX_LEAD = "Do this instead:";
+export const RULE_ID = /^[a-z][a-z0-9]*(-[a-z0-9]+)*$/;
+export const FINDING_LINE = /^\S+:\d+ [a-z][a-z0-9-]*: .+\. Do this instead: .+\.( See \S+\.)?$/;
+
+export const GH_TIMEOUT_MS = 4000;
+export const SHORT_SHA_LENGTH = 7;
+
+export const USAGE = [
+  "usage: bun run lint:house [files…]     check the named files, or the whole repo when none are named",
+  "       bun run lint:house --rules       print the rule table",
+  "       bun run lint:house --selftest    run every rule's cases",
+  "       bun run lint:house --write-docs  rewrite the rule table in docs/agents/lint-rules.md",
+  "       bun run lint:house --check-docs  fail when that table is stale",
+];
