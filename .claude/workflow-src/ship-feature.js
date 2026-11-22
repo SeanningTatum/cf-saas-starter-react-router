@@ -103,7 +103,6 @@ let BASE = input.base || "";
 const shq = (v) => `'${String(v).replace(/'/g, `'\\''`)}'`;
 const REVIEW_ROUNDS = Math.max(0, Math.min(3, input.reviewRounds ?? 2));
 const ROLLUP_ROUNDS = Math.max(0, Math.min(5, input.rollupRounds ?? 3));
-const COAUTHOR = "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>";
 // The e2e dev server must not collide with another on 5173 (a second checkout, another project's dev server):
 // every gate or e2e run gets a free port. playwright.config.ts reads E2E_PORT.
 const E2E_ENV = `E2E_PORT=$(bun -e 'const s=Bun.listen({hostname:"localhost",port:0,socket:{data(){}}});console.log(s.port);s.stop(true)')`;
@@ -823,7 +822,7 @@ for (; shipRound <= 3; shipRound++) {
       overlaps: assignment ? assignment.overlaps : [],
       verdicts: `${verdictLines()}${reelLine}`,
       open_findings: open,
-      other_findings: allFindings().filter((f) => !open.includes(f)),
+      other_findings: allFindings().filter((f) => !isP0P1(f)),
       blocked: blockedNotes,
       analytics: instrEvents,
       e2e: e2eOut,

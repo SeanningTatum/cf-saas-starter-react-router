@@ -9,6 +9,7 @@
  */
 import { describe, expect, it } from "vitest";
 import { dryRun, labels, seq, type AgentCall, type AnswerRule, type DryRunResult } from "../../lib/workflow-dry-run";
+import { COAUTHOR } from "../../../.claude/workflow-src/lib.js";
 
 const ROOT = "/work/repo";
 const SLUG = "demo-widget";
@@ -363,13 +364,25 @@ describe("ship-feature: fix rounds", () => {
     expect(r.open_findings).toEqual([expect.objectContaining({ source: "security", severity: "P1", file: SEC.file })]);
   });
 
-  // KNOWN DEFECT, pinned with it.fails: ship-feature.js builds `open` from one allFindings() call and filters
-  // `other_findings` with `!open.includes(f)` over a second call, whose objects are new, so the filter keeps
-  // everything: each open P0/P1 also shows under "other findings" on the ship page. When the workflow is
-  // fixed this test goes red; drop `.fails` then.
-  it.fails("the ship page's other_findings holds only what is not open (catches an open P0/P1 listed twice)", async () => {
+  it("the ship page's other_findings holds only what is not open (catches an open P0/P1 listed twice)", async () => {
     const r = (await runFix()).result as { other_findings: { source: string; severity: string }[] };
     expect(r.other_findings).toEqual([expect.objectContaining({ source: "effect", severity: "P2" })]);
+  });
+
+  it("every commit the run asks for ends with the library's co-author line (catches a trailer that names a model no longer in use)", async () => {
+    const finding = { severity: "P0", file: "app/repositories/widget.ts", line: 3, detail: "SQL built from input", fix: "bind it" };
+    const run = await dryRun("ship-feature", {
+      args: approve(),
+      answers: happy([
+        [/^local:code-review:1:/, { method: "code-review skill", findings: [finding] }],
+        [/^local:respond:code-review:1:/, (c) => ({ comments: [{ id: `cr-1-${c.label.split(":").pop()}-1`, action: "fixed", reply: "bound" }], commits: ["f1"], blocked: [] })],
+        [/^local:restack:/, { ok: true, failed_command: "" }],
+      ]),
+    });
+    const trailers = (prompt: string) => prompt.match(/Co-Authored-By: [^\n"\\]+/g) ?? [];
+    const committing = run.calls.filter((c) => trailers(c.prompt).length > 0);
+    expect(labels(committing)).toEqual(expect.arrayContaining(["contract:branch", expect.stringMatching(/^local:respond:code-review:1:/)]));
+    for (const c of committing) expect({ label: c.label, trailers: [...new Set(trailers(c.prompt))] }).toEqual({ label: c.label, trailers: [COAUTHOR] });
   });
 
   it("local review: a branch's P0/P1 goes to review-responder, later branches are restacked, and code-review stops after reviewRounds", async () => {
