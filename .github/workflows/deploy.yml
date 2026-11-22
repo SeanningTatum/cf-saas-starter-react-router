@@ -58,7 +58,8 @@ jobs:
     needs: readiness
     runs-on: ubuntu-latest
     if: needs.readiness.outputs.ready == 'true'
-    timeout-minutes: 15
+    # The restore-point step may use up to 14 minutes of this (scripts/lib/d1-backup-constants.ts).
+    timeout-minutes: 30
     environment: production
     env:
       CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
