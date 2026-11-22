@@ -13,7 +13,7 @@ import {
   utcStamp,
   type CommandResult,
   type Deps,
-} from "../ci/d1-backup";
+} from "../d1-backup";
 
 const FAKE_TOKEN = "fake-token-value-for-tests";
 const SHA = "0123456789abcdef0123456789abcdef01234567";

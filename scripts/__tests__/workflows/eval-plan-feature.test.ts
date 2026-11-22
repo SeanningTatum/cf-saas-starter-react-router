@@ -167,6 +167,32 @@ describe("eval-plan-feature: stops before any audit", () => {
     expect(r.phases).not.toContain("Audit");
   });
 
+  it("after a 'differs from disk' stop, a resume with args.reload loads again and finishes; without it the old load replays and stops again", async () => {
+    const stopped = await dryRun("eval-plan-feature", {
+      args: {},
+      answers: [["verify loaded copy", { identical: false, diff: "< a\n> b" }], ...answers()],
+    });
+    expect(stopped.result).toMatchObject({ stopped: "Load", next: expect.stringContaining("args.reload") });
+
+    const replayed = await dryRun("eval-plan-feature", { args: {}, answers: answers(), resumeFrom: stopped });
+    expect(replayed.live).toEqual([]);
+    expect(replayed.result).toMatchObject({ stopped: "Load" });
+
+    const reloaded = await dryRun("eval-plan-feature", { args: { reload: 1 }, answers: answers(), resumeFrom: stopped });
+    expect(labels(reloaded.live).slice(0, 2)).toEqual(["load metadata", "verify loaded copy"]);
+    expect(reloaded.live[0]?.prompt).toContain("This is reload 1");
+    expect(resultOf(reloaded)).toMatchObject({ score: 20, total: 20, gate: true });
+  });
+
+  it("without args.reload the Load prompt is unchanged, so an eval that never stopped keeps its cached load", async () => {
+    const plain = await dryRun("eval-plan-feature", { args: {}, answers: answers() });
+    expect(plain.calls[0]?.prompt).not.toContain("reload");
+    for (const bad of [0, -1, 1.5, "2", true]) {
+      const r = await dryRun("eval-plan-feature", { args: { reload: bad }, answers: answers() });
+      expect({ bad, prompt: r.calls[0]?.prompt }).toEqual({ bad, prompt: plain.calls[0]?.prompt });
+    }
+  });
+
   it("a loader that died, or an `only` that selects nothing, stops at Load instead of crashing or scoring 0/0", async () => {
     const dead = await dryRun("eval-plan-feature", { args: {}, answers: [["load metadata", null]] });
     expect(dead.result).toMatchObject({ stopped: "Load" });

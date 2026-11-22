@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { jobNames, requiredContexts } from "../lib/repo-rules-workflow-checks";
-import type { Ruleset } from "../lib/repo-rules-schemas";
+import { jobNames, requiredContexts } from "../repo-rules-workflow-checks";
+import type { Ruleset } from "../repo-rules-schemas";
 
 const withChecks = (contexts: string[]): Ruleset => ({
   name: "r",
