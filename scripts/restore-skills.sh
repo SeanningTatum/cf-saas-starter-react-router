@@ -88,9 +88,10 @@ older_than_2m() { [ -n "$(find "$1" -maxdepth 0 -mmin +2 2>/dev/null)" ]; }
 started() { ps -o lstart= -p "$1" 2>/dev/null | awk '{$1=$1; print}'; }
 
 # Create file $1 holding line $2, only if $1 does not exist. bash's noclobber opens with the
-# kernel's O_EXCL, so of any number of racing callers exactly one succeeds. Not `mkdir`: on
-# CI's Ubuntu 26.04 runners a `mkdir` lock was seen to go to two owners at once (two
-# processes inside the reclaim guard, two owners writing the same lock).
+# kernel's O_EXCL, so of any number of racing callers exactly one succeeds. Not `mkdir`:
+# Ubuntu 26.04 ships uutils coreutils, whose `mkdir` exits 0 for more than one of several
+# racing callers (8 racers, 300 rounds: 183 rounds with two or more winners; GNU mkdir: 0).
+# A `mkdir` lock there goes to two owners at once, and two restores run the install.
 create_excl() { (set -o noclobber; printf '%s\n' "$2" >"$1") 2>/dev/null; }
 
 # Stale = the owner died before cleanup (SIGKILL, crash, reboot), or died between creating
@@ -109,10 +110,14 @@ lock_is_stale() {
   pid=${owner%% *}
   start=${owner#* }
   if [ -n "$start" ]; then
-    [ "$(started "$pid")" != "$start" ]
+    [ "$(started "$pid")" != "$start" ] || return 1
   else
-    ! kill -0 "$pid" 2>/dev/null # no ps on this host: fall back to liveness alone
+    ! kill -0 "$pid" 2>/dev/null || return 1 # no ps on this host: fall back to liveness alone
   fi
+  # The owner we read is dead. Read the lock again: if that owner exited after the first read
+  # it removed its lock, and the file now there belongs to a new, live owner. Only a lock that
+  # still names the dead owner is stale, and only a reclaim (we hold its guard) can remove it.
+  [ "$(cat "$RUNLOCK" 2>/dev/null || true)" = "$owner" ]
 }
 
 ME="$$ $(started $$)"
