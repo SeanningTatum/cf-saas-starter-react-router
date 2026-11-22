@@ -13,6 +13,7 @@ import { ThemeProvider } from "next-themes";
 import type { Route } from "./+types/root";
 import "./app.css";
 import { TRPCProvider } from "./trpc/client";
+import { Toaster } from "./components/ui/sonner";
 import { useTranslation } from "react-i18next";
 import { useChangeLanguage } from "remix-i18next/react";
 import { i18nServer } from "./i18n/i18n.server";
@@ -88,6 +89,7 @@ export default function App({ loaderData }: Route.ComponentProps) {
       <TRPCProvider>
         <Outlet />
       </TRPCProvider>
+      <Toaster />
     </ThemeProvider>
   );
 }
