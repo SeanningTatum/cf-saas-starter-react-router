@@ -21,6 +21,7 @@ GATES='typecheck|bun run typecheck|y|600
 test|bun run test|y|600
 non-negotiables-selftest|bun run scripts/check-non-negotiables.ts --selftest|y|300
 non-negotiables|bun run scripts/check-non-negotiables.ts|y|300
+migrations|bun run scripts/migration-check.ts|y|120
 harness|./scripts/harness-check.sh|y|300
 secrets|bun run scripts/secret-scan.ts|y|120
 audit|bun run scripts/package-audit.ts|y|120
