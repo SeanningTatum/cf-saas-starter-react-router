@@ -101,7 +101,12 @@ export async function action({ request, context }: Route.ActionArgs) {
   const exit = await context.runtime.runPromiseExit(program);
   return Exit.match(exit, {
     onSuccess: (response) => response,
-    onFailure: () =>
-      data({ success: false as const, error: "Internal Server Error" }, { status: 500 }),
+    onFailure: (cause) => {
+      context.reportError({ error: cause, source: "upload" });
+      return data(
+        { success: false as const, error: "Internal Server Error" },
+        { status: 500 }
+      );
+    },
   });
 }

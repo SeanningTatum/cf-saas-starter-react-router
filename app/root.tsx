@@ -18,6 +18,7 @@ import { useChangeLanguage } from "remix-i18next/react";
 import { i18nServer } from "./i18n/i18n.server";
 import { useNonce } from "./lib/csp-nonce";
 import { useDocumentRequestId } from "./lib/request-id";
+import { useReportBoundaryError } from "./lib/error-reporting/browser";
 
 export const handle = { i18n: ["common"] };
 
@@ -95,6 +96,7 @@ export default function App({ loaderData }: Route.ComponentProps) {
 export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {
   const { t } = useTranslation("common");
   const requestId = useRequestId();
+  useReportBoundaryError(error);
 
   let message = t("errors.oops");
   let details = t("errors.unexpected");

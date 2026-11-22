@@ -1,5 +1,19 @@
-import { describe, expect, it } from "vitest";
-import { devDelayMs, stripStackOutsideDev } from "..";
+import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+vi.hoisted(() => {
+  vi.stubEnv("DEV", false);
+});
+
+import { Either, Option, Schema } from "effect";
+import { TRPCError } from "@trpc/server";
+import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
+import {
+  createTRPCRouter,
+  devDelayMs,
+  publicProcedure,
+  stripStackOutsideDev,
+  type Context,
+} from "..";
 
 /**
  * These cover the two symptoms of one bug: tRPC derives `isDev` from
@@ -104,6 +118,49 @@ describe("stripStackOutsideDev", () => {
     expect(stripStackOutsideDev({ message: "boom" }, false)).toEqual({
       message: "boom",
     });
+  });
+});
+
+describe("errorFormatter schemaError", () => {
+  beforeEach(() => {
+    vi.spyOn(console, "log").mockImplementation(() => {});
+  });
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+  afterAll(() => {
+    vi.unstubAllEnvs();
+  });
+
+  const parseError = () =>
+    Either.getLeft(Schema.decodeUnknownEither(Schema.Number)("not a number"));
+
+  const schemaErrorFor = async (code: "BAD_REQUEST" | "INTERNAL_SERVER_ERROR") => {
+    const router = createTRPCRouter({
+      fails: publicProcedure.query(() =>
+        Promise.reject(new TRPCError({ code, cause: Option.getOrUndefined(parseError()) }))
+      ),
+    });
+    const response = await fetchRequestHandler({
+      endpoint: "/api/trpc",
+      router,
+      req: new Request("https://app.example.com/api/trpc/fails"),
+      createContext: () =>
+        ({ headers: new Headers(), auth: null } as unknown as Context),
+    });
+    const body: { error: { json: { data: { schemaError: unknown } } } } =
+      await response.json();
+    return body.error.json.data.schemaError;
+  };
+
+  it("shows the decode issues on a BAD_REQUEST, so a form can point at the bad field", async () => {
+    expect(await schemaErrorFor("BAD_REQUEST")).toEqual([
+      expect.objectContaining({ path: [] }),
+    ]);
+  });
+
+  it("is null on a 500 caused by a ParseError, so internal decode details never reach the client", async () => {
+    expect(await schemaErrorFor("INTERNAL_SERVER_ERROR")).toBeNull();
   });
 });
 
