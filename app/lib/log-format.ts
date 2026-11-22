@@ -34,6 +34,20 @@ const RESET = "\x1b[0m";
 export const shouldLog = (level: LogLevel) =>
   isLevelEnabled(level, isDev ? "trace" : "info");
 
+type LogContextProvider = () => Record<string, unknown>;
+
+let logContext: LogContextProvider = () => ({});
+
+/**
+ * Sets the fields every log line starts from. `app/lib/request-context.ts`
+ * registers its async-local store here (`requestId`, `userId`) when it loads;
+ * this module stays free of Node imports because a client bundle may load it.
+ * Explicit annotations passed to `emitLog` win over these fields.
+ */
+export const setLogContext = (provider: LogContextProvider): void => {
+  logContext = provider;
+};
+
 export function emitLog(
   level: LogLevel,
   message: string,
@@ -43,6 +57,7 @@ export function emitLog(
 
   const time = new Date().toISOString();
   const data: Record<string, unknown> = {
+    ...logContext(),
     ...annotations,
     level,
     time,
@@ -50,10 +65,20 @@ export function emitLog(
   };
 
   if (isDev) {
-    const { layer, traceId, ...rest } = data;
+    // The request id leads the line, shortened, and stays out of the trailing
+    // JSON. When it takes the prefix, `traceId` moves to the JSON, so the
+    // trace can still be found; otherwise `traceId` leads as before.
+    const { layer, requestId, ...withTrace } = data;
+    const { traceId, ...withoutTrace } = withTrace;
+    const shortRequestId =
+      typeof requestId === "string" && requestId.length > 0
+        ? requestId.slice(0, 8)
+        : undefined;
+    const id = shortRequestId ?? traceId;
+    const rest = shortRequestId ? withTrace : withoutTrace;
     const prefix = [
       layer ? `[${layer}]` : "",
-      traceId ? `(${traceId})` : "",
+      id ? `(${id})` : "",
     ]
       .filter(Boolean)
       .join(" ");

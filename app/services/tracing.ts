@@ -1,4 +1,5 @@
 import { Context, Effect, Exit, Layer, Option, Tracer } from "effect";
+import { randomHex, type RequestContext } from "@/lib/request-context";
 
 /**
  * Env-driven OTLP span export for Effect's tracer.
@@ -72,12 +73,6 @@ export const readTracingConfig = (env: object): TracingConfig | null => {
 };
 
 // --- Span implementation -----------------------------------------------------
-
-const randomHex = (bytes: number): string => {
-  const buf = new Uint8Array(bytes);
-  crypto.getRandomValues(buf);
-  return Array.from(buf, (b) => b.toString(16).padStart(2, "0")).join("");
-};
 
 interface SpanEvent {
   readonly name: string;
@@ -153,10 +148,28 @@ export class OtlpSpan implements Tracer.Span {
   }
 }
 
-export const makeOtlpTracer = (buffer: SpanBuffer): Tracer.Tracer =>
+/**
+ * With a `request`, every span carries `request.id`, and `user.id` once the
+ * session has resolved. The request object is read when each span starts: it
+ * is the one `setRequestUser` updates, so spans started after sign-in resolves
+ * carry the user. (The tracer's own `context` argument is `SpanOptions.context`,
+ * not the fiber's, so the request is handed in here instead.)
+ */
+export const makeOtlpTracer = (
+  buffer: SpanBuffer,
+  request?: RequestContext
+): Tracer.Tracer =>
   Tracer.make({
-    span: (name, parent, _context, links, startTime, kind) =>
-      new OtlpSpan(name, parent, links, startTime, kind, buffer),
+    span: (name, parent, _context, links, startTime, kind) => {
+      const span = new OtlpSpan(name, parent, links, startTime, kind, buffer);
+      if (request) {
+        span.attribute("request.id", request.requestId);
+        if (request.userId !== undefined) {
+          span.attribute("user.id", request.userId);
+        }
+      }
+      return span;
+    },
     context: (f) => f(),
   });
 
@@ -320,17 +333,19 @@ export const flushSpans = (
 /**
  * `Layer.empty` when `OTEL_EXPORTER_OTLP_ENDPOINT` is unset. Otherwise sets
  * the OTLP-buffering tracer and registers a flush finalizer that runs on
- * `runtime.dispose()`.
+ * `runtime.dispose()`. `request` stamps the request's ids on every span; see
+ * `makeOtlpTracer`.
  */
 export const TracingLayer = (
   env: object,
-  fetchFn?: FetchLike
+  fetchFn?: FetchLike,
+  request?: RequestContext
 ): Layer.Layer<never> => {
   const config = readTracingConfig(env);
   if (!config) return Layer.empty;
   const buffer = makeSpanBuffer();
   return Layer.merge(
-    Layer.setTracer(makeOtlpTracer(buffer)),
+    Layer.setTracer(makeOtlpTracer(buffer, request)),
     Layer.scopedDiscard(
       Effect.addFinalizer(() => flushSpans(config, buffer, fetchFn))
     )

@@ -6,6 +6,11 @@ import type { Auth } from "@/auth/server";
 import { AuthApi } from "@/services/auth";
 import { makeAppRuntime, type AppRuntime } from "@/runtime";
 import { loggers } from "@/lib/logger";
+import {
+  makeRequestContext,
+  runWithRequestContext,
+  type RequestContext,
+} from "@/lib/request-context";
 import { makeNonce, withSecurityHeaders } from "./security-headers";
 
 const createCaller = createCallerFactory(appRouter);
@@ -21,6 +26,8 @@ declare module "react-router" {
     runtime: AppRuntime;
     /** Per-request CSP nonce; see workers/security-headers.ts. */
     cspNonce: string;
+    /** This request's id, also sent as `x-request-id`; see app/lib/request-context.ts. */
+    requestId: string;
   }
 }
 
@@ -31,13 +38,23 @@ const requestHandler = createRequestHandler(
 
 export { ExampleWorkflow } from "../workflows/example";
 
+const internalError = (requestId: string) =>
+  new Response(`Internal Server Error (request id: ${requestId})`, {
+    status: 500,
+  });
+
 async function handle(
   request: Request,
   env: Env,
   ctx: ExecutionContext,
-  cspNonce: string
+  cspNonce: string,
+  requestContext: RequestContext
 ): Promise<Response> {
-  const runtime = makeAppRuntime(env, new URL(request.url).origin);
+  const runtime = makeAppRuntime(
+    env,
+    new URL(request.url).origin,
+    requestContext
+  );
 
   try {
     // Single entry edge: read the Better Auth instance off the runtime's
@@ -53,7 +70,7 @@ async function handle(
         { cause: Cause.pretty(authExit.cause) },
         "Failed to construct AuthApi"
       );
-      return new Response("Internal Server Error", { status: 500 });
+      return internalError(requestContext.requestId);
     }
     const { auth } = authExit.value;
 
@@ -69,6 +86,7 @@ async function handle(
       auth,
       runtime,
       cspNonce,
+      requestId: requestContext.requestId,
     });
   } catch (err) {
     // Platform edge: context construction (e.g. session resolution in
@@ -76,18 +94,30 @@ async function handle(
     // unhandled rejection. Effect-level failures are already mapped before
     // this point — this only catches boundary throws.
     loggers.server.error({ err }, "Unhandled error while building request context");
-    return new Response("Internal Server Error", { status: 500 });
+    return internalError(requestContext.requestId);
   } finally {
     ctx.waitUntil(runtime.dispose());
   }
 }
 
 export default {
-  // The one place that applies the security headers: every path out of
-  // `handle`, the two 500s included, passes through here.
+  // The one place that applies the security headers and the request id:
+  // every path out of `handle`, the two 500s included, passes through here.
+  // The async-local store opened here is what plain `loggers.x.info(...)`
+  // lines read their `requestId`/`userId` from; Effect code reads the same
+  // context from the runtime instead.
   async fetch(request, env, ctx) {
     const nonce = makeNonce();
-    const response = await handle(request, env, ctx, nonce);
-    return withSecurityHeaders(response, { nonce, dev: import.meta.env.DEV });
+    const requestContext = makeRequestContext(request);
+    const response = await runWithRequestContext(requestContext, () =>
+      handle(request, env, ctx, nonce, requestContext)
+    );
+    const secured = withSecurityHeaders(response, {
+      nonce,
+      dev: import.meta.env.DEV,
+    });
+    // `withSecurityHeaders` returns a fresh response with mutable headers.
+    secured.headers.set("x-request-id", requestContext.requestId);
+    return secured;
   },
 } satisfies ExportedHandler<Env>;

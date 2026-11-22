@@ -1,11 +1,17 @@
 import { describe, expect, it, vi } from "vitest";
-import { Effect, LogLevel } from "effect";
+import { Effect, Layer, LogLevel, ManagedRuntime } from "effect";
 import {
   toAppLevel,
   stringify,
   currentSpanAnnotations,
+  currentRequestAnnotations,
   LoggerLive,
 } from "../logger";
+import {
+  CurrentRequest,
+  runWithRequestContext,
+  type RequestContext,
+} from "@/lib/request-context";
 
 describe("toAppLevel", () => {
   it("maps Trace to trace", () => {
@@ -129,6 +135,60 @@ describe("LoggerLive", () => {
       expect(output).toContain("req-1");
     } finally {
       spy.mockRestore();
+    }
+  });
+});
+
+describe("currentRequestAnnotations", () => {
+  const request: RequestContext = { requestId: "req-fiber", method: "GET", path: "/", userId: "u1" };
+
+  it("returns the request and user ids when CurrentRequest is in the fiber context", () => {
+    // Catches reading the wrong tag or FiberRef: every Effect log line would
+    // lose its request id.
+    const refs = Effect.runSync(
+      Effect.getFiberRefs.pipe(Effect.provide(Layer.succeed(CurrentRequest, request)))
+    );
+    expect(currentRequestAnnotations(refs)).toStrictEqual({
+      requestId: "req-fiber",
+      userId: "u1",
+    });
+  });
+
+  it("returns {} without CurrentRequest", () => {
+    expect(currentRequestAnnotations(Effect.runSync(Effect.getFiberRefs))).toStrictEqual({});
+  });
+});
+
+describe("LoggerLive with a request", () => {
+  it("stamps the runtime's request id on a log, over the async-local store's", async () => {
+    // The regression the design guards against: Effect's scheduler is shared
+    // across requests, so a fiber can resume inside another request's async
+    // context. The fiber's own CurrentRequest must win over the store.
+    const spy = vi.spyOn(console, "info").mockImplementation(() => {});
+    const runtime = ManagedRuntime.make(
+      Layer.merge(
+        LoggerLive,
+        Layer.succeed(CurrentRequest, {
+          requestId: "fiber-request-id",
+          method: "GET",
+          path: "/",
+        })
+      )
+    );
+    try {
+      await runWithRequestContext(
+        { requestId: "other-request-id", method: "GET", path: "/" },
+        () => runtime.runPromise(Effect.logInfo("through runtime"))
+      );
+
+      const output = spy.mock.calls.map((args) => String(args[0])).join("\n");
+      expect(output).toContain("through runtime");
+      // the dev line shows the first 8 characters of the request id
+      expect(output).toContain("(fiber-re)");
+      expect(output).not.toContain("(other-re)");
+    } finally {
+      spy.mockRestore();
+      await runtime.dispose();
     }
   });
 });

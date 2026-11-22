@@ -33,15 +33,13 @@ export const links: Route.LinksFunction = () => [
   },
 ];
 
-export async function loader({ request }: Route.LoaderArgs) {
+export async function loader({ request, context }: Route.LoaderArgs) {
   const locale = await i18nServer.getLocale(request);
-  return { locale };
+  return { locale, requestId: context.requestId };
 }
 
 export function Layout({ children }: { children: React.ReactNode }) {
-  const loaderData = useRouteLoaderData("root") as
-    | { locale: string }
-    | undefined;
+  const loaderData = useRouteLoaderData<typeof loader>("root");
   const locale = loaderData?.locale ?? "en";
   const nonce = useNonce();
 
@@ -82,6 +80,9 @@ export default function App({ loaderData }: Route.ComponentProps) {
 
 export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {
   const { t } = useTranslation("common");
+  // Undefined when the root loader itself failed. The id comes through loader
+  // data, so the server and the client render the same HTML.
+  const requestId = useRouteLoaderData<typeof loader>("root")?.requestId;
 
   let message = t("errors.oops");
   let details = t("errors.unexpected");
@@ -102,6 +103,14 @@ export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {
     <main className="pt-16 p-4 container mx-auto">
       <h1>{message}</h1>
       <p>{details}</p>
+      {requestId && (
+        <p
+          className="text-sm text-muted-foreground"
+          data-testid="error-request-id"
+        >
+          {t("errors.request_id", { id: requestId })}
+        </p>
+      )}
       {stack && (
         <pre className="w-full p-4 overflow-x-auto">
           <code>{stack}</code>
