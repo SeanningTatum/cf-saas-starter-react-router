@@ -73,7 +73,7 @@ wrangler login
 bun run scripts/first-time-setup.ts
 ```
 
-The wizard creates your D1 database, R2 bucket, optional KV namespace, generates a `BETTER_AUTH_SECRET`, writes `wrangler.jsonc` + `.env`, runs migrations, and deploys. ~3 min end-to-end.
+The wizard creates your D1 database, R2 bucket, optional KV namespace, generates a `BETTER_AUTH_SECRET`, writes `wrangler.jsonc` + `.env`, runs migrations, and deploys. ~3 min end-to-end. Its last step offers to apply the [repo rules](#repo-rules-githubrepo-rulesjson).
 
 ### Option B — Manual
 
@@ -179,6 +179,16 @@ Auto-installed via `postinstall` (sets `core.hooksPath = .githooks`). Re-install
 ```bash
 SKIP_HOOKS=1 git commit -m "..."
 ```
+
+### Repo rules ([`.github/repo-rules.json`](.github/repo-rules.json))
+
+The rules GitHub enforces are a file: pull requests only on the default branch, the three CI jobs required, linear history, no force push, and a required reviewer on the `production` environment. The repo owner applies them with one command (it needs admin rights, and is safe to run twice):
+
+```bash
+bun run scripts/repo-rules.ts --apply            # add --dry-run to see the writes first
+```
+
+`./scripts/harness-check.sh` fails when the live rules drift from the file. How it checks, and how to turn on required human review: [`docs/ci/repo-rules.md`](docs/ci/repo-rules.md).
 
 ### CLAUDE.md ↔ AGENTS.md
 

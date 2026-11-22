@@ -15,6 +15,10 @@ import {
   isCancel,
 } from "@clack/prompts";
 import { buildWranglerConfig, writeWranglerJsonc } from "./lib/wrangler-config";
+import {
+  run as runRepoRules,
+  type Outcome as RepoRulesOutcome,
+} from "./repo-rules";
 
 function sanitizeResourceName(name: string): string {
   return name
@@ -484,6 +488,32 @@ export async function setupGitHubCiCredentials(accountId?: string) {
   }
 }
 
+// Off unless the user says yes: the rules stop direct pushes to the default branch.
+// `apply` is injected so the test can watch the call without touching GitHub.
+export async function offerRepoRules(
+  apply: (argv: string[]) => RepoRulesOutcome = runRepoRules
+) {
+  console.log("\n\x1b[36m🛡️  Step 12: Repo rules (branch protection)\x1b[0m");
+  const wanted = await confirm({
+    message:
+      "Apply the repo rules now (pull requests only on the default branch, CI required, a reviewer on production deploys)?",
+    initialValue: false,
+  });
+  if (isCancel(wanted) || !wanted) {
+    console.log(
+      "\x1b[33mSkipped. Apply them later with: bun run scripts/repo-rules.ts --apply\x1b[0m"
+    );
+    return;
+  }
+  const outcome = apply(["--apply"]);
+  for (const line of [...outcome.stdout, ...outcome.stderr]) console.log(line);
+  console.log(
+    outcome.code === 0
+      ? "\x1b[32m✓ Repo rules applied\x1b[0m"
+      : "\x1b[33mRepo rules not applied. Fix the error above, then run: bun run scripts/repo-rules.ts --apply\x1b[0m"
+  );
+}
+
 // Main setup function
 async function main() {
   intro("🚀 Cloudflare SaaS Stack - First-Time Setup");
@@ -749,6 +779,9 @@ async function main() {
   // deploy on push to main / per-PR. Entirely opt-in and skipped cleanly if
   // the GitHub CLI isn't available.
   await setupGitHubCiCredentials(accountId);
+
+  // Step 12: Offer to apply the repo rules (optional, needs admin rights).
+  await offerRepoRules();
 
   // Final instructions
   console.log("\n\x1b[36m✅ Setup Complete!\x1b[0m\n");

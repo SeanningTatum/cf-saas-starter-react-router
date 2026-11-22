@@ -36,6 +36,10 @@ jobs:
         # One entry point: scripts/verify.sh owns WHICH gates run, so adding one is a
         # one-line change there rather than a workflow change.
         run: ./scripts/verify.sh --baseline
+        env:
+          # Read-only (`contents: read` above). Lets the harness gate compare the live
+          # ruleset with .github/repo-rules.json; without it the gate prints a notice.
+          GH_TOKEN: ${{ github.token }}
 
   build:
     name: Build (Cloudflare Workers)
