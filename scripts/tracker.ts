@@ -80,7 +80,9 @@ interface Ref {
 
 function parseRef(raw: string | undefined): Ref | null {
   if (!raw) return null;
-  const url = /^https?:\/\/github\.com\/([^/]+\/[^/]+)\/(?:issues|pull)\/(\d+)\/?(?:[#?].*)?$/.exec(raw);
+  const url = /^https?:\/\/github\.com\/([^/]+\/[^/]+)\/(?:issues|pull)\/(\d+)\/?(?:[#?].*)?$/.exec(
+    raw,
+  );
   if (url) return { repo: url[1], number: Number(url[2]) };
   const num = /^#?(\d+)$/.exec(raw);
   return num ? { number: Number(num[1]) } : null;
@@ -136,14 +138,23 @@ const repoArgs = (ref: Ref) => (ref.repo ? ["-R", ref.repo] : []);
 
 const ISSUE_FIELDS = "number,url,title,body,state,labels,updatedAt,comments";
 
-// biome-ignore lint/suspicious/noExplicitAny: gh returns a different JSON shape for each --json field list, and callers read different subsets of it
-async function viewJson(ref: Ref, deps: Deps, fields = ISSUE_FIELDS): Promise<Outcome & { data?: any }> {
+async function viewJson(
+  ref: Ref,
+  deps: Deps,
+  fields = ISSUE_FIELDS,
+  // biome-ignore lint/suspicious/noExplicitAny: gh returns a different JSON shape for each --json field list, and callers read different subsets of it
+): Promise<Outcome & { data?: any }> {
   const r = deps.gh(["issue", "view", String(ref.number), ...repoArgs(ref), "--json", fields]);
   if (r.code !== 0) return ghFailure(r);
   try {
     return { code: 0, data: JSON.parse(r.stdout) };
   } catch {
-    return bad(2, "NOT_FOUND", "gh returned unreadable JSON", `run: gh issue view <n> --json ${fields}`);
+    return bad(
+      2,
+      "NOT_FOUND",
+      "gh returned unreadable JSON",
+      `run: gh issue view <n> --json ${fields}`,
+    );
   }
 }
 
@@ -152,7 +163,8 @@ function resolveRepo(ref: Ref, deps: Deps): { repo: string } | Outcome {
   if (ref.repo) return { repo: ref.repo };
   const r = deps.gh(["repo", "view", "--json", "nameWithOwner", "-q", ".nameWithOwner"]);
   const repo = r.stdout.trim();
-  if (r.code !== 0 || !repo) return ghFailure(r.code !== 0 ? r : { ...r, stderr: "could not resolve the repository" });
+  if (r.code !== 0 || !repo)
+    return ghFailure(r.code !== 0 ? r : { ...r, stderr: "could not resolve the repository" });
   return { repo };
 }
 
@@ -181,12 +193,14 @@ async function view(ref: Ref, deps: Deps): Promise<Outcome> {
     state: d.state,
     labels: (d.labels ?? []).map((l: { name: string }) => l.name),
     updatedAt: d.updatedAt,
-    comments: (d.comments ?? []).map((c: { id: unknown; author?: { login?: string } | null; body: unknown; url: unknown }) => ({
-      id: c.id,
-      author: c.author?.login ?? "",
-      body: c.body,
-      url: c.url,
-    })),
+    comments: (d.comments ?? []).map(
+      (c: { id: unknown; author?: { login?: string } | null; body: unknown; url: unknown }) => ({
+        id: c.id,
+        author: c.author?.login ?? "",
+        body: c.body,
+        url: c.url,
+      }),
+    ),
   });
 }
 
@@ -200,7 +214,8 @@ function create(p: Parsed, deps: Deps): Outcome {
   if (r.code !== 0) return ghFailure(r);
   const url = r.stdout.trim().split("\n").pop() ?? "";
   const n = /\/issues\/(\d+)/.exec(url)?.[1];
-  if (!n) return bad(2, "NOT_FOUND", `gh did not print an issue URL: ${url}`, "check: gh issue list");
+  if (!n)
+    return bad(2, "NOT_FOUND", `gh did not print an issue URL: ${url}`, "check: gh issue list");
   return ok({ ref: `#${n}`, number: Number(n), url });
 }
 
@@ -232,7 +247,15 @@ async function edit(ref: Ref, p: Parsed, deps: Deps): Promise<Outcome> {
     me = u.stdout.trim();
   }
   const writeAt = (deps.now ?? (() => new Date().toISOString()))();
-  const r = deps.gh(["issue", "edit", String(ref.number), ...repoArgs(ref), "--body-file", body.path, ...(title ? ["--title", title] : [])]);
+  const r = deps.gh([
+    "issue",
+    "edit",
+    String(ref.number),
+    ...repoArgs(ref),
+    "--body-file",
+    body.path,
+    ...(title ? ["--title", title] : []),
+  ]);
   if (r.code !== 0) return ghFailure(r);
   if (expect) {
     const q = deps.gh([
@@ -244,11 +267,17 @@ async function edit(ref: Ref, p: Parsed, deps: Deps): Promise<Outcome> {
       `id=${nodeId}`,
     ]);
     if (q.code !== 0) return ghFailure(q);
-    let nodes: { editor?: { login?: string } | null; editedAt: string; diff?: string | null }[] = [];
+    let nodes: { editor?: { login?: string } | null; editedAt: string; diff?: string | null }[] =
+      [];
     try {
       nodes = JSON.parse(q.stdout).data.node.userContentEdits.nodes ?? [];
     } catch {
-      return bad(2, "NOT_FOUND", "gh api graphql returned unreadable JSON", "the write landed; run: tracker view <ref> and check the body");
+      return bad(
+        2,
+        "NOT_FOUND",
+        "gh api graphql returned unreadable JSON",
+        "the write landed; run: tracker view <ref> and check the body",
+      );
     }
     // The bound is our own completed write, not the clock before we ran: an edit that lands while
     // `gh issue edit` is in flight sits after writeAt but before our edit. With no own edit on
@@ -281,11 +310,24 @@ async function edit(ref: Ref, p: Parsed, deps: Deps): Promise<Outcome> {
 function comment(ref: Ref, p: Parsed, deps: Deps): Outcome {
   const body = readBody(p, deps);
   if (isOutcome(body)) return body;
-  const r = deps.gh(["issue", "comment", String(ref.number), ...repoArgs(ref), "--body-file", body.path]);
+  const r = deps.gh([
+    "issue",
+    "comment",
+    String(ref.number),
+    ...repoArgs(ref),
+    "--body-file",
+    body.path,
+  ]);
   if (r.code !== 0) return ghFailure(r);
   const url = r.stdout.trim().split("\n").pop() ?? "";
   const id = /issuecomment-(\d+)/.exec(url)?.[1];
-  if (!id) return bad(2, "NOT_FOUND", `gh did not print a comment URL: ${url}`, "check the issue on GitHub");
+  if (!id)
+    return bad(
+      2,
+      "NOT_FOUND",
+      `gh did not print a comment URL: ${url}`,
+      "check the issue on GitHub",
+    );
   return ok({ id, url });
 }
 
@@ -323,7 +365,10 @@ function upsertComment(ref: Ref, p: Parsed, deps: Deps): Outcome {
         return null;
       }
     })
-    .filter((c): c is { id: number; html_url: string; body: string; author?: string } => !!c?.body?.includes(marker));
+    .filter(
+      (c): c is { id: number; html_url: string; body: string; author?: string } =>
+        !!c?.body?.includes(marker),
+    );
   // Newest own marked comment wins; comment ids grow with time.
   const mine = marked.filter((c) => c.author === me).sort((a, b) => b.id - a.id)[0];
   const others = marked.filter((c) => c !== mine).map((c) => String(c.id));
@@ -331,21 +376,46 @@ function upsertComment(ref: Ref, p: Parsed, deps: Deps): Outcome {
   const done = (w: GhResult, action: "created" | "updated", superseded: string[]): Outcome => {
     try {
       const c = JSON.parse(w.stdout) as { id: number; html_url: string };
-      return ok({ id: String(c.id), url: c.html_url, action, ...(superseded.length ? { superseded } : {}) });
+      return ok({
+        id: String(c.id),
+        url: c.html_url,
+        action,
+        ...(superseded.length ? { superseded } : {}),
+      });
     } catch {
-      return bad(2, "NOT_FOUND", "gh api returned unreadable JSON", "check the issue comments on GitHub");
+      return bad(
+        2,
+        "NOT_FOUND",
+        "gh api returned unreadable JSON",
+        "check the issue comments on GitHub",
+      );
     }
   };
   const create = (superseded: string[]) => {
-    const w = deps.gh(["api", "-X", "POST", `repos/${repo.repo}/issues/${ref.number}/comments`, "-f", `body=${body}`]);
+    const w = deps.gh([
+      "api",
+      "-X",
+      "POST",
+      `repos/${repo.repo}/issues/${ref.number}/comments`,
+      "-f",
+      `body=${body}`,
+    ]);
     return w.code !== 0 ? ghFailure(w) : done(w, "created", superseded);
   };
 
   if (!mine) return create(others);
-  const patch = deps.gh(["api", "-X", "PATCH", `repos/${repo.repo}/issues/comments/${mine.id}`, "-f", `body=${body}`]);
+  const patch = deps.gh([
+    "api",
+    "-X",
+    "PATCH",
+    `repos/${repo.repo}/issues/comments/${mine.id}`,
+    "-f",
+    `body=${body}`,
+  ]);
   if (patch.code === 0) return done(patch, "updated", []);
   // Edit refused (403) or comment gone (404): post a fresh marked comment instead.
-  if (/HTTP 40[34]|forbidden|not found/i.test(patch.stderr)) return create([String(mine.id), ...others]);
+  if (/HTTP 40[34]|forbidden|not found/i.test(patch.stderr))
+    return create([String(mine.id), ...others]);
   return ghFailure(patch);
 }
 
@@ -354,12 +424,22 @@ export async function run(argv: string[], deps: Deps = defaultDeps): Promise<Out
   const p = parseArgs(argv);
   if (typeof p === "string") return usage(p);
   if (p.backend === "linear")
-    return bad(4, "BACKEND", "the linear backend is not built", "Linear backend is task t1: the run asks the user which CLI to use");
+    return bad(
+      4,
+      "BACKEND",
+      "the linear backend is not built",
+      "Linear backend is task t1: the run asks the user which CLI to use",
+    );
   if (p.backend !== "gh") return usage(`unknown backend "${p.backend}"`);
 
   if (!(p.verb in FLAGS)) return usage(p.verb ? `unknown verb "${p.verb}"` : "a verb is required");
-  const unknown = [...p.flags.keys()].filter((f) => f !== "--backend" && !(FLAGS[p.verb] ?? []).includes(f));
-  if (unknown.length) return usage(`unknown flag ${unknown.join(", ")} for ${p.verb}; accepts ${(FLAGS[p.verb] ?? []).join(" ") || "no flags"}`);
+  const unknown = [...p.flags.keys()].filter(
+    (f) => f !== "--backend" && !(FLAGS[p.verb] ?? []).includes(f),
+  );
+  if (unknown.length)
+    return usage(
+      `unknown flag ${unknown.join(", ")} for ${p.verb}; accepts ${(FLAGS[p.verb] ?? []).join(" ") || "no flags"}`,
+    );
   if (p.verb === "create") return create(p, deps);
   const ref = parseRef(p.positional[0]);
   if (!ref) return usage(`<ref> must be 12, #12 or an issue URL, got "${p.positional[0] ?? ""}"`);

@@ -12,7 +12,8 @@ import {
 } from "../secret-scan";
 
 // Every fake token is built at run time so this file holds no literal a real scanner would flag.
-const alnum = (n: number, seed = "aB3dE5gH7jK9mN1pQ2sT4vW6yZ8") => seed.repeat(Math.ceil(n / seed.length)).slice(0, n);
+const alnum = (n: number, seed = "aB3dE5gH7jK9mN1pQ2sT4vW6yZ8") =>
+  seed.repeat(Math.ceil(n / seed.length)).slice(0, n);
 const rules = (text: string) => scanText("f.txt", text).map((f) => f.rule);
 
 const FAKES = {
@@ -31,20 +32,27 @@ const FAKES = {
 } satisfies Record<string, string>;
 
 describe("scanText: each rule fires on a fake credential", () => {
-  it.each(Object.entries(FAKES))("%s: a rule dropped from the list lets this shape through", (rule, line) => {
-    expect(rules(line)).toContain(rule);
-  });
+  it.each(Object.entries(FAKES))(
+    "%s: a rule dropped from the list lets this shape through",
+    (rule, line) => {
+      expect(rules(line)).toContain(rule);
+    },
+  );
 
   it("github-token also catches the fine-grained form", () => {
     expect(rules(`t = github_pat_${alnum(70)}`)).toContain("github-token");
   });
 
   it("cloudflare-token-assignment catches the preview token name too, not only the production one", () => {
-    expect(rules(`CLOUDFLARE_PREVIEW_API_TOKEN=${alnum(40)}`)).toContain("cloudflare-token-assignment");
+    expect(rules(`CLOUDFLARE_PREVIEW_API_TOKEN=${alnum(40)}`)).toContain(
+      "cloudflare-token-assignment",
+    );
   });
 
   it("env-secret-assignment catches 64 hex from openssl rand, which has no mixed case", () => {
-    expect(rules(`export BETTER_AUTH_SECRET=${"0123456789abcdef".repeat(4)}`)).toContain("env-secret-assignment");
+    expect(rules(`export BETTER_AUTH_SECRET=${"0123456789abcdef".repeat(4)}`)).toContain(
+      "env-secret-assignment",
+    );
     expect(rules(`DB_PASSWORD="${alnum(32)}"  # prod`)).toContain("env-secret-assignment");
   });
 
@@ -55,8 +63,11 @@ describe("scanText: each rule fires on a fake credential", () => {
 
 describe("scanText: near misses stay quiet", () => {
   const quiet: [string, string][] = [
-    // biome-ignore lint/suspicious/noTemplateCurlyInString: a literal GitHub Actions ${{ secrets.X }} reference is the input under test
-    ["a secrets reference in a workflow", "CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}"],
+    [
+      "a secrets reference in a workflow",
+      // biome-ignore lint/suspicious/noTemplateCurlyInString: a literal GitHub Actions ${{ secrets.X }} reference is the input under test
+      "CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}",
+    ],
     ["a shell variable", 'CLOUDFLARE_API_TOKEN="$CLOUDFLARE_API_TOKEN"'],
     ["process.env", "const token = process.env.CLOUDFLARE_API_TOKEN;"],
     ["a placeholder token", `CLOUDFLARE_API_TOKEN=your-token-goes-here-${"x".repeat(30)}`],
@@ -69,11 +80,17 @@ describe("scanText: near misses stay quiet", () => {
     ["a short ghp prefix", `ghp_${alnum(10)}`],
     ["an env secret left as a placeholder", `BETTER_AUTH_SECRET=${"your-secret-here-".repeat(3)}`],
     ["an env secret that is a shell reference", `API_TOKEN=$(cat /run/secrets/${"x".repeat(30)})`],
-    ["an env secret that is a file path", "TOKEN_FILE=/var/lib/some/very/long/path/to/a/token/file"],
+    [
+      "an env secret that is a file path",
+      "TOKEN_FILE=/var/lib/some/very/long/path/to/a/token/file",
+    ],
     ["an env secret that is short", `SESSION_SECRET=${alnum(20)}`],
     ["an env name without a secret word", `BUCKET_NAME=${alnum(40)}`],
-    // biome-ignore lint/suspicious/noTemplateCurlyInString: a literal GitHub Actions ${{ secrets.X }} reference is the input under test
-    ["a cloudflare token name with no literal", "CLOUDFLARE_PREVIEW_API_TOKEN: ${{ secrets.CLOUDFLARE_PREVIEW_API_TOKEN }}"],
+    [
+      "a cloudflare token name with no literal",
+      // biome-ignore lint/suspicious/noTemplateCurlyInString: a literal GitHub Actions ${{ secrets.X }} reference is the input under test
+      "CLOUDFLARE_PREVIEW_API_TOKEN: ${{ secrets.CLOUDFLARE_PREVIEW_API_TOKEN }}",
+    ],
     ["an AKIA word that is too short", "AKIA" + "SHORT"],
   ];
   it.each(quiet)("%s: a loose pattern would raise a false alarm here", (_name, line) => {
@@ -81,7 +98,9 @@ describe("scanText: near misses stay quiet", () => {
   });
 
   it("secret-assignment still fires on a 32-char hex value when the name is not a hash", () => {
-    expect(rules(`const apiKey = "${"aB1".repeat(11).slice(0, 32)}";`)).toContain("secret-assignment");
+    expect(rules(`const apiKey = "${"aB1".repeat(11).slice(0, 32)}";`)).toContain(
+      "secret-assignment",
+    );
   });
 
   it("secret-assignment skips a 64-char hex value named for a checksum", () => {
@@ -106,7 +125,9 @@ describe("scanText: allow marker, line numbers and secrecy", () => {
   });
 
   it("a marker never allows a private key", () => {
-    expect(rules(`${FAKES["private-key"]} // ${ALLOW_MARKER} private-key`)).toEqual(["private-key"]);
+    expect(rules(`${FAKES["private-key"]} // ${ALLOW_MARKER} private-key`)).toEqual([
+      "private-key",
+    ]);
   });
 
   it("the marker for one rule leaves another rule on the same line live", () => {
@@ -217,7 +238,9 @@ describe("run", () => {
   });
 
   it("the skip notice also shows when the scan fails, so a failure never hides what was not read", () => {
-    const { deps, lines } = depsFor({ files: { "a.ts": FAKES["github-token"], "img.png": new Uint8Array([0]) } });
+    const { deps, lines } = depsFor({
+      files: { "a.ts": FAKES["github-token"], "img.png": new Uint8Array([0]) },
+    });
     expect(run(deps)).toBe(1);
     expect(lines[0]).toBe("notice: skipped 1 binary or large files (not scanned)");
   });
@@ -230,7 +253,11 @@ describe("run", () => {
 
   it("a file git lists but the disk no longer has is skipped, not an error", () => {
     const { deps } = depsFor({ files: { "a.ts": "x" } });
-    const gone: Deps = { ...deps, git: () => ({ ok: true, stdout: "gone.ts\0a.ts\0" }), size: (f) => (f === "a.ts" ? 1 : undefined) };
+    const gone: Deps = {
+      ...deps,
+      git: () => ({ ok: true, stdout: "gone.ts\0a.ts\0" }),
+      size: (f) => (f === "a.ts" ? 1 : undefined),
+    };
     expect(run(gone)).toBe(0);
   });
 });
