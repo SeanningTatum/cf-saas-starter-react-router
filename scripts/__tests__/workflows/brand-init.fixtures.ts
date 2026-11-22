@@ -2,8 +2,6 @@ import { fileURLToPath } from "node:url";
 import { expect } from "vitest";
 import { configLine, dryRun, RUN_OK, type AgentCall, type AnswerInput, type AnswerRule, type DryRunResult } from "../../lib/workflow-dry-run";
 
-/** The workflow returns untyped JSON. */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export type Obj = Record<string, any>;
 
 export const ROOT = "/work/acme";
@@ -11,7 +9,6 @@ export const OUT = `${ROOT}/.verify/brand-init`;
 export const UI_DIR = fileURLToPath(new URL("../../../app/components/ui", import.meta.url));
 
 export const ANSWERS = { users: "Studio owners who bill by the hour" };
-/** Args that settle both the brief and the pick, so a run goes straight to Contract. */
 export const SHIP_ARGS = { answers: ANSWERS, pick: 2, rebuildHome: true };
 
 export const run = (args: unknown, answers: AnswerRule[], resumeFrom?: DryRunResult) => dryRun("brand-init", { args, answers, resumeFrom });
@@ -24,7 +21,6 @@ export const one = (r: DryRunResult, label: string): AgentCall => {
 };
 export const indexOf = (r: DryRunResult, label: string) => r.calls.findIndex((c) => c.label === label);
 
-/** The `  · path` lines under a prompt's FILE FENCE header: the paths that lane is held to. */
 export function fenceIn(prompt: string): string[] {
   const after = prompt.split("FILE FENCE")[1];
   if (!after) return [];
@@ -37,7 +33,6 @@ export function fenceIn(prompt: string): string[] {
   return out;
 }
 export const fileIn = (fence: string) => (fence.endsWith("/**") ? `${fence.slice(0, -2)}index.tsx` : fence);
-/** A lane that edited the first file of its own fence. */
 export const laneDid = (c: AnswerInput, files = [fileIn(fenceIn(c.prompt)[0])]) => ({ files, report: `${c.label}: done`, cwd: ROOT });
 
 export const idOf = (label: string) => Number(label.split(":")[1]);
@@ -55,7 +50,6 @@ export const QUESTIONS = [
 export const PASS = { verdict: "PASS", findings: [], evidence: "all green" };
 export const SHIPPED = { shipped: true, gatesGreen: true, verdictWritten: true, commit: "abc1234", pr: "https://github.com/acme/app/pull/7" };
 
-/** The happy path. Overrides go first, because the first matching rule answers. */
 export function rules(overrides: AnswerRule[] = []): AnswerRule[] {
   return [
     ...overrides,

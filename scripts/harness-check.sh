@@ -201,7 +201,7 @@ else
   printf '%s\n' "$WF_OUT" | sed 's/^/      /'
 fi
 
-# K. Repo rules. The ruleset on the default branch and the production environment must
+# K. Repo rules. The rulesets on the default branch and on production, and the production environment, must
 #    match .github/repo-rules.json (docs/ci/repo-rules.md says when a notice stays green).
 RR_OUT=$(bun run scripts/repo-rules.ts --check 2>&1)
 RR_CODE=$?
@@ -246,8 +246,8 @@ fi
 #    it is written as a repeat so this file does not hold the literal either.
 N_PATTERN='(^|[^A-Za-z0-9_./-])ap{2}/'
 N_CANDIDATES=(.claude/workflow-src/*.js .claude/workflows/*.js scripts/verify.sh scripts/harness-check.sh scripts/tracker.ts scripts/stack.ts
-  scripts/pr-review-wait.ts scripts/design-audit.ts scripts/workflows.ts scripts/memory.ts scripts/run-telemetry.ts scripts/harness-config.ts
-  scripts/lib/gh.ts scripts/lib/workflow-dry-run.ts scripts/lib/run-telemetry*.ts scripts/lib/harness-config*.ts scripts/lib/audit-login.ts)
+  scripts/pr-review-wait.ts scripts/design-audit.ts scripts/default-branch.ts scripts/workflows.ts scripts/memory.ts scripts/run-telemetry.ts scripts/harness-config.ts
+  scripts/lib/gh.ts scripts/lib/default-branch*.ts scripts/lib/workflow-dry-run.ts scripts/lib/run-telemetry*.ts scripts/lib/harness-config*.ts scripts/lib/audit-login.ts)
 N_FILES=()
 for f in "${N_CANDIDATES[@]}"; do [ -f "$f" ] && N_FILES+=("$f"); done
 N_HITS=$(grep -HnE "$N_PATTERN" "${N_FILES[@]}" 2>/dev/null)

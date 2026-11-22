@@ -1,9 +1,3 @@
-/**
- * The three workflows read their project values from harness.config.json, through the one line their
- * Preflight returns as config_json. These tests drive the built scripts with scripted agents and a
- * changed config, and pin two promises: a copy that does not verify stops the run before any other
- * agent starts, and a value in the config reaches the prompts that used to hold it as a literal.
- */
 import { describe, expect, it } from "vitest";
 import { configLine, dryRun, labels, type AnswerRule } from "../../lib/workflow-dry-run";
 import type { HarnessConfig } from "../../lib/harness-config";
@@ -119,8 +113,8 @@ describe("a config with other paths, docs, base branch and co-author", () => {
   it("ship-feature fetches the config's base branch and signs commits with the config's co-author line", async () => {
     const run = await dryRun("ship-feature", { args: ship.ARGS, answers: ship.happy([["config", { ...ship.CONFIG_OK, config_json: changed }]]) });
     const preflight = run.calls.find((c) => c.label === "preflight")?.prompt ?? "";
-    expect(preflight).toContain("git fetch -q origin develop");
-    expect(preflight).not.toContain("origin main");
+    expect(preflight).toContain("'develop'");
+    expect(preflight).not.toContain("bun scripts/default-branch.ts");
     const trailers = run.calls.flatMap((c) => c.prompt.match(/Co-Authored-By: [^\n"\\]+/g) ?? []);
     expect(trailers.length).toBeGreaterThan(0);
     expect([...new Set(trailers)]).toEqual(["Co-Authored-By: Test Agent <agent@example.com>"]);

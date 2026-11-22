@@ -47,7 +47,7 @@ const sumTokens = (calls: ReadonlyArray<Call>, pick: Pick) => sumColumn(calls, p
 const sumSeconds = (calls: ReadonlyArray<Call>) => sumColumn(calls, secondsOf, SECONDS_DECIMALS);
 
 const escapeMarkdown = (text: string): string =>
-  text.replace(/\|/g, "\\|").replace(/\r?\n|\r/g, " ").replace(/</g, "&lt;").replace(/@/g, "(at)");
+  text.replace(/\\/g, "\\\\").replace(/\|/g, "\\|").replace(/\r?\n|\r/g, " ").replace(/</g, "&lt;").replace(/@/g, "(at)");
 
 function renderTable(headers: readonly string[], rows: string[][], markdown: boolean): string[] {
   if (markdown) {

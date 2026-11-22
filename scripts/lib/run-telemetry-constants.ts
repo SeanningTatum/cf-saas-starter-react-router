@@ -14,6 +14,7 @@ export const FIRST_ATTEMPT = 1;
 export const CALL_FIELD_COUNT = 7;
 export const FIELD_MAX_LENGTH = 120;
 export const LEDGER_TEXT_FIELDS = ["label", "phase", "agent", "model", "verdict"] as const;
+export const LEDGER_COMPARE_FIELDS = ["label", "phase", "agent", "model", "attempt", "outcome", "verdict"] as const;
 export const AGENT_ID_PATTERN = /^[A-Za-z0-9_-]+$/;
 
 export const VERDICT_PASS = "pass";
@@ -63,4 +64,4 @@ export const SLOWEST_TITLE = "Slowest phase";
 export const FAILURE_TITLE = "Failure rate by agent";
 export const TOKEN_DATA_NAME = "token data";
 export const TIMING_NAME = "timing";
-export const NOT_FOUND_CODE = "ENOENT";
+export const MISSING_FILE_CODES: readonly unknown[] = ["ENOENT", "ENOTDIR"];

@@ -10,7 +10,9 @@
  * Prints one JSON object { ok, file, failures: [{ rule, detail }] } to stdout.
  * Exit 0 when ok, 1 when any rule fails, 2 on usage or an unreadable file (error JSON on stderr).
  */
+import { Either } from "effect";
 import { readFileSync } from "node:fs";
+import { defaultBranch, realDeps } from "./default-branch";
 
 export interface Failure {
   rule: string;
@@ -224,7 +226,7 @@ function overlaps(a: string, b: string): boolean {
   return a === b || b.startsWith(dir(a)) || a.startsWith(dir(b));
 }
 
-function checkStack(s: Section, base: string, fail: (rule: string, detail: string) => void) {
+function checkStack(s: Section, base: string | undefined, fail: (rule: string, detail: string) => void) {
   const table = parseTable(s);
   if (!table || table.rows.length === 0) {
     fail("stack", "PR stack has no rows");
@@ -243,7 +245,7 @@ function checkStack(s: Section, base: string, fail: (rule: string, detail: strin
     if (num !== String(n)) fail("stack", `row ${n}: # is "${num}", expected ${n}`);
     if (seen.has(branch)) fail("stack", `row ${n}: branch "${branch}" is repeated`);
     seen.add(branch);
-    const wantBase = i === 0 ? base : table.rows[i - 1][1];
+    const wantBase = i === 0 ? base ?? rowBase : table.rows[i - 1][1];
     if (rowBase !== wantBase) fail("stack", `row ${n}: base is "${rowBase}", expected "${wantBase}"`);
     const paths = [...(fence ?? "").matchAll(/`([^`]+)`/g)].map((m) => m[1]);
     if (paths.length === 0) fail("stack", `row ${n}: fence has no backticked path`);
@@ -260,7 +262,7 @@ function checkStack(s: Section, base: string, fail: (rule: string, detail: strin
         fail("fence-overlap", `PR ${fences[i].n} \`${fences[i].path}\` overlaps PR ${fences[j].n} \`${fences[j].path}\``);
 }
 
-export function checkFeatureDoc(markdown: string): Failure[] {
+export function checkFeatureDoc(markdown: string, defaultBase?: () => string | undefined): Failure[] {
   const failures: Failure[] = [];
   const fail = (rule: string, detail: string) => failures.push({ rule, detail });
   const { front, body } = parseFrontmatter(markdown);
@@ -334,9 +336,13 @@ export function checkFeatureDoc(markdown: string): Failure[] {
 
   // stack + fence-overlap
   const stack = byName.get("PR stack");
-  if (stack) checkStack(stack, front?.base || "main", fail);
+  if (stack) checkStack(stack, front?.base || defaultBase?.(), fail);
 
   return failures;
+}
+
+function repoDefaultBranch(): string | undefined {
+  return Either.getOrUndefined(defaultBranch(realDeps()));
 }
 
 function main(argv: string[]): number {
@@ -352,7 +358,7 @@ function main(argv: string[]): number {
     console.error(JSON.stringify({ error: `cannot read ${file}: ${(e as Error).message}`, code: "UNREADABLE" }));
     return 2;
   }
-  const failures = checkFeatureDoc(text);
+  const failures = checkFeatureDoc(text, repoDefaultBranch);
   console.log(JSON.stringify({ ok: failures.length === 0, file, failures }));
   return failures.length === 0 ? 0 : 1;
 }

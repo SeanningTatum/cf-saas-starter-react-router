@@ -11,7 +11,7 @@ import {
   JOURNAL_FILE_NAME,
   JSON_INDENT,
   MESSAGE_PREFIX,
-  NOT_FOUND_CODE,
+  MISSING_FILE_CODES,
   RUN_FILE_NAME,
   USAGE_TEXT,
   VERB_INGEST,
@@ -22,14 +22,13 @@ import {
 } from "./lib/run-telemetry-constants";
 import {
   emptyRunFile,
-  ingestJournals,
   isValidSlug,
   mergeLedger,
   parseLedger,
   parseRunFile,
-  type Journal,
   type RunFile,
 } from "./lib/run-telemetry";
+import { ingestJournals, type Journal } from "./lib/run-telemetry-ingest";
 import { statsLines, summaryLines } from "./lib/run-telemetry-report";
 
 export interface Deps {
@@ -145,7 +144,7 @@ function ingest(positional: string[], deps: Deps): Outcome {
   const next: RunFile = { ...base, workflows: { ...base.workflows, [workflow]: { calls: result.calls } } };
   saveRunFile(deps, next);
   return done([
-    `${MESSAGE_PREFIX} ${result.withTokens} of ${result.calls.length} calls now have tokens; ${result.unmatched} journal entries had no ledger call`,
+    `${MESSAGE_PREFIX} ${result.withTokens} of ${result.calls.length} calls now have tokens; ${result.added} journal entries had no ledger call and were added`,
   ]);
 }
 
@@ -166,7 +165,13 @@ function stats(positional: string[], parsed: Parsed, deps: Deps): Outcome {
   const runs: RunFile[] = [];
   const warnings: string[] = [];
   for (const entry of deps.listDir(base).sort()) {
-    const text = deps.readFile(join(base, entry, RUN_FILE_NAME));
+    let text: string | null;
+    try {
+      text = deps.readFile(join(base, entry, RUN_FILE_NAME));
+    } catch (e) {
+      warnings.push(`${MESSAGE_PREFIX} skipped ${entry}: ${e instanceof Error ? e.message : String(e)}`);
+      continue;
+    }
     if (text === null) continue;
     const file = parseRunFile(text);
     if (typeof file === "string") warnings.push(`${MESSAGE_PREFIX} skipped ${entry}/${RUN_FILE_NAME}: ${file}`);
@@ -205,7 +210,7 @@ export const defaultDeps: Deps = {
     try {
       return readFileSync(path, "utf8");
     } catch (e) {
-      if (e instanceof Error && "code" in e && e.code === NOT_FOUND_CODE) return null;
+      if (e instanceof Error && "code" in e && MISSING_FILE_CODES.includes(e.code)) return null;
       throw e;
     }
   },

@@ -237,6 +237,7 @@ const pre = await tracked(
      Otherwise return backend "gh".
   4. PRODUCT.md. Does ROOT/PRODUCT.md exist? -> has_product.
   5. DESIGN.md. Does ROOT/DESIGN.md exist? -> has_design. Does ROOT/.claude/skills/to-spec/SKILL.md exist? -> has_to_spec.
+  5b. Base branch. Run \`bun scripts/default-branch.ts\` -> base_branch, a bare branch name. If it fails, fail with its message.
 ${trackerLine}
   7. Config. Run \`bun scripts/harness-config.ts show\` from ROOT and return its one line of output exactly as \`config_json\`: copy it character for character, change nothing.
 Return ok=false with a one-line reason for the first failure, else ok=true. Always return root when you found it.`,
@@ -246,8 +247,8 @@ Return ok=false with a one-line reason for the first failure, else ok=true. Alwa
     agentType: "runner",
     effort: "low",
     schema: obj(
-      { ok: BOOL, reason: STR, root: STR, date: STR, backend: STR, has_product: BOOL, has_design: BOOL, has_to_spec: BOOL, config_json: STR, issue: { type: ["object", "null"], additionalProperties: true } },
-      ["ok", "reason", "root", "date", "backend", "has_product", "has_design", "has_to_spec", "config_json"]
+      { ok: BOOL, reason: STR, root: STR, date: STR, backend: STR, base_branch: STR, has_product: BOOL, has_design: BOOL, has_to_spec: BOOL, config_json: STR, issue: { type: ["object", "null"], additionalProperties: true } },
+      ["ok", "reason", "root", "date", "backend", "base_branch", "has_product", "has_design", "has_to_spec", "config_json"]
     ),
   }
 );
@@ -259,11 +260,15 @@ if (conf.error) {
   return { stopped: "Preflight", reason: conf.error };
 }
 const cfg = conf.config;
-const BASE = cfg.baseBranch || "main";
 if (!/^\d{4}-\d{2}-\d{2}$/.test(pre.date)) {
   log(`Pre-flight returned a bad date (${JSON.stringify(pre.date)}). Nothing ran.`);
   return { stopped: "Preflight", reason: "preflight did not return an ISO date" };
 }
+if (!cfg.baseBranch && !pre.base_branch) {
+  log("Pre-flight did not return the default branch. Nothing ran.");
+  return { stopped: "Preflight", reason: "preflight did not return the default branch" };
+}
+const BASE = cfg.baseBranch || pre.base_branch;
 if (input.ticket && !pre.issue) {
   log("Pre-flight did not return the ticket. Nothing ran.");
   return { stopped: "Preflight", reason: "ticket could not be read" };

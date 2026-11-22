@@ -20,7 +20,6 @@ import {
   DEFAULT_SCHEMA_PATH,
   DRIZZLE_DIR,
   MIN_REASON_CHARS,
-  TEMP_PREFIX,
 } from "../lib/migration-constants";
 
 const repoRoot = path.join(__dirname, "..", "..");
@@ -356,21 +355,23 @@ describe("drizzle.config.ts match", () => {
   });
 });
 
-const tempDirs = () => fs.readdirSync(os.tmpdir()).filter((n) => n.startsWith(TEMP_PREFIX));
+const ownTempRoot = (): string => fs.mkdtempSync(path.join(os.tmpdir(), "migration-check-test-root-"));
 const migrationsListing = () => fs.readdirSync(path.join(repoRoot, DRIZZLE_DIR)).sort();
 const SLOW_TEST_MS = 30000;
 
 describe("drift against real drizzle-kit", () => {
   it(
-    "reports one extra table as drift and leaves no temp dir and no new migration",
+    "reports one extra table as drift and leaves nothing in its own temp root and no new migration (it once counted folders in the shared OS temp folder, so a second checkout's run could fail it)",
     () => {
-      const tempBefore = tempDirs();
+      const tempRoot = ownTempRoot();
       const listing = migrationsListing();
       const schema = "./scripts/__tests__/fixtures/migration-check/schema-extra.ts";
-      const verdict = decideDrift(generateInTempCopy(repoRoot, schema));
+      const verdict = decideDrift(generateInTempCopy(repoRoot, schema, tempRoot));
+      const leftInTempRoot = fs.readdirSync(tempRoot);
+      fs.rmSync(tempRoot, { recursive: true, force: true });
       expect(verdict.kind).toBe("drift");
       if (verdict.kind === "drift") expect(verdict.files[0]?.sql).toContain("drift_probe");
-      expect(tempDirs()).toEqual(tempBefore);
+      expect(leftInTempRoot).toEqual([]);
       expect(migrationsListing()).toEqual(listing);
     },
     SLOW_TEST_MS,
@@ -378,8 +379,12 @@ describe("drift against real drizzle-kit", () => {
 
   it("returns an unclear probe, not a throw, when the repo has no drizzle folder", () => {
     const empty = fs.mkdtempSync(path.join(os.tmpdir(), "empty-root-"));
-    const probe = generateInTempCopy(empty, DEFAULT_SCHEMA_PATH);
+    const tempRoot = ownTempRoot();
+    const probe = generateInTempCopy(empty, DEFAULT_SCHEMA_PATH, tempRoot);
+    const leftInTempRoot = fs.readdirSync(tempRoot);
     fs.rmSync(empty, { recursive: true, force: true });
+    fs.rmSync(tempRoot, { recursive: true, force: true });
+    expect(leftInTempRoot).toEqual([]);
     expect(probe.newFiles).toEqual([]);
     expect(probe.output).not.toBe("");
     expect(decideDrift(probe).kind).toBe("unclear");

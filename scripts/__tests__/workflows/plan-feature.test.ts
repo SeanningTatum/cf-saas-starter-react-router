@@ -50,7 +50,7 @@ describe("plan-feature: happy path", () => {
       prototypes: ["a", "b", "c"].map((id) => `plans/${SLUG}-proto-${id}.html`),
       chosen: "a",
       research: false,
-      prs: [{ n: 1, branch: "feat/invoice-export/1-api", base: "main", size: "S" }],
+      prs: [{ n: 1, branch: "feat/invoice-export/1-api", base: "staging", size: "S" }],
     });
     expect(done.phases).toEqual(["Preflight", "Intake", "Context", "Audit", "Brief", "Write back", "Fit", "Design", "Stack", "Check", "Plan", "Publish"]);
 
@@ -231,11 +231,31 @@ describe("plan-feature: happy path", () => {
 
   it("a red or unusable preflight stops the run before any other agent", async () => {
     // Catches the preflight checks loosened: a relative root would make every path in every prompt relative.
-    for (const bad of [{ ok: false, reason: "gh auth status: not logged in" }, { root: "repo" }, { issue: null }]) {
+    for (const bad of [{ ok: false, reason: "gh auth status: not logged in" }, { root: "repo" }, { issue: null }, { base_branch: "" }]) {
       const r = await plan({}, rules([["preflight", { ...PREFLIGHT, ...bad }]]));
       expect(r.result).toMatchObject({ stopped: "Preflight" });
       expect(labels(r.calls)).toEqual(["preflight"]);
     }
+  });
+});
+
+describe("plan-feature: the base branch", () => {
+  it("the stack and record prompts name the default branch preflight reported, never a literal main (catches a repo whose default is not main getting PR 1 aimed at a branch that is gone)", async () => {
+    const answers = rules([["preflight", { ...PREFLIGHT, base_branch: "trunk-x" }]]);
+    const atBrief = await plan({}, answers);
+    const atPlan = await plan({ brief: BRIEF }, answers, atBrief);
+    const run = { calls: atPlan.live };
+    const stack = find(run.calls, "stack");
+    expect(stack.prompt).toContain("PR 1 targets trunk-x;");
+    const assemble = run.calls.find((c) => c.prompt.includes("Assemble the decision record"));
+    expect(assemble?.prompt).toContain("base trunk-x.");
+    expect(assemble?.prompt).toContain("(trunk-x)");
+    expect(`${stack.prompt}${assemble?.prompt}`).not.toMatch(/targets main\b|base main\b|\(main\)/);
+  });
+
+  it("preflight is told to get the branch from scripts/default-branch.ts, not to assume it", async () => {
+    const run = await plan({});
+    expect(find(run.calls, "preflight").prompt).toContain("bun scripts/default-branch.ts");
   });
 });
 

@@ -1,15 +1,16 @@
-# Production deploy after CI passes on a push to main. Skipped, not failed, until set up.
-# The token is a `production` environment secret. Pull-request code cannot read it only
-# once that environment has a required reviewer and default-branch-only deploys
-# (bun run scripts/repo-rules.ts --apply, from #67); before that, a branch in this repo
-# can add `environment: production` to a workflow of its own. See docs/ci/pipelines.md
+# Production deploy after CI passes on a push to production. Skipped, not failed, until set up.
+# The token is a `production` environment secret. Pull-request code cannot read it once
+# that environment has a required reviewer and takes deploys only from the default branch
+# (bun run scripts/repo-rules.ts --apply; see docs/ci/repo-rules.md). Before that, a branch
+# in this repo can add `environment: production` to a workflow of its own.
+# See docs/ci/pipelines.md
 name: Deploy Production
 
 on:
   workflow_run:
     workflows: [CI]
     types: [completed]
-    branches: [main]
+    branches: [production]
 
 concurrency:
   group: deploy-production
@@ -23,7 +24,7 @@ jobs:
   readiness:
     name: Check production setup
     runs-on: ubuntu-latest
-    # Only on a green CI run for a push to main (CI also runs on PRs).
+    # Only on a green CI run for a push to production (CI also runs on PRs).
     if: >-
       ${{ github.event.workflow_run.conclusion == 'success'
           && github.event.workflow_run.event == 'push' }}

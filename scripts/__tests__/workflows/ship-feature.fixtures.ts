@@ -5,12 +5,11 @@ export const SLUG = "demo-widget";
 export const BASE_SHA = "a".repeat(40);
 export const REVIEWED_SHA = "c".repeat(40);
 export const ISSUE_URL = "https://github.com/o/r/issues/76";
-export const PR1 = { n: 1, branch: `feat/${SLUG}/1-data`, base: "main", title: "Widget data", fence: ["app/repositories/widget.ts", "app/repositories/__tests__/widget.test.ts"], greptile_focus: "authorization" };
+export const PR1 = { n: 1, branch: `feat/${SLUG}/1-data`, base: "staging", title: "Widget data", fence: ["app/repositories/widget.ts", "app/repositories/__tests__/widget.test.ts"], greptile_focus: "authorization" };
 export const PR2 = { n: 2, branch: `feat/${SLUG}/2-ui`, base: PR1.branch, title: "Widget screen", fence: ["app/routes/widget.tsx"], greptile_focus: "empty and error states" };
 export const CONTRACT = "export type Widget = { id: string; name: string }";
 export const ARGS = { ticket: "76" };
 
-/** Anything that writes outside the machine. Reads (`gh pr checks`, `gh issue view`) are allowed before the ship stop. */
 export const GITHUB_WRITE = /git push|gh pr (create|comment|merge|edit|review|close|ready)|gh issue (create|comment|edit|close)|gh api|@greptileai review/;
 
 export const GATES = [
@@ -29,6 +28,7 @@ export const preflight = (over: Record<string, unknown> = {}) => ({
   root: ROOT,
   date: "2026-11-22",
   untracked: [],
+  base_branch: "staging",
   base_sha: BASE_SHA,
   issue: { ref: "#76", url: ISSUE_URL, title: "Demo widget", body: "Let users add widgets." },
   record_path: `${ROOT}/.verify/_intake/record-76.md`,
@@ -55,10 +55,6 @@ export const PLAN = {
   prs: [PR1, PR2],
 };
 
-/**
- * A ticket with a plan-feature decision record, two stacked PRs (backend, then UI), every check green,
- * Greptile 5/5 on the roll-up. `over` rules come first, so they win.
- */
 export function happy(over: AnswerRule[] = []): AnswerRule[] {
   return [
     ...over,

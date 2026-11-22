@@ -57,7 +57,7 @@ describe("ship-feature: happy path, a ticket with a decision record, two stacked
     expect(firstWrite).toBeGreaterThan(indexOf(shipped.calls, "local:code-review:2:1"));
   });
 
-  it("the ship page offers a stack whose PR 1 targets review/<slug>, not main (catches baseOf dropped: PR 1 would merge straight into main)", async () => {
+  it("the ship page offers a stack whose PR 1 targets review/<slug>, not the base (catches baseOf dropped: PR 1 would merge straight into the base)", async () => {
     const { stopped } = await runHappy();
     const r = stopped.result as { prs: { n: number; base: string }[]; open_findings: unknown[]; review: string };
     expect(r.prs.map((p) => [p.n, p.base])).toEqual([[1, `review/${SLUG}`], [2, PR1.branch]]);
@@ -138,11 +138,50 @@ describe("ship-feature: happy path, a ticket with a decision record, two stacked
   });
 });
 
+describe("ship-feature: the base branch", () => {
+  const shipWith = async (args: Record<string, unknown>, reported: string) => {
+    const answers = happy([["preflight", preflight({ base_branch: reported })]]);
+    const stopped = await dryRun("ship-feature", { args, answers });
+    const shipped = await dryRun("ship-feature", { args: { ...args, ships: { "1": { approved: true } } }, answers, resumeFrom: stopped });
+    return { stopped, shipped };
+  };
+
+  it("with no base arg the roll-up targets the default branch preflight reported, and preflight is told to ask the repo (catches a literal main creeping back)", async () => {
+    const { stopped, shipped } = await shipWith(ARGS, "trunk-x");
+    expect(find(stopped.calls, "preflight").prompt).toContain("bun scripts/default-branch.ts");
+    expect(find(shipped.live, "rollup:pr").prompt).toContain("gh pr create --base 'trunk-x' --head review/");
+    expect(find(shipped.live, "rollup:pr").prompt).not.toMatch(/--base main\b/);
+  });
+
+  it("an explicit base arg wins over what preflight reports, and preflight is not sent to ask the repo (catches the arg ignored)", async () => {
+    const { stopped, shipped } = await shipWith({ ...ARGS, base: "release/v3" }, "trunk-x");
+    expect(find(stopped.calls, "preflight").prompt).toContain("'release/v3'");
+    expect(find(stopped.calls, "preflight").prompt).not.toContain("bun scripts/default-branch.ts");
+    expect(find(shipped.live, "rollup:pr").prompt).toContain("gh pr create --base 'release/v3' --head review/");
+  });
+
+  it("a reported base with a shell-active character reaches the roll-up prompt only quoted (catches an unquoted BASE in gh pr create and gh pr comment)", async () => {
+    const hostile = "x$(touch pwned)`id`";
+    const { shipped } = await shipWith(ARGS, hostile);
+    const prompt = find(shipped.live, "rollup:pr").prompt;
+    expect(prompt).toContain(`--base '${hostile}' --head review/`);
+    expect(prompt).toContain("--body 'Merged into ");
+    expect(prompt).not.toContain(`--base ${hostile}`);
+    expect(prompt).not.toContain('--body "Merged into');
+  });
+
+  it("a preflight that reports no default branch stops the run when no base arg was given", async () => {
+    const run = await dryRun("ship-feature", { args: ARGS, answers: happy([["preflight", preflight({ base_branch: "" })]]) });
+    expect(run.result).toMatchObject({ stopped: "Preflight", reason: "no default branch reported" });
+    expect(labels(run.calls)).toEqual(["config", "preflight"]);
+  });
+});
+
 describe("ship-feature: a failing gate", () => {
   it("a red baseline stops the run in Preflight, before any other agent (catches a run that builds on a red base and hides its own regressions)", async () => {
     const red = GATES.map((g) => (g.name === "unit" ? { ...g, pass: false, tail: "1 failed" } : g));
     const run = await dryRun("ship-feature", { args: ARGS, answers: happy([["preflight", preflight({ baseline: red })]]) });
-    expect(run.result).toMatchObject({ stopped: "Preflight", reason: "baseline red on main: unit" });
+    expect(run.result).toMatchObject({ stopped: "Preflight", reason: "baseline red on staging: unit" });
     expect(labels(run.calls)).toEqual(["config", "preflight"]);
   });
 

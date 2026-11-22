@@ -70,6 +70,34 @@ describe("runRules", () => {
     expect(fallback).toMatchObject({ fix: "write GOOD", example: "app/good.ts" });
   });
 
+  it("keeps a hit's own example over the rule's, so a finding points at a file that shows its own fix", () => {
+    const rule = badWordRule({
+      example: "app/good.ts",
+      check: () => [{ line: 1, message: "own example", example: "app/closer.ts" }],
+    });
+
+    const [own] = runRules([rule], memoryRepo({ "app/a.ts": "x" }), roots()).findings;
+
+    expect(own).toMatchObject({ example: "app/closer.ts" });
+  });
+
+  it("hands a repo rule the named files, so a rule that reads the whole tree can stop at them in file mode", () => {
+    const seen: Array<ReadonlySet<string> | undefined> = [];
+    const rule = listedHitsRule([], {
+      check: (_repo, only) => {
+        seen.push(only);
+        return [];
+      },
+    });
+    const repo = memoryRepo({ "app/a.ts": "x" });
+
+    runRules([rule], repo, roots());
+    runRules([rule], repo, roots(), new Set(["app/a.ts"]));
+
+    expect(seen[0]).toBeUndefined();
+    expect([...(seen[1] ?? [])]).toEqual(["app/a.ts"]);
+  });
+
   it("adds up the suppression markers with a reason across every file", () => {
     const rule = badWordRule({ suppressionMarker: "bad-ok:" });
     const repo = memoryRepo({ "app/a.ts": "// bad-ok: one\nBAD", "app/b.ts": "// bad-ok: two\nBAD" });
