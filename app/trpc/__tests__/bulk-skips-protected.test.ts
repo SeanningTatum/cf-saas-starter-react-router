@@ -52,13 +52,14 @@ describe("bulk admin procedures skip the caller and every admin", { timeout: 60_
     await adminsUntouched();
   });
 
-  it("admin.bulkUpdateUserRoles cannot demote the caller or another admin", async () => {
+  it("admin.bulkUpdateUserRoles promotes the plain user to admin and counts the caller and the other admin as skipped", async () => {
     const plain = await seedPlainUser("bulk-role-plain");
     const result = await (await asCaller()).admin.bulkUpdateUserRoles({
       userIds: [caller.userId, otherAdmin.userId, plain],
-      role: "user",
+      role: "admin",
     });
     expect(result).toEqual({ success: true, affectedCount: 1, skippedCount: 2 });
+    expect(await row(plain)).toMatchObject({ role: "admin" });
     await adminsUntouched();
   });
 

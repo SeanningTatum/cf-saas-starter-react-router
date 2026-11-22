@@ -94,7 +94,7 @@ export function emitLog(
       level === "fatal" ? "error" : level === "trace" ? "debug" : level;
     // biome-ignore lint/suspicious/noConsole: this function is the one log sink
     console[fn](
-      `${LOG_LEVEL_COLORS[level]}${level.toUpperCase().padEnd(5)}${ANSI_RESET}${prefix} ${data.msg}${ctx}`
+      `${LOG_LEVEL_COLORS[level]}${level.toUpperCase().padEnd(5)}${ANSI_RESET} ${prefix} ${data.msg}${ctx}`
     );
   } else {
     // biome-ignore lint/suspicious/noConsole: this function is the one log sink
