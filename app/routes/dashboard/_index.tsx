@@ -33,7 +33,6 @@ export default function DashboardIndex() {
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-12 lg:px-6">
-      {/* Welcome */}
       <header className="mb-10 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div className="flex flex-col gap-3">
           <span className="inline-flex w-fit items-center gap-2 rounded-full border border-border bg-card px-3 py-1 font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
@@ -67,7 +66,6 @@ export default function DashboardIndex() {
         </div>
       </header>
 
-      {/* Educational grid */}
       <section className="mb-12">
         <div className="mb-4 flex items-baseline justify-between gap-4">
           <h2 className="text-sm font-medium uppercase tracking-wider text-muted-foreground">
@@ -126,7 +124,6 @@ export default function DashboardIndex() {
         </div>
       </section>
 
-      {/* Status / your account */}
       <section>
         <Card data-testid="dashboard-account">
           <CardHeader className="gap-2">

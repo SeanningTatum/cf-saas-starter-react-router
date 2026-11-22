@@ -58,7 +58,6 @@ export default function Home() {
       <TopBar />
 
       <main className="mx-auto max-w-6xl px-6 pb-24">
-        {/* Hero */}
         <section className="flex flex-col items-start gap-8 pt-20 pb-16 md:items-center md:text-center">
           <span className="inline-flex items-center gap-2 rounded-full border border-border bg-card px-3 py-1 font-mono text-[11px] uppercase tracking-wider text-muted-foreground">
             <span className="size-1.5 rounded-full bg-primary" />
@@ -94,7 +93,6 @@ export default function Home() {
           </div>
         </section>
 
-        {/* What's wired */}
         <section className="border-t border-border pt-16">
           <div className="mb-8 flex flex-col gap-2">
             <h2 className="text-xl font-semibold tracking-tight sm:text-2xl">
@@ -163,7 +161,6 @@ export default function Home() {
           </div>
         </section>
 
-        {/* Harness */}
         <section className="mt-20 border-t border-border pt-16">
           <div className="mb-8 flex flex-col gap-3">
             <span className="inline-flex w-fit items-center gap-2 rounded-full border border-border bg-card px-2.5 py-1 font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
@@ -221,7 +218,6 @@ export default function Home() {
           </div>
         </section>
 
-        {/* Quickstart */}
         <section className="mt-20 border-t border-border pt-16">
           <div className="grid gap-10 lg:grid-cols-[1fr_auto] lg:items-end">
             <div className="flex flex-col gap-3">

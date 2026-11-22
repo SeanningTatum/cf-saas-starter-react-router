@@ -13,22 +13,15 @@ import { LanguageSwitcher } from "@/components/language-switcher";
 import { StackBadge } from "@/components/stack-badge";
 
 interface AuthShellProps {
-  /** Form column content (the sign-in / sign-up card). */
   children: React.ReactNode;
 }
 
-/**
- * Split-pane shell for the auth pages. Form on the left (always visible), an
- * educational context panel on the right (md+ only) so engineers evaluating
- * the boilerplate immediately see what's powering the auth flow.
- */
 export function AuthShell({ children }: AuthShellProps) {
   const { t } = useTranslation("auth");
   const { t: tc } = useTranslation("common");
 
   return (
     <div className="grid min-h-svh grid-cols-1 md:grid-cols-[5fr_7fr]">
-      {/* Form column */}
       <div className="relative flex flex-col px-4 py-8 sm:px-6 md:px-10">
         <div className="flex items-center justify-between">
           <Link
@@ -61,7 +54,6 @@ export function AuthShell({ children }: AuthShellProps) {
         </div>
       </div>
 
-      {/* Context column */}
       <aside
         aria-hidden="true"
         className="relative hidden flex-col justify-between border-l border-border bg-muted/30 p-12 md:flex"

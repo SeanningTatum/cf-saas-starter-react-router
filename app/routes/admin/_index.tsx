@@ -55,7 +55,6 @@ export default function AdminHome({ loaderData }: Route.ComponentProps) {
       <div className="flex flex-1 flex-col">
         <div className="@container/main flex flex-1 flex-col gap-2">
           <div className="flex flex-col gap-4 py-4 md:gap-6 md:py-6">
-            {/* Stats Cards */}
             <div className="px-4 lg:px-6">
               <StatCardGrid columns={4}>
                 <StatCard
@@ -85,7 +84,6 @@ export default function AdminHome({ loaderData }: Route.ComponentProps) {
               </StatCardGrid>
             </div>
 
-            {/* Charts Row */}
             <div className="px-4 lg:px-6">
               <div className="grid gap-4 lg:grid-cols-2 lg:gap-6">
                 <TimeSeriesChart
@@ -106,7 +104,6 @@ export default function AdminHome({ loaderData }: Route.ComponentProps) {
               </div>
             </div>
 
-            {/* Second Row: Verification Distribution + Insights */}
             <div className="px-4 lg:px-6">
               <div className="grid gap-4 lg:grid-cols-2 lg:gap-6">
                 <DistributionChart
