@@ -1,4 +1,4 @@
-import { isSourcePath } from "./source";
+import { commentsIn } from "./comments";
 import type { FileHit, FileRule, Finding, Hit, Repo, Rule, RunResult, Source } from "./types";
 
 interface Marker {
@@ -11,13 +11,10 @@ interface Suppressed {
   count: number;
 }
 
-const COMMENT_CLOSE = /\*\/\s*\}?\s*$/;
-
 function markers(source: Source, marker: string): Marker[] {
-  return source.text.split("\n").flatMap((text, index) => {
-    const at = text.indexOf(marker);
-    if (at < 0) return [];
-    return [{ line: index + 1, reason: text.slice(at + marker.length).replace(COMMENT_CLOSE, "").trim() }];
+  return commentsIn(source).flatMap((comment) => {
+    const at = comment.body.indexOf(marker);
+    return at < 0 ? [] : [{ line: comment.line, reason: comment.body.slice(at + marker.length).trim() }];
   });
 }
 
@@ -61,7 +58,7 @@ const byText = (a: string, b: string): number => Number(a > b) - Number(a < b);
 const byPlace = (a: Finding, b: Finding): number => byText(a.file, b.file) || a.line - b.line || byText(a.rule, b.rule);
 
 export function runRules(rules: Rule[], repo: Repo, roots: readonly string[], only?: ReadonlySet<string>): RunResult {
-  const paths = (only ? [...only] : roots.flatMap((root) => repo.files(root))).filter(isSourcePath).sort();
+  const paths = (only ? [...only] : roots.flatMap((root) => repo.files(root))).sort();
   const findings: Finding[] = [];
   let suppressions = 0;
   let filesChecked = 0;

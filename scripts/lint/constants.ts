@@ -1,9 +1,16 @@
-export const LINT_ROOTS = ["app", "workers"] as const;
+export const SHIPPED_ROOTS = ["app", "workers"] as const;
+export const WORKFLOW_SOURCE_DIR = ".claude/workflow-src";
+export const LINT_ROOTS = [...SHIPPED_ROOTS, "e2e", "scripts", WORKFLOW_SOURCE_DIR] as const;
 export const SKIPPED_DIRS = ["node_modules", ".react-router", "build"] as const;
 export const SOURCE_FILE = /\.tsx?$/;
 export const TEST_PATH = /(^|\/)__tests__\/|\.test\.tsx?$|\.test-layer\.ts$/;
 
 export const VENDORED_UI = "app/components/ui/";
+export const CONSTANTS_DIR = "app/lib/constants/";
+export const ROUTE_CONSTANTS_FILE = "app/lib/constants/routes.ts";
+export const MAX_FILE_LINES = 400;
+export const SIZED_ROOTS = [...SHIPPED_ROOTS, "e2e", "scripts"] as const;
+export const WORKFLOW_SOURCE_FILE = /\.js$/;
 export const ERRORS_DIR = "app/models/errors";
 export const ERROR_MAP_FILE = "app/lib/effect-trpc.ts";
 export const MIN_TEST_FILE_CHARS = 40;

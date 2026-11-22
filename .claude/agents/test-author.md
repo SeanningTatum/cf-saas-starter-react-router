@@ -18,7 +18,7 @@ Before each test, answer in one sentence: what plausible future edit does it cat
 - "It proves the code is the code": skip it.
 - It only asserts on a mock you set up: skip it.
 
-Put that sentence in the test name or a comment. `app/trpc/__tests__/index.test.ts` is the model: a header explains the production bug, and an inline comment explains why a runtime test backs a type-level guarantee.
+Put that sentence in the test's title: `it("refuses a banned user, so a ban cannot be undone by signing in again", …)`. Comments are not allowed in test files (the `no-comments` rule), so the title is the only place for it.
 
 ## What to test, in order
 
