@@ -139,6 +139,7 @@ State lives in GitHub: the spec is an issue, each ticket is an issue, and a merg
 | harness | `./scripts/harness-check.sh` | baseline, full |
 | secrets | `bun run scripts/secret-scan.ts` | baseline, full |
 | audit | `bun run scripts/package-audit.ts` | baseline, full |
+| machines | `bun scripts/check-machines.ts` ([state machines](docs/agents/harness.md#state-machines)) | baseline, full |
 | build | `bun run build` | full |
 | e2e | `bun run test:e2e` | full |
 

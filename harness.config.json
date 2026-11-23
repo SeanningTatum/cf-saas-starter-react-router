@@ -44,6 +44,12 @@
       "limitSeconds": 120
     },
     {
+      "name": "machines",
+      "run": "bun scripts/check-machines.ts",
+      "tier": "baseline",
+      "limitSeconds": 120
+    },
+    {
       "name": "coverage",
       "run": "bun run scripts/coverage-floors.ts",
       "tier": "full",

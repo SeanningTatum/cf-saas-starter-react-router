@@ -21,6 +21,8 @@ export const FULL_RUN_TRIGGERS = [
   { match: "scripts/lib/repo-rules-*.ts", reason: "a gate script" },
   { match: "scripts/secret-scan.ts", reason: "a gate script" },
   { match: "scripts/package-audit.ts", reason: "a gate script" },
+  { match: "scripts/check-machines.ts", reason: "a gate script" },
+  { match: "scripts/lib/machine-*.ts", reason: "a gate script" },
   { match: "scripts/coverage-floors.ts", reason: "a gate script" },
   { match: "scripts/lib/coverage-*.ts", reason: "a gate script" },
   { match: "scripts/lint/**", reason: "the house linter, its rules, map or baseline" },
@@ -50,12 +52,13 @@ export const FULL_RUN_TRIGGERS = [
   { match: "app/db/schema.ts", reason: "the schema, which the migrations gate reads" },
 ] as const;
 
-export const GATE = { typecheck: "typecheck", lint: "lint", test: "test", e2e: "e2e" } as const;
+export const GATE = { typecheck: "typecheck", lint: "lint", test: "test", machines: "machines", e2e: "e2e" } as const;
 
 export const COMMAND = {
   typecheck: "bun run typecheck",
   lint: "bun run lint",
   test: "bunx vitest related --run --passWithNoTests",
+  machines: "bun scripts/check-machines.ts",
   e2e: "CI=1 bun run test:e2e",
 } as const;
 
@@ -64,6 +67,7 @@ export const MODULE_FILE = /\.(tsx?|jsx?|json)$/;
 export const SKIP_REASON = {
   noCode: "no .ts, .tsx, .js, .json or .css file changed, so Biome has nothing to check",
   noModule: "no .ts, .tsx, .js or .json file changed, so no test imports one",
+  noMachine: "no *.machine.ts file changed, and no machine imports a changed file",
   noSpec: "no changed file maps to an e2e spec (scripts/lint/test-map.json, the route table, or a spec that imports it)",
 } as const;
 
