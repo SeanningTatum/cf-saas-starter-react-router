@@ -1,0 +1,13 @@
+# Commits that only change layout. `git blame` skips them after
+#   git config blame.ignoreRevsFile .git-blame-ignore-revs
+# GitHub's blame view reads this file on its own.
+#
+# A SHA here dies when the branch that holds it is squashed: the squash commit has a new SHA
+# and also holds the real changes of every other commit in that branch, so it cannot be listed
+# in its place. If that happens, delete the dead line (git skips an unknown SHA in this file,
+# so the line does no harm, but it misleads). To keep the skip, land the
+# branch with a merge commit instead, or re-run the formatter on the squashed branch and list
+# that commit alone.
+
+# style: format the repo with Biome (#79), on v3/w1-79-lint-gates-final
+48084a3c5196266b96e1cad93bb30286e34f5e1f
