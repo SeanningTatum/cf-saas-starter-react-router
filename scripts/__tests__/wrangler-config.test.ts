@@ -19,8 +19,6 @@ const committed = JSON.parse(stripJsonc(fs.readFileSync(path.join(__dirname, "..
 
 const built = buildWranglerConfig(DUMMY_INPUT) as WranglerShape;
 
-const committedText = fs.readFileSync(path.join(__dirname, "..", "..", "wrangler.jsonc"), "utf-8");
-
 describe("buildWranglerConfig", () => {
   it("builds the same rate-limit bindings wrangler.jsonc holds, in both blocks, whatever names and ids setup wrote around them", () => {
     expect(built.ratelimits).toEqual(committed.ratelimits);
@@ -45,8 +43,9 @@ describe("buildWranglerConfig", () => {
     expect(new Set(periods)).toEqual(new Set([RATE_LIMIT_PERIOD_SECONDS]));
   });
 
-  it("builds exactly the committed wrangler.jsonc from the dummy input, so that setup and teardown never drop or add a block the repo holds", () => {
-    expect(JSON.parse(stripJsonc(committedText))).toEqual(built);
+  it("builds the same env blocks and staging rate limits the committed wrangler.jsonc holds, whatever ids, names or vars setup and the owner wrote into it, so that setup never drops a block the repo deploys", () => {
+    expect(Object.keys(committed.env).sort()).toEqual(Object.keys(built.env).sort());
+    expect(built.env.staging.ratelimits).toEqual(committed.env.staging.ratelimits);
   });
 
   it("gives staging its own database, bucket and rate-limit counters, so that a staging deploy or test never touches production or preview data", () => {

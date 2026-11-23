@@ -223,8 +223,9 @@ describe("readStagingD1Id", () => {
     expect(Either.isLeft(readStagingD1Id('{"env":{"staging":{"d1_databases":"no"}}}'))).toBe(true);
   });
 
-  it("finds the placeholder id in the committed wrangler.jsonc, so that this template skips staging until setup runs", () => {
-    expect(readStagingD1Id(REAL_FILE)).toEqual(Either.right(ZERO_ID));
+  it("reads a D1 id from the committed wrangler.jsonc, placeholder or real, so that the staging gate works on this template and on a fork that ran setup", () => {
+    const id = readStagingD1Id(REAL_FILE);
+    expect(Either.isRight(id) && typeof id.right).toBe("string");
   });
 });
 
