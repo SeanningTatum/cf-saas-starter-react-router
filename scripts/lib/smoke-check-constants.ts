@@ -32,6 +32,7 @@ export const ERROR_BAD_URL = "the URL must be an https origin (or http on localh
 export const ERROR_HALF_PIN = `${FLAG_WORKER} and ${FLAG_VERSION_ID} go together`;
 export const ERROR_BAD_WORKER = "the Worker name must be lower-case letters, digits and hyphens";
 export const ERROR_BAD_VERSION = "the version id must be a Worker version UUID";
+export const ERROR_PIN_NEEDS_RELEASE = `a pinned version needs ${FLAG_RELEASE}: Cloudflare ignores a pin for a version outside the deployment, and only the release shows which version answered`;
 export const ERROR_BAD_RELEASE = "the release must be 1 to 64 letters, digits, dots, hyphens, underscores or plus signs";
 
 export const REASON_NO_ANSWER = "no answer (network error or timeout)";

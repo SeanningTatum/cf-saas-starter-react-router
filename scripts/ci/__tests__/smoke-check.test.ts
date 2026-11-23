@@ -80,6 +80,12 @@ describe("release text from the body", () => {
     }
   });
 
+  it("refuses a pinned version without --release, so that an old version answering through an ignored pin can never pass", () => {
+    const pinned = ["--url", "https://a.example.com", "--worker", "my-app", "--version-id", "dc8dcd28-271b-4367-9840-6c244f84cb40"];
+    expect(Either.isLeft(parseArgs(pinned))).toBe(true);
+    expect(Either.isRight(parseArgs([...pinned, "--release", "v1"]))).toBe(true);
+  });
+
   it("refuses an empty or unsafe --release, so that an unset CI variable cannot silently turn the release check off", () => {
     expect(Either.isLeft(parseArgs(["--url", "https://a.example.com", "--release", ""]))).toBe(true);
     expect(Either.isLeft(parseArgs(["--url", "https://a.example.com", "--release", "v1\nx"]))).toBe(true);
