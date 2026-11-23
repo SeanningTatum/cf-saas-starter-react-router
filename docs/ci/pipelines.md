@@ -75,6 +75,8 @@ On a PR into `staging` or `production`, CI measures the size itself against the 
 
 A budget only shrinks. On a pull request, the `Budgets only shrink` step runs `bun run size --ratchet origin/<base>` and fails a budget that went up or was removed against the base branch's file. A row marked `lower the budget` has more than 4 KiB to spare: edit the file down to the measured number. Raising a budget is the owner's call, with numbers, in its own pull request. A target is a goal the budget walks down to; it fails nothing. Lighthouse limits stay warn-only.
 
+The Worker budget carries headroom on purpose. The owner raised it on 2026-11-23 from 1,225,032 to 1,280,000 bytes, about 50 KB above the 1,229,619 measured that day, so server features can land while the cuts in #89 are still to come. Until those cuts land, the Worker row may read `lower the budget`; leave it. When they land, set the Worker budget to the measured number, and from then on it only shrinks like the rest. Page budgets have no headroom: they are what a visitor downloads.
+
 ## How a change reaches production
 
 Two long-lived branches: `staging` (the default branch) and `production`.
