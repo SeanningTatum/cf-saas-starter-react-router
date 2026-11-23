@@ -36,8 +36,9 @@ function Toaster(props: ToasterProps) {
   const { t } = useTranslation("common");
 
   useEffect(() => {
-    const held = takeHeldSuccessToast(() => window.sessionStorage);
-    if (held !== null) sonnerToast.success(held);
+    void takeHeldSuccessToast(() => window.sessionStorage).then((held) => {
+      if (held !== null) sonnerToast.success(held);
+    });
   }, []);
 
   const tokenStyle: SonnerTokenStyle = {
