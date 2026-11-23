@@ -3,7 +3,7 @@ import { Either } from "effect";
 import { describePath, fileUploadEdgePaths, type ModelEvent } from "@/components/file-upload.model";
 import uploadText from "@/locales/en/upload.json" with { type: "json" };
 import { useAdminSessionSignedInOncePerFile } from "./lib/admin-session";
-import { allowForAColdFirstLoad, reloadWhileViteReoptimizesDeps } from "./lib/hydration";
+import { expectHydrated } from "./lib/hydration";
 import { TIMEOUTS_MS } from "./lib/values";
 
 const KITCHEN_SINK_MAX_SIZE = 1024 * 1024;
@@ -54,12 +54,8 @@ test.describe("FileUpload paths (wiring only, since the machine unit tests own e
 
       const root = page.getByTestId("file-upload");
       const dropzone = page.getByTestId("file-upload-dropzone");
-      allowForAColdFirstLoad();
-      await reloadWhileViteReoptimizesDeps(
-        page,
-        await page.goto("/admin/kitchen-sink#upload"),
-        () => dropzone,
-      );
+      await page.goto("/admin/kitchen-sink#upload");
+      await expectHydrated(dropzone, "the upload dropzone");
       await expect(root).toHaveAttribute("data-state", "idle");
       await expect(async () => {
         await dropzone.dispatchEvent("dragover");

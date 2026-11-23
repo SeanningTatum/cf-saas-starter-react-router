@@ -168,6 +168,8 @@ Listed in `gates` in [`harness.config.json`](../../harness.config.json) and run 
 
 The `e2e` gate needs the network: the sign-in and sign-up pages load Turnstile from `challenges.cloudflare.com`. Each spec file sends its own client IP (`e2e/lib/client-ip.ts`), so the auth rate limits count per file ([`docs/auth.md`](../auth.md#rate-limits)).
 
+The `e2e` gate never retries (`retries: 0` in `playwright.config.ts`), so a test that fails one run in three turns the gate red instead of passing on a second try; the trace of the failing run is kept under `test-results/`. `future.unstable_optimizeDeps` in `react-router.config.ts` makes Vite pre-bundle every dependency the routes import at start, so a cold first load gets no "504 Outdated Optimize Dep" and no spec needs to reload. To hunt a flake, run the spec with `--repeat-each=20` on a cold cache (`rm -rf node_modules/.vite`).
+
 The `lint` gate is the one entry point: Biome, the house linter, import cycles and dead code, one finding shape ([`lint.md`](lint.md)). The two `non-negotiables` gates run the house linter (`bun run lint:house`) and its self-test on their own: one file per rule in `scripts/lint/rules/`, findings that say the fix, and a baseline that only shrinks. The rules, the baseline and how to add a rule: [`lint-rules.md`](lint-rules.md).
 
 ## Commands (README.md has the same list)
