@@ -2,7 +2,7 @@ import { expect, test, type Locator, type Page } from "@playwright/test";
 import { BROWSER_REPORT_PATH } from "../app/lib/constants/error-reporting";
 import { useAdminSessionSignedInOncePerFile } from "./lib/admin-session";
 import { useClientIpPerFile } from "./lib/client-ip";
-import { loadHydratedReloadingWhileViteReoptimizesDeps } from "./lib/hydration";
+import { loadHydrated } from "./lib/hydration";
 import { PAGE_PATHS } from "./lib/values";
 
 const DOC = "docs/security-headers.md";
@@ -51,7 +51,7 @@ const expectNoHydrationProblem = async (
   ready: (page: Page) => Locator,
 ) => {
   const problems = watchHydrationProblems(page);
-  await loadHydratedReloadingWhileViteReoptimizesDeps(page, url, ready);
+  await loadHydrated(page, url, ready);
   expect(new URL(page.url()).pathname, `${url} redirected; is the fixture signed in?`).toBe(url);
   await letReactFinishLogging(page);
   expect(
