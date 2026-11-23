@@ -20,10 +20,11 @@ afterEach(() => {
 });
 
 describe("providerSetIn", () => {
-  it("reads a bare, a double-quoted and a single-quoted value, so quoting cannot hide posthog", () => {
+  it("reads a bare, a quoted and an export-prefixed value, as dotenv does, so neither quoting nor export can hide posthog", () => {
     expect(providerSetIn("ANALYTICS_PROVIDER=posthog\n")).toBe("posthog");
     expect(providerSetIn('ANALYTICS_PROVIDER="posthog"\n')).toBe("posthog");
     expect(providerSetIn("  ANALYTICS_PROVIDER = 'posthog' # real\n")).toBe("posthog");
+    expect(providerSetIn("export ANALYTICS_PROVIDER=posthog\n")).toBe("posthog");
   });
 
   it("skips a commented-out line, so the .dev.vars.example hint does not stop every run", () => {

@@ -1,10 +1,11 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import { parse } from "dotenv";
 import { Effect } from "effect";
 import { RealAnalyticsProviderError } from "../../app/models/errors/fixture";
-import { ANALYTICS_PROVIDER_LINES, LOCAL_ENV_FILES, REAL_ANALYTICS_PROVIDER, UNREADABLE_PROVIDER } from "./analytics-guard-constants";
+import { ANALYTICS_PROVIDER_KEY, LOCAL_ENV_FILES, REAL_ANALYTICS_PROVIDER, UNREADABLE_PROVIDER } from "./analytics-guard-constants";
 
-export const providerSetIn = (text: string): string | undefined => Array.from(text.matchAll(ANALYTICS_PROVIDER_LINES), (match) => match[1]).at(-1);
+export const providerSetIn = (text: string): string | undefined => parse(text)[ANALYTICS_PROVIDER_KEY];
 
 const refuseFile = (root: string, file: string) =>
   Effect.gen(function* () {
