@@ -77,3 +77,8 @@ export const SQL_NULL = "NULL";
 export const SQL_QUOTE = "'";
 export const SQL_ESCAPED_QUOTE = "''";
 export const SQL_STATEMENT_END = ";";
+
+export const SEEDED_DATABASE_URL = ":memory:";
+export const SEEDED_DATABASE_PASSWORD_HASH = "not-a-hash:the-seeded-test-database-has-no-login";
+export const SQLITE_FOREIGN_KEYS_ON = "PRAGMA foreign_keys = ON";
+export const MIGRATION_STATEMENT_BREAKPOINT = "--> statement-breakpoint";

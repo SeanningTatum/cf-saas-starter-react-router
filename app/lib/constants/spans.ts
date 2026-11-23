@@ -7,3 +7,6 @@ export const RATE_LIMIT_CHECK_SPAN = "rate_limit.check";
 export const UPLOAD_STORE_FILE_SPAN = "upload.store_file";
 export const UPLOAD_READ_HEAD_SPAN = "upload.read_head";
 export const FIXTURES_LOAD_SCENARIO_SPAN = "fixtures.load_scenario";
+export const FIXTURES_OPEN_DATABASE_SPAN = "fixtures.open_database";
+export const FIXTURES_APPLY_MIGRATIONS_SPAN = "fixtures.apply_migrations";
+export const FIXTURES_APPLY_SCENARIO_SPAN = "fixtures.apply_scenario";

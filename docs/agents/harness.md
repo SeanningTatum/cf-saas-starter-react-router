@@ -192,6 +192,27 @@ Commit subjects and PR titles follow Conventional Commits, checked by the `commi
 |---------|---------|
 | [`/harness-check`](../../.claude/commands/harness-check.md) | [`scripts/harness-check.sh`](../../scripts/harness-check.sh) — CLAUDE↔AGENTS symlink, sub-agent frontmatter, Kimi roster symlink, hook wiring + hook tests, `harness.config.json` (check M), workflow scripts (they parse, and match their sources), the generated lint rules page, and the live repo rules against `.github/repo-rules.json` ([`docs/ci/repo-rules.md`](../ci/repo-rules.md); a notice when GitHub cannot be read). No LLM, exits non-zero on drift. |
 
+## Tests on the seeded database
+
+A repository or procedure test runs on real SQL, not on the chainable stub in `app/services/database.test-layer.ts`. One import, one call:
+
+```ts
+import { makeSeededDatabase } from "@/services/database.seeded-layer";
+
+const layer = UserRepository.Default.pipe(Layer.provide(makeSeededDatabase("many-users")));
+```
+
+`makeSeededDatabase(scenario)` returns a `Database` layer: an in-memory SQLite database (`@libsql/client` with `drizzle-orm/libsql`, cast to the D1 drizzle type) with every migration in `drizzle/` applied in journal order, foreign keys on as in D1, and the scenario's users and their credential accounts inserted in one batch. It takes a scenario name from `app/lib/fixtures/` (`base`, `empty`, `many-users`) or a `Scenario` you build in the test. No sessions are seeded; insert the rows a test needs. Accounts carry a placeholder hash, so nobody can sign in against it.
+
+- **Reads** can share one database: `it.layer(layer)("...", (it) => { ... })`.
+- **Writes** build their own: `Effect.provide(layer)` per test. Every provide opens a fresh database and closes it when the test's scope ends, so no write leaks into the next test.
+- **Counts** come from `getScenario("<name>")`, never from a literal, so a bigger scenario does not break the test.
+- **Property tests** (`it.effect.prop` with a schema or fast-check arbitrary) take a fixed `fastCheck: { seed, numRuns }`. Model: `app/repositories/__tests__/user-properties.test.ts`, which checks `getUsers` against a plain-JS filter of the scenario.
+- **A procedure test** provides the same layer under its repositories. The stub stays for what real SQL cannot show: that a call never reached the database, or how a thrown driver error maps to a tagged error.
+- `db.batch([...])` is all or nothing, as on D1. After a `client.transaction()` (or drizzle's `db.transaction`) the libsql client moves to a new connection, which on `:memory:` is a new, empty database; D1 has no interactive transactions either, so repositories batch instead.
+
+The helper is test support: only tests import it, so it never reaches the Worker bundle. Its own tests: `app/services/__tests__/database.seeded-layer.test.ts`.
+
 ## Gates
 
 Listed in `gates` in [`harness.config.json`](../../harness.config.json) and run by [`scripts/verify.sh`](../../scripts/verify.sh), the one runner for CI, `init.sh` and agents:
