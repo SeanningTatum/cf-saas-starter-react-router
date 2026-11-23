@@ -11,6 +11,7 @@ import {
   NESTED_KEYS,
   configChecksum,
   loadHarnessConfig,
+  loadHarnessConfigFromDisk,
   shownConfig,
   stableJson,
   type HarnessConfig,
@@ -18,6 +19,8 @@ import {
 import { CONFIG_FILE_NAME } from "../lib/harness-config-constants";
 import { ledgerChecksum } from "../lib/run-telemetry";
 import { readConfig } from "../../.claude/workflow-src/lib.js";
+import { FIXTURE_ROLE_EMAILS } from "../../app/lib/constants/fixtures";
+import { LOCAL_FIXTURE_PASSWORD } from "../lib/seed-constants";
 
 const ROOT = "/repo";
 
@@ -66,6 +69,31 @@ describe("loadHarnessConfig defaults", () => {
     expect(HARNESS_DEFAULTS.scratchDirs).toEqual([".verify/", "tmp/"]);
     expect(HARNESS_DEFAULTS.baseBranch).toBeNull();
     expect(HARNESS_DEFAULTS.coauthor).toBe("Co-Authored-By: Claude Fable 5.2 <noreply@anthropic.com>");
+  });
+
+  it("the wave defaults run two tracks, one review round, design and planning on the stronger model and mechanical work on the cheaper one", () => {
+    expect(HARNESS_DEFAULTS.wave).toEqual({
+      tracksAtOnce: 2,
+      reviewRounds: 1,
+      models: { plan: "opus", design: "opus", build: "sonnet", review: "sonnet", mechanical: "haiku" },
+    });
+  });
+
+  it("this repo runs three tracks at once: the owner's choice for wave 2 must not fall back to the default", () => {
+    expect(loadHarnessConfigFromDisk().wave.tracksAtOnce).toBe(3);
+  });
+
+  it("a wave section with one model set keeps the other models and the counts: a partial wave must not blank the planner's model", () => {
+    const config = loadedOrThrow(JSON.stringify({ wave: { models: { mechanical: "sonnet" } } }));
+    expect(config.wave).toEqual({ ...HARNESS_DEFAULTS.wave, models: { ...HARNESS_DEFAULTS.wave.models, mechanical: "sonnet" } });
+  });
+
+  it("refuses a wave that runs no track, more tracks than the cap, or a model name a shell could misread", () => {
+    expect(faultOf(JSON.stringify({ wave: { tracksAtOnce: 0 } }))).toMatch(/wave\.tracksAtOnce/);
+    expect(faultOf(JSON.stringify({ wave: { tracksAtOnce: 9 } }))).toMatch(/wave\.tracksAtOnce/);
+    expect(faultOf(JSON.stringify({ wave: { reviewRounds: 4 } }))).toMatch(/wave\.reviewRounds/);
+    expect(faultOf(JSON.stringify({ wave: { models: { build: "son net; rm" } } }))).toMatch(/wave\.models\.build/);
+    expect(faultOf(JSON.stringify({ wave: { modls: {} } }))).toMatch(/modls/);
   });
 
   it("a section with one key set keeps the default for its other keys: a partial reviewBot must not blank the marker", () => {
@@ -156,12 +184,11 @@ describe("the real harness.config.json", () => {
     expect(Object.keys(realConfig.paths).sort()).toEqual([...NESTED_KEYS.paths].sort());
   });
 
-  it("matches the seeded logins in seed-preview.ts: a stale password would fail every audit login", () => {
-    const seed = readFileSync(join(HARNESS_ROOT, "scripts/seed-preview.ts"), "utf8");
-    const password = /const PASSWORD = "([^"]+)"/.exec(seed)?.[1];
+  it("matches the seed fixtures' logins and local password: a stale login would fail every audit login", () => {
+    const emails: Record<string, string> = FIXTURE_ROLE_EMAILS;
     for (const [name, login] of Object.entries(realConfig.seedLogins)) {
-      expect(seed, name).toContain(`email: "${login.email}"`);
-      expect(login.password, name).toBe(password);
+      expect(login.email, name).toBe(emails[name]);
+      expect(login.password, name).toBe(LOCAL_FIXTURE_PASSWORD);
     }
   });
 });

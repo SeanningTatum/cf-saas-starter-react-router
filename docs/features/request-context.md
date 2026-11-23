@@ -27,5 +27,4 @@ Notes on the spec:
 
 - `/:lng` matches any single segment, so the missing page it loads has several.
 - The 404 test waits on the heading, which renders with or without an id, so a missing id line fails on its own assertion and not as "never hydrated".
-- `hydrated` waits until React has hydrated a node: React sets its `__reactProps$…` key on a DOM node only when it claims the node during hydration, so the server HTML alone never passes. The same helper is in `e2e/security-headers.spec.ts`.
-- On a cold dev server the first load can die on Vite's "504 Outdated Optimize Dep" and never hydrate (issue #50); one reload recovers it.
+- `loadHydrated` (`e2e/lib/hydration.ts`) waits until React has hydrated a node: React sets its `__reactProps$…` key on a DOM node only when it claims the node during hydration, so the server HTML alone never passes. Every spec that waits for hydration uses it.

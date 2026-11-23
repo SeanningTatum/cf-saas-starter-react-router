@@ -1,7 +1,7 @@
 import { test, expect, type APIResponse, type Locator, type Page } from "@playwright/test";
 import { securityHeaders } from "../workers/security-headers";
 import { useAdminSessionSignedInOncePerFile } from "./lib/admin-session";
-import { loadHydratedReloadingWhileViteReoptimizesDeps } from "./lib/hydration";
+import { loadHydrated } from "./lib/hydration";
 import { expectTurnstileState } from "./lib/auth-form";
 import { useClientIpPerFile } from "./lib/client-ip";
 
@@ -93,7 +93,7 @@ const checkPage = async (
     watchers.set(page, violations);
   }
   violations.clear();
-  const response = await loadHydratedReloadingWhileViteReoptimizesDeps(page, url, ready);
+  const response = await loadHydrated(page, url, ready);
   expect(new URL(page.url()).pathname, `${url} redirected; is the fixture signed in?`).toBe(url);
   expect(response.status()).toBe(200);
   const nonce = expectSecurityHeaders(await response.allHeaders(), url);

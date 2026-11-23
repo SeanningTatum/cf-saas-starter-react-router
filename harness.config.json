@@ -101,6 +101,17 @@
       { "path": "app/lib/analytics/events.ts", "owner": "^app/trpc/" }
     ]
   },
+  "wave": {
+    "tracksAtOnce": 3,
+    "reviewRounds": 1,
+    "models": {
+      "plan": "opus",
+      "design": "opus",
+      "build": "sonnet",
+      "review": "sonnet",
+      "mechanical": "haiku"
+    }
+  },
   "brandInit": {
     "contractFence": ["app/app.css", "app/root.tsx"],
     "primitiveLanes": [
