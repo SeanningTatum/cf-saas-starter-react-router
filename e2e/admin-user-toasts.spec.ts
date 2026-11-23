@@ -6,7 +6,7 @@ import commonText from "@/locales/en/common.json" with { type: "json" };
 import { useSavedSession } from "./lib/saved-session";
 import { postAppApi, postSignUp } from "./lib/auth-api";
 import { appOrigin } from "./lib/client-ip";
-import { API_PATHS, CLIENT_IPS } from "./lib/values";
+import { API_PATHS, CLIENT_IPS, PAGE_PATHS } from "./lib/values";
 import { loadHydrated } from "./lib/hydration";
 
 type Member = { id: string; name: string; email: string };
@@ -44,12 +44,14 @@ const test = base.extend<{ member: Member }>({
 const toastRegion = (page: Page) =>
   page.getByRole("region", { name: `${commonText.notifications_region} alt+T`, exact: true });
 
+const announcedToast = (page: Page, message: string) =>
+  toastRegion(page)
+    .getByRole("listitem")
+    .filter({ has: page.getByText(message, { exact: true }) });
+
 const expectAnnounced = async (page: Page, message: string) => {
-  const region = toastRegion(page);
-  await expect(region).toHaveAttribute("aria-live", "polite");
-  await expect(
-    region.getByRole("listitem").filter({ has: page.getByText(message, { exact: true }) }),
-  ).toBeVisible();
+  await expect(toastRegion(page)).toHaveAttribute("aria-live", "polite");
+  await expect(announcedToast(page, message)).toBeVisible();
 };
 
 const memberRow = (page: Page, member: Member) =>
@@ -65,17 +67,10 @@ const openUsersTable = async (page: Page, member: Member) => {
   await expect(memberRow(page, member)).toBeVisible();
 };
 
-const chooseRowActionDespiteCellRemount = async (page: Page, member: Member, action: string) => {
-  const oneClickTimeout = 5_000;
-  const trigger = rowMenuTrigger(page, member);
+const chooseRowAction = async (page: Page, member: Member, action: string) => {
   const menu = page.getByRole("menu");
-  await expect(async () => {
-    await page.keyboard.press("Escape");
-    await trigger.click({ timeout: oneClickTimeout });
-    await menu
-      .getByRole("menuitem", { name: action, exact: true })
-      .click({ timeout: oneClickTimeout });
-  }).toPass();
+  await rowMenuTrigger(page, member).click();
+  await menu.getByRole("menuitem", { name: action, exact: true }).click();
   await expect(menu).toBeHidden();
 };
 
@@ -90,17 +85,17 @@ test.describe("Admin users table toasts", () => {
   }, async ({ page, member }) => {
     await openUsersTable(page, member);
 
-    await chooseRowActionDespiteCellRemount(page, member, text.ban_user);
+    await chooseRowAction(page, member, text.ban_user);
     await expectAnnounced(page, withName(text.toasts.ban_success, member.name));
     await expect(bannedBadge(page, member)).toBeVisible();
 
-    await chooseRowActionDespiteCellRemount(page, member, text.unban_user);
+    await chooseRowAction(page, member, text.unban_user);
     await expectAnnounced(page, withName(text.toasts.unban_success, member.name));
     await expect(memberRow(page, member)).toBeVisible();
     await expect(bannedBadge(page, member)).toHaveCount(0);
   });
 
-  test("a ban the server refuses announces the ban error toast in the live region, never the success toast, and the user stays unbanned", {
+  test("a ban the server refuses announces the ban error toast in the live region, never the success toast, the user stays unbanned, and the error closes from its own close button", {
     tag: "@error",
   }, async ({ page, member }) => {
     await page.route("**/api/auth/admin/ban-user", (route) =>
@@ -112,12 +107,45 @@ test.describe("Admin users table toasts", () => {
     );
     await openUsersTable(page, member);
 
-    await chooseRowActionDespiteCellRemount(page, member, text.ban_user);
+    await chooseRowAction(page, member, text.ban_user);
 
-    await expectAnnounced(page, withName(text.toasts.ban_error, member.name));
+    const banError = withName(text.toasts.ban_error, member.name);
+    await expectAnnounced(page, banError);
+    await announcedToast(page, banError)
+      .getByRole("button", { name: commonText.close_notification, exact: true })
+      .click();
+    await expect(announcedToast(page, banError)).toHaveCount(0);
     await expect(
       toastRegion(page).getByText(withName(text.toasts.ban_success, member.name), { exact: true }),
     ).toHaveCount(0);
     await expect(bannedBadge(page, member)).toHaveCount(0);
+  });
+
+  test("selecting a row with the keyboard keeps focus on its checkbox, since a re-render no longer remounts the table's cells", async ({
+    page,
+    member,
+  }) => {
+    await openUsersTable(page, member);
+    const select = memberRow(page, member).getByRole("checkbox", { name: text.select_row });
+    await select.focus();
+    await page.keyboard.press("Space");
+    await expect(select).toBeChecked();
+    await expect(select).toBeFocused();
+  });
+
+  test("impersonating a user opens their dashboard and announces the impersonation toast after the full page load", async ({
+    page,
+    member,
+    baseURL,
+  }) => {
+    await openUsersTable(page, member);
+    await chooseRowAction(page, member, text.impersonate);
+
+    await page.waitForURL(PAGE_PATHS.dashboard);
+    await expectAnnounced(page, withName(text.toasts.impersonate_success, member.name));
+
+    const caller = { origin: appOrigin(baseURL), clientIp: CLIENT_IPS["admin-user-toasts"] };
+    const stopped = await postAppApi(page.request, caller, API_PATHS.stopImpersonating, {});
+    expect(stopped.ok(), `stop-impersonating returned ${stopped.status()}`).toBe(true);
   });
 });

@@ -38,6 +38,24 @@ test.describe("FileUpload paths (wiring only, since the machine unit tests own e
     expect(paths.map((p) => p.name).sort()).toEqual([...WIRING].sort());
   });
 
+  test("the drop zone is the file input's own label: focus reaches the named input, a click on the zone opens the picker, and no div stands in for a button", async ({
+    page,
+  }) => {
+    const dropzone = page.getByTestId("file-upload-dropzone");
+    await page.goto("/admin/kitchen-sink#upload");
+    await expectHydrated(dropzone, "the upload dropzone");
+    expect(await dropzone.evaluate((zone) => zone.tagName)).toBe("LABEL");
+    await expect(page.getByTestId("file-upload").locator('[role="button"]')).toHaveCount(0);
+
+    const input = page.getByLabel(uploadText.file_input_label, { exact: true });
+    await input.focus();
+    await expect(input).toBeFocused();
+
+    const chooser = page.waitForEvent("filechooser");
+    await dropzone.click();
+    expect((await chooser).isMultiple()).toBe(false);
+  });
+
   for (const { statePath, end, name } of paths) {
     const tag =
       name === "PICK small.txt → upload ok → success"

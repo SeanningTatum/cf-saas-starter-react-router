@@ -22,6 +22,7 @@ import { ProblemBox, TurnstileWidget, useTurnstile } from "@/components/turnstil
 import { captchaFetchOptions } from "@/lib/turnstile-client";
 import { authRefusalFor } from "@/lib/auth-errors";
 import { ROUTES } from "@/lib/constants/routes";
+import { useRetryCooldown } from "./use-retry-cooldown";
 
 interface LoginFormProps extends React.ComponentProps<"div"> {
   turnstileSiteKey?: string | null;
@@ -34,6 +35,7 @@ export function LoginForm({ className, turnstileSiteKey = null, ...props }: Logi
   const hydrated = useHydrated();
   const turnstile = useTurnstile(turnstileSiteKey);
   const awaitingCheck = turnstile.enabled && turnstile.token === null;
+  const cooldown = useRetryCooldown();
 
   const form = useForm<LoginInput>({
     resolver: effectTsResolver(LoginSchema),
@@ -51,7 +53,10 @@ export function LoginForm({ className, turnstileSiteKey = null, ...props }: Logi
       const result = await authClient.signIn.email({
         email: data.email,
         password: data.password,
-        fetchOptions: captchaFetchOptions(turnstile.token),
+        fetchOptions: {
+          ...captchaFetchOptions(turnstile.token),
+          onError: ({ response }) => cooldown.startFrom(response),
+        },
       });
 
       if (result.error) {
@@ -110,16 +115,7 @@ export function LoginForm({ className, turnstileSiteKey = null, ...props }: Logi
                 name="password"
                 render={({ field }) => (
                   <FormItem>
-                    <div className="flex items-center">
-                      <FormLabel>{t("login.password_label")}</FormLabel>
-                      <a
-                        // biome-ignore lint/a11y/useValidAnchor: placeholder, no reset-password route exists yet to point at
-                        href="#"
-                        className="ml-auto inline-block text-sm underline-offset-4 hover:underline"
-                      >
-                        {t("login.forgot_password")}
-                      </a>
-                    </div>
+                    <FormLabel>{t("login.password_label")}</FormLabel>
                     <FormControl>
                       <Input
                         type="password"
@@ -144,9 +140,15 @@ export function LoginForm({ className, turnstileSiteKey = null, ...props }: Logi
                   type="submit"
                   className="w-full"
                   data-testid="login-submit"
-                  disabled={!hydrated || form.formState.isSubmitting || awaitingCheck}
+                  disabled={
+                    !hydrated || form.formState.isSubmitting || awaitingCheck || cooldown.waiting
+                  }
                 >
-                  {form.formState.isSubmitting ? t("login.submitting") : t("login.submit")}
+                  {cooldown.waiting
+                    ? t("refusal.retry_in", { seconds: cooldown.secondsLeft })
+                    : form.formState.isSubmitting
+                      ? t("login.submitting")
+                      : t("login.submit")}
                 </Button>
                 <p className="text-center text-sm text-muted-foreground">
                   {t("login.no_account")}{" "}

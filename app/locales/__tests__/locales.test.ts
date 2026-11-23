@@ -48,3 +48,18 @@ describe("home route i18n keys, so a renamed key the route still references cann
     expect(usedKeys.filter((k) => !keys.has(k))).toEqual([]);
   });
 });
+
+describe("admin users-table toasts name the person once, so a user named 'User Preview' never reads as 'User User Preview has been banned'", () => {
+  const NAME = "{{- name}}";
+
+  it.each(["en", "zh"])("no %s toast puts the word for user right before the name", (lng) => {
+    const admin = readNamespace(lng, "admin") as {
+      users_table: { columns: { user: string }; toasts: Record<string, string> };
+    };
+    const userWord = admin.users_table.columns.user.toLowerCase();
+    const doubled = Object.entries(admin.users_table.toasts).filter(([, template]) =>
+      template.split(NAME)[0]?.trim().toLowerCase().endsWith(userWord),
+    );
+    expect(doubled).toEqual([]);
+  });
+});

@@ -25,6 +25,7 @@ export const API_PATHS = {
   signOut: "/api/auth/sign-out",
   getSession: "/api/auth/get-session",
   removeUser: "/api/auth/admin/remove-user",
+  stopImpersonating: "/api/auth/admin/stop-impersonating",
 } as const;
 
 export const CLIENT_IPS = {
@@ -63,6 +64,8 @@ export const HTTP_STATUS = {
   badRequest: 400,
   unauthorized: 401,
 } as const;
+
+export const TALL_DESKTOP_VIEWPORT = { width: 1280, height: 1000 } as const;
 
 export const TIMEOUTS_MS = {
   oneLook: 1_000,

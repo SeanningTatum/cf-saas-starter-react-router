@@ -63,6 +63,7 @@ export const IPV6_SUBNET_SUFFIX = "::/64";
 
 export const HTTP_TOO_MANY_REQUESTS = 429;
 export const RETRY_AFTER_HEADER = "Retry-After";
+export const RETRY_AFTER_DELAY_SECONDS = /^\d+$/;
 export const RATE_LIMITED_CODE = "TOO_MANY_REQUESTS";
 export const RATE_LIMITED_MESSAGE = "Too many attempts. Wait a minute, then try again.";
 export const UPLOAD_RATE_LIMITED_MESSAGE = "Too many uploads. Wait a minute, then try again.";

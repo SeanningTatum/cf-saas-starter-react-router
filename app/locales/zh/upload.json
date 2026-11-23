@@ -13,7 +13,7 @@
   "upload_another": "上传其他文件",
   "failed": "上传失败",
   "try_again": "重试",
-  "file_input_label": "文件输入",
+  "file_input_label": "选择要上传的文件",
   "size_limit_exceeded": "文件大小超过 {{size}}MB 限制",
   "unreachable": "无法连接服务器。请检查网络后重试。"
 }
