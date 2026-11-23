@@ -56,6 +56,17 @@ describe("buildPlan from flags", () => {
     expect(rotated.entries.map((entry) => entry.item.id)).toContain("auth-secret");
   });
 
+  it("never generates an auth secret when the store cannot be read: it may already hold one", async () => {
+    const unreadable = (world: ReturnType<typeof newWorld>) => {
+      world.workersExist = false;
+    };
+    const plan = await buildPlan({ ...base, request: request(["--yes"]), snapshot: snapshotOf(unreadable), ask: undefined });
+    expect(plan.entries.map((entry) => entry.item.id)).not.toContain("auth-secret");
+    expect(plan.entries.map((entry) => entry.item.id)).not.toContain("auth-secret-preview");
+    const rotated = await buildPlan({ ...base, request: request(["--yes", "--rotate-auth-secret"]), snapshot: snapshotOf(unreadable), ask: undefined });
+    expect(rotated.entries.map((entry) => entry.item.id)).toContain("auth-secret");
+  });
+
   it("changes an item that is already set when a flag names it", async () => {
     const set = (world: ReturnType<typeof newWorld>) => world.ghEnvSecrets.production?.add("CLOUDFLARE_API_TOKEN");
     const plan = await buildPlan({

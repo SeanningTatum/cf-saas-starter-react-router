@@ -47,7 +47,7 @@ const generates = (item: SetupItem, request: SetupRequest, snapshot: Snapshot): 
   item.generated === true &&
   AUTO_GENERATED_ENVIRONMENTS.includes(item.environment) &&
   !request.skips.has(item.id) &&
-  (request.rotateAuthSecret || !alreadySet(item, snapshot));
+  (request.rotateAuthSecret || isSet(item, snapshot) === false);
 
 const askFor = async (item: SetupItem, ask: Ask): Promise<string | undefined> => {
   const label = `${item.label} (${item.environment})${item.link ? `, made at ${item.link}` : ""}, blank to skip`;
