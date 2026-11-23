@@ -1,6 +1,6 @@
 import type { AnyStateMachine, AnyStateNode } from "xstate";
 import { type DirectedGraphNode, toDirectedGraph } from "xstate/graph";
-import { ALWAYS_EVENT, INLINE_GUARD, STATE_PATH_JOIN } from "./machine-constants";
+import { ALWAYS_EVENT, EVENT_PREFIX, INLINE_GUARD, STATE_PATH_JOIN } from "./machine-constants";
 
 export interface MachineEdge {
   readonly source: AnyStateNode;
@@ -46,27 +46,50 @@ export function ancestors(node: AnyStateNode): AnyStateNode[] {
   return found;
 }
 
+const children = (node: AnyStateNode): AnyStateNode[] => Object.values<AnyStateNode>(node.states);
+
+function between(node: AnyStateNode, top: AnyStateNode): AnyStateNode[] {
+  const above = ancestors(node);
+  const end = above.indexOf(top);
+  return end === -1 ? above : above.slice(0, end);
+}
+
 export function descend(node: AnyStateNode): AnyStateNode[] {
-  if (node.type === "compound") return [node, ...node.initial.target.flatMap(enter)];
-  if (node.type === "parallel") return [node, ...Object.values<AnyStateNode>(node.states).flatMap(descend)];
+  if (node.type === "compound") return [node, ...node.initial.target.flatMap((target) => [...between(target, node), ...descend(target)])];
+  if (node.type === "parallel") return [node, ...children(node).flatMap(descend)];
   if (node.type === "history" && node.parent) return [node, ...descend(node.parent)];
   return [node];
 }
 
-export const enter = (node: AnyStateNode): AnyStateNode[] => [...ancestors(node), ...descend(node)];
+export function enter(node: AnyStateNode): AnyStateNode[] {
+  const above = ancestors(node);
+  const line = [node, ...above];
+  const otherRegions = above
+    .filter((ancestor) => ancestor.type === "parallel")
+    .flatMap((parallel) => children(parallel).filter((region) => !line.includes(region)))
+    .flatMap(descend);
+  return [...above, ...descend(node), ...otherRegions];
+}
+
+function finished(node: AnyStateNode, seen: ReadonlySet<AnyStateNode>): boolean {
+  if (node.type === "parallel") return children(node).every((region) => finished(region, seen));
+  return children(node).some((child) => child.type === "final" && seen.has(child));
+}
+
+const waitsForChildren = (edge: MachineEdge): boolean => edge.event.startsWith(EVENT_PREFIX.doneState);
 
 export function closure(start: readonly AnyStateNode[], edges: readonly MachineEdge[], follow: (edge: MachineEdge) => boolean = () => true): Set<AnyStateNode> {
-  const bySource = new Map<AnyStateNode, MachineEdge[]>();
-  for (const edge of edges.filter(follow)) bySource.set(edge.source, [...(bySource.get(edge.source) ?? []), edge]);
+  const open = edges.filter(follow);
   const seen = new Set(start);
-  const queue = [...seen];
-  for (let index = 0; index < queue.length; index++) {
-    const node = queue[index];
-    for (const edge of (node && bySource.get(node)) ?? []) {
+  let grew = true;
+  while (grew) {
+    grew = false;
+    for (const edge of open) {
+      if (!seen.has(edge.source) || (waitsForChildren(edge) && !finished(edge.source, seen))) continue;
       for (const next of enter(edge.target)) {
         if (seen.has(next)) continue;
         seen.add(next);
-        queue.push(next);
+        grew = true;
       }
     }
   }

@@ -182,3 +182,54 @@ export const delayedMachine = createMachine({
     shown: { after: { 3000: "idle" }, on: { HOVER: { actions: [] } } },
   },
 });
+
+export const trappedChildMachine = createMachine({
+  id: "trappedChild",
+  initial: "idle",
+  states: {
+    idle: { on: { EDIT: "editing" } },
+    editing: {
+      initial: "draft",
+      onDone: "idle",
+      states: {
+        draft: { on: { APPROVE: "approved", BREAK: "stuck" } },
+        stuck: { on: { POKE: "stuck" } },
+        approved: { type: "final" },
+      },
+    },
+  },
+});
+
+export const parallelTargetMachine = createMachine({
+  id: "parallelTarget",
+  initial: "idle",
+  states: {
+    idle: { on: { START: "active.left.on" } },
+    active: {
+      type: "parallel",
+      on: { STOP: "idle" },
+      states: {
+        left: { initial: "off", states: { off: { on: { FLIP: "on" } }, on: { on: { FLIP: "off" } } } },
+        right: { initial: "off", states: { off: { on: { FLOP: "on" } }, on: { on: { FLOP: "off" } } } },
+      },
+    },
+  },
+});
+
+export const alwaysSpawnMachine = setup({ actors: { work } }).createMachine({
+  id: "alwaysSpawn",
+  initial: "checking",
+  states: {
+    checking: { always: { target: "ready", actions: spawnChild("work") } },
+    ready: { on: { RESET: "checking" } },
+  },
+});
+
+export const clashingKeysMachine = createMachine({
+  id: "clashingKeys",
+  initial: "a-b",
+  states: {
+    "a-b": { on: { NEXT: "a_b" } },
+    a_b: { on: { NEXT: "a-b" } },
+  },
+});

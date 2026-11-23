@@ -54,7 +54,8 @@ export const MESSAGE = {
   unreachable: "no transition reaches it from the initial state",
   deadEnd: "once entered, no path leads back to the initial state or to a final state, and it is not marked final",
   invokes: "it is active when the machine starts and invokes an actor, so useMachine starts that work during the server render; the actor:",
-  spawns: "it is active when the machine starts and spawns a child actor on entry, so useMachine starts that work during the server render",
+  spawns:
+    "it is active when the machine starts and spawns a child actor on entry or on an eventless transition, so useMachine starts that work during the server render",
   noMachine: "the file exports no XState machine",
   load: "the file does not load:",
 } as const;

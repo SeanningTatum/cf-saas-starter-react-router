@@ -47,7 +47,9 @@ function startsWork(machine: AnyStateMachine, start: readonly AnyStateNode[], ed
     ...node.invoke.map((invoke) =>
       finding(CHECK.startsWork, node, `${MESSAGE.invokes} "${typeof invoke.src === "string" ? invoke.src : invoke.id}"`, FIX.startsWork),
     ),
-    ...(node.entry.some((action) => isSpawn(resolveAction(machine, action))) ? [finding(CHECK.startsWork, node, MESSAGE.spawns, FIX.startsWork)] : []),
+    ...([...node.entry, ...(node.always ?? []).flatMap((transition) => transition.actions)].some((action) => isSpawn(resolveAction(machine, action)))
+      ? [finding(CHECK.startsWork, node, MESSAGE.spawns, FIX.startsWork)]
+      : []),
   ]);
 }
 

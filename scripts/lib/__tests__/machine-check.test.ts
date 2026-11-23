@@ -5,15 +5,18 @@ import { checkMachine } from "../machine-check";
 import { CHECK } from "../machine-constants";
 import {
   alwaysIntoWorkMachine,
+  alwaysSpawnMachine,
   deadEndMachine,
   delayedMachine,
   invokesOnStartMachine,
   nestedDeadEndMachine,
   nestedMachine,
   parallelMachine,
+  parallelTargetMachine,
   soundMachine,
   spawnsOnStartMachine,
   toFinalMachine,
+  trappedChildMachine,
   unreachableMachine,
 } from "./fixtures/machines";
 
@@ -47,6 +50,14 @@ describe("checkMachine self-test: each check fails on a bad machine", () => {
     expect(found(spawnsOnStartMachine)).toEqual([{ check: CHECK.startsWork, state: "idle" }]);
   });
 
+  it("does not let a parent's onDone rescue a child that can never finish, so a trapped child state is still caught", () => {
+    expect(found(trappedChildMachine)).toEqual([{ check: CHECK.deadEnd, state: "editing.stuck" }]);
+  });
+
+  it("names an initial state whose eventless transition spawns a child, so a spawn on an always hop is caught", () => {
+    expect(found(alwaysSpawnMachine)).toEqual([{ check: CHECK.startsWork, state: "checking" }]);
+  });
+
   it("says what to do instead in every finding, so the author is never left with only a complaint", () => {
     const all = [unreachableMachine, deadEndMachine, invokesOnStartMachine, spawnsOnStartMachine].flatMap(checkMachine);
     expect(all.length).toBe(4);
@@ -64,6 +75,7 @@ describe("checkMachine passes sound machines", () => {
     ["a compound state whose parent transitions and onDone lead back", nestedMachine],
     ["a state whose only way out is a final state", toFinalMachine],
     ["a parallel machine whose regions each toggle back", parallelMachine],
+    ["a transition into one region of a parallel state, which enters the other regions too", parallelTargetMachine],
     ["a delayed transition back to the initial state, beside a targetless one", delayedMachine],
   ])("passes %s, so a correct shape is not flagged", (_name, machine) => {
     expect(found(machine)).toEqual([]);

@@ -196,6 +196,12 @@ describe("planChanged", () => {
     expect(plan.run).toContainEqual({ gate: GATE.machines, command: `${COMMAND.machines} 'app/components/door.machine.ts'` });
   });
 
+  it("a deleted file a machine imports still runs the machine check on that machine, so the import resolving elsewhere is checked", () => {
+    const repo = tree({ "app/components/door.machine.ts": 'import { gone } from "@/lib/gone";\nexport const door = gone;\n' });
+    const plan = lean(planChanged(repo, ["app/lib/gone.ts"]));
+    expect(plan.run).toContainEqual({ gate: GATE.machines, command: `${COMMAND.machines} 'app/components/door.machine.ts'` });
+  });
+
   it("a change no machine touches skips the machine check with a reason, so it costs nothing when no machine changed", () => {
     expect(machinesFor(tree(), ["app/lib/sum.ts", "app/routes/login.tsx"])).toEqual([]);
     expect(machinesFor(tree({ "app/components/__tests__/door.machine.ts": "export const x = 1;\n" }), ["app/components/__tests__/door.machine.ts"])).toEqual(

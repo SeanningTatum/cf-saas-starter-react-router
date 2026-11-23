@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { actorName, eventLabel, toMermaid, toMermaidBlock } from "../machine-mermaid";
-import { crossLevelMachine, guardedMachine, nestedMachine, parallelMachine, soundMachine } from "./fixtures/machines";
+import { actorName, eventLabel, mermaidIds, toMermaid, toMermaidBlock } from "../machine-mermaid";
+import { clashingKeysMachine, crossLevelMachine, guardedMachine, nestedMachine, parallelMachine, soundMachine } from "./fixtures/machines";
 
 describe("toMermaid", () => {
   it("draws a flat machine with its start, its final state and actor labels, so the printed diagram stays valid Mermaid", () => {
@@ -110,6 +110,14 @@ describe("actorName", () => {
     expect(id).not.toBe("work");
     expect(actorName(loading, id)).toBe("work");
     expect(actorName(loading, "unknown")).toBe("unknown");
+  });
+});
+
+describe("mermaidIds", () => {
+  it("gives every state its own id when two keys clean to the same text, so the diagram never merges two states", () => {
+    const ids = [...mermaidIds(clashingKeysMachine).values()];
+    expect(new Set(ids).size).toBe(ids.length);
+    expect(toMermaid(clashingKeysMachine)).toContain('  state "a-b" as a_b');
   });
 });
 

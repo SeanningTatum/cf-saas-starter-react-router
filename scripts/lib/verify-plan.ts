@@ -93,7 +93,7 @@ export function planChanged(repo: Repo, changed: readonly string[]): Plan {
   else skip.push({ gate: GATE.lint, reason: SKIP_REASON.noCode });
   if (modules.length > 0) run.push({ gate: GATE.test, command: withArgs(COMMAND.test, modules) });
   else skip.push({ gate: GATE.test, reason: SKIP_REASON.noModule });
-  const machines = machinesFor(repo, present);
+  const machines = machinesFor(repo, changed);
   if (machines.length > 0) run.push({ gate: GATE.machines, command: withArgs(COMMAND.machines, machines) });
   else skip.push({ gate: GATE.machines, reason: SKIP_REASON.noMachine });
   if (specs.length > 0) run.push({ gate: GATE.e2e, command: withArgs(COMMAND.e2e, specs) });

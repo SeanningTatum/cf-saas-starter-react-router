@@ -1,8 +1,17 @@
 import { describe, expect, it } from "vitest";
 import type { AnyStateMachine, AnyStateNode } from "xstate";
 import { EVENT_PREFIX, INLINE_GUARD } from "../machine-constants";
-import { closure, descend, enter, guardName, machineEdges, stateNodes, statePath } from "../machine-graph";
-import { delayedMachine, guardedMachine, historyMachine, nestedMachine, parallelMachine, soundMachine } from "./fixtures/machines";
+import { ancestors, closure, descend, enter, guardName, machineEdges, stateNodes, statePath } from "../machine-graph";
+import {
+  delayedMachine,
+  guardedMachine,
+  historyMachine,
+  nestedMachine,
+  parallelMachine,
+  parallelTargetMachine,
+  soundMachine,
+  trappedChildMachine,
+} from "./fixtures/machines";
 
 const edges = (machine: AnyStateMachine) =>
   machineEdges(machine).map(({ source, target, event, guard }) => [statePath(source), statePath(target), event, guard]);
@@ -55,13 +64,32 @@ describe("machineEdges", () => {
 
 describe("descend and enter", () => {
   it("enters a compound state's initial child only, so reaching a parent does not mark its other children reached", () => {
-    expect(paths(descend(node(nestedMachine, "editing")))).toEqual(["", "editing", "editing.draft"]);
+    expect(paths(descend(node(nestedMachine, "editing")))).toEqual(["editing", "editing.draft"]);
     const idle = node(nestedMachine, "idle");
     expect(descend(idle)).toEqual([idle]);
   });
 
   it("enters every region of a parallel state, so a toggle in the second region is reachable", () => {
     expect(paths(descend(parallelMachine.root))).toEqual(["", "bold", "bold.off", "italic", "italic.off"]);
+  });
+
+  it("enters the other regions when a transition targets a state inside one region, so a parallel sibling is not called unreachable", () => {
+    expect(paths(enter(node(parallelTargetMachine, "active.left.on")))).toEqual([
+      "",
+      "active",
+      "active.left",
+      "active.left.on",
+      "active.right",
+      "active.right.off",
+    ]);
+  });
+
+  it("follows a parent's onDone edge only once a final child is reached, so a child that never finishes is not rescued by it", () => {
+    const edges = machineEdges(trappedChildMachine);
+    const stuck = node(trappedChildMachine, "editing.stuck");
+    expect(paths([...closure([stuck, ...ancestors(stuck)], edges)])).not.toContain("idle");
+    const draft = node(trappedChildMachine, "editing.draft");
+    expect(paths([...closure([draft, ...ancestors(draft)], edges)])).toContain("idle");
   });
 
   it("enters a history state through its parent's initial child, so a resume target still reaches the parent's states", () => {
