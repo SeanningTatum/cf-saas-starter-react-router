@@ -96,7 +96,6 @@ const environmentBlock = (block: EnvironmentBlock) => ({
   preview_urls: block.previewUrls,
   d1_databases: [{ binding: "DATABASE", database_name: block.dbName, database_id: block.dbId, migrations_dir: "./drizzle" }],
   ...(block.enableR2 ? { r2_buckets: [{ binding: "BUCKET", bucket_name: block.bucketName }] } : {}),
-  ai: { binding: "AI" },
   ratelimits: rateLimitBindings(block.namespaceIdOf),
   observability: OBSERVABILITY,
 });
@@ -123,9 +122,6 @@ export function buildWranglerConfig(input: WranglerConfigInput): object {
     },
     d1_databases: [{ binding: "DATABASE", database_name: names.dbName, database_id: dbId, migrations_dir: "./drizzle" }],
     ...(enableR2 ? { r2_buckets: [{ binding: "BUCKET", bucket_name: names.bucketName }] } : {}),
-    ai: {
-      binding: "AI",
-    },
     ratelimits: rateLimitBindings((binding) => binding.namespaceId),
     observability: OBSERVABILITY,
     workers_dev: true,

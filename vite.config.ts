@@ -8,11 +8,6 @@ export default defineConfig({
   plugins: [
     cloudflare({
       viteEnvironment: { name: "ssr" },
-      // Workers AI has no local simulation — the plugin proxies remote-only
-      // bindings through a session that requires wrangler auth. CI runners
-      // have no Cloudflare credentials, so skip the remote session there
-      // (the AI binding is stubbed; nothing in e2e invokes it).
-      remoteBindings: !process.env.CI,
     }),
     tailwindcss(),
     reactRouter(),
