@@ -38,6 +38,7 @@ export const SUMMARY_HEADING = "### Production rollout";
 export const ERROR_NO_RELEASE = `::error::${ENV_RELEASE} is not set or not a valid release, so nothing was uploaded.`;
 export const ERROR_NO_NAME = "::error::wrangler.jsonc has no Worker name, so nothing was uploaded.";
 export const ERROR_STATUS = `::error::Could not read the current deployment, so nothing was uploaded. See ${DOC}`;
+export const ERROR_SPLIT = `::error::The current deployment does not send 100% of traffic to one version (a split left by an earlier run or by hand), so there is no safe version to roll back to and nothing was uploaded. Send 100% to the good version with \`bunx wrangler versions deploy <id>@100% -y\`, then run the deploy again. See ${DOC}`;
 export const ERROR_UPLOAD = `::error::The new version did not upload, so production still runs the version it ran. See ${DOC}`;
 export const ERROR_NO_VERSION_ID = `::error::The upload printed no Worker Version ID (has the wrangler output changed?), so nothing was deployed. See ${DOC}`;
 export const WARNING_NO_URL = `::warning::The ${ENV_URL} variable is not set, so the new version goes to 100% at once with no smoke check and no automatic rollback. See ${DOC}`;

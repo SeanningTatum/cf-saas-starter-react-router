@@ -84,12 +84,12 @@ Run these once, by hand. The workflow never creates them.
 
 The production deploy does not move every user at once. After the migration and the build, `scripts/ci/rollout.ts`:
 
-1. Reads the current deployment (`wrangler deployments status --json`) and keeps the version with the most traffic as the way back.
+1. Reads the current deployment (`wrangler deployments status --json`) and keeps the version that serves 100% alone as the way back. If traffic is split (an earlier run that failed to roll back, or a split made by hand), it stops before the upload and asks you to send 100% to the good version first: a split has no safe way back.
 2. Uploads the build as a new version (`wrangler versions upload`, with `RELEASE_VERSION` and `ENVIRONMENT=production`). Nothing serves it yet.
 3. Moves traffic in steps, 10%, 50%, then 100% (`wrangler versions deploy <new>@10% <old>@90% --yes`). After each step it waits 60 seconds and runs the [smoke check](pipelines.md#smoke-check) on `PRODUCTION_URL`, pinned to the new version and expecting its release.
-4. On a failed check, or a step wrangler refuses, it sends 100% back to the old version (`wrangler versions deploy <old>@100% --yes`) and the run fails.
+4. On a failed check, or a step wrangler refuses, it sends 100% back to the old version (`wrangler versions deploy <old>@100% --yes`), reads the deployment again to confirm the old version serves 100% alone, and the run fails. If that read shows anything else, it reports the rollback as failed.
 
-A failure is announced on GitHub: the failed run, its job summary (outcome, versions, the step that failed), and a comment on the one open issue titled "Production deploy failed" (opened if there is none). Close the issue once production is healthy; the next failure opens a new one.
+A failure is announced on GitHub: the failed run, its job summary (outcome, versions, the step that failed), and a comment on the one open issue titled "Production deploy failed" (opened if there is none; only an issue the workflow itself opened counts, so an issue anyone else opens with that title is ignored). Close the issue once production is healthy; the next failure opens a new one.
 
 What it does not do:
 

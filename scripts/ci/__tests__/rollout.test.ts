@@ -1,7 +1,8 @@
+import { Either } from "effect";
 import { describe, expect, it } from "vitest";
 import {
   deployArgv,
-  parseCurrentVersion,
+  parseSoleVersion,
   parseVersionId,
   planRollout,
   run,
@@ -30,7 +31,7 @@ const broken: HttpAnswer = { status: 503, body: JSON.stringify({ status: "down",
 const FAST: RolloutOptions = { soakMs: 30_000, smoke: { attempts: 2, delayMs: 5_000, timeoutMs: 1_000 }, steps: [10, 50, 100] };
 
 interface Fake {
-  status?: CommandResult;
+  status?: CommandResult | ((call: number) => CommandResult);
   upload?: CommandResult;
   deploy?: (specs: string[]) => CommandResult;
   health?: (call: number, headers: Readonly<Record<string, string>>) => HttpAnswer | undefined;
@@ -46,6 +47,7 @@ function harness(fake: Fake = {}) {
   const sleeps: number[] = [];
   const pins: string[] = [];
   let healthCalls = 0;
+  let statusCalls = 0;
   const deps: Deps = {
     env: {
       RELEASE_VERSION: RELEASE,
@@ -58,7 +60,11 @@ function harness(fake: Fake = {}) {
     runCommand: (argv) => {
       const args = argv.slice(2);
       commands.push(args);
-      if (args[0] === "deployments") return fake.status ?? ok(statusOutput([{ version_id: OLD, percentage: 100 }]));
+      if (args[0] === "deployments") {
+        statusCalls += 1;
+        const status = typeof fake.status === "function" ? fake.status(statusCalls) : fake.status;
+        return status ?? ok(statusOutput([{ version_id: OLD, percentage: 100 }]));
+      }
       if (args[1] === "upload") return fake.upload ?? ok(UPLOAD_OUTPUT);
       const specs = args.slice(2, args.indexOf("--message"));
       deploys.push(specs);
@@ -117,18 +123,17 @@ describe("traffic and parsing", () => {
     expect(parseVersionId("Uploaded my-app\n")).toBeUndefined();
   });
 
-  it("takes the version with the most traffic as the one to go back to, so that a rollback after a half-done split returns to the old version", () => {
-    expect(parseCurrentVersion(statusOutput([{ version_id: OLD, percentage: 100 }]))).toBe(OLD);
-    expect(
-      parseCurrentVersion(
-        statusOutput([
-          { version_id: NEW, percentage: 10 },
-          { version_id: OLD, percentage: 90 },
-        ]),
-      ),
-    ).toBe(OLD);
-    expect(parseCurrentVersion("not json")).toBeUndefined();
-    expect(parseCurrentVersion(statusOutput([{ version_id: "not-a-uuid", percentage: 100 }]))).toBeUndefined();
+  it("takes a version as the way back only when it serves 100% alone, so that a split left by a failed run never makes a bad version the rollback target", () => {
+    expect(parseSoleVersion(statusOutput([{ version_id: OLD, percentage: 100 }]))).toEqual(Either.right(OLD));
+    const split = parseSoleVersion(
+      statusOutput([
+        { version_id: NEW, percentage: 10 },
+        { version_id: OLD, percentage: 90 },
+      ]),
+    );
+    expect(Either.isLeft(split) && split.left).toContain("does not send 100% of traffic to one version");
+    expect(Either.isLeft(parseSoleVersion("not json"))).toBe(true);
+    expect(Either.isLeft(parseSoleVersion(statusOutput([{ version_id: "not-a-uuid", percentage: 100 }])))).toBe(true);
   });
 
   it("uploads with the release and the production environment and deploys with --yes and a message, so that error reports name the release and no prompt hangs the job", () => {
@@ -188,6 +193,18 @@ describe("run: automatic rollback", () => {
     expect(h.output()).toMatchObject({ outcome: "rolled-back", failed_at: "50" });
   });
 
+  it("reports the rollback as failed when wrangler says it worked but the deployment still splits, so that a late traffic move cannot be hidden behind a success", async () => {
+    const split = ok(
+      statusOutput([
+        { version_id: NEW, percentage: 10 },
+        { version_id: OLD, percentage: 90 },
+      ]),
+    );
+    const h = harness({ health: () => broken, status: (call) => (call === 1 ? ok(statusOutput([{ version_id: OLD, percentage: 100 }])) : split) });
+    expect(await run(h.deps, FAST)).toBe(1);
+    expect(h.output()).toMatchObject({ outcome: "rollback-failed" });
+  });
+
   it("names the old version and the command to run when the rollback itself fails, so that a person can finish it at once", async () => {
     const h = harness({ health: () => broken, deploy: (specs) => (specs[0] === `${OLD}@100%` ? failed() : ok()) });
     expect(await run(h.deps, FAST)).toBe(1);
@@ -222,6 +239,14 @@ describe("run: first deploy, no URL and bad input", () => {
       { wrangler: '{ "name": "My App" }' },
       { status: failed("Authentication error [code: 10000]") },
       { status: ok("nothing here") },
+      {
+        status: ok(
+          statusOutput([
+            { version_id: NEW, percentage: 50 },
+            { version_id: OLD, percentage: 50 },
+          ]),
+        ),
+      },
     ] satisfies Fake[]) {
       const h = harness(fake);
       expect(await run(h.deps, FAST), JSON.stringify(fake)).toBe(1);

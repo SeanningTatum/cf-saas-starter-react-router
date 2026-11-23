@@ -16,6 +16,7 @@ import {
   ERROR_NO_NAME,
   ERROR_NO_RELEASE,
   ERROR_NO_VERSION_ID,
+  ERROR_SPLIT,
   ERROR_STATUS,
   ERROR_UPLOAD,
   EXIT_FAIL,
@@ -118,14 +119,19 @@ export function parseVersionId(output: string): string | undefined {
   return VERSION_ID_LINE.exec(output)?.[1];
 }
 
-export function parseCurrentVersion(output: string): string | undefined {
+export function parseSoleVersion(output: string): Either.Either<string, string> {
   const first = output.indexOf(OPEN_BRACE);
   const last = output.lastIndexOf(CLOSE_BRACE);
-  if (first < 0 || last < first) return undefined;
+  if (first < 0 || last < first) return Either.left(ERROR_STATUS);
   const decoded = decodeDeployment(output.slice(first, last + 1));
-  if (Either.isLeft(decoded)) return undefined;
-  const ranked = [...decoded.right.versions].sort((a, b) => b.percentage - a.percentage);
-  return ranked[0]?.version_id;
+  if (Either.isLeft(decoded)) return Either.left(ERROR_STATUS);
+  const [only, ...others] = decoded.right.versions;
+  return only !== undefined && others.length === 0 && only.percentage === FULL_TRAFFIC ? Either.right(only.version_id) : Either.left(ERROR_SPLIT);
+}
+
+function confirmSole(deps: Deps, versionId: string): boolean {
+  const status = deps.runCommand(statusArgv(), STATUS_TIMEOUT_MS);
+  return succeeded(status) && Either.getOrUndefined(parseSoleVersion(status.output)) === versionId;
 }
 
 export const statusArgv = (): string[] => [...WRANGLER_COMMAND, "deployments", "status", "--json"];
@@ -179,7 +185,7 @@ function rollBack(ctx: Context, percent: number): number {
   const { previous } = ctx;
   if (previous === undefined) return finish(ctx, OUTCOME_FAILED, [firstDeployFailedLine(ctx.next)], percent);
   const result = ctx.deps.runCommand(deployArgv(trafficSpecs(previous, undefined, FULL_TRAFFIC), rollbackMessage(ctx.release, percent)), DEPLOY_TIMEOUT_MS);
-  return succeeded(result)
+  return succeeded(result) && confirmSole(ctx.deps, previous)
     ? finish(ctx, OUTCOME_ROLLED_BACK, [rolledBackLine(percent, previous)], percent)
     : finish(ctx, OUTCOME_ROLLBACK_FAILED, [rollbackFailedLine(previous)], percent);
 }
@@ -209,19 +215,12 @@ async function rollOut(ctx: Context): Promise<number> {
   return finish(ctx, OUTCOME_PROMOTED, [promotedLine(ctx.next, ctx.release)]);
 }
 
-type Previous = { readonly ok: true; readonly id: string | undefined } | { readonly ok: false };
-
-function readPrevious(deps: Deps): Previous {
+function readPrevious(deps: Deps): Either.Either<string | undefined, string> {
   const status = deps.runCommand(statusArgv(), STATUS_TIMEOUT_MS);
-  if (!succeeded(status)) {
-    if (status.output.includes(NO_DEPLOYMENTS_MARKER)) {
-      deps.log(WARNING_FIRST_DEPLOY);
-      return { ok: true, id: undefined };
-    }
-    return { ok: false };
-  }
-  const id = parseCurrentVersion(status.output);
-  return id === undefined ? { ok: false } : { ok: true, id };
+  if (succeeded(status)) return parseSoleVersion(status.output);
+  if (!status.output.includes(NO_DEPLOYMENTS_MARKER)) return Either.left(ERROR_STATUS);
+  deps.log(WARNING_FIRST_DEPLOY);
+  return Either.right(undefined);
 }
 
 function readInputs(deps: Deps): Either.Either<{ release: string; worker: string; origin: string | undefined }, string> {
@@ -245,8 +244,8 @@ export async function run(deps: Deps, options: RolloutOptions = DEFAULT_ROLLOUT)
     return EXIT_FAIL;
   }
   const previous = readPrevious(deps);
-  if (!previous.ok) {
-    deps.log(ERROR_STATUS);
+  if (Either.isLeft(previous)) {
+    deps.log(previous.left);
     return EXIT_FAIL;
   }
   const uploaded = deps.runCommand(uploadArgv(inputs.right.release, shortSha(deps.env[ENV_SHA])), UPLOAD_TIMEOUT_MS);
@@ -260,7 +259,7 @@ export async function run(deps: Deps, options: RolloutOptions = DEFAULT_ROLLOUT)
     return EXIT_FAIL;
   }
   deps.log(uploadedLine(next));
-  return rollOut({ ...inputs.right, deps, options, next, previous: previous.id, report: [] });
+  return rollOut({ ...inputs.right, deps, options, next, previous: previous.right, report: [] });
 }
 
 export function spawnCaptured(argv: readonly string[], timeoutMs: number): CommandResult {

@@ -65,6 +65,7 @@ describe("deploy.yml: announcing a failure on GitHub", () => {
     const announce = job("announce-failure");
     expect(announce).toContain('title="Production deploy failed"');
     expect(announce).toContain("gh issue comment");
+    expect(announce).toContain('--author "app/github-actions"');
     expect(announce).toContain("gh issue create");
     expect(announce).toContain("RUN_URL:");
     expect(announce).toContain("bunx wrangler versions deploy $PREVIOUS_VERSION_ID@100% -y");
