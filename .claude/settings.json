@@ -82,6 +82,18 @@
         ]
       }
     ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "timeout": 20,
+            "command": "[ -x \"$CLAUDE_PROJECT_DIR/.claude/hooks/lint-edit.sh\" ] || exit 0; \"$CLAUDE_PROJECT_DIR/.claude/hooks/lint-edit.sh\""
+          }
+        ]
+      }
+    ],
     "UserPromptSubmit": [
       {
         "hooks": [

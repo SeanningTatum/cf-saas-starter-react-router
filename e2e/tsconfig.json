@@ -1,0 +1,17 @@
+{
+  "extends": "../tsconfig.json",
+  "include": ["./**/*.ts"],
+  "compilerOptions": {
+    "incremental": true,
+    "tsBuildInfoFile": "../node_modules/.cache/tsc/e2e.tsbuildinfo",
+    "types": ["node"],
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "target": "ES2022",
+    "module": "preserve",
+    "moduleResolution": "bundler",
+    "resolveJsonModule": true,
+    "paths": {
+      "@/*": ["../app/*"]
+    }
+  }
+}
