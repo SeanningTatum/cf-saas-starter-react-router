@@ -14,6 +14,9 @@ export default defineConfig({
     ],
     exclude: ["node_modules", "e2e", ".react-router"],
     setupFiles: [],
+    coverage: {
+      provider: "v8",
+    },
     typecheck: {
       tsconfig: "./tsconfig.cloudflare.json",
     },

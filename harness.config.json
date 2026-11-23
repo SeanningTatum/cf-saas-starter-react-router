@@ -49,6 +49,12 @@
       "tier": "baseline",
       "limitSeconds": 120
     },
+    {
+      "name": "coverage",
+      "run": "bun run scripts/coverage-floors.ts",
+      "tier": "full",
+      "limitSeconds": 600
+    },
     { "name": "build", "run": "bun run build", "tier": "full", "limitSeconds": 900 },
     { "name": "e2e", "run": "CI=1 bun run test:e2e", "tier": "full", "limitSeconds": 900 }
   ],

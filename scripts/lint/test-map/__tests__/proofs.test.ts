@@ -15,7 +15,7 @@ const firstCode = (text: string): string | undefined => {
 
 const HELPER =
   'import { Effect } from "effect";\nimport type { User } from "@/models/user";\n\nexport type Id = string;\nexport function helper(user: User) { return Effect.succeed(user); }\n';
-const TSX_TEST = 'import { expect, it } from "vitest";\nimport { helper } from "../helper";\nit("wraps", () => { expect(helper).toBeDefined(); });\n';
+const TSX_TEST = 'import { expect, it } from "vitest";\nimport { helper } from "../helper";\nit("wraps", () => { expect(helper(1)).toBe(2); });\n';
 
 describe("firstRuntimeStatement", () => {
   it.each([

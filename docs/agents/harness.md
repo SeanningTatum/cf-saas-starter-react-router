@@ -241,6 +241,7 @@ Listed in `gates` in [`harness.config.json`](../../harness.config.json) and run 
 | secrets | `bun run scripts/secret-scan.ts` | baseline, full |
 | audit | `bun run scripts/package-audit.ts` | baseline, full |
 | machines | `bun scripts/check-machines.ts` ([state machines](#state-machines)) | baseline, full |
+| coverage | `bun run scripts/coverage-floors.ts` ([floors](#coverage-floors)) | full |
 | build | `bun run build` | full |
 | e2e | `bun run test:e2e` | full |
 
@@ -253,6 +254,12 @@ The `e2e` gate needs the network: the sign-in and sign-up pages load Turnstile f
 Global setup (`e2e/global-setup.ts`) runs once per Playwright run. It stops the run if `.dev.vars` or `.env` sets `ANALYTICS_PROVIDER=posthog`, restores the seed, then signs in once per fixture role through `POST /api/auth/sign-in/email` and saves `e2e/.auth/admin.json`, `user.json` and `banned.json` (gitignored, overwritten each run). The banned sign-in must be refused, so `banned.json` holds no cookie. A role that cannot sign in, or a banned role that can, stops the run with `FixtureLoginError` naming the role. A spec that needs a signed-in user calls `useSavedSession("admin", "<file>")` from `e2e/lib/saved-session.ts`; only a spec that tests sign-in, sign-out or a ban of the signed-in user signs in on its own.
 
 The `e2e` gate never retries (`retries: 0` in `playwright.config.ts`), so a test that fails one run in three turns the gate red instead of passing on a second try; the trace of the failing run is kept under `test-results/`. `future.unstable_optimizeDeps` in `react-router.config.ts` makes Vite pre-bundle every dependency the routes import at start, so a cold first load gets no "504 Outdated Optimize Dep" and no spec needs to reload. To hunt a flake, run the spec with `--repeat-each=20` on a cold cache (`rm -rf node_modules/.vite`).
+
+### Coverage floors
+
+The `coverage` gate runs the `app/` and `workers/` unit tests under vitest's v8 coverage (`@vitest/coverage-v8`, set as the provider in `vitest.config.ts`) and fails when a folder runs fewer of its lines than its floor: 90% for `app/repositories`, `app/services`, `app/trpc` and `app/lib`. The floors are `COVERAGE_FLOORS` in `scripts/lib/coverage-constants.ts`; a test fails any floor under the 90% bar, so a floor can rise and cannot fall below it. A failure names the folder, how far under it is, how many lines must run and the files with the most lines not run, and says to write a test beside each. Never lower a floor or add a test that asserts nothing to pass it.
+
+It runs in the full tier, not the quick set or the lean job: it reruns the app tests, which costs as much as the `test` gate again. CI runs it as a step of the required Baseline job, so a PR into the default branch or production cannot drop a folder under its floor.
 
 The `lint` gate is the one entry point: Biome, the house linter, import cycles and dead code, one finding shape ([`lint.md`](lint.md)). The two `non-negotiables` gates run the house linter (`bun run lint:house`) and its self-test on their own: one file per rule in `scripts/lint/rules/`, findings that say the fix, and a baseline that only shrinks. The rules, the baseline and how to add a rule: [`lint-rules.md`](lint-rules.md).
 

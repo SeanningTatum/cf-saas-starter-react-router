@@ -129,6 +129,61 @@ export const testMapCases: Case[] = [
     expect: "finding",
   },
   {
+    name: "unit: a test that imports a value and never calls or reads it does not count",
+    files: unit('import { expect, it } from "vitest";\nimport { helper } from "../helper";\nit("x", () => { expect(1).toBe(1); });\n'),
+    expect: "finding",
+  },
+  {
+    name: "unit: a value read only inside a type does not count",
+    files: unit('import { expect, it } from "vitest";\nimport { helper } from "../helper";\ntype R = ReturnType<typeof helper>;\nit("x", () => { expect(1 as R).toBe(1); });\n'),
+    expect: "finding",
+  },
+  {
+    name: "unit: a property that shares the import's name is not a read of it",
+    files: unit('import { expect, it } from "vitest";\nimport { helper } from "../helper";\nconst o = { helper: 1 };\nit("x", () => { expect(o.helper).toBe(1); });\n'),
+    expect: "finding",
+  },
+  {
+    name: "unit: a side-effect import runs the file and calls nothing, so it does not count",
+    files: unit('import { expect, it } from "vitest";\nimport "../helper";\nit("x", () => { expect(1).toBe(1); });\n'),
+    expect: "finding",
+  },
+  {
+    name: "unit: a test that only checks the export exists does not count",
+    files: unit('import { expect, it } from "vitest";\nimport { helper } from "../helper";\nit("x", () => { expect(helper).toBeDefined(); });\n'),
+    expect: "finding",
+  },
+  {
+    name: "unit: a test that mocks the file away calls the mock, not the file, so it does not count",
+    files: unit('import { expect, it, vi } from "vitest";\nvi.mock("../helper");\nimport { helper } from "../helper";\nit("x", () => { expect(helper(1)).toBeUndefined(); });\n'),
+    expect: "finding",
+  },
+  {
+    name: "unit: a factory that names importOriginal but discards the real module still mocks the file away",
+    files: unit('import { expect, it, vi } from "vitest";\nvi.mock("../helper", (importOriginal) => ({ helper: vi.fn() }));\nimport { helper } from "../helper";\nit("x", () => { expect(helper(1)).toBeUndefined(); });\n'),
+    expect: "finding",
+  },
+  {
+    name: "unit: a computed export compared with assert.deepEqual counts",
+    files: unit('import { assert, it } from "vitest";\nimport { helper } from "../helper";\nit("x", () => { assert.deepEqual(helper, helper); });\n'),
+    expect: "clean",
+  },
+  {
+    name: "unit: a namespace import that is called counts",
+    files: unit('import { expect, it } from "vitest";\nimport * as subject from "../helper";\nit("adds", () => { expect(subject.helper(1)).toBe(2); });\n'),
+    expect: "clean",
+  },
+  {
+    name: "unit: an import passed by reference to the code under test counts",
+    files: unit('import { expect, it } from "vitest";\nimport { helper } from "../helper";\nit("adds", () => { expect([1].map(helper)).toEqual([2]); });\n'),
+    expect: "clean",
+  },
+  {
+    name: "unit: a dynamic import of the file counts",
+    files: unit('import { expect, it } from "vitest";\nit("adds", async () => { const { helper } = await import("../helper"); expect(helper(1)).toBe(2); });\n'),
+    expect: "clean",
+  },
+  {
     name: "unit: expect.soft counts as an assertion",
     files: unit('import { expect, it } from "vitest";\nimport { helper } from "../helper";\nit("adds", () => { expect.soft(helper(1)).toBe(2); });\n'),
     expect: "clean",
