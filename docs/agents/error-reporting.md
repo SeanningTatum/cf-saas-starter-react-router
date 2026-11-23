@@ -50,6 +50,8 @@ A capture may pass its own `level`; CSP reports pass `warning`.
 
 A rate-limited request is an expected refusal (a `RateLimitError`, mapped to `TOO_MANY_REQUESTS`) and is not reported. A fault in the auth rate-limit gate is a different case: `app/routes/api/auth.$.ts` reports it as an `action` error and lets the request through.
 
+Better Auth answers some server failures (Turnstile verification unavailable, for one) with a 5xx response instead of throwing, so no hook sees them. `app/routes/api/auth.$.ts` reports a returned response of 500 or above once, as a `loader` or `action` defect carrying only the status, the request id and the path without its query; it never reads the body or attaches headers. A returned 4xx is expected and is not reported.
+
 `kind` says whether the code expected the failure: a tagged error is one you modelled, a defect is a bug. `level` says how loud it is. The console adapter writes every report, as an error line for `error` and a warning line for `warning`. With Sentry on, the log line is always written, and only level `error` reports are sent on. Sends to Sentry share a per-isolate budget of 300 per 60 seconds (`remoteBudget` in `app/services/error-reporter.ts`): past it, a report is logged but not sent, so an error storm cannot spend the backend's quota. Only a report that is sent spends it: CSP reports (level `warning`) do not. The budget is larger than the browser endpoint's, so browser posts alone cannot use it up.
 
 tRPC never sends a 5xx `cause` to the client, and `app/trpc/index.ts` shows `schemaError` for `BAD_REQUEST` only, so the detail in a report does not reach a user.
