@@ -59,9 +59,15 @@ jobs:
     needs: readiness
     runs-on: ubuntu-latest
     if: needs.readiness.outputs.ready == 'true'
-    # The restore-point step may use up to 14 minutes of this (scripts/lib/d1-backup-constants.ts).
-    timeout-minutes: 30
+    # The restore-point step may use up to 14 minutes of this (scripts/lib/d1-backup-constants.ts),
+    # the rollout up to about 15 (three steps, each a minute's soak and a minute of checks).
+    timeout-minutes: 45
     environment: production
+    outputs:
+      outcome: ${{ steps.rollout.outputs.outcome }}
+      failed_at: ${{ steps.rollout.outputs.failed_at }}
+      version_id: ${{ steps.rollout.outputs.version_id }}
+      previous_version_id: ${{ steps.rollout.outputs.previous_version_id }}
     env:
       CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
       D1_DATABASE_ID: ${{ vars.CLOUDFLARE_D1_DATABASE_ID }}
@@ -137,20 +143,59 @@ jobs:
           }
           printf '%s\n' "$TAGS" | bun scripts/ci/release-version.ts "$DEPLOY_SHA" >> "$GITHUB_OUTPUT"
 
-      - name: Deploy to Cloudflare Workers
+      # Uploads a version, then moves traffic 10%, 50%, 100% with a smoke check of /healthz,
+      # pinned to the new version, after each step. A failed check or step sends all traffic
+      # back to the version that ran before, and the run fails. docs/ci/rollback.md#automatic-rollback
+      - name: Roll out to Cloudflare Workers in steps
+        id: rollout
         if: steps.token.outputs.ready == 'true'
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           RELEASE_VERSION: ${{ steps.release.outputs.version }}
-        run: bunx wrangler deploy --var "RELEASE_VERSION:$RELEASE_VERSION" --var ENVIRONMENT:production
+          PRODUCTION_URL: ${{ vars.PRODUCTION_URL }}
+        run: bun scripts/ci/rollout.ts
 
-      - name: Deploy summary
-        if: steps.token.outputs.ready == 'true'
+  # A failed production deploy or an automatic rollback is announced on GitHub: the failed run,
+  # its job summary, and one open issue that each failure comments on. The only job that can
+  # write issues; it checks out nothing and runs no repo code.
+  announce-failure:
+    name: Announce a failed deploy
+    needs: deploy
+    if: failure() && needs.deploy.result == 'failure'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      issues: write
+    steps:
+      - name: Open or update the failed-deploy issue
+        # A fork with issues turned off still has the failed run and its summary.
+        continue-on-error: true
         env:
-          RELEASE_VERSION: ${{ steps.release.outputs.version }}
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          DEPLOY_SHA: ${{ github.event.workflow_run.head_sha }}
+          OUTCOME: ${{ needs.deploy.outputs.outcome }}
+          FAILED_AT: ${{ needs.deploy.outputs.failed_at }}
+          VERSION_ID: ${{ needs.deploy.outputs.version_id }}
+          PREVIOUS_VERSION_ID: ${{ needs.deploy.outputs.previous_version_id }}
         run: |
+          title="Production deploy failed"
           {
-            echo "### Production deploy"
+            echo "Commit \`$DEPLOY_SHA\` did not reach production: **${OUTCOME:-failed before the rollout}**."
+            [ -n "$FAILED_AT" ] && echo "The smoke check or the traffic move failed at $FAILED_AT% of traffic."
+            [ "$OUTCOME" = "rolled-back" ] && echo "All traffic went back to version \`$PREVIOUS_VERSION_ID\`. The database keeps any migration this deploy ran."
+            [ "$OUTCOME" = "rollback-failed" ] && echo "**The rollback failed.** Run \`bunx wrangler versions deploy $PREVIOUS_VERSION_ID@100% -y\` now."
+            [ -n "$VERSION_ID" ] && echo "New version: \`$VERSION_ID\`."
             echo
-            echo "Deployed commit \`$DEPLOY_SHA\` to Cloudflare Workers (production), release \`$RELEASE_VERSION\`."
-          } >> "$GITHUB_STEP_SUMMARY"
+            echo "Run: $RUN_URL. What to do next: docs/ci/rollback.md"
+          } > body.md
+          # Only an issue this workflow opened counts: anyone can open one with the same title.
+          number=$(gh issue list --repo "$REPO" --state open --author "app/github-actions" --search "\"$title\" in:title" \
+            --json number,title --jq "[.[] | select(.title == \"$title\")][0].number // empty")
+          if [ -n "$number" ]; then
+            gh issue comment "$number" --repo "$REPO" --body-file body.md
+          else
+            gh issue create --repo "$REPO" --title "$title" --body-file body.md
+          fi
+      # A chat or email webhook would be one more step here, reading the same env and body.md.

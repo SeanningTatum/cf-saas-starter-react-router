@@ -11,7 +11,7 @@ Nine workflows live in `.github/workflows/`. Deploy and preview stay off until y
 | `codeql.yml` (CodeQL) | every push to `staging` or `production`, every pull request into the default branch or `production`, and Mondays | reads the source for injection and workflow mistakes |
 | `production-guard.yml` (Production Guard) | a pull request into `production` | fails unless the pull request comes from this repo's `staging` |
 | `release.yml` (Release) | every push to `production` | picks the next version, tags the commit, creates the GitHub release |
-| `deploy.yml` (Deploy Production) | CI finished green on a push to `production` | migrates the production D1 database (first saving a [restore point](rollback.md)), builds, runs `wrangler deploy` with a [release version and environment](../agents/error-reporting.md#environment) |
+| `deploy.yml` (Deploy Production) | CI finished green on a push to `production` | migrates the production D1 database (first saving a [restore point](rollback.md)), builds, waits for the environment's reviewer, uploads a version with its [release version and environment](../agents/error-reporting.md#environment) and moves traffic 10%, 50%, 100% with a smoke check after each step, rolling back on a failure ([automatic rollback](rollback.md#automatic-rollback)); a failure comments on the open "Production deploy failed" issue |
 | `deploy-staging.yml` (Deploy Staging) | CI finished green on a push to `staging` | migrates the staging D1 database, deploys the staging Worker with its release, smoke-checks `/healthz`, runs the `@deployed` e2e specs against it ([staging](#staging)) |
 | `preview.yml` (Preview Deploy) | a pull request into the default branch or `production`, opened, updated or reopened | gives the PR its own D1 database, seeds it, uploads a Worker version (with its [release version and environment](../agents/error-reporting.md#environment)), comments the URL |
 | `preview-cleanup.yml` (Preview Cleanup) | a pull request closed | deletes the PR's D1 database |
@@ -79,7 +79,7 @@ Two long-lived branches: `staging` (the default branch) and `production`.
    - anything else: patch.
 
    It then tags the commit and creates the release with GitHub's generated notes. A re-run on a commit that already has a tag does nothing.
-5. After CI passes on `production`, `deploy.yml` deploys that commit.
+5. After CI passes on `production`, `deploy.yml` waits for the owner's approval on the `production` environment, then rolls that commit out in steps ([automatic rollback](rollback.md#automatic-rollback)).
 
 `release.yml` tags on the push to `production` and does not wait for CI or the deploy, so a failed deploy still has a tag. Fix forward with a new release.
 
@@ -209,6 +209,7 @@ A run that is set up but fails is a real failure. The usual cause is a token wit
 | `CLOUDFLARE_ACCOUNT_ID` | repo variable | deploy; also preview and cleanup when `CLOUDFLARE_PREVIEW_ACCOUNT_ID` is unset |
 | `CLOUDFLARE_PREVIEW_ACCOUNT_ID` | repo variable, optional | preview and cleanup; use it for a separate preview account |
 | `CLOUDFLARE_D1_DATABASE_ID` | repo variable, optional | deploy only; patched into the CI checkout's `wrangler.jsonc` |
+| `PRODUCTION_URL` | repo variable, optional | deploy only; the production origin the rollout smoke-checks. Unset, the new version goes to 100% at once with no check ([automatic rollback](rollback.md#automatic-rollback)) |
 | `D1_BACKUP_BUCKET` | repo variable, optional | deploy only; names a private R2 bucket for the pre-migration export ([rollback](rollback.md#owner-steps-to-turn-the-export-on)) |
 | `CLOUDFLARE_API_TOKEN` | `production` environment secret | the production deploy job only |
 | `CLOUDFLARE_STAGING_API_TOKEN` | `staging` environment secret, never a repo secret | the staging deploy job only; a repo-level one makes the staging gate refuse |
@@ -234,7 +235,8 @@ The preview jobs never read `CLOUDFLARE_API_TOKEN`. The preview `readiness` job 
 6. Optional, for a repo that keeps placeholder ids committed: set the repo variable `CLOUDFLARE_D1_DATABASE_ID` to your production database id. The deploy job writes it into the checkout; the file in git does not change.
 7. Delete any old repo-level `CLOUDFLARE_API_TOKEN` secret.
 8. Optional: turn on the pre-migration export ([owner steps](rollback.md#owner-steps-to-turn-the-export-on)).
-9. Create `production` if you have not (`git push origin staging:production`), then merge a pull request from `staging` into `production` ([How a change reaches production](#how-a-change-reaches-production)). After CI passes on `production`, Deploy Production runs.
+9. Set the repo variable `PRODUCTION_URL` to the production origin (an `https` origin, no path), so the rollout checks each step and can roll back. The Worker must already answer there: `BETTER_AUTH_URL` set ([auth config](../auth.md)).
+10. Create `production` if you have not (`git push origin staging:production`), then merge a pull request from `staging` into `production` ([How a change reaches production](#how-a-change-reaches-production)). After CI passes on `production`, Deploy Production runs.
 
 ## Turn on previews
 
