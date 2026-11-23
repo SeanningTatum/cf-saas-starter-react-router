@@ -225,6 +225,43 @@ export const alwaysSpawnMachine = setup({ actors: { work } }).createMachine({
   },
 });
 
+export const trappedRegionMachine = createMachine({
+  id: "trappedRegion",
+  type: "parallel",
+  states: {
+    left: {
+      initial: "idle",
+      states: { idle: { on: { BREAK: "stuck" } }, stuck: { on: { POKE: "stuck" } } },
+    },
+    right: {
+      initial: "idle",
+      states: { idle: { on: { FLIP: "on" } }, on: { on: { FLIP: "idle" } } },
+    },
+  },
+});
+
+export const initialSpawnMachine = setup({ actors: { work } }).createMachine({
+  id: "initialSpawn",
+  initial: { target: "idle", actions: spawnChild("work") },
+  states: {
+    idle: { on: { GO: "done" } },
+    done: { on: { RESET: "idle" } },
+  },
+});
+
+export const rootHandlerMachine = createMachine({
+  id: "rootHandler",
+  initial: "idle",
+  on: { RESET: ".idle" },
+  states: {
+    idle: { on: { EDIT: "editing" } },
+    editing: {
+      initial: "draft",
+      states: { draft: { on: { NEXT: "review" } }, review: {} },
+    },
+  },
+});
+
 export const clashingKeysMachine = createMachine({
   id: "clashingKeys",
   initial: "a-b",

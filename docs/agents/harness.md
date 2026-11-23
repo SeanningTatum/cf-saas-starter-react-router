@@ -223,6 +223,16 @@ A component with UI logic keeps it in an XState machine, `<name>.machine.ts` bes
 
 Each finding names the file, the machine, the state and the fix. The walk follows the machine's shape and ignores guards: a state behind a guard that is never true still counts as reachable, so the unit tests own the guards. The self-test is `scripts/lib/__tests__/machine-check.test.ts`, on bad machines in `scripts/lib/__tests__/fixtures/machines.ts`. The gate runs in the baseline tier, and `--changed` runs it only for a machine the diff changes or that imports a changed file directly (a change two imports away waits for the baseline run).
 
+What the gate does not check, so a green gate means only "the shape has no trap", not "the machine is right":
+
+- **Events.** Any event the machine handles is assumed to arrive at any time. An event the component never sends still counts as a way out.
+- **Guards.** Every guarded transition counts as possible. A guard that is never true can hide an unreachable state or fake a way home.
+- **Delays.** An `after` transition counts as a way out whatever its delay.
+- **History states.** Entering one is treated as entering its parent's initial state; the state it would restore is not modelled.
+- **Parallel states.** Each region is judged on its own, and the walk does not track which pairs of region states can be active together. A parallel state's `onDone` is taken as possible once every region can reach a final state, whether or not they can all be final at once.
+- **Start-up work it cannot see.** A `spawn` inside the `context` factory, a spawn inside `enqueueActions`, and an action supplied later through `.provide()` all slip past `machines/starts-work`.
+- **Machines elsewhere.** Only machines exported from a `*.machine.ts` file under `app/` or `workers/` are checked.
+
 A pull request that adds or changes a machine pastes its diagram in the body. `bun scripts/machine-diagram.ts app/components/file-upload.machine.ts` prints each machine in the file as a fenced Mermaid state diagram, which GitHub draws.
 
 ## Gates

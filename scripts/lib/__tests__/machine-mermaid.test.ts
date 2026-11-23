@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { actorName, eventLabel, mermaidIds, toMermaid, toMermaidBlock } from "../machine-mermaid";
-import { clashingKeysMachine, crossLevelMachine, guardedMachine, nestedMachine, parallelMachine, soundMachine } from "./fixtures/machines";
+import { clashingKeysMachine, crossLevelMachine, guardedMachine, nestedMachine, parallelMachine, rootHandlerMachine, soundMachine } from "./fixtures/machines";
 
 describe("toMermaid", () => {
   it("draws a flat machine with its start, its final state and actor labels, so the printed diagram stays valid Mermaid", () => {
@@ -110,6 +110,23 @@ describe("actorName", () => {
     expect(id).not.toBe("work");
     expect(actorName(loading, id)).toBe("work");
     expect(actorName(loading, "unknown")).toBe("unknown");
+  });
+});
+
+describe("every arrow", () => {
+  it.each([
+    ["a machine with a root handler", rootHandlerMachine],
+    ["a nested machine", nestedMachine],
+    ["a parallel machine", parallelMachine],
+    ["a cross-level machine", crossLevelMachine],
+  ])("has a source and a target in %s, so the pasted diagram is valid Mermaid", (_name, machine) => {
+    const arrows = toMermaid(machine).filter((line) => line.includes("-->"));
+    expect(arrows.length).toBeGreaterThan(0);
+    for (const arrow of arrows) expect(arrow).toMatch(/^\s*\S+ --> \S+( : .+)?$/);
+  });
+
+  it("draws a root handler from every top-level state, since it fires in each of them", () => {
+    expect(toMermaid(rootHandlerMachine)).toEqual(expect.arrayContaining(["  idle --> idle : RESET", "  editing --> idle : RESET"]));
   });
 });
 

@@ -81,7 +81,9 @@ function renderBlock(node: AnyStateNode, placed: readonly Placed[], ids: Ids, in
 
 export function toMermaid(machine: AnyStateMachine): string[] {
   const ids = mermaidIds(machine);
-  const placed = machineEdges(machine).flatMap((edge) => place(edge, ids) ?? []);
+  const topLevel = Object.values<AnyStateNode>(machine.root.states);
+  const edges = machineEdges(machine).flatMap((edge) => (edge.source === machine.root ? topLevel.map((source) => ({ ...edge, source })) : [edge]));
+  const placed = edges.flatMap((edge) => place(edge, ids) ?? []);
   return [MERMAID.header, ...renderBlock(machine.root, placed, ids, MERMAID.indent)];
 }
 

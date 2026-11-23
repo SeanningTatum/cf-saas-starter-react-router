@@ -6,6 +6,7 @@ export const ALWAYS_EVENT = "";
 export const ANY_EVENT = "*";
 export const INLINE_GUARD = "guard";
 export const SPAWN_CHILD = "xstate.spawnChild";
+export const ROOT_STATE = "(root)";
 
 export const EVENT_PREFIX = {
   doneActor: "xstate.done.actor.",
@@ -55,7 +56,7 @@ export const MESSAGE = {
   deadEnd: "once entered, no path leads back to the initial state or to a final state, and it is not marked final",
   invokes: "it is active when the machine starts and invokes an actor, so useMachine starts that work during the server render; the actor:",
   spawns:
-    "it is active when the machine starts and spawns a child actor on entry or on an eventless transition, so useMachine starts that work during the server render",
+    "it is active when the machine starts and spawns a child actor on entry, on its initial transition or on an eventless transition, so useMachine starts that work during the server render",
   noMachine: "the file exports no XState machine",
   load: "the file does not load:",
 } as const;

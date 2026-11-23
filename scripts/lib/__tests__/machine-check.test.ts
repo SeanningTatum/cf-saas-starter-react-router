@@ -8,7 +8,10 @@ import {
   alwaysSpawnMachine,
   deadEndMachine,
   delayedMachine,
+  initialSpawnMachine,
   invokesOnStartMachine,
+  rootHandlerMachine,
+  trappedRegionMachine,
   nestedDeadEndMachine,
   nestedMachine,
   parallelMachine,
@@ -56,6 +59,18 @@ describe("checkMachine self-test: each check fails on a bad machine", () => {
 
   it("names an initial state whose eventless transition spawns a child, so a spawn on an always hop is caught", () => {
     expect(found(alwaysSpawnMachine)).toEqual([{ check: CHECK.startsWork, state: "checking" }]);
+  });
+
+  it("names a trapped state in one region of a parallel machine, so another region sitting at its initial state does not count as home", () => {
+    expect(found(trappedRegionMachine)).toEqual([{ check: CHECK.deadEnd, state: "left.stuck" }]);
+  });
+
+  it("names a machine whose initial transition spawns a child, so actions on initial are checked like entry actions", () => {
+    expect(found(initialSpawnMachine)).toEqual([{ check: CHECK.startsWork, state: "(root)" }]);
+  });
+
+  it("lets a root handler rescue every state, so a RESET defined on the machine counts as a way home", () => {
+    expect(found(rootHandlerMachine)).toEqual([]);
   });
 
   it("says what to do instead in every finding, so the author is never left with only a complaint", () => {
