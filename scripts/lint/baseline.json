@@ -12,7 +12,6 @@
   "debt": {
     "constants-home": {},
     "file-size": {
-      "app/repositories/__tests__/user.test.ts": 505,
       "app/routes/admin/components/user-data-table.tsx": 571,
       "app/routes/admin/kitchen-sink.tsx": 960,
       "app/services/__tests__/tracing.test.ts": 436,
