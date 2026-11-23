@@ -66,7 +66,6 @@
       "scripts/repo-rules.ts": 18,
       "scripts/roster.ts": 10,
       "scripts/secret-scan.ts": 17,
-      "scripts/seed-preview.ts": 30,
       "scripts/stack.ts": 9,
       "scripts/teardown.ts": 22,
       "scripts/tracker.ts": 18,
