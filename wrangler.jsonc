@@ -25,9 +25,6 @@
       "bucket_name": "cf-saas-starter-react-router-bucket"
     }
   ],
-  "ai": {
-    "binding": "AI"
-  },
   "ratelimits": [
     {
       "name": "AUTH_SIGN_IN_LIMITER",
@@ -90,9 +87,6 @@
           "bucket_name": "cf-saas-starter-react-router-bucket-preview"
         }
       ],
-      "ai": {
-        "binding": "AI"
-      },
       "ratelimits": [
         {
           "name": "AUTH_SIGN_IN_LIMITER",
@@ -121,6 +115,66 @@
         {
           "name": "UPLOAD_LIMITER",
           "namespace_id": "2004",
+          "simple": {
+            "limit": 20,
+            "period": 60
+          }
+        }
+      ],
+      "observability": {
+        "logs": {
+          "enabled": true,
+          "head_sampling_rate": 1,
+          "invocation_logs": true,
+          "persist": true
+        }
+      }
+    },
+    "staging": {
+      "workers_dev": true,
+      "preview_urls": false,
+      "d1_databases": [
+        {
+          "binding": "DATABASE",
+          "database_name": "cf-saas-starter-react-router-db-staging",
+          "database_id": "00000000-0000-0000-0000-000000000000",
+          "migrations_dir": "./drizzle"
+        }
+      ],
+      "r2_buckets": [
+        {
+          "binding": "BUCKET",
+          "bucket_name": "cf-saas-starter-react-router-bucket-staging"
+        }
+      ],
+      "ratelimits": [
+        {
+          "name": "AUTH_SIGN_IN_LIMITER",
+          "namespace_id": "3001",
+          "simple": {
+            "limit": 10,
+            "period": 60
+          }
+        },
+        {
+          "name": "AUTH_SIGN_UP_LIMITER",
+          "namespace_id": "3002",
+          "simple": {
+            "limit": 5,
+            "period": 60
+          }
+        },
+        {
+          "name": "AUTH_API_LIMITER",
+          "namespace_id": "3003",
+          "simple": {
+            "limit": 60,
+            "period": 60
+          }
+        },
+        {
+          "name": "UPLOAD_LIMITER",
+          "namespace_id": "3004",
           "simple": {
             "limit": 20,
             "period": 60

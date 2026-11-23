@@ -70,9 +70,9 @@ export function evaluate(expression: string, context: Context): boolean {
     }
     if (token.startsWith("'")) return token.slice(1, -1);
     if (token === "true" || token === "false") return token === "true";
-    if (token === "always" && queue[0] === "(" && queue[1] === ")") {
+    if ((token === "always" || token === "failure") && queue[0] === "(" && queue[1] === ")") {
       queue.splice(0, 2);
-      return true;
+      return token === "always" || context.failure === true;
     }
     return lookup(context, token) ?? "";
   };
@@ -108,7 +108,7 @@ export function jobsThatRun(jobs: Job[], context: Context): string[] {
   const decide = (job: Job): boolean => {
     const known = runs.get(job.id);
     if (known !== undefined) return known;
-    const runsAnyway = job.condition?.trimStart().startsWith("always()") ?? false;
+    const runsAnyway = /^\s*(always|failure)\(\)/.test(job.condition ?? "");
     const parents =
       runsAnyway ||
       job.needs.every((id) => {

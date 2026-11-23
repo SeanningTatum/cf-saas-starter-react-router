@@ -2,11 +2,9 @@ import type { AppLoadContext, EntryContext, HandleErrorFunction } from "react-ro
 import { ServerRouter } from "react-router";
 import { isbot } from "isbot";
 import { renderToReadableStream } from "react-dom/server";
-import { createInstance } from "i18next";
-import { I18nextProvider, initReactI18next } from "react-i18next";
+import { I18nextProvider } from "react-i18next";
 import { i18nServer } from "./i18n/i18n.server";
-import { supportedLngs, fallbackLng, defaultNS } from "@/lib/constants/i18n";
-import resourcesToBackend from "i18next-resources-to-backend";
+import { createRequestI18n } from "./i18n/i18n.request";
 import { FIRST_SERVER_ERROR_STATUS, READ_METHODS } from "@/lib/constants/error-reporting";
 import { NonceContext } from "@/lib/csp-nonce";
 import { RequestIdContext } from "@/lib/request-id";
@@ -34,24 +32,9 @@ export default async function handleRequest(
   const nonce = loadContext.cspNonce;
   const userAgent = request.headers.get("user-agent");
 
-  const instance = createInstance();
   const lng = await i18nServer.getLocale(request);
   const ns = i18nServer.getRouteNamespaces(routerContext);
-
-  await instance
-    .use(initReactI18next)
-    .use(
-      resourcesToBackend(
-        (language: string, namespace: string) => import(`./locales/${language}/${namespace}.json`),
-      ),
-    )
-    .init({
-      supportedLngs: [...supportedLngs],
-      fallbackLng,
-      defaultNS,
-      lng,
-      ns,
-    });
+  const instance = await createRequestI18n(lng, ns);
 
   const body = await renderToReadableStream(
     <NonceContext.Provider value={nonce}>

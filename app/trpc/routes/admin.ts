@@ -2,6 +2,7 @@ import { Effect, Schema } from "effect";
 import { adminProcedure, createTRPCRouter } from "..";
 import { runProcedure } from "@/lib/effect-trpc";
 import { UserRepository } from "@/repositories/user";
+import { UploadRepository } from "@/repositories/upload";
 import { Analytics } from "@/services/analytics";
 import type { AppRuntime } from "@/runtime";
 import {
@@ -22,7 +23,10 @@ function runBulkUserAction<E>(
   userIds: readonly string[],
   logEvent: string,
   span: string,
-  performAction: (repo: UserRepository, validUserIds: string[]) => Effect.Effect<number, E>,
+  performAction: (
+    repo: UserRepository,
+    validUserIds: string[],
+  ) => Effect.Effect<number, E, UploadRepository>,
   extraLogFields: Record<string, unknown> = {},
 ) {
   return runProcedure(
@@ -138,6 +142,9 @@ export const adminRouter = createTRPCRouter({
         ctx.runtime,
         Effect.gen(function* () {
           const repo = yield* UserRepository;
+          const uploads = yield* UploadRepository;
+          yield* repo.assertMutable({ userId: input.userId, currentUserId: ctx.auth.user.id });
+          yield* uploads.purgeForUsers([input.userId]);
           return yield* repo.deleteUser({
             ...input,
             currentUserId: ctx.auth.user.id,
@@ -172,7 +179,12 @@ export const adminRouter = createTRPCRouter({
         input.userIds,
         "users.bulk_deleted",
         "trpc.admin.bulkDeleteUsers",
-        (repo, validUserIds) => repo.bulkDeleteUsers({ userIds: validUserIds }),
+        (repo, validUserIds) =>
+          Effect.gen(function* () {
+            const uploads = yield* UploadRepository;
+            yield* uploads.purgeForUsers(validUserIds);
+            return yield* repo.bulkDeleteUsers({ userIds: validUserIds });
+          }),
       ),
     ),
 

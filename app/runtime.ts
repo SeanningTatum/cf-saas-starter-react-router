@@ -20,6 +20,8 @@ import { UserRepository } from "@/repositories/user";
 import { AnalyticsRepository } from "@/repositories/analytics";
 import { BucketRepository } from "@/repositories/bucket";
 import { HealthRepository } from "@/repositories/health";
+import { UploadRepository } from "@/repositories/upload";
+import { AccountRepository } from "@/repositories/account";
 
 export type AppServices =
   | Database
@@ -31,6 +33,8 @@ export type AppServices =
   | UserRepository
   | AnalyticsRepository
   | BucketRepository
+  | UploadRepository
+  | AccountRepository
   | HealthRepository;
 
 const requestLayer = (request: RequestContext): Layer.Layer<CurrentRequest | Tracer.ParentSpan> =>
@@ -79,6 +83,8 @@ export const makeAppRuntime = (
     UserRepository.Default,
     AnalyticsRepository.Default,
     BucketRepository.Default,
+    UploadRepository.Default,
+    AccountRepository.Default,
     HealthRepository.Default,
   );
   const layer = reposLayer

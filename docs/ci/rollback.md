@@ -80,6 +80,28 @@ Run these once, by hand. The workflow never creates them.
 4. Set the repo variable `D1_BACKUP_BUCKET` to `<name>` (Settings, Secrets and variables, Actions, Variables).
 5. Give the production API token R2 write rights for this bucket only. The lifecycle docs name the permission group "Workers R2 Storage Write". When you create or edit the token, add that permission and limit it to the backup bucket if the token form lets you scope it to buckets; otherwise know that the token can write to every bucket in the account. `D1_BACKUP_BUCKET` must never name the app's own bucket (the one in `wrangler.jsonc`). If the upload fails with an authentication error, add the permission to the token.
 
+## Automatic rollback
+
+The production deploy does not move every user at once. After the migration and the build, `scripts/ci/rollout.ts`:
+
+1. Reads the current deployment (`wrangler deployments status --json`) and keeps the version that serves 100% alone as the way back. If traffic is split (an earlier run that failed to roll back, or a split made by hand), it stops before the upload and asks you to send 100% to the good version first: a split has no safe way back.
+2. Uploads the build as a new version (`wrangler versions upload`, with `RELEASE_VERSION` and `ENVIRONMENT=production`). Nothing serves it yet.
+3. Moves traffic in steps, 10%, 50%, then 100% (`wrangler versions deploy <new>@10% <old>@90% --yes`). After each step it waits 60 seconds and runs the [smoke check](pipelines.md#smoke-check) on `PRODUCTION_URL`, pinned to the new version and expecting its release.
+4. On a failed check, or a step wrangler refuses, it sends 100% back to the old version (`wrangler versions deploy <old>@100% --yes`), reads the deployment again to confirm the old version serves 100% alone, and the run fails. If that read shows anything else, it reports the rollback as failed.
+
+A failure is announced on GitHub: the failed run, its job summary (outcome, versions, the step that failed), and a comment on the one open issue titled "Production deploy failed" (opened if there is none; only an issue the workflow itself opened counts, so an issue anyone else opens with that title is ignored). Close the issue once production is healthy; the next failure opens a new one.
+
+What it does not do:
+
+- **It never rolls the database back.** The migration ran before the upload, so the old version runs on the new schema. That is safe only because of [the rule above](#the-rule-that-makes-rollback-possible). For a migration that broke the old code, go to [Case B](#case-b-the-migration-ran-and-the-deploy-failed).
+- **No `PRODUCTION_URL`, no checks.** Without the variable the new version goes to 100% at once, as before, with a warning. The same on a Worker's first deployment: there is no version to split with or go back to, so it goes to 100%, is checked, and a failed check fails the run without a rollback.
+- **Only `/healthz`.** The check proves the Worker starts, its auth config builds and the database answers. A broken page or a broken procedure passes it. Watch the error reports for the first minutes after a release.
+- **A split is per request.** During the 10% and 50% steps a user can get the old version on one request and the new one on the next. Code and data must work both ways for those minutes, which the migration rule already asks for.
+
+Limits from Cloudflare ([gradual deployments](https://developers.cloudflare.com/workers/configuration/versions-and-deployments/gradual-deployments/), [version overrides](https://developers.cloudflare.com/workers/configuration/versions-and-deployments/version-overrides/)): a deployment serves at most two versions; a split can use only the last 100 uploaded versions; a version pin is ignored for a version outside the current deployment, and a deployment change takes a little time to reach every location, so the check compares the release and retries. A deploy that carries a Durable Object migration must use `wrangler deploy` instead (this app has none).
+
+If the rollback itself fails, the job says so with the command to run by hand: `bunx wrangler versions deploy <old version id>@100% -y`.
+
 ## Case A: the new code is bad, the migration is fine
 
 The Worker deploy failed, or the Worker runs and misbehaves. The database is fine.

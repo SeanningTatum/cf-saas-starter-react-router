@@ -2,6 +2,8 @@ export const supportedLngs = ["en", "zh"] as const;
 export const fallbackLng = "en" as const;
 export const defaultNS = "common" as const;
 
+export const i18nInterpolation = { escapeValue: false } as const;
+
 export const localeCookieName = "i18next";
 
 const SECONDS_PER_YEAR = 60 * 60 * 24 * 365;

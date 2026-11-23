@@ -1,4 +1,5 @@
 import { BROWSER_REPORT_PATH } from "./error-reporting";
+import { HEALTHZ_PATH } from "./health";
 
 export const ROUTES = {
   home: "/",
@@ -16,4 +17,12 @@ export const API_ROUTES = {
   auth: "/api/auth",
   uploadFile: "/api/upload-file",
   setLocale: "/api/set-locale",
+} as const;
+
+export const OPS_ROUTES = {
+  healthz: HEALTHZ_PATH,
+} as const;
+
+export const DEV_ROUTES = {
+  sandboxManifest: "/sandbox.json",
 } as const;

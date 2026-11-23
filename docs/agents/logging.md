@@ -59,6 +59,7 @@ Names are constants in `app/lib/constants/spans.ts` (tRPC span names stay beside
 | An R2 call | `r2.put`, `r2.get`, `r2.delete`, `r2.list` | client | `app/repositories/bucket.ts` |
 | A Better Auth session lookup | `auth.get_session` | client | `getSession` in `app/services/session.ts`; `SessionLive`, the upload route and the loader guards in `app/lib/session.ts` all use it |
 | The upload route | `upload.store_file`, with `upload.read_head` inside | internal | `app/routes/api/upload-file.ts` |
+| The health route | `healthz.check`, with `healthz.up` and `db.query health` inside; a request inside the 5-second window reuses the last check and makes no span | internal | `app/routes/api/healthz.ts` |
 
 ## Gates
 

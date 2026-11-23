@@ -79,6 +79,13 @@
       "reviewers": ["@owner"],
       "prevent_self_review": false,
       "deployment_branches": ["~DEFAULT_BRANCH"]
+    },
+    {
+      "name": "staging",
+      "reviewers": [],
+      "prevent_self_review": false,
+      "deployment_branches": ["~DEFAULT_BRANCH"],
+      "pending": "the owner applies it with the staging setup (docs/ci/pipelines.md#staging); until then the deploy job runs in an unprotected environment GitHub creates on first use"
     }
   ],
   "repository": {

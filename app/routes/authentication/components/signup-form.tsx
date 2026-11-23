@@ -23,6 +23,7 @@ import { ProblemBox, TurnstileWidget, useTurnstile } from "@/components/turnstil
 import { captchaFetchOptions } from "@/lib/turnstile-client";
 import { authRefusalFor } from "@/lib/auth-errors";
 import { ROUTES } from "@/lib/constants/routes";
+import { useRetryCooldown } from "./use-retry-cooldown";
 
 interface SignupFormProps extends React.ComponentProps<"div"> {
   turnstileSiteKey?: string | null;
@@ -35,6 +36,7 @@ export function SignupForm({ className, turnstileSiteKey = null, ...props }: Sig
   const hydrated = useHydrated();
   const turnstile = useTurnstile(turnstileSiteKey);
   const awaitingCheck = turnstile.enabled && turnstile.token === null;
+  const cooldown = useRetryCooldown();
 
   const form = useForm<SignupInput>({
     resolver: effectTsResolver(SignupSchema),
@@ -55,7 +57,10 @@ export function SignupForm({ className, turnstileSiteKey = null, ...props }: Sig
         email: data.email,
         password: data.password,
         name: data.name,
-        fetchOptions: captchaFetchOptions(turnstile.token),
+        fetchOptions: {
+          ...captchaFetchOptions(turnstile.token),
+          onError: ({ response }) => cooldown.startFrom(response),
+        },
       });
 
       if (result.error) {
@@ -178,9 +183,15 @@ export function SignupForm({ className, turnstileSiteKey = null, ...props }: Sig
                   type="submit"
                   className="w-full"
                   data-testid="signup-submit"
-                  disabled={!hydrated || form.formState.isSubmitting || awaitingCheck}
+                  disabled={
+                    !hydrated || form.formState.isSubmitting || awaitingCheck || cooldown.waiting
+                  }
                 >
-                  {form.formState.isSubmitting ? t("signup.submitting") : t("signup.submit")}
+                  {cooldown.waiting
+                    ? t("refusal.retry_in", { seconds: cooldown.secondsLeft })
+                    : form.formState.isSubmitting
+                      ? t("signup.submitting")
+                      : t("signup.submit")}
                 </Button>
                 <p className="text-center text-sm text-muted-foreground">
                   {t("signup.has_account")}{" "}

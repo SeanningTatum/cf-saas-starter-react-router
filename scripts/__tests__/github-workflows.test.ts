@@ -104,7 +104,7 @@ describe(".github/dependabot.yml", () => {
 });
 
 describe("workflows keep secrets and PR data out of shell text", () => {
-  it.each(["deploy.yml", "preview.yml", "preview-cleanup.yml"])(
+  it.each(["deploy.yml", "deploy-staging.yml", "preview.yml", "preview-cleanup.yml"])(
     "%s has no ${{ }} expression inside a run script: PR-controlled values must go through env",
     (f) => {
       const lines = codeLines(f);
@@ -198,18 +198,19 @@ describe("deploys tell the Worker its release version and environment", () => {
   const deploy = codeLines("deploy.yml").join("\n");
   const preview = codeLines("preview.yml").join("\n");
 
-  it("deploy.yml names the release first, then passes it and the environment to wrangler deploy: without them every error report says unversioned", () => {
+  it("deploy.yml names the release first, then hands it to the rollout script, which uploads it with the environment (scripts/ci/__tests__/rollout.test.ts): without them every error report says unversioned", () => {
     expect(deploy).toMatch(/RELEASE_VERSION:\s*\$\{\{\s*steps\.release\.outputs\.version\s*\}\}/);
-    expect(deploy).toContain('bunx wrangler deploy --var "RELEASE_VERSION:$RELEASE_VERSION" --var ENVIRONMENT:production');
+    expect(deploy).toContain("run: bun scripts/ci/rollout.ts");
+    expect(deploy).not.toContain("bunx wrangler deploy");
     const naming = deploy.indexOf("bun scripts/ci/release-version.ts");
     expect(naming).toBeGreaterThan(-1);
-    expect(naming).toBeLessThan(deploy.indexOf("bunx wrangler deploy"));
+    expect(naming).toBeLessThan(deploy.indexOf("bun scripts/ci/rollout.ts"));
   });
 
   it("deploy.yml names the release from the tested commit and gives that step only the read-only repo token", () => {
     expect(deploy).toContain('bun scripts/ci/release-version.ts "$DEPLOY_SHA" >> "$GITHUB_OUTPUT"');
     expect(deploy).toMatch(/GH_TOKEN:\s*\$\{\{\s*github\.token\s*\}\}/);
-    const releaseStep = deploy.slice(deploy.indexOf("- name: Name the release"), deploy.indexOf("- name: Deploy to Cloudflare Workers"));
+    const releaseStep = deploy.slice(deploy.indexOf("- name: Name the release"), deploy.indexOf("- name: Roll out to Cloudflare Workers in steps"));
     expect(releaseStep).not.toContain("CLOUDFLARE_API_TOKEN");
   });
 

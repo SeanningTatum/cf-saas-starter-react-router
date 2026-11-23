@@ -1,0 +1,260 @@
+import { describe, expect, it } from "vitest";
+import { INTO, SHA_A, SHA_B, WAVE } from "../lib/__tests__/helpers/wave-fixture";
+import { run } from "../wave";
+import { PASS, RED, RUNNING, SLUG, STATE, TICKETS, world } from "./helpers/wave-world";
+
+describe("wave CLI", () => {
+  it("a call with no verb is a usage error that names the verbs", async () => {
+    const o = await run([], world().deps);
+    expect(o.code).toBe(2);
+    expect(o.stderr.join("\n")).toContain("a verb is required");
+  });
+
+  it("walks plan, approval, two batches, merges, gates and the roll-up, and never merges the roll-up PR", async () => {
+    const w = world();
+    expect(JSON.parse((await w.plan()).stdout[0] ?? "").out).toEqual({
+      tracks: [
+        { id: "t1", tickets: [11, 12] },
+        { id: "t2", tickets: [13] },
+      ],
+      batches: [[11, 13], [12]],
+      notes: [],
+    });
+    expect(await w.step()).toEqual({ kind: "stop", stop: "plan", pr: null });
+    expect(await w.out(["approve", SLUG])).toEqual({ approved: true });
+    expect(await w.step()).toMatchObject({
+      kind: "tickets",
+      batch: 0,
+      tickets: [
+        { n: 11, step: "build" },
+        { n: 13, step: "build" },
+      ],
+    });
+    await w.open(11);
+    await w.open(13);
+    expect(await w.step()).toMatchObject({
+      kind: "tickets",
+      tickets: [
+        { n: 11, step: "review", round: 1 },
+        { n: 13, step: "review" },
+      ],
+    });
+    await w.review(11);
+    await w.review(13);
+    expect(await w.guard(11)).toMatchObject({ guard: { verdict: "green" }, ticket: { status: "green" } });
+    await w.guard(13);
+    expect(await w.step()).toEqual({ kind: "merge", batch: 0 });
+    expect(await w.out(["merge", SLUG])).toEqual({ merged: [11, 13], refused: [], halt: null, paused: false });
+    expect(w.calls).toContainEqual(["pr", "merge", "111", "--merge", "--match-head-commit", SHA_B]);
+    expect(await w.step()).toEqual({ kind: "gate", batch: 0 });
+    expect(await w.out(["gate", SLUG, "--head", SHA_A, "--code", "0"])).toEqual({ gate: "pass", failures: 0, tail: "", merged: [11, 13] });
+    expect(await w.step()).toMatchObject({ kind: "tickets", batch: 1, tickets: [{ n: 12, step: "build" }] });
+    await w.green(12);
+    expect(await w.step()).toEqual({ kind: "merge", batch: 1 });
+    await w.out(["merge", SLUG]);
+    expect(await w.step()).toEqual({ kind: "gate", batch: 1 });
+    await w.out(["gate", SLUG, "--head", SHA_A, "--code", "0"]);
+    expect(await w.step()).toEqual({ kind: "rollup" });
+    expect(await w.out(["rollup", SLUG, "--title", "v3.0 wave 2"])).toEqual({ pr: 900 });
+    expect(w.calls).toContainEqual(["pr", "create", "--base", INTO, "--head", WAVE, "--title", "v3.0 wave 2", "--body-file", "-"]);
+    expect(w.bodies[0]).toContain("never merges it");
+    expect(await w.step()).toEqual({ kind: "stop", stop: "rollup", pr: 900 });
+    expect(await w.step()).toEqual({ kind: "stop", stop: "rollup", pr: 900 });
+    expect(w.merges()).toEqual(["111", "113", "112"]);
+  });
+
+  it("rollup reuses an open roll-up PR instead of opening a second, and still never merges it", async () => {
+    const w = world();
+    await w.approved();
+    w.lists.rollup = JSON.stringify([{ number: 77, body: "A person wrote this line.\n\n## Size\n\nold table" }]);
+    expect(await w.out(["rollup", SLUG, "--title", "v3.0 wave 2"])).toEqual({ pr: 77 });
+    expect(w.calls.some((x) => x[1] === "create")).toBe(false);
+    expect(w.state().rollupPr).toBe(77);
+    expect(w.merges()).toEqual([]);
+  });
+
+  it("merge re-reads each PR and never calls gh pr merge on one retargeted off the wave branch or turned red", async () => {
+    const w = world();
+    await w.approved();
+    await w.green(11, 13);
+    w.pr(111).base = INTO;
+    w.pr(113).checks = RED;
+    expect(await w.out(["merge", SLUG])).toEqual({ merged: [], refused: [], halt: null, paused: false });
+    expect(w.merges()).toEqual([]);
+    expect(w.ticket(11)).toMatchObject({ status: "stuck", why: `the PR's base is ${INTO}, not the wave branch ${WAVE}` });
+    expect(w.ticket(13)).toMatchObject({ status: "open", needsCheckFix: true });
+  });
+
+  it("guard never reports green over an unanswered thread, a red check or a pending list", async () => {
+    const w = world();
+    await w.approved();
+    await w.open(11, {
+      threads: [{ isResolved: false, comments: { pageInfo: { hasNextPage: false }, nodes: [{ author: { login: "bot" }, url: "https://x/t1" }] } }],
+    });
+    await w.review(11);
+    expect(await w.guard(11)).toMatchObject({ guard: { verdict: "threads", unanswered: ["https://x/t1"] }, ticket: { step: "answer-threads" } });
+    await w.open(13, { checks: RED });
+    await w.review(13);
+    expect(await w.guard(13)).toMatchObject({ guard: { verdict: "red" }, ticket: { step: "fix-check" } });
+    w.pr(113).checks = RUNNING;
+    expect(await w.guard(13)).toMatchObject({ guard: { verdict: "pending" }, ticket: { status: "open" } });
+    expect(w.slept).toEqual([]);
+  });
+
+  it("guard --wait polls while checks run and stops once they pass", async () => {
+    const w = world();
+    await w.approved();
+    await w.open(11, { checks: RUNNING });
+    await w.review(11);
+    w.afterSleep.push(() => {
+      w.pr(111).checks = PASS;
+    });
+    expect(await w.guard(11, "--wait", "120")).toMatchObject({ guard: { verdict: "green" } });
+    expect(w.slept).toEqual([30_000]);
+  });
+
+  it("a guard that waits on CI writes over nothing: another ticket's event and a pause made during the wait both survive", async () => {
+    const w = world();
+    await w.approved();
+    await w.open(11, { checks: RUNNING });
+    await w.review(11);
+    w.afterSleep.push(async () => {
+      w.prs.set(113, { state: "OPEN", base: WAVE, head: SHA_B, mergeable: "MERGEABLE", checks: PASS, threads: [], refuse: "" });
+      await w.cli(["event", SLUG], JSON.stringify({ type: "opened", n: 13, pr: 113, branch: "w/13", head: SHA_A, ownerSteps: [] }));
+      await w.cli(["pause", SLUG]);
+      w.pr(111).checks = PASS;
+    });
+    expect(await w.guard(11, "--wait", "120")).toMatchObject({ guard: { verdict: "green" }, paused: true });
+    expect(w.ticket(11).status).toBe("green");
+    expect(w.ticket(13)).toMatchObject({ status: "open", pr: 113 });
+    expect(w.state().paused).toBe(true);
+  });
+
+  it("a write waits for the state lock, gives up with a clear line when it never frees, and leaves no lock behind after a normal write", async () => {
+    const w = world();
+    await w.approved();
+    const lock = `${STATE}.lock`;
+    expect(w.files.has(lock)).toBe(false);
+    w.files.set(lock, "held");
+    const blocked = await w.cli(["pause", SLUG]);
+    expect(blocked.code).toBe(1);
+    expect(blocked.stderr[0]).toContain("the wave state is locked by another step");
+    expect(w.state().paused).toBe(false);
+    w.files.delete(lock);
+    expect((await w.cli(["pause", SLUG])).code).toBe(0);
+    expect(w.files.has(lock)).toBe(false);
+  });
+
+  it("a merge conflict sends the ticket back for a refresh without calling gh pr merge; a second refusal sticks it", async () => {
+    const w = world();
+    await w.approved();
+    await w.green(11);
+    await w.open(13);
+    w.pr(111).mergeable = "CONFLICTING";
+    await w.cli(["event", SLUG], JSON.stringify({ type: "failed", n: 13, line: "cannot build the docs" }));
+    expect(await w.out(["merge", SLUG])).toMatchObject({ merged: [], refused: [{ n: 11, why: "conflicts with the wave branch" }] });
+    expect(w.merges()).toEqual([]);
+    expect(await w.step()).toMatchObject({ kind: "tickets", tickets: [{ n: 11, step: "refresh" }] });
+    await w.out(["event", SLUG], JSON.stringify({ type: "fixed", n: 11, what: "refresh", head: SHA_B }));
+    w.pr(111).mergeable = "MERGEABLE";
+    w.pr(111).refuse = "Head branch is out of date";
+    await w.guard(11);
+    expect(await w.out(["merge", SLUG])).toMatchObject({ refused: [{ n: 11, why: "Head branch is out of date" }] });
+    expect(w.ticket(11)).toMatchObject({ status: "stuck", why: "could not merge after 2 tries: Head branch is out of date" });
+    expect(await w.step()).toMatchObject({ kind: "stop", stop: "stuck", tickets: [{ n: 11 }, { n: 13 }] });
+  });
+
+  it("a red gate runs again once, then stops the wave with its log; a log outside the wave folder is refused; resume lets it run again", async () => {
+    const w = world();
+    await w.approved();
+    await w.green(11, 13);
+    await w.out(["merge", SLUG]);
+    w.files.set("/repo/.verify/wave-two/gate-1.log", `${Array.from({ length: 20 }, (_, i) => `line ${i}`).join("\n")}\n`);
+    const gate = ["gate", SLUG, "--head", SHA_A, "--code", "1", "--log", "/repo/.verify/wave-two/gate-1.log"];
+    const first = await w.out(gate);
+    expect(first).toMatchObject({ gate: "fail", failures: 1 });
+    expect(first.tail.split("\n")).toHaveLength(15);
+    expect(first.tail.endsWith("line 19")).toBe(true);
+    expect(await w.step()).toEqual({ kind: "gate", batch: 0 });
+    expect((await w.cli(["gate", SLUG, "--head", SHA_A, "--code", "0", "--log", "/etc/passwd"])).code).toBe(2);
+    await w.out(gate);
+    expect(await w.step()).toEqual({ kind: "stop", stop: "gate", batch: 0, log: "/repo/.verify/wave-two/gate-1.log" });
+    expect((await w.cli(["resume", SLUG])).stdout).toEqual([`wave: ${SLUG} resumed; start the workflow again with the same args`]);
+    expect(await w.step()).toEqual({ kind: "gate", batch: 0 });
+  });
+
+  it("pause then next stops; resume then next carries on with the same batch", async () => {
+    const w = world();
+    await w.approved();
+    await w.open(11);
+    expect((await w.cli(["pause", SLUG])).code).toBe(0);
+    expect(w.state().paused).toBe(true);
+    expect(JSON.parse((await w.cli(["status", SLUG, "--json"])).stdout[0] ?? "{}")).toMatchObject({ paused: true, slug: SLUG });
+    expect(await w.step()).toEqual({ kind: "stop", stop: "paused", pr: null });
+    await w.cli(["resume", SLUG]);
+    expect(await w.step()).toMatchObject({
+      kind: "tickets",
+      batch: 0,
+      tickets: [
+        { n: 11, step: "review" },
+        { n: 13, step: "build" },
+      ],
+    });
+  });
+
+  it("the same failure in two tracks halts the wave through the state file, and resume clears it", async () => {
+    const w = world();
+    await w.approved();
+    await w.out(["event", SLUG], JSON.stringify({ type: "fixed", n: 11, what: "check", head: SHA_B, cause: "D1 binding missing at /a/x.ts:4" }));
+    const halted = await w.out(["event", SLUG], JSON.stringify({ type: "fixed", n: 13, what: "check", head: SHA_B, cause: "D1 binding missing at /b/x.ts:9" }));
+    expect(halted.halt).toEqual({ signature: "d0 binding missing at …/x.ts:0", tickets: [11, 13] });
+    expect(await w.step()).toMatchObject({ kind: "stop", stop: "shared-failure", tickets: [11, 13] });
+    await w.cli(["resume", SLUG]);
+    expect(w.state().halt).toBeNull();
+    expect(await w.step()).toMatchObject({ kind: "tickets", batch: 0 });
+  });
+
+  it("plan refuses a blocker loop and writes no state", async () => {
+    const w = world();
+    const loop = [
+      { ...TICKETS[0], blockedBy: [13] },
+      { ...TICKETS[2], blockedBy: [11] },
+    ];
+    expect(await w.plan(loop)).toEqual({ code: 1, stdout: [], stderr: ["wave: tickets #11, #13 block each other; break the loop before planning"] });
+    expect(w.files.size).toBe(0);
+  });
+
+  it("plan notes an unknown blocker, and an approved plan cannot be planned again", async () => {
+    const w = world();
+    const made = await w.plan([{ ...TICKETS[2], blockedBy: [99] }]);
+    expect(JSON.parse(made.stdout[0] ?? "").out.notes).toEqual(["#13 is blocked by #99, which is not in this wave: treated as done"]);
+    await w.cli(["approve", SLUG]);
+    expect((await w.plan()).stderr).toEqual(["wave: the plan is approved and cannot change; edit the state with retry or skip instead"]);
+  });
+
+  it("bad arguments are usage errors, next on a new wave asks for the plan, and status on a missing state is a plain error, all before any gh call", async () => {
+    const w = world();
+    expect((await w.plan(TICKETS, ["--wave", WAVE, "--into", WAVE, "--tracks", "2", "--review-rounds", "1"])).code).toBe(1);
+    expect((await w.plan(TICKETS, ["--wave", WAVE, "--into", INTO, "--tracks", "9", "--review-rounds", "1"])).code).toBe(2);
+    expect((await w.cli(["next", "Wave Two"])).code).toBe(2);
+    expect((await w.cli(["frobnicate", SLUG])).code).toBe(2);
+    expect(JSON.parse((await w.cli(["next", SLUG])).stdout[0] ?? "{}").out).toEqual({ step: { kind: "plan" } });
+    expect((await w.cli(["status", SLUG])).stderr[0]).toBe(`wave: no wave state for ${SLUG}: the workflow writes it at its plan step`);
+    await w.approved();
+    expect((await w.cli(["gate", SLUG, "--head", "abc1234", "--code", "0"])).code).toBe(2);
+    expect((await w.cli(["guard", SLUG])).code).toBe(2);
+    expect((await w.cli(["guard", SLUG, "11"])).stderr).toEqual(["wave: #11 has no PR in this wave"]);
+    expect((await w.cli(["event", SLUG], JSON.stringify({ type: "failed", n: 42, line: "x" }))).stderr).toEqual(["wave: #42 is not in this wave"]);
+    expect(w.calls).toEqual([]);
+  });
+
+  it("a gh failure during guard exits 3 and leaves the state file as it was", async () => {
+    const w = world();
+    await w.approved();
+    await w.open(11);
+    w.prs.delete(111);
+    const before = w.files.get(STATE);
+    expect(await w.cli(["guard", SLUG, "11"])).toEqual({ code: 3, stdout: [], stderr: ["wave: gh pr view 111: no pull request 111"] });
+    expect(w.files.get(STATE)).toBe(before);
+  });
+});

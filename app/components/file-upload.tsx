@@ -1,11 +1,4 @@
-import {
-  useCallback,
-  useEffect,
-  useRef,
-  type ChangeEvent,
-  type DragEvent,
-  type KeyboardEvent,
-} from "react";
+import { useCallback, useEffect, useId, type ChangeEvent, type DragEvent } from "react";
 import { useMachine } from "@xstate/react";
 import { useTranslation } from "react-i18next";
 import { cn } from "@/lib/utils";
@@ -24,8 +17,6 @@ interface FileUploadProps {
 
 const toMB = (bytes: number) => (bytes / 1024 / 1024).toFixed(0);
 
-const skipI18nextEscaping = { interpolation: { escapeValue: false } } as const;
-
 const listWithBreakPoints = (accept: string) =>
   accept
     .split(",")
@@ -42,7 +33,7 @@ export function FileUpload({
 }: FileUploadProps) {
   const { t } = useTranslation("upload");
   const [snapshot, send, actorRef] = useMachine(fileUploadMachine, { input: { maxSize } });
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const hintId = useId();
   const { file, key, error } = snapshot.context;
   const limit = toMB(snapshot.context.maxSize);
 
@@ -69,16 +60,12 @@ export function FileUpload({
     };
   }, [actorRef, onUploadSuccess, onUploadError, describe]);
 
-  const openPickerUnlessUploading = () => {
-    if (!snapshot.matches("uploading")) fileInputRef.current?.click();
-  };
-
-  const handleDragOver = (e: DragEvent<HTMLDivElement>) => {
+  const handleDragOver = (e: DragEvent<HTMLLabelElement>) => {
     e.preventDefault();
     send({ type: "DRAG_ENTER" });
   };
 
-  const handleDragLeave = (e: DragEvent<HTMLDivElement>) => {
+  const handleDragLeave = (e: DragEvent<HTMLLabelElement>) => {
     e.preventDefault();
     const pointerMovedOntoAChild =
       e.relatedTarget instanceof Node && e.currentTarget.contains(e.relatedTarget);
@@ -86,7 +73,7 @@ export function FileUpload({
     send({ type: "DRAG_LEAVE" });
   };
 
-  const handleDrop = (e: DragEvent<HTMLDivElement>) => {
+  const handleDrop = (e: DragEvent<HTMLLabelElement>) => {
     e.preventDefault();
     const dropped = e.dataTransfer.files[0];
     if (dropped) send({ type: "PICK", file: dropped });
@@ -97,13 +84,6 @@ export function FileUpload({
     const picked = e.target.files?.[0];
     e.target.value = "";
     if (picked) send({ type: "PICK", file: picked });
-  };
-
-  const handleKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
-    if (e.key === "Enter" || e.key === " ") {
-      e.preventDefault();
-      openPickerUnlessUploading();
-    }
   };
 
   const reset = () => send({ type: "RESET" });
@@ -117,16 +97,6 @@ export function FileUpload({
       data-testid="file-upload"
       data-state={String(snapshot.value)}
     >
-      <input
-        ref={fileInputRef}
-        type="file"
-        onChange={handleInputChange}
-        accept={accept}
-        className="hidden"
-        aria-label={t("file_input_label")}
-        data-testid="file-upload-input"
-      />
-
       {snapshot.matches("success") ? (
         <div
           role="status"
@@ -147,28 +117,22 @@ export function FileUpload({
             className="text-xs text-foreground/90 mb-4 font-mono max-w-full break-all text-center"
             data-testid="file-upload-key"
           >
-            {t("key_label", { key, ...skipI18nextEscaping })}
+            {t("key_label", { key })}
           </p>
           <Button onClick={reset} variant="outline" size="sm" data-testid="file-upload-reset">
             {t("upload_another")}
           </Button>
         </div>
       ) : (
-        // biome-ignore lint/a11y/useSemanticElements: the zone wraps a file input the upload machine drives; a new element is its own UI change
-        <div
-          role="button"
-          tabIndex={uploading ? -1 : 0}
-          aria-disabled={uploading || undefined}
+        <label
           aria-busy={uploading || undefined}
           onDragOver={handleDragOver}
           onDragLeave={handleDragLeave}
           onDrop={handleDrop}
-          onClick={openPickerUnlessUploading}
-          onKeyDown={handleKeyDown}
           data-testid="file-upload-dropzone"
           className={cn(
-            "relative flex flex-col items-center justify-center w-full h-64 px-4 transition-all border-2 border-dashed rounded-lg cursor-pointer outline-none",
-            "focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px]",
+            "relative flex flex-col items-center justify-center w-full h-64 px-4 transition-all border-2 border-dashed rounded-lg cursor-pointer",
+            "has-focus-visible:border-ring has-focus-visible:ring-ring/50 has-focus-visible:ring-[3px]",
             dragging
               ? "border-primary bg-primary/5 scale-[1.02] motion-reduce:scale-100"
               : "border-input hover:border-muted-foreground/60",
@@ -176,16 +140,26 @@ export function FileUpload({
             uploading && "pointer-events-none opacity-70",
           )}
         >
+          <input
+            type="file"
+            onChange={handleInputChange}
+            accept={accept}
+            disabled={uploading}
+            className="sr-only"
+            aria-label={t("file_input_label")}
+            aria-describedby={uploading ? undefined : hintId}
+            data-testid="file-upload-input"
+          />
           {uploading ? (
-            <div role="status" className="flex flex-col items-center gap-4">
+            <span role="status" className="flex flex-col items-center gap-4">
               <Spinner size="lg" />
-              <div className="text-center">
-                <p className="text-sm font-medium text-foreground max-w-full truncate">
-                  {t("uploading", { name: file?.name, ...skipI18nextEscaping })}
-                </p>
-                <p className="text-xs text-muted-foreground mt-1">{t("please_wait")}</p>
-              </div>
-            </div>
+              <span className="block text-center">
+                <span className="block text-sm font-medium text-foreground max-w-full truncate">
+                  {t("uploading", { name: file?.name })}
+                </span>
+                <span className="block text-xs text-muted-foreground mt-1">{t("please_wait")}</span>
+              </span>
+            </span>
           ) : (
             <>
               <svg
@@ -202,26 +176,25 @@ export function FileUpload({
                   strokeLinejoin="round"
                 />
               </svg>
-              <div className="text-center">
-                <p className="mb-2 text-sm font-semibold text-foreground">
+              <span className="block text-center">
+                <span className="block mb-2 text-sm font-semibold text-foreground">
                   <span className="text-primary">{t("dropzone.click_to_upload")}</span>{" "}
                   {t("dropzone.drag_and_drop")}
-                </p>
-                <p className="text-xs text-muted-foreground text-balance break-words">
-                  {accept
-                    ? t("dropzone.accepted_formats", {
-                        formats: listWithBreakPoints(accept),
-                        ...skipI18nextEscaping,
-                      })
-                    : t("dropzone.any_file_type")}
-                </p>
-                <p className="text-xs text-muted-foreground mt-1">
-                  {t("dropzone.max_size", { size: limit })}
-                </p>
-              </div>
+                </span>
+                <span id={hintId} className="block">
+                  <span className="block text-xs text-muted-foreground text-balance break-words">
+                    {accept
+                      ? t("dropzone.accepted_formats", { formats: listWithBreakPoints(accept) })
+                      : t("dropzone.any_file_type")}
+                  </span>
+                  <span className="block text-xs text-muted-foreground mt-1">
+                    {t("dropzone.max_size", { size: limit })}
+                  </span>
+                </span>
+              </span>
             </>
           )}
-        </div>
+        </label>
       )}
 
       {error && (

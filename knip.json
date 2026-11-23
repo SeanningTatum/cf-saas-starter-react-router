@@ -6,7 +6,8 @@
     "scripts/ci/*.ts",
     "scripts/lint/rules/*.ts",
     "scripts/__tests__/fixtures/migration-check/*.ts",
-    "e2e/**/*.spec.ts"
+    "e2e/**/*.spec.ts",
+    "app/routes/sandbox/*.{ts,tsx}"
   ],
   "project": [
     "app/**/*.{ts,tsx}",

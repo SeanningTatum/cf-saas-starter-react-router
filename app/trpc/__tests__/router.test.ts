@@ -9,6 +9,8 @@ import { startRealApp, type AppCaller, type RealApp } from "./real-d1";
 type Level = "protected" | "admin";
 
 const LEVELS: Record<string, Level> = {
+  "account.exportData": "protected",
+  "account.deleteAccount": "protected",
   "admin.getUsers": "admin",
   "admin.getUser": "admin",
   "admin.updateUser": "admin",
@@ -28,7 +30,10 @@ const LEVELS: Record<string, Level> = {
 
 type OwnershipCase = (other: AppCaller) => Promise<unknown>;
 
-const OWNERSHIP: Record<string, "takes no id" | OwnershipCase> = {};
+const OWNERSHIP: Record<string, "takes no id" | OwnershipCase> = {
+  "account.exportData": "takes no id",
+  "account.deleteAccount": "takes no id",
+};
 
 vi.mock("@/lib/log-format", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/log-format")>()),

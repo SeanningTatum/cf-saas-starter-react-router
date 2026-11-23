@@ -46,8 +46,7 @@ export type LogLayer =
   | "trpc"
   | "repository"
   | "auth"
-  | "middleware"
-  | "workflow";
+  | "middleware";
 
 function createLayerLogger(layer: LogLayer) {
   return logger.child({ layer });
@@ -62,5 +61,4 @@ export const loggers = {
   repository: createLayerLogger("repository"),
   auth: createLayerLogger("auth"),
   middleware: createLayerLogger("middleware"),
-  workflow: createLayerLogger("workflow"),
 } as const;

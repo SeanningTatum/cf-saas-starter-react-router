@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { Effect, Layer, ManagedRuntime } from "effect";
 import type { AppLoadContext } from "react-router";
 import type { ErrorCapture } from "@/lib/error-reporting/report";
-import { BucketRepository } from "@/repositories/bucket";
+import { UploadRepository } from "@/repositories/upload";
 import { ErrorReporterFrom } from "@/services/error-reporter";
 import { RateLimiter } from "@/services/rate-limit";
 import { action } from "../upload-file";
@@ -23,9 +23,10 @@ const upload = async (getSession: () => Promise<unknown>) => {
         capture: (capture) => Effect.sync(() => void captures.push(capture)),
       }),
       Layer.succeed(RateLimiter, { check: () => Effect.void }),
-      Layer.succeed(BucketRepository, {
-        upload: () => Effect.succeed("uploads/fake"),
-      } as unknown as BucketRepository),
+      Layer.succeed(UploadRepository, {
+        assertRoom: () => Effect.void,
+        store: () => Effect.succeed({ id: "fake", key: "uploads/u1/fake" }),
+      } as unknown as UploadRepository),
     ),
   );
   const form = new FormData();

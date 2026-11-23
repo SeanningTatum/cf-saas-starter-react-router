@@ -45,8 +45,12 @@ export function importedModules(source: Source): string[] {
   return modules;
 }
 
-export function importsFile(source: Source, target: string): boolean {
+export const moduleNames = (target: string): string[] => {
   const module = withoutExtension(target);
-  const names = INDEX_MODULE.test(module) ? [module, module.replace(INDEX_MODULE, "")] : [module];
+  return INDEX_MODULE.test(module) ? [module, module.replace(INDEX_MODULE, "")] : [module];
+};
+
+export function importsFile(source: Source, target: string): boolean {
+  const names = moduleNames(target);
   return importedModules(source).some((imported) => names.includes(imported));
 }

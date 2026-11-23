@@ -9,7 +9,7 @@
  * surface shown, or a still page for a subject that moves. Those are all countable, so they get
  * counted.
  *
- *   CI=1 bun run dev --port 5231     # CI=1 skips the Workers-AI remote-bindings proxy session
+ *   bun run dev --port 5231
  *   bun run design:audit -- --url http://localhost:5231/<route> --scope '[data-surface="<name>"]'
  *   bun run design:audit -- --url … --accent '#RRGGBB'      # accent economy check
  *

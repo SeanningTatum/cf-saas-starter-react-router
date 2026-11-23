@@ -26,14 +26,15 @@ const ReviewerName = Schema.String.pipe(
   }),
 );
 
+const PendingReason = Schema.String.pipe(Schema.filter((s) => s.trim().length > 0, { message: () => "pending must be a non-empty string" }));
+
 const DeclaredEnv = Schema.Struct({
   name: PathSafe,
   reviewers: Schema.Array(ReviewerName),
   prevent_self_review: Schema.Boolean,
   deployment_branches: Schema.Array(PathSafe),
+  pending: Schema.optional(PendingReason),
 });
-
-const PendingReason = Schema.String.pipe(Schema.filter((s) => s.trim().length > 0, { message: () => "pending must be a non-empty string" }));
 
 const DeclaredRepository = Schema.Struct({
   squash_merge_commit_title: Schema.Literal("PR_TITLE", "COMMIT_OR_PR_TITLE"),

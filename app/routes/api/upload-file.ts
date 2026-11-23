@@ -1,6 +1,6 @@
 import { Clock, Effect, Exit, Schema } from "effect";
 import { data } from "react-router";
-import { BucketRepository } from "@/repositories/bucket";
+import { UploadRepository } from "@/repositories/upload";
 import { activeSession } from "@/auth/ban";
 import { ExternalServiceError, ValidationError } from "@/models/errors/repository";
 import { BucketValidationError } from "@/models/errors/bucket";
@@ -28,6 +28,8 @@ import {
   UPLOAD_TYPE_AND_SIZE_MESSAGE,
   UPLOAD_UNAUTHORIZED_MESSAGE,
   UPLOAD_UNAVAILABLE_MESSAGE,
+  UPLOAD_QUOTA_MESSAGE,
+  declaredPayloadBytes,
   declaresOversizedUpload,
   matchesMagicBytes,
 } from "@/lib/constants/upload";
@@ -62,6 +64,9 @@ export async function action({ request, context }: Route.ActionArgs) {
       return refusal(UPLOAD_TOO_LARGE_MESSAGE, HTTP_PAYLOAD_TOO_LARGE);
     }
 
+    const uploads = yield* UploadRepository;
+    yield* uploads.assertRoom(signedIn.user.id, declaredPayloadBytes(request.headers));
+
     const formData = yield* Effect.tryPromise({
       try: () => request.formData(),
       catch: () => fileField(UPLOAD_NOT_A_FORM_MESSAGE),
@@ -90,9 +95,12 @@ export async function action({ request, context }: Route.ActionArgs) {
       );
     }
 
-    const repo = yield* BucketRepository;
-    const key = yield* repo.upload(file);
-    return data({ success: true as const, key });
+    const stored = yield* uploads.store({
+      userId: signedIn.user.id,
+      file,
+      contentType: meta.type,
+    });
+    return data({ success: true as const, key: stored.key, id: stored.id });
   }).pipe(
     Effect.catchTag("RateLimitError", (e) =>
       Effect.succeed(
@@ -106,6 +114,7 @@ export async function action({ request, context }: Route.ActionArgs) {
     Effect.catchTags({
       ValidationError: (e) => Effect.succeed(refusal(e.message, HTTP_BAD_REQUEST)),
       BucketValidationError: (e) => Effect.succeed(refusal(e.message, HTTP_BAD_REQUEST)),
+      UploadQuotaError: () => Effect.succeed(refusal(UPLOAD_QUOTA_MESSAGE, HTTP_PAYLOAD_TOO_LARGE)),
       ExternalServiceError: (error) =>
         Effect.as(
           Effect.flatMap(ErrorReporter, (reporter) =>

@@ -63,7 +63,7 @@ Secrets are not in `wrangler.jsonc`, so `wrangler types` sees one only through a
 
 Wrangler does not inherit `vars` into an environment, so set them in both blocks. Local dev reads `.dev.vars` (copy `.dev.vars.example`).
 
-`wrangler.jsonc` is generated. `scripts/first-time-setup.ts` builds it with `buildWranglerConfig` in `scripts/lib/wrangler-config.ts` and overwrites the whole file, so a hand-added `vars` block does not survive a re-run of setup. Teardown also rewrites it from the placeholder values. The builder emits no `vars`. After a re-run, add the `vars` back. To keep them, add them in `buildWranglerConfig` instead. The rate-limit bindings are different: the builder emits them ([Rate limits](#rate-limits)).
+`wrangler.jsonc` is generated. `scripts/first-time-setup.ts` builds it with `buildWranglerConfig` in `scripts/lib/wrangler-config.ts` and writes it again on a re-run, carrying over every `vars` block already in the file (top level and each environment). Teardown rewrites it from the placeholder values. `bun run setup --auth-url <url>` (and `--auth-url-preview`, `--auth-url-staging`) sets `BETTER_AUTH_URL` without touching anything else; see [the set-up wizard](setup.md). The rate-limit bindings are different: the builder emits them ([Rate limits](#rate-limits)).
 
 ## Sessions, cookies, passwords
 

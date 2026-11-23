@@ -1,4 +1,4 @@
-import type { CSSProperties } from "react";
+import { useEffect, type CSSProperties } from "react";
 import {
   CircleCheckIcon,
   InfoIcon,
@@ -8,7 +8,19 @@ import {
 } from "lucide-react";
 import { useTheme } from "next-themes";
 import { useTranslation } from "react-i18next";
-import { Toaster as Sonner, type ToasterProps } from "sonner";
+import { takeHeldSuccessToast } from "@/lib/held-toast";
+import { toast as sonnerToast, Toaster as Sonner, type ToasterProps } from "sonner";
+
+const ERROR_TOAST_DURATION_MS = Number.POSITIVE_INFINITY;
+
+const toast: typeof sonnerToast = Object.assign(
+  (...args: Parameters<typeof sonnerToast>) => sonnerToast(...args),
+  sonnerToast,
+  {
+    error: (...[message, data]: Parameters<typeof sonnerToast.error>) =>
+      sonnerToast.error(message, { duration: ERROR_TOAST_DURATION_MS, ...data }),
+  },
+);
 
 type SonnerTokenStyle = CSSProperties & Record<`--${string}`, string>;
 
@@ -23,6 +35,12 @@ function Toaster(props: ToasterProps) {
   const { resolvedTheme } = useTheme();
   const { t } = useTranslation("common");
 
+  useEffect(() => {
+    void takeHeldSuccessToast(() => window.sessionStorage).then((held) => {
+      if (held !== null) sonnerToast.success(held);
+    });
+  }, []);
+
   const tokenStyle: SonnerTokenStyle = {
     "--normal-bg": "var(--popover)",
     "--normal-text": "var(--popover-foreground)",
@@ -36,6 +54,7 @@ function Toaster(props: ToasterProps) {
       theme={toSonnerTheme(resolvedTheme)}
       className="toaster group"
       containerAriaLabel={t("notifications_region")}
+      closeButton
       icons={{
         success: <CircleCheckIcon className="size-4" aria-hidden />,
         info: <InfoIcon className="size-4" aria-hidden />,
@@ -47,9 +66,12 @@ function Toaster(props: ToasterProps) {
       }}
       style={tokenStyle}
       toastOptions={{
+        closeButtonAriaLabel: t("close_notification"),
         classNames: {
           toast:
-            "focus-visible:shadow-md focus-visible:ring-3! focus-visible:ring-muted-foreground",
+            "pe-12! focus-visible:shadow-md focus-visible:ring-3! focus-visible:ring-muted-foreground",
+          closeButton:
+            "start-auto! end-2! top-1/2! size-8! -translate-y-1/2! transform-none! rounded-md! border-0! bg-transparent! text-muted-foreground! hover:bg-muted! hover:text-foreground! focus-visible:ring-3! focus-visible:ring-ring/50! [&>svg]:size-4",
         },
       }}
       {...props}
@@ -57,4 +79,4 @@ function Toaster(props: ToasterProps) {
   );
 }
 
-export { Toaster };
+export { ERROR_TOAST_DURATION_MS, Toaster, toast };

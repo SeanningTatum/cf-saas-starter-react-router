@@ -2,6 +2,7 @@ import { test, expect } from "@playwright/test";
 import authText from "@/locales/en/auth.json" with { type: "json" };
 import {
   HTTP_TOO_MANY_REQUESTS,
+  MS_PER_SECOND,
   RATE_LIMITED_CODE,
   RETRY_AFTER_HEADER,
 } from "../app/lib/constants/rate-limit";
@@ -18,8 +19,10 @@ import {
   SEEDED_PASSWORD,
 } from "./lib/values";
 
+const retryCountdown = new RegExp(`^${authText.refusal.retry_in.replace("{{seconds}}", "\\d+")}$`);
+
 test.describe("Sign-in rate limit", () => {
-  test("sign-in limit: past the wrangler.jsonc limit the form says wait a minute and stays on /login, while another client IP still signs in", {
+  test("sign-in limit: past the wrangler.jsonc limit the form says wait a minute, keeps submit off and counting down until Retry-After passes, and stays on /login, while another client IP still signs in", {
     tag: "@error",
   }, async ({ page, context, browser, baseURL }) => {
     test.slow();
@@ -30,6 +33,7 @@ test.describe("Sign-in rate limit", () => {
     const wrongPassword = { email: SEEDED_LOGINS.user, password: `wrong-${crypto.randomUUID()}` };
 
     await sendClientIpOnAppApiRequests(context, origin, guesser.clientIp);
+    await page.clock.install();
     await page.goto(PAGE_PATHS.login);
     await waitForAuthFormReady(page, "login");
     await fillLogin(page, wrongPassword.email, wrongPassword.password);
@@ -52,6 +56,12 @@ test.describe("Sign-in rate limit", () => {
     expect(await response.json()).toMatchObject({ code: RATE_LIMITED_CODE });
     await expect(page.getByTestId("login-error")).toHaveText(authText.refusal.rate_limited);
     await expect(page).toHaveURL(/\/login$/);
+    const submit = page.getByTestId("login-submit");
+    await expect(submit).toBeDisabled();
+    await expect(submit).toHaveText(retryCountdown);
+    await page.clock.fastForward(rule.periodSeconds * MS_PER_SECOND);
+    await expect(submit).toBeEnabled();
+    await expect(submit).toHaveText(authText.login.submit);
 
     const otherContext = await browser.newContext({ baseURL });
     await sendClientIpOnAppApiRequests(otherContext, origin, CLIENT_IPS["auth-rate-limit"]);

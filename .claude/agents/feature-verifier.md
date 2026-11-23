@@ -19,7 +19,7 @@ Prove a user-visible feature works in a headless browser, and leave evidence. `e
 ## Steps
 
 1. If `.verify/<slug>/verdict.md` exists, it is an earlier round; a re-walk after FAIL overwrites it.
-2. Own your port. Use the one the caller gave, else a free one. Start `CI=1 bun run dev --port <port>` in the background and poll until it serves. `CI=1` turns off remote Cloudflare bindings (`vite.config.ts`), which need a Cloudflare login. Never reuse another agent's server. Stop yours when done.
+2. Own your port. Use the one the caller gave, else a free one. Start `CI=1 bun run dev --port <port>` in the background and poll until it serves. Never reuse another agent's server. Stop yours when done.
 3. `node_modules/.bin/playwright install chromium` (no-op if present).
 4. Write the script to `tmp/verify-<slug>.ts` (gitignored). It must sit under the repo so Bun resolves `@playwright/test`; `/tmp` cannot. Never put it in `e2e/` or name it `*.spec.ts`.
 5. Run `bun run tmp/verify-<slug>.ts` from the repo root. Capture stdout and exit code.

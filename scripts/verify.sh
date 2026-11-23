@@ -25,8 +25,6 @@ cd "$(dirname "$0")/.."
 
 # One line per gate: name|command|tier|time limit (s), read from harness.config.json.
 # tier: lean (also runs in baseline and full), baseline (also in full), full.
-# The e2e command starts with CI=1: without it the dev server opens a remote-bindings session that needs a
-# Cloudflare login, so the gate is red on any machine that is not logged in (vite.config.ts, remoteBindings).
 GATES=$(bun scripts/harness-config.ts gates) || {
   echo "verify: cannot read the gates from harness.config.json" >&2
   exit 1

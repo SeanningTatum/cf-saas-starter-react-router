@@ -21,6 +21,7 @@ worker-configuration.d.ts
 /test-results/
 /playwright-report/
 /playwright/.cache/
+/e2e/.auth/
 /e2e/**/*.png
 
 # Manual Playwright MCP screenshots (transient, not checked in)

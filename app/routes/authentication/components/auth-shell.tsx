@@ -38,7 +38,7 @@ export function AuthShell({ children }: AuthShellProps) {
           </div>
         </div>
 
-        <div className="flex flex-1 items-center justify-center py-10">
+        <div className="flex flex-1 items-start justify-center py-10 md:pt-[12svh]">
           <div className="flex w-full max-w-sm flex-col gap-8">
             <Link to="/" className="flex items-center gap-2 self-start text-sm font-medium">
               <span className="flex size-6 items-center justify-center rounded-md bg-primary text-primary-foreground font-mono text-[10px] font-bold">

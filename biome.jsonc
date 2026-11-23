@@ -142,6 +142,7 @@
       // The framework loads these by their default export.
       "includes": [
         "*.config.ts",
+        "e2e/global-setup.ts",
         "app/root.tsx",
         "app/routes.ts",
         "app/entry.server.tsx",

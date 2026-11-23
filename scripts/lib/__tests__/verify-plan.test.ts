@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { memoryRepo } from "../../lint/repo";
 import { parseTestMap } from "../../lint/test-map/map";
-import { e2eSpecsFor, fullRunReasons, planChanged, renderPlan, shellQuote, type Plan } from "../verify-plan";
+import { e2eSpecsFor, fullRunReasons, machinesFor, planChanged, renderPlan, shellQuote, type Plan } from "../verify-plan";
 import { COMMAND, GATE, NO_MAP_REASON, SKIP_REASON, UNSAFE_PATH_REASON } from "../verify-plan-constants";
 
 const testMap = () =>
@@ -49,6 +49,10 @@ describe("fullRunReasons", () => {
     ["harness.config.json", "the gate list"],
     ["scripts/lib/harness-config.ts", "the reader of the gate list"],
     ["scripts/check-non-negotiables.ts", "a gate script"],
+    ["scripts/check-machines.ts", "a gate script"],
+    ["scripts/lib/machine-graph.ts", "a gate script"],
+    ["scripts/size.ts", "a gate script"],
+    ["scripts/lib/size-budgets.ts", "a gate script"],
     ["scripts/lint-all.ts", "the lint runner"],
     ["scripts/lib/lint-findings.ts", "the lint runner"],
     ["biome.jsonc", "a config file"],
@@ -126,19 +130,22 @@ describe("planChanged", () => {
       { gate: GATE.lint, command: `${COMMAND.lint} 'app/lib/sum.ts'` },
       { gate: GATE.test, command: `${COMMAND.test} 'app/lib/sum.ts'` },
     ]);
-    expect(plan.skip).toEqual([{ gate: GATE.e2e, reason: SKIP_REASON.noSpec }]);
+    expect(plan.skip).toEqual([
+      { gate: GATE.machines, reason: SKIP_REASON.noMachine },
+      { gate: GATE.e2e, reason: SKIP_REASON.noSpec },
+    ]);
   });
 
   it("a route change adds the e2e specs that visit it", () => {
     const plan = lean(planChanged(tree(), ["app/routes/login.tsx"]));
     expect(plan.run.at(-1)).toEqual({ gate: GATE.e2e, command: `${COMMAND.e2e} 'e2e/auth.spec.ts'` });
-    expect(plan.skip).toEqual([]);
+    expect(plan.skip.map((skip) => skip.gate)).toEqual([GATE.machines]);
   });
 
   it("a docs-only change runs typecheck alone and skips lint and tests with a reason", () => {
     const plan = lean(planChanged(tree(), ["docs/ci/pipelines.md"]));
     expect(gates(plan)).toEqual([GATE.typecheck]);
-    expect(plan.skip.map((skip) => skip.reason)).toEqual([SKIP_REASON.noCode, SKIP_REASON.noModule, SKIP_REASON.noSpec]);
+    expect(plan.skip.map((skip) => skip.reason)).toEqual([SKIP_REASON.noCode, SKIP_REASON.noModule, SKIP_REASON.noMachine, SKIP_REASON.noSpec]);
   });
 
   it("a changed JSON file is linted and runs the unit tests that import it", () => {
@@ -148,7 +155,7 @@ describe("planChanged", () => {
       `${COMMAND.lint} 'app/locales/en/common.json'`,
       `${COMMAND.test} 'app/locales/en/common.json'`,
     ]);
-    expect(plan.skip.map((skip) => skip.gate)).toEqual([GATE.e2e]);
+    expect(plan.skip.map((skip) => skip.gate)).toEqual([GATE.machines, GATE.e2e]);
   });
 
   it("a CSS-only change runs the lint gate on that file and no tests", () => {
@@ -157,7 +164,7 @@ describe("planChanged", () => {
       { gate: GATE.typecheck, command: COMMAND.typecheck },
       { gate: GATE.lint, command: `${COMMAND.lint} 'app/app.css'` },
     ]);
-    expect(plan.skip.map((skip) => skip.gate)).toEqual([GATE.test, GATE.e2e]);
+    expect(plan.skip.map((skip) => skip.gate)).toEqual([GATE.test, GATE.machines, GATE.e2e]);
   });
 
   it("a mixed change lints every lintable file and runs the tests related to the modules only", () => {
@@ -174,6 +181,34 @@ describe("planChanged", () => {
   it("a deleted file is not handed to the linter or vitest: both fail on a path that does not exist", () => {
     const plan = lean(planChanged(tree(), ["app/lib/gone.ts", "app/lib/sum.ts"]));
     expect(plan.run.map((step) => step.command).join("\n")).not.toContain("gone.ts");
+  });
+
+  it("a changed machine runs the machine check on it alone, so a stacked change that edits a machine is checked before push", () => {
+    const plan = lean(planChanged(tree(), ["app/components/door.machine.ts"]));
+    expect(plan.run).toContainEqual({ gate: GATE.machines, command: `${COMMAND.machines} 'app/components/door.machine.ts'` });
+    expect(plan.skip.map((skip) => skip.gate)).not.toContain(GATE.machines);
+  });
+
+  it("a change to a file a machine imports runs the machine check on that machine, so a moved state name or guard in a helper is caught", () => {
+    const repo = tree({
+      "app/components/door.machine.ts": 'import { sum } from "@/lib/sum";\nexport const door = sum;\n',
+      "app/components/lock.machine.ts": "export const lock = 1;\n",
+    });
+    const plan = lean(planChanged(repo, ["app/lib/sum.ts"]));
+    expect(plan.run).toContainEqual({ gate: GATE.machines, command: `${COMMAND.machines} 'app/components/door.machine.ts'` });
+  });
+
+  it("a deleted file a machine imports still runs the machine check on that machine, so the import resolving elsewhere is checked", () => {
+    const repo = tree({ "app/components/door.machine.ts": 'import { gone } from "@/lib/gone";\nexport const door = gone;\n' });
+    const plan = lean(planChanged(repo, ["app/lib/gone.ts"]));
+    expect(plan.run).toContainEqual({ gate: GATE.machines, command: `${COMMAND.machines} 'app/components/door.machine.ts'` });
+  });
+
+  it("a change no machine touches skips the machine check with a reason, so it costs nothing when no machine changed", () => {
+    expect(machinesFor(tree(), ["app/lib/sum.ts", "app/routes/login.tsx"])).toEqual([]);
+    expect(machinesFor(tree({ "app/components/__tests__/door.machine.ts": "export const x = 1;\n" }), ["app/components/__tests__/door.machine.ts"])).toEqual(
+      [],
+    );
   });
 
   it("no change at all still typechecks", () => {

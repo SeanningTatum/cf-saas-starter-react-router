@@ -11,7 +11,7 @@ The one file of values that belong to a project, not to the harness. Scripts and
 - A workflow script cannot read a file. Its first agent call, labelled `config`, runs `bun scripts/harness-config.ts show` from the checkout and returns the one line it prints as `config_json`, a string. That call is a step of its own: no ticket text or file name from the tree shares it, and the Preflight step that follows names the configured files (the product and design docs, the base branch). All three workflows make the call through `loadConfig` in `.claude/workflow-src/lib.js`. It calls `readConfig`: it parses the line, recomputes the checksum over the stable JSON of `config` and compares it with `check`. A line the runner garbled stops the run at Preflight with "the config copy did not verify; run the workflow again". The script then reads every project value as `cfg.<key>`; a key the workflow needs and the file lacks (undefined, null or an empty string) stops it with `harness-config: set <key> in harness.config.json`. An empty list is a value, not a missing key; a workflow that cannot run on one says so itself. `show` leaves `seedLogins` out, because no workflow reads it and the line lands in a run's journal; its checksum covers what it prints. The build never pastes config values into `.claude/workflows/*.js`.
 - Folders are held in one form. The loader strips a leading `./`, repeated slashes and any trailing slash from every setting that names a folder, so `src/pages/` and `src/pages` load alike. A reader that compares a path adds the `/` itself and compares whole path segments, so `appRoot: "src"` does not take `src-tools/x.ts`. The folder settings are `paths.sourceRoots` (each entry), `components`, `primitives`, `routes`, `locales`, `schemas`, `hooks`, `trpc`, `repositories`, `appRoot`, and `docs.adr` and `docs.features`. A folder setting that is empty or `.` is an error. Every other path (`tokens`, `rootLayout`, `home`, `analytics`, `analyticsEvents`, `routeTable`, `docs.product`, `docs.design`, `docs.glossary`) names a file and is kept as typed. `scratchDirs`, `ship.sharedFiles[].path` and `brandInit` fences keep the spelling you give them, because `scripts/stack.ts` and the fence tests read a trailing `/` as "this is a folder".
 - A grep gate keeps the harness code free of project paths: check N in `scripts/harness-check.sh` fails when a harness code file holds a literal path that starts with `app/`. It does not cover this file, tests and fixtures, the agent briefs in `.claude/agents/`, or the app's own scripts (seeding, first-time setup, teardown, CI helpers, the linters).
-- The file is JSON and has no comments. The notes that once sat beside the gate list are here: the e2e gate starts with `CI=1` because, without it, the dev server opens a remote-bindings session that needs a Cloudflare login, so the gate is red on any machine that is not logged in (`vite.config.ts`, `remoteBindings`).
+- The file is JSON and has no comments.
 
 ## Keys
 
@@ -32,6 +32,7 @@ A key with no default is empty. A consumer that needs it fails with a line that 
 | `paths` | object | none | the workflows, `scripts/harness-check.sh` |
 | `ship` | object | none | `ship-feature` |
 | `brandInit` | object | none | `brand-init` |
+| `wave` | object | see below | `run-wave` and `scripts/wave.ts` |
 
 ### `gates`
 
@@ -120,6 +121,26 @@ All optional. Each is a path from the repo root. Folder settings load without a 
 | `homeLane` | `{ name, motion, owns }` | The lane that runs only when the home page is rebuilt |
 
 `owns` is a list of repo paths; a path ending in `/**` owns the folder.
+
+### `wave`
+
+Settings for the `run-wave` workflow ([how to run a wave](harness.md#running-a-wave)). A wave freezes `tracksAtOnce` and `reviewRounds` into its state file when it is planned, so a change here applies to the next wave.
+
+| Key | Type | Default | Meaning |
+|---|---|---|---|
+| `tracksAtOnce` | integer, 1 to 8 | `2` | How many tickets a batch builds at once (this repo sets 3). `args.tracks` may lower it for one wave, never raise it |
+| `reviewRounds` | integer, 0 to 3 | `1` | Review rounds per ticket PR. A P0 or P1 in the last round earns one more round, never more |
+| `models` | object | see below | The model for each kind of work. A model name is lower-case letters, digits, dots and dashes |
+
+| `models` key | Default | The work |
+|---|---|---|
+| `plan` | `opus` | Reading the tickets into the plan |
+| `design` | `opus` | A ticket the planner marks design-heavy, and its fixes |
+| `build` | `sonnet` | Any other ticket, and its fixes |
+| `review` | `sonnet` | The review round on each ticket PR |
+| `mechanical` | `haiku` | Merging the wave branch into a ticket branch, answering review threads, a ticket the planner marks mechanical (a format or clean-up pass) |
+
+Checking and merging a PR and running the gates use no model of their own: the `runner` runs `scripts/wave.ts`, and the script decides.
 
 ## Commands
 

@@ -2,6 +2,7 @@ import { Either } from "effect";
 import { afterEach, describe, expect, it } from "vitest";
 import { parseArgs, realDeps, run, type Deps } from "../size";
 import type { RunResult } from "../lib/shell";
+import { BUDGETS_PATH } from "../lib/size-budgets-constants";
 
 const CWD = "/repo";
 const BASE_DIR = "/tmp/size-base-1";
@@ -56,7 +57,7 @@ function fake(options: { gzip?: Record<string, number>; fail?: RegExp; diff?: st
 describe("parseArgs", () => {
   it("reads --base, --json, --markdown and --pr-body", () => {
     expect(parseArgs(["--base", "origin/staging", "--json", "a.json", "--markdown", "a.md", "--pr-body"])).toEqual(
-      Either.right({ base: "origin/staging", json: "a.json", markdown: "a.md", prBody: true }),
+      Either.right({ base: "origin/staging", json: "a.json", markdown: "a.md", prBody: true, budgets: false, built: false, ratchet: undefined }),
     );
   });
 
@@ -151,5 +152,90 @@ describe("realDeps", () => {
   it("runs the build with CI=1, so vite.config.ts opens no remote-bindings session and a machine with no Cloudflare login can measure", () => {
     delete process.env.CI;
     expect(realDeps().run("sh", ["-c", 'printf "%s" "$CI"'], process.cwd()).stdout).toBe("1");
+  });
+});
+
+describe("bun run size --budgets", () => {
+  const BUDGET_FILE = `${CWD}/.github/size-budgets.json`;
+  const budgets = (worker: number, home: number) => JSON.stringify({ worker: { budget: worker }, pages: { "/": { budget: home } } });
+
+  it("builds, prints the table and exits 0 when every budget holds", () => {
+    const f = fake({ files: { [BUDGET_FILE]: budgets(2048, 60) } });
+    expect(run(["--budgets"], f.deps)).toBe(0);
+    expect(f.calls).toEqual([`${CWD}: bun run build`, `${CWD}: bun x wrangler deploy --dry-run`]);
+    expect(f.out[0]).toContain("| / | 60 | 60 | 0 | — | — | ok |");
+  });
+
+  it("--built measures the build already there and builds nothing", () => {
+    const f = fake({ files: { [BUDGET_FILE]: budgets(2048, 60) } });
+    expect(run(["--budgets", "--built"], f.deps)).toBe(0);
+    expect(f.calls).toEqual([`${CWD}: bun x wrangler deploy --dry-run`]);
+  });
+
+  it("exits 1 and prints the page, the overshoot and the fix when a page is over", () => {
+    const f = fake({ files: { [BUDGET_FILE]: budgets(2048, 60) }, gzip: { "home.js": 5000, "entry.js": 0, "root.js": 0 } });
+    expect(run(["--budgets", "--built"], f.deps)).toBe(1);
+    expect(f.err[0]).toMatch(/^\/ is 4,940 bytes over its budget/);
+    expect(f.out[0]).toContain("OVER");
+  });
+
+  it("exits 1 when there is no budget file", () => {
+    const f = fake();
+    expect(run(["--budgets", "--built"], f.deps)).toBe(1);
+    expect(f.err[0]).toContain("no budget file at .github/size-budgets.json");
+  });
+
+  it("--built needs --budgets", () => {
+    expect(Either.isLeft(parseArgs(["--built"]))).toBe(true);
+  });
+
+  it("--ratchet fails when the budget file raises a budget the base holds, and needs no build", () => {
+    const f = fake({ files: { [BUDGET_FILE]: budgets(2048, 90) } });
+    const base = fake().deps;
+    const deps: Deps = {
+      ...f.deps,
+      run: (command, args, cwd) => {
+        if (args[0] === "ls-tree") return { code: 0, stdout: `${BUDGETS_PATH}\n`, stderr: "" };
+        if (args[0] === "show") return { code: 0, stdout: budgets(2048, 60), stderr: "" };
+        return base.run(command, args, cwd);
+      },
+    };
+    expect(run(["--ratchet", "origin/main"], deps)).toBe(1);
+    expect(f.err[0]).toContain("/ went up from 60 to 90");
+    expect(f.calls.some((call) => call.includes("build"))).toBe(false);
+  });
+
+  it("--ratchet passes when the base has no budget file yet", () => {
+    const f = fake({ files: { [BUDGET_FILE]: budgets(2048, 90) } });
+    const deps: Deps = {
+      ...f.deps,
+      run: (command, args, cwd) => (args[0] === "ls-tree" ? { code: 0, stdout: "", stderr: "" } : f.deps.run(command, args, cwd)),
+    };
+    expect(run(["--ratchet", "origin/main"], deps)).toBe(0);
+    expect(f.out[0]).toContain("does not exist on origin/main");
+  });
+
+  it("--ratchet fails on a ref that does not resolve, instead of skipping the comparison", () => {
+    const f = fake({ files: { [BUDGET_FILE]: budgets(2048, 90) }, fail: /rev-parse/ });
+    expect(run(["--ratchet", "origin/stagin"], f.deps)).toBe(1);
+    expect(f.out.join("\n")).not.toContain("does not exist");
+  });
+
+  it("--ratchet fails when listing the base tree errors, rather than treating it as a missing file", () => {
+    const f = fake({ files: { [BUDGET_FILE]: budgets(2048, 90) }, fail: /ls-tree/ });
+    expect(run(["--ratchet", "origin/main"], f.deps)).toBe(1);
+    expect(f.out.join("\n")).not.toContain("does not exist");
+  });
+
+  it.each([
+    ["--json", "out.json"],
+    ["--base", "origin/main"],
+  ])("--budgets rejects %s: it would be ignored", (flag, value) => {
+    expect(Either.isLeft(parseArgs(["--budgets", flag, value]))).toBe(true);
+    expect(Either.isLeft(parseArgs(["--ratchet", "origin/main", flag, value]))).toBe(true);
+  });
+
+  it("--budgets still takes --markdown", () => {
+    expect(Either.isRight(parseArgs(["--budgets", "--built", "--markdown", "b.md"]))).toBe(true);
   });
 });

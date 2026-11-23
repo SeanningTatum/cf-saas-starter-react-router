@@ -76,7 +76,55 @@ An app screen's `impeccable` lanes: `shape` (direction), `critique`, `audit` / `
 | [`plan-feature`](../../.claude/workflows/plan-feature.js) | Turn a GitHub issue (`args.ticket`) or an idea (`args.idea`) into an approved decision record, before any code. `context-scout` reads the working memory, issues, PRs and code; `ticket-auditor` grades the ticket against `PRODUCT.md`; you fill the gaps in chat; the issue is amended (`scripts/tracker.ts`). Then `ticket-auditor` in fit mode (user, job, fit, metric, non-goals) → `ux-planner` ‖ `architect` → `architect` in stack mode (flow diagram, stacked PRs on disjoint fences). For a UI feature `ui-prototyper` draws three rival directions as HTML in the project's tokens file (`paths.tokens`), `proto-critic` screenshots and critiques each, and you pick one on a lavish page; the winner gets its empty, loading, error and success states. `plan-judge` grades every step against the producer's checklist (one retry, then it asks you). The record (`docs/features/FORMAT.md`, checked by `bun run feature-doc:check`) goes to an issue comment and a working-memory record. Never commits; `ship-feature` builds it. Stops like `brand-init`: `needs-input` (product interview, brief, escalation: chat), `needs-plan` (lavish page `.verify/<slug>/plan-<round>.html`), `needs-accept` (states findings). Re-run with `resumeFromRunId` and `args.product`, `.brief`, `.escalations`, `.plans["<round>"]` or `.accept`. Drafts, pages and screenshots land in `.verify/<slug>/`. Run: `Workflow({ name: "plan-feature", args: { ticket: "#12" } })` or `args: "<idea>"`. |
 | [`ship-feature`](../../.claude/workflows/ship-feature.js) | Build, review and open a feature as stacked PRs. Input: an issue with a `plan-feature` record (its contract and PR stack are used as is), an issue the `ticket-auditor` rates ready (the `architect` writes a one-PR contract), or a precise prompt. It runs every gate on the base first, so a gate that was green and is red later is a regression (P0). Then specialist lanes on disjoint fences (`backend-builder`, `ui-builder`), tests, spans and analytics (`instrumenter`), and a parallel review (gates, `effect-ts-enforcer`, `security-reviewer`, `scale-reviewer`, `maintainability-reviewer`, browser walk and design critique); each P0/P1 goes back to the lane that owns the file, two rounds. It stops once (`needs-ship`, lavish page `.verify/<slug>/ship-<round>.html`): nothing is pushed before you approve. Then `scripts/stack.ts` splits the tree into stacked branches by fence and each is checked alone with `./scripts/verify.sh --changed <branch below>`. Each branch is reviewed locally before any push: the `code-review` skill at `high` on its diff against the branch below, `review-responder` fixes or declines each P0/P1, later branches restack, one round (`args.reviewRounds`). Then the PRs open; a stacked PR gets CI's lean job and no preview; with more than one, `review/<slug>` is pushed at the base first and PR 1 targets it. The stacked PRs then merge bottom-up into `review/<slug>` (merge commits; your ship approval covers these merges, never one into the default branch), and one roll-up PR, `review/<slug>` → the default branch, opens for you to test and merge. Greptile reviews the roll-up (or the single PR) only, up to three rounds (`args.rollupRounds`); see [Review loop and merge bar](#review-loop-and-merge-bar). Other stop: `needs-input` (ticket not ready: `args.ready = "override" \| "stop"`). Re-run with `resumeFromRunId` and `args.ships["<round>"] = { approved } \| { approved: false, changes }`. Run: `Workflow({ name: "ship-feature", args: { ticket: "#12" } })` or `args: "<prompt>"`. Phases and args: the header of the script. |
 | [`eval-plan-feature`](../../.claude/workflows/eval-plan-feature.js) | Run the `ticket-auditor` over the 20 golden tickets in `evals/plan-feature/` and score them in-script. Run it after any change to the auditor's prompt; the gate is every frozen case passing and ≥ 17/20. `args: { degrade: true }` proves the score can drop. If it stops with "loaded metadata differs from the files on disk", fix the files and re-run with `resumeFromRunId` and `args: { reload: 1 }` (then 2, and so on): the number goes into the Load prompt, so the loader runs again instead of replaying its old answer. |
+| [`run-wave`](../../.claude/workflows/run-wave.js) | Build a list of tickets as a wave: each ticket its own PR into one wave branch, in batches of a few, merged by a script, checked once per batch, then one roll-up PR it never merges. See [Running a wave](#running-a-wave). Run: `Workflow({ name: "run-wave", args: { wave: "v3/wave-2", into: "release/v3.0", tickets: [154, 166] } })`. |
 | [`brand-init`](../../.claude/workflows/brand-init.js) | Give a fresh fork its own brand, in one run. Interview → three brand directions as live comps → you pick → tokens, fonts, every primitive and the shared components redesigned → one PR. Agents in a workflow can't talk to you, so when it needs you it stops and returns `{ status: "needs-input" | "needs-pick" | "needs-accept", ... }`; the main thread asks you — the brief in chat, the comp pick and fix acceptance on a lavish review page — then re-runs with `resumeFromRunId: "<run id>"` and the answer in `args` (`answers`, `pick` + `rebuildHome`, or `accept`). Comps and screenshots land in `.verify/brand-init/`. Refuses if `DESIGN.md` exists unless you pass `redo: true`. Run: `Workflow({ name: "brand-init", args: { brief: "..." } })`. |
+
+### Running a wave
+
+A wave is a list of tickets that each get their own PR into one wave branch; the wave branch then reaches its base (`into`) through one roll-up PR that you merge. `run-wave` runs the whole wave from one command and stops only where the call is yours. You choose the tickets; it does not.
+
+**Start.** Push the wave branch first (`git push origin <base>:refs/heads/v3/wave-2`), then:
+
+```
+Workflow({ name: "run-wave", args: { wave: "v3/wave-2", into: "release/v3.0", tickets: [154, 166, 175],
+  rules: "<path to a shared rules file, optional>", branchPrefix: "v3/w2-", tracks: 2 } })
+```
+
+`into` defaults to `baseBranch` in the config, then the default branch. `tracks` may lower `wave.tracksAtOnce` for this wave, never raise it. `slug` defaults to the wave branch in kebab-case (`v3-wave-2`); every file of the wave lives in `.verify/<slug>/`.
+
+**What it does.**
+
+| Step | What happens | Done by |
+|---|---|---|
+| Plan | One agent reads each ticket and says what it will touch, what blocks it, and its kind (design, build, mechanical). `scripts/wave.ts plan` puts tickets that share a file in one track, orders each track by its blockers, and lays out batches. A ticket that edits most of the repo goes alone and last | `wave.models.plan`, then a script |
+| Build | A batch runs at most `wave.tracksAtOnce` tickets at once (3 in this repo, 2 by default), never two from one track. Each ticket gets one fresh agent with a short brief, in its own worktree `.verify/<slug>/wt/<n>`, cut from the wave branch's head at the start of the batch: it builds, runs the lean checks and opens the PR | `wave.models.design` or `.build` (`.mechanical` for a mechanical ticket) |
+| Review | One review round per PR (`wave.reviewRounds`, default 1); a P0 or P1 gets a fix and one more round, never more | `wave.models.review`; fixes on the ticket's model |
+| Check | `scripts/wave.ts guard` reads the PR's checks and review threads with `gh`. A red check gets one fix; red twice and the ticket is stuck. Unanswered threads go to a thread step. A PR with more review threads, or a thread with more comments, than one read returns is stuck for you to check by hand, never merged | a script; the thread step on `wave.models.mechanical` |
+| Merge | `scripts/wave.ts merge` re-reads each green PR and merges it with a merge commit (`--merge --match-head-commit`, never a squash, so a ticket stacked on another keeps the commits it was cut from) only when every check is success or skipped, no thread is unanswered and its base is the wave branch. Only the roll-up is squashed, by you. A PR that conflicts gets the wave branch merged in once, then tries again | a script |
+| Gate | The full `./scripts/verify.sh` once on the combined wave branch, in `.verify/<slug>/gate`. Red twice stops the run | a script |
+| Finish | `scripts/wave.ts rollup` opens the roll-up PR with every merged ticket and every owner step in its body, and the run stops. It never merges the roll-up | a script |
+
+Checking, merging and the gate run as `runner` steps: the runner only runs the command, and `scripts/wave.ts` decides. The run merges a PR only through the guard, and only when its base is the wave branch and its head is the ticket's own branch in this repo; no step merges the roll-up, changes repo settings or touches secrets or cloud resources. Preflight refuses a wave branch that is the default branch or the configured base.
+
+The ticket agents' rules ("never merge, never force-push, never touch settings") are words in a prompt, and the agents run with your `gh` and git access. Branch protection on the wave, release and default branches (required checks, no force-push, no direct push) is what enforces them; keep it on while a wave runs.
+
+**The three stops.** The run returns, and you answer:
+
+| Result | When | Your answer |
+|---|---|---|
+| `needs-plan` | Before the first batch | Look at `.verify/<slug>/plan.html` (the main thread writes it from `bun scripts/wave.ts status <slug>`), then run again with the same args plus `plan: { approved: true }` or `plan: { approved: false, changes: "..." }` |
+| `needs-help` | A ticket is stuck (a check failed twice, the agent could not finish, the PR could not merge), the gate failed twice, or the same failure hit two tracks (`reason`: `stuck`, `gate`, `shared-failure`) | For a stuck ticket: fix it and `bun scripts/wave.ts retry <slug> <n>`, or `bun scripts/wave.ts skip <slug> <n>` (tickets it blocks are skipped too). For the gate or a shared failure: fix the cause, then `bun scripts/wave.ts resume <slug>`. Then run again with the same args |
+| `needs-rollup` | Every ticket is merged or skipped | Review the roll-up PR, wait for its checks, merge it yourself |
+
+When one ticket is stuck, the rest of its batch still merges and gates before the run stops. When the same failure (the first error line, with shas, numbers and paths taken out) hits tickets in two tracks, every track stops at its next step and the run reports once.
+
+**Pause and resume.** `bun scripts/wave.ts pause <slug>` stops the run at its next step; it returns `paused`. `bun scripts/wave.ts resume <slug>`, then run the workflow again with the same args. Every finished step is in the state file, so a paused, failed or killed run picks up from the last finished step on a fresh start; `resumeFromRunId` is not needed. Every write to the state file reads the latest copy and applies its change under a lock, `.verify/<slug>/wave.json.lock` (an exclusive create), so parallel tickets and your `pause` never overwrite each other; if a step died holding the lock, the next write says so, and you delete that file.
+
+**Read a wave.** `bun scripts/wave.ts status <slug>` prints the state and starts nothing: the plan, each track's tickets with status and PR, the running batch, a halt, the owner steps so far and the last events. `--json` prints the state file. Tokens and seconds per track: run `bun scripts/run-telemetry.ts ingest <slug> run-wave <transcript dir>` after each return, then `bun scripts/run-telemetry.ts summary <slug>`; each ticket's calls carry `Track <id>` as their phase.
+
+**Settings** live in `wave` in [`harness.config.json`](harness-config.md#wave). A wave keeps the tracks and review rounds it was planned with.
+
+**What a dry run does not show.** `scripts/__tests__/workflows/run-wave.test.ts` drives the built script with the real `scripts/wave.ts` over an in-memory state file and a fake `gh`. It cannot show how a real agent follows its brief, how long the gate takes on a real machine, or how GitHub's checks behave; the first real wave is that proof.
 
 ### Editing a workflow
 
@@ -121,7 +169,7 @@ After the first push no branch is rewritten: `.claude/settings.json` denies `git
 
 **Merge bar**
 
-1. `./scripts/verify.sh` green on the top branch with a freshly seeded DB (`bun run db:seed`); `./scripts/verify.sh --changed <branch below>` green on every branch alone.
+1. `./scripts/verify.sh` green on the top branch (the e2e gate restores the seeded DB itself); `./scripts/verify.sh --changed <branch below>` green on every branch alone.
 2. Local reviews (code-review, security, scale, maintainability, `effect-ts-enforcer`): no open P0/P1.
 3. Greptile 5/5 on the roll-up's current head, or each remaining comment declined with a reason. The 5/5 bar applies to the roll-up head only, never to the stacked PRs.
 4. You (or a coordinator you authorized) squash-merge the roll-up with `gh pr merge <n> --squash --match-head-commit <reviewed sha>`. `ship-feature` prints the command with the sha Greptile reviewed. The stacked PRs already show Merged (into `review/<slug>`), so nothing is left to close.
@@ -133,7 +181,7 @@ Commit subjects and PR titles follow Conventional Commits, checked by the `commi
 **When another feature merges first.** The stack is already in `review/<slug>`, so merge the default branch into it (`bun scripts/default-branch.ts` prints it; `staging` today); no rebase, no force push, and no re-review of the stacked PRs:
 
 - `git switch review/<slug>`, then `git merge "origin/$(bun scripts/default-branch.ts)"`. Migrations and ADRs: renumber yours to follow its latest. `scripts/seed-preview.ts` and `GLOSSARY.md`: keep both sides.
-- Re-run typecheck and unit tests, and e2e after `bun run db:seed`: the e2e server migrates but does not seed.
+- Re-run typecheck, unit tests and e2e. Every Playwright run restores the seeded DB in its global setup.
 - `git push origin review/<slug>` (a fast-forward), then post `@greptileai review` on the roll-up. The squash merge folds the merge commit away.
 
 **Fresh worktrees.** A `node_modules/node_modules` symlink to the main checkout breaks tests ("Invalid hook call", Playwright "No tests found"). `ship-feature`'s preflight moves it aside in a linked worktree; elsewhere, `mv node_modules/node_modules node_modules/.nested-modules-aside`.
@@ -143,6 +191,49 @@ Commit subjects and PR titles follow Conventional Commits, checked by the `commi
 | Command | Purpose |
 |---------|---------|
 | [`/harness-check`](../../.claude/commands/harness-check.md) | [`scripts/harness-check.sh`](../../scripts/harness-check.sh) — CLAUDE↔AGENTS symlink, sub-agent frontmatter, Kimi roster symlink, hook wiring + hook tests, `harness.config.json` (check M), workflow scripts (they parse, and match their sources), the generated lint rules page, and the live repo rules against `.github/repo-rules.json` ([`docs/ci/repo-rules.md`](../ci/repo-rules.md); a notice when GitHub cannot be read). No LLM, exits non-zero on drift. |
+
+## Tests on the seeded database
+
+A repository or procedure test runs on real SQL, not on the chainable stub in `app/services/database.test-layer.ts`. One import, one call:
+
+```ts
+import { makeSeededDatabase } from "@/services/database.seeded-layer";
+
+const layer = UserRepository.Default.pipe(Layer.provide(makeSeededDatabase("many-users")));
+```
+
+`makeSeededDatabase(scenario)` returns a `Database` layer: an in-memory SQLite database (`@libsql/client` with `drizzle-orm/libsql`, cast to the D1 drizzle type) with every migration in `drizzle/` applied in journal order, foreign keys on as in D1, and the scenario's users and their credential accounts inserted in one batch. It takes a scenario name from `app/lib/fixtures/` (`base`, `empty`, `many-users`) or a `Scenario` you build in the test. No sessions are seeded; insert the rows a test needs. Accounts carry a placeholder hash, so nobody can sign in against it.
+
+- **Reads** can share one database: `it.layer(layer)("...", (it) => { ... })`.
+- **Writes** build their own: `Effect.provide(layer)` per test. Every provide opens a fresh database and closes it when the test's scope ends, so no write leaks into the next test.
+- **Counts** come from `getScenario("<name>")`, never from a literal, so a bigger scenario does not break the test.
+- **Property tests** (`it.effect.prop` with a schema or fast-check arbitrary) take a fixed `fastCheck: { seed, numRuns }`. Model: `app/repositories/__tests__/user-properties.test.ts`, which checks `getUsers` against a plain-JS filter of the scenario.
+- **A procedure test** provides the same layer under its repositories. The stub stays for what real SQL cannot show: that a call never reached the database, or how a thrown driver error maps to a tagged error.
+- `db.batch([...])` is all or nothing, as on D1. After a `client.transaction()` (or drizzle's `db.transaction`) the libsql client moves to a new connection, which on `:memory:` is a new, empty database; D1 has no interactive transactions either, so repositories batch instead.
+
+The helper is test support: only tests import it, so it never reaches the Worker bundle. Its own tests: `app/services/__tests__/database.seeded-layer.test.ts`.
+
+## State machines
+
+A component with UI logic keeps it in an XState machine, `<name>.machine.ts` beside the component (model: `app/components/file-upload.machine.ts`). The `machines` gate (`bun scripts/check-machines.ts`, or name the files) imports every `*.machine.ts` under `app/` and `workers/` and walks its states with XState's graph helpers. It fails when:
+
+- a state is unreachable from the initial state (`machines/unreachable`);
+- a state has no path back to the initial state or to a final state and is not marked `type: "final"` (`machines/dead-end`);
+- the machine starts in a state that invokes or spawns an actor, so `useMachine` would start that work during the server render (`machines/starts-work`).
+
+Each finding names the file, the machine, the state and the fix. The walk follows the machine's shape and ignores guards: a state behind a guard that is never true still counts as reachable, so the unit tests own the guards. The self-test is `scripts/lib/__tests__/machine-check.test.ts`, on bad machines in `scripts/lib/__tests__/fixtures/machines.ts`. The gate runs in the baseline tier, and `--changed` runs it only for a machine the diff changes or that imports a changed file directly (a change two imports away waits for the baseline run).
+
+What the gate does not check, so a green gate means only "the shape has no trap", not "the machine is right":
+
+- **Events.** Any event the machine handles is assumed to arrive at any time. An event the component never sends still counts as a way out.
+- **Guards.** Every guarded transition counts as possible. A guard that is never true can hide an unreachable state or fake a way home.
+- **Delays.** An `after` transition counts as a way out whatever its delay.
+- **History states.** Entering one is treated as entering its parent's initial state; the state it would restore is not modelled.
+- **Parallel states.** Each region is judged on its own, and the walk does not track which pairs of region states can be active together. A parallel state's `onDone` is taken as possible once every region can reach a final state, whether or not they can all be final at once.
+- **Start-up work it cannot see.** A `spawn` inside the `context` factory, a spawn inside `enqueueActions`, and an action supplied later through `.provide()` all slip past `machines/starts-work`.
+- **Machines elsewhere.** Only machines exported from a `*.machine.ts` file under `app/` or `workers/` are checked.
+
+A pull request that adds or changes a machine pastes its diagram in the body. `bun scripts/machine-diagram.ts app/components/file-upload.machine.ts` prints each machine in the file as a fenced Mermaid state diagram, which GitHub draws.
 
 ## Gates
 
@@ -159,14 +250,26 @@ Listed in `gates` in [`harness.config.json`](../../harness.config.json) and run 
 | harness | `./scripts/harness-check.sh` | baseline, full |
 | secrets | `bun run scripts/secret-scan.ts` | baseline, full |
 | audit | `bun run scripts/package-audit.ts` | baseline, full |
+| machines | `bun scripts/check-machines.ts` ([state machines](#state-machines)) | baseline, full |
+| coverage | `bun run scripts/coverage-floors.ts` ([floors](#coverage-floors)) | full |
 | build | `bun run build` | full |
 | e2e | `bun run test:e2e` | full |
 
 `./scripts/verify.sh` runs the full set, `--baseline` the quick set, `--lean` the lean tier (CI's job on a stacked PR), `--only <gate>` one gate, `--list` prints them. To add a gate, add an object to `gates` in `harness.config.json`, with the `tier` it first runs in (see [`harness-config.md`](harness-config.md)) — CI picks it up.
 
-`./scripts/verify.sh --changed [base]` is for a stacked change. It diffs the working tree (committed, staged, unstaged and untracked) against the merge base with `base` (default: the pull request's target, else the default branch) and runs: typecheck; `bun run lint <changed .ts/.tsx>` (Biome and the house linter on those files); `bunx vitest related --run <changed .ts/.tsx>` (the tests that import them, at any depth); and `CI=1 bun run test:e2e <specs>` for the specs the [test map](lint-rules.md#the-test-map) ties to them (a changed spec, a `covered-by` spec, a machine's paths spec, the specs that visit a changed route, the specs that import a changed file). It prints the base, what it ran, and each gate it skipped with the reason. A change to a gate script, `harness.config.json`, `scripts/lint/**`, the lint runner, a config file (`biome.jsonc` and `knip.json` included), `.github/`, `.claude/`, a migration, the schema or the lockfile runs every gate instead and says which file caused it. The plan is `scripts/verify-changed.ts`; its rules are `scripts/lib/verify-plan.ts`.
+`./scripts/verify.sh --changed [base]` is for a stacked change. It diffs the working tree (committed, staged, unstaged and untracked) against the merge base with `base` (default: the pull request's target, else the default branch) and runs: typecheck; `bun run lint <changed .ts/.tsx>` (Biome and the house linter on those files); `bunx vitest related --run <changed .ts/.tsx>` (the tests that import them, at any depth); and `CI=1 bun run test:e2e <specs>` for the specs the [test map](lint-rules.md#the-test-map) ties to them (a changed spec, a `covered-by` spec, a machine's paths spec, the specs that visit a changed route, the specs that import a changed file). When a `*.machine.ts` changed, or a machine imports a changed file, it also runs `bun scripts/check-machines.ts <those machines>`. It prints the base, what it ran, and each gate it skipped with the reason. A change to a gate script, `harness.config.json`, `scripts/lint/**`, the lint runner, a config file (`biome.jsonc` and `knip.json` included), `.github/`, `.claude/`, a migration, the schema or the lockfile runs every gate instead and says which file caused it. The plan is `scripts/verify-changed.ts`; its rules are `scripts/lib/verify-plan.ts`.
 
 The `e2e` gate needs the network: the sign-in and sign-up pages load Turnstile from `challenges.cloudflare.com`. Each spec file sends its own client IP (`e2e/lib/client-ip.ts`), so the auth rate limits count per file ([`docs/auth.md`](../auth.md#rate-limits)).
+
+Global setup (`e2e/global-setup.ts`) runs once per Playwright run. It stops the run if `.dev.vars` or `.env` sets `ANALYTICS_PROVIDER=posthog`, restores the seed, then signs in once per fixture role through `POST /api/auth/sign-in/email` and saves `e2e/.auth/admin.json`, `user.json` and `banned.json` (gitignored, overwritten each run). The banned sign-in must be refused, so `banned.json` holds no cookie. A role that cannot sign in, or a banned role that can, stops the run with `FixtureLoginError` naming the role. A spec that needs a signed-in user calls `useSavedSession("admin", "<file>")` from `e2e/lib/saved-session.ts`; only a spec that tests sign-in, sign-out or a ban of the signed-in user signs in on its own.
+
+The `e2e` gate never retries (`retries: 0` in `playwright.config.ts`), so a test that fails one run in three turns the gate red instead of passing on a second try; the trace of the failing run is kept under `test-results/`. `future.unstable_optimizeDeps` in `react-router.config.ts` makes Vite pre-bundle every dependency the routes import at start, so a cold first load gets no "504 Outdated Optimize Dep" and no spec needs to reload. To hunt a flake, run the spec with `--repeat-each=20` on a cold cache (`rm -rf node_modules/.vite`).
+
+### Coverage floors
+
+The `coverage` gate runs the `app/` and `workers/` unit tests under vitest's v8 coverage (`@vitest/coverage-v8`, set as the provider in `vitest.config.ts`) and fails when a folder runs fewer of its lines than its floor: 90% for `app/repositories`, `app/services`, `app/trpc` and `app/lib`. The floors are `COVERAGE_FLOORS` in `scripts/lib/coverage-constants.ts`; a test fails any floor under the 90% bar, so a floor can rise and cannot fall below it. A failure names the folder, how far under it is, how many lines must run and the files with the most lines not run, and says to write a test beside each. Never lower a floor or add a test that asserts nothing to pass it.
+
+It runs in the full tier, not the quick set or the lean job: it reruns the app tests, which costs as much as the `test` gate again. CI runs it as a step of the required Baseline job, so a PR into the default branch or production cannot drop a folder under its floor.
 
 The `lint` gate is the one entry point: Biome, the house linter, import cycles and dead code, one finding shape ([`lint.md`](lint.md)). The two `non-negotiables` gates run the house linter (`bun run lint:house`) and its self-test on their own: one file per rule in `scripts/lint/rules/`, findings that say the fix, and a baseline that only shrinks. The rules, the baseline and how to add a rule: [`lint-rules.md`](lint-rules.md).
 
@@ -197,7 +300,9 @@ bun run db:generate       # Generate Drizzle migration
 bun run db:migrate:local  # Apply migrations to local D1
 bun run db:migrate:remote # Apply migrations to remote D1
 bun run db:migrate:preview # Apply migrations to the preview-env D1
-bun run db:seed           # Seed local D1 with admin/user/banned fixtures
+bun run db:seed           # Restore the seed fixtures in local D1 (--scenario base|empty|many-users); `bun run dev` and every Playwright run do this
+bun run db:prepare        # Migrate and seed local D1 (what `bun run dev` runs first)
+bun run db:reset          # Wipe local D1 and R2, then migrate and seed (--scenario); refuses while the dev server runs
 bun run db:seed:preview   # Seed the preview-env D1 with the same fixtures
 bun run db:studio         # Drizzle Studio
 ```

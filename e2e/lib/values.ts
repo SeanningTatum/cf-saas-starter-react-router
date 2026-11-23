@@ -1,16 +1,21 @@
+import { FIXTURE_ROLE_EMAILS } from "../../app/lib/constants/fixtures";
+
 export const SEEDED_PASSWORD = "Password123!";
 
-export const SEEDED_LOGINS = {
-  admin: "admin@preview.local",
-  user: "user@preview.local",
-  banned: "banned@preview.local",
-} as const;
+export const SEEDED_LOGINS = FIXTURE_ROLE_EMAILS;
+
+export const RESTORE_SEED_COMMAND = ["bun", "run", "db:prepare"] as const;
+
+export const SAVED_SESSION_DIR = "e2e/.auth";
+
+export const BANNED_REPLY = /banned/i;
 
 export const PAGE_PATHS = {
   home: "/",
   login: "/login",
   signUp: "/sign-up",
   dashboard: "/dashboard",
+  admin: "/admin",
 } as const;
 
 export const API_PATHS = {
@@ -20,6 +25,7 @@ export const API_PATHS = {
   signOut: "/api/auth/sign-out",
   getSession: "/api/auth/get-session",
   removeUser: "/api/auth/admin/remove-user",
+  stopImpersonating: "/api/auth/admin/stop-impersonating",
 } as const;
 
 export const CLIENT_IPS = {
@@ -29,6 +35,9 @@ export const CLIENT_IPS = {
   "security-headers": "203.0.113.12",
   "file-upload": "203.0.113.13",
   "admin-user-toasts": "203.0.113.14",
+  hydration: "203.0.113.15",
+  "seeded-logins": "203.0.113.16",
+  "global-setup": "203.0.113.17",
 } as const;
 
 export type SpecFile = keyof typeof CLIENT_IPS;
@@ -56,10 +65,11 @@ export const HTTP_STATUS = {
   unauthorized: 401,
 } as const;
 
+export const TALL_DESKTOP_VIEWPORT = { width: 1280, height: 1000 } as const;
+
 export const TIMEOUTS_MS = {
   oneLook: 1_000,
-  firstHydration: 15_000,
-  hydrationAfterReload: 30_000,
+  hydration: 15_000,
   turnstileReady: 30_000,
   rateLimitWindowWait: 25_000,
 } as const;

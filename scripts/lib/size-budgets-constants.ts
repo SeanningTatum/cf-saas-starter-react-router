@@ -1,0 +1,14 @@
+export const BUDGETS_PATH = ".github/size-budgets.json";
+export const WORKER_NAME = "Worker upload";
+export const PAGE_JS_LABEL_PATTERN = /^`(.+)` first-load JS, gzip$/;
+export const NOISE_SLACK_BYTES = 1024;
+export const LOWER_HINT_BYTES = 4096;
+export const STATUS_OK = "ok";
+export const STATUS_OVER = "OVER";
+export const STATUS_UNBUDGETED = "NO BUDGET";
+export const STATUS_LOWER = "lower the budget";
+export const NO_TARGET_CELL = "—";
+export const BUDGETS_HEADING = "Bundle budgets, gzip bytes";
+export const BUDGET_COLUMNS = ["", "Measured", "Budget", "Left", "Ticket target", "Over target by", "Status"];
+export const SHRINK_RULE = "A budget only goes down. Raising one is the owner's call, with numbers, in its own pull request.";
+export const RATCHET_SKIPPED = (ref: string): string => `${BUDGETS_PATH} does not exist on ${ref}, so there is no budget to hold the line against.`;

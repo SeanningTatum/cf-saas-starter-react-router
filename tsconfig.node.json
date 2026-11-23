@@ -1,6 +1,6 @@
 {
   "extends": "./tsconfig.json",
-  "include": ["*.config.ts"],
+  "include": ["*.config.ts", "app/lib/sandbox/switch.ts", "app/lib/constants/sandbox.ts"],
   "compilerOptions": {
     "composite": true,
     "strict": true,

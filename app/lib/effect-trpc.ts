@@ -115,6 +115,11 @@ const appErrorToTRPC = (e: AppError): TRPCError => {
         code: "BAD_REQUEST",
         message: e.message,
       });
+    case "UploadQuotaError":
+      return new TRPCError({
+        code: "PAYLOAD_TOO_LARGE",
+        message: e.message,
+      });
     case "AnalyticsDeliveryError":
       return new TRPCError({
         code: "INTERNAL_SERVER_ERROR",
@@ -126,6 +131,25 @@ const appErrorToTRPC = (e: AppError): TRPCError => {
         code: "TOO_MANY_REQUESTS",
         message: RATE_LIMITED_MESSAGE,
       });
+    case "FixtureValidationError":
+    case "SeedError":
+    case "FixtureLoginError":
+    case "RealAnalyticsProviderError":
+      return new TRPCError({
+        code: "INTERNAL_SERVER_ERROR",
+        message: "Internal Server Error",
+        cause: e,
+      });
+    case "DevServerRunningError":
+      return new TRPCError({
+        code: "CONFLICT",
+        message: "Stop the dev server first",
+      });
+    case "SandboxDisabledError":
+    case "SandboxUnknownModuleError":
+    case "SandboxUnknownScenarioError":
+    case "SandboxCaseNotDeclaredError":
+      return new TRPCError({ code: "NOT_FOUND", message: "Not Found" });
     default:
       return assertNever(e);
   }

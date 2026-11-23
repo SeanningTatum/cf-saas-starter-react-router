@@ -1,4 +1,10 @@
-import { HTTP_TOO_MANY_REQUESTS, RATE_LIMITED_CODE } from "@/lib/constants/rate-limit";
+import {
+  HTTP_TOO_MANY_REQUESTS,
+  MS_PER_SECOND,
+  RATE_LIMITED_CODE,
+  RETRY_AFTER_DELAY_SECONDS,
+  RETRY_AFTER_HEADER,
+} from "@/lib/constants/rate-limit";
 import {
   TURNSTILE_FAILED_CODES,
   TURNSTILE_UNAVAILABLE_CODE,
@@ -24,4 +30,21 @@ export const authRefusalFor = (
     return "captcha_unavailable";
   }
   return null;
+};
+
+export interface RefusedResponse {
+  readonly status: number;
+  readonly headers: { get(name: string): string | null };
+}
+
+const secondsUntil = (atMs: number, nowMs: number): number =>
+  Math.ceil((atMs - nowMs) / MS_PER_SECOND);
+
+export const retryWaitSeconds = (response: RefusedResponse, nowMs: number): number | null => {
+  if (response.status !== HTTP_TOO_MANY_REQUESTS) return null;
+  const header = response.headers.get(RETRY_AFTER_HEADER)?.trim() ?? "";
+  const seconds = RETRY_AFTER_DELAY_SECONDS.test(header)
+    ? Number(header)
+    : secondsUntil(Date.parse(header), nowMs);
+  return Number.isFinite(seconds) && seconds > 0 ? seconds : null;
 };

@@ -43,7 +43,31 @@
       "tier": "baseline",
       "limitSeconds": 120
     },
+    {
+      "name": "machines",
+      "run": "bun scripts/check-machines.ts",
+      "tier": "baseline",
+      "limitSeconds": 120
+    },
+    {
+      "name": "coverage",
+      "run": "bun run scripts/coverage-floors.ts",
+      "tier": "full",
+      "limitSeconds": 600
+    },
     { "name": "build", "run": "bun run build", "tier": "full", "limitSeconds": 900 },
+    {
+      "name": "size-budgets",
+      "run": "bun run size --budgets --built",
+      "tier": "full",
+      "limitSeconds": 300
+    },
+    {
+      "name": "sandbox-absent",
+      "run": "bun scripts/ci/sandbox-absent.ts",
+      "tier": "full",
+      "limitSeconds": 60
+    },
     { "name": "e2e", "run": "CI=1 bun run test:e2e", "tier": "full", "limitSeconds": 900 }
   ],
   "tracker": { "readyLabel": "ready-for-agent" },
@@ -100,6 +124,17 @@
       { "path": "app/locales/", "owner": "^app/(routes|components)/" },
       { "path": "app/lib/analytics/events.ts", "owner": "^app/trpc/" }
     ]
+  },
+  "wave": {
+    "tracksAtOnce": 3,
+    "reviewRounds": 1,
+    "models": {
+      "plan": "opus",
+      "design": "opus",
+      "build": "sonnet",
+      "review": "sonnet",
+      "mechanical": "haiku"
+    }
   },
   "brandInit": {
     "contractFence": ["app/app.css", "app/root.tsx"],
