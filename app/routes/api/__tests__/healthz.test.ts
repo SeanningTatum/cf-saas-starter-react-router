@@ -68,6 +68,13 @@ describe("/healthz", () => {
     expect(response.headers.get("content-type")).toContain("application/json");
   });
 
+  it("answers 503 when the query hangs past its timeout, so that a stuck database reads as down instead of holding the request open", async () => {
+    const { get } = await freshRoute(() => new Promise(() => undefined));
+    const response = await get();
+    expect(response.status).toBe(503);
+    expect(await response.json()).toEqual({ status: "down", release: "v3.1.0" });
+  }, 10_000);
+
   it("queries the database once for many calls inside the window, so that a flood of public requests cannot turn into a flood of D1 reads", async () => {
     const { get, runSpy } = await freshRoute(up);
     for (let call = 0; call < 5; call += 1) {
@@ -85,7 +92,7 @@ describe("/healthz", () => {
     expect(runSpy).not.toHaveBeenCalled();
   });
 
-  it("answers 503 and hands the cause to reportError when the runtime cannot build the database, so that a missing binding reads as down and is still seen", async () => {
+  it("answers 503 and hands the cause to reportError when the runtime cannot build the database, so that a runtime fault inside the route reads as down and is reported once per window", async () => {
     vi.resetModules();
     const route = await import("../healthz");
     const { HealthRepository } = await import("@/repositories/health");
