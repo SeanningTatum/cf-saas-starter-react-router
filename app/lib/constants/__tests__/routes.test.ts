@@ -1,7 +1,7 @@
 import type { RouteConfigEntry } from "@react-router/dev/routes";
 import { describe, expect, it } from "vitest";
 import routeTable from "@/routes";
-import { API_ROUTES, OPS_ROUTES, ROUTES } from "../routes";
+import { API_ROUTES, DEV_ROUTES, OPS_ROUTES, ROUTES } from "../routes";
 
 const normalise = (path: string): string => `/${path.split("/").filter(Boolean).join("/")}`;
 
@@ -23,6 +23,7 @@ describe("route constants", () => {
       ...Object.values(ROUTES),
       ...Object.values(API_ROUTES),
       ...Object.values(OPS_ROUTES),
+      ...Object.values(DEV_ROUTES),
     ].sort();
 
     expect(constants).toEqual(fixedPaths());

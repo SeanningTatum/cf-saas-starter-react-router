@@ -62,6 +62,12 @@
       "tier": "full",
       "limitSeconds": 300
     },
+    {
+      "name": "sandbox-absent",
+      "run": "bun scripts/ci/sandbox-absent.ts",
+      "tier": "full",
+      "limitSeconds": 60
+    },
     { "name": "e2e", "run": "CI=1 bun run test:e2e", "tier": "full", "limitSeconds": 900 }
   ],
   "tracker": { "readyLabel": "ready-for-agent" },

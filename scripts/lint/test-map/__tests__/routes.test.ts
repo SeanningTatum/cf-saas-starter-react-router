@@ -47,6 +47,15 @@ describe("routePaths", () => {
     });
   });
 
+  it("a route behind a build flag counts in either branch, so a dev-only route still needs its proof and its path stays reserved", () => {
+    const table = '[...(DEV ? [route("/sandbox.json", "routes/sandbox/manifest.ts")] : []), ...(OPS ? prefix("ops", [route("/", "routes/ops.tsx")]) : [])]';
+
+    expect(pathsOf(table)).toEqual({
+      "app/routes/sandbox/manifest.ts": ["/sandbox.json"],
+      "app/routes/ops.tsx": ["/ops"],
+    });
+  });
+
   it("a top-level layout wraps /", () => {
     expect(pathsOf('[layout("routes/_layout.tsx", [route("/about", "routes/about.tsx")])]')).toEqual({
       "app/routes/_layout.tsx": ["/"],

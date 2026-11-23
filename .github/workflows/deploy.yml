@@ -128,6 +128,12 @@ jobs:
         if: steps.token.outputs.ready == 'true'
         run: bun run build
 
+      # The build that ships: fail before deploy when a sandbox route, its code or the
+      # SANDBOX_ENABLED var reached it. Only preview.yml sets VITE_SANDBOX (issue #47).
+      - name: No sandbox in the build that ships
+        if: steps.token.outputs.ready == 'true'
+        run: bun scripts/ci/sandbox-absent.ts
+
       # The error reporter stamps each report with these two vars (docs/agents/error-reporting.md).
       # The version is the vX.Y.Z tag on this commit when release.yml has made one, else the commit sha.
       # release.yml makes lightweight tags; an annotated tag is not matched here and reads as the sha.

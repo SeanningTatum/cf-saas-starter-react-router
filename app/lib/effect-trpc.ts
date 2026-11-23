@@ -145,6 +145,11 @@ const appErrorToTRPC = (e: AppError): TRPCError => {
         code: "CONFLICT",
         message: "Stop the dev server first",
       });
+    case "SandboxDisabledError":
+    case "SandboxUnknownModuleError":
+    case "SandboxUnknownScenarioError":
+    case "SandboxCaseNotDeclaredError":
+      return new TRPCError({ code: "NOT_FOUND", message: "Not Found" });
     default:
       return assertNever(e);
   }

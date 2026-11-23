@@ -15,6 +15,12 @@ const literal = (node: ts.Node | undefined): string | undefined => (node && ts.i
 const children = (call: ts.CallExpression): readonly ts.Expression[] =>
   call.arguments.flatMap((argument) => (ts.isArrayLiteralExpression(argument) ? argument.elements : []));
 
+const branches = (node: ts.ConditionalExpression): readonly ts.Expression[] =>
+  [node.whenTrue, node.whenFalse].flatMap((branch) => {
+    const inner = unwrapExpression(branch);
+    return ts.isArrayLiteralExpression(inner) ? inner.elements : [inner];
+  });
+
 export function routePaths(source: Source): Map<string, string[]> {
   const paths = new Map<string, string[]>();
   const add = (file: string | undefined, path: string): void => {
@@ -24,7 +30,11 @@ export function routePaths(source: Source): Map<string, string[]> {
   };
   const visit = (elements: readonly ts.Expression[], base: string): void => {
     for (const element of elements) {
-      const call = ts.isSpreadElement(element) ? element.expression : element;
+      const call = ts.isSpreadElement(element) ? unwrapExpression(element.expression) : element;
+      if (ts.isConditionalExpression(call)) {
+        visit(branches(call), base);
+        continue;
+      }
       if (!ts.isCallExpression(call) || !ts.isIdentifier(call.expression)) continue;
       const [first, second] = call.arguments;
       const helper = call.expression.text;

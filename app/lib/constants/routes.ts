@@ -22,3 +22,7 @@ export const API_ROUTES = {
 export const OPS_ROUTES = {
   healthz: HEALTHZ_PATH,
 } as const;
+
+export const DEV_ROUTES = {
+  sandboxManifest: "/sandbox.json",
+} as const;

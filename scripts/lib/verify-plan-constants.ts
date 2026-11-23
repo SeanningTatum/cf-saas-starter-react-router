@@ -27,6 +27,8 @@ export const FULL_RUN_TRIGGERS = [
   { match: "scripts/lib/coverage-*.ts", reason: "a gate script" },
   { match: "scripts/size.ts", reason: "a gate script" },
   { match: "scripts/lib/size-budgets*.ts", reason: "a gate script" },
+  { match: "scripts/ci/sandbox-absent.ts", reason: "a gate script" },
+  { match: "scripts/lib/sandbox-absent-constants.ts", reason: "a gate script" },
   { match: "scripts/lint/**", reason: "the house linter, its rules, map or baseline" },
   { match: "scripts/lint-all.ts", reason: "the lint runner" },
   { match: "scripts/lib/lint-*.ts", reason: "the lint runner" },
