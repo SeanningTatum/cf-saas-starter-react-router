@@ -3,7 +3,7 @@ import { BROWSER_REPORT_PATH } from "../app/lib/constants/error-reporting";
 import { useSavedSession } from "./lib/saved-session";
 import { useClientIpPerFile } from "./lib/client-ip";
 import { loadHydrated } from "./lib/hydration";
-import { PAGE_PATHS } from "./lib/values";
+import { HTTP_STATUS, PAGE_PATHS } from "./lib/values";
 
 const DOC = "docs/security-headers.md";
 const HYDRATION_TEXT = /hydrat/i;
@@ -84,5 +84,22 @@ test.describe("Hydration, signed in as admin", () => {
     await expectNoHydrationProblem(page, PAGE_PATHS.admin, (p) =>
       p.getByRole("button", { name: "Toggle Sidebar" }).first(),
     );
+  });
+});
+
+test.describe("Cold load of the kitchen sink, signed in as admin (issue #50)", () => {
+  useSavedSession("admin", "hydration");
+
+  test("the first load of /admin/kitchen-sink gets no 504 from Vite's dependency optimizer, so it hydrates without a reload (on a cold cache, `rm -rf node_modules/.vite`, a late-found dependency would fail here)", async ({
+    page,
+  }) => {
+    const gatewayTimeouts: string[] = [];
+    page.on("response", (response) => {
+      if (response.status() === HTTP_STATUS.gatewayTimeout) gatewayTimeouts.push(response.url());
+    });
+    await loadHydrated(page, PAGE_PATHS.adminKitchenSink, (p) =>
+      p.getByTestId("file-upload-dropzone"),
+    );
+    expect(gatewayTimeouts, "Vite re-optimized dependencies during the first load").toEqual([]);
   });
 });
