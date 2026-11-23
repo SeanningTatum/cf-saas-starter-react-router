@@ -45,8 +45,65 @@ export function importedModules(source: Source): string[] {
   return modules;
 }
 
-export function importsFile(source: Source, target: string): boolean {
+const moduleNames = (target: string): string[] => {
   const module = withoutExtension(target);
-  const names = INDEX_MODULE.test(module) ? [module, module.replace(INDEX_MODULE, "")] : [module];
+  return INDEX_MODULE.test(module) ? [module, module.replace(INDEX_MODULE, "")] : [module];
+};
+
+export function importsFile(source: Source, target: string): boolean {
+  const names = moduleNames(target);
   return importedModules(source).some((imported) => names.includes(imported));
+}
+
+function valueBindings(clause: ts.ImportClause | undefined): string[] {
+  if (!clause || clause.isTypeOnly) return [];
+  const bindings = clause.namedBindings;
+  const named = bindings && ts.isNamedImports(bindings) ? bindings.elements.filter((element) => !element.isTypeOnly).map((element) => element.name.text) : [];
+  const namespace = bindings && ts.isNamespaceImport(bindings) ? [bindings.name.text] : [];
+  return [...(clause.name ? [clause.name.text] : []), ...named, ...namespace];
+}
+
+function isNameSlot(node: ts.Identifier): boolean {
+  const parent = node.parent;
+  if (ts.isPropertyAccessExpression(parent) || ts.isPropertyAssignment(parent) || ts.isMethodDeclaration(parent) || ts.isPropertyDeclaration(parent)) {
+    return parent.name === node;
+  }
+  if (ts.isBindingElement(parent)) return parent.propertyName === node;
+  return ts.isImportSpecifier(parent) || ts.isImportClause(parent) || ts.isNamespaceImport(parent) || ts.isExportSpecifier(parent);
+}
+
+function inTypePosition(node: ts.Node): boolean {
+  for (let current = node.parent; current !== undefined; current = current.parent) {
+    if (ts.isTypeNode(current) && !ts.isExpressionWithTypeArguments(current)) return true;
+  }
+  return false;
+}
+
+function dynamicallyImports(source: Source, names: string[]): boolean {
+  let found = false;
+  walkNodes(source.ast, (node) => {
+    if (!ts.isCallExpression(node) || node.expression.kind !== ts.SyntaxKind.ImportKeyword) return;
+    const specifier = specifierOf(node);
+    const resolved = specifier === undefined ? undefined : resolveSpecifier(specifier, source.path);
+    found ||= resolved !== undefined && names.includes(resolved);
+  });
+  return found;
+}
+
+export function usesFile(source: Source, target: string): boolean {
+  const names = moduleNames(target);
+  if (dynamicallyImports(source, names)) return true;
+  const locals = new Set(
+    source.ast.statements.flatMap((statement) => {
+      if (!ts.isImportDeclaration(statement) || !ts.isStringLiteralLike(statement.moduleSpecifier)) return [];
+      const resolved = resolveSpecifier(statement.moduleSpecifier.text, source.path);
+      return resolved !== undefined && names.includes(resolved) ? valueBindings(statement.importClause) : [];
+    }),
+  );
+  if (locals.size === 0) return false;
+  let used = false;
+  walkNodes(source.ast, (node) => {
+    used ||= ts.isIdentifier(node) && locals.has(node.text) && !isNameSlot(node) && !inTypePosition(node);
+  });
+  return used;
 }

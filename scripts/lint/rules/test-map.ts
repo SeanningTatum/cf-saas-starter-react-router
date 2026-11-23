@@ -78,7 +78,7 @@ export const rule: RepoRule = {
   nonNegotiable: 4,
   matches:
     `A source file that matches no entry in \`${TEST_MAP_PATH}\`, or whose kind's proof is missing: ` +
-    "`unit` a `__tests__/<name>.test.ts` that imports it and asserts; `machine` that and an `e2e/<name>.paths.spec.ts`; " +
+    "`unit` a `__tests__/<name>.test.ts` that imports it, calls or reads what it exports, and asserts; `machine` that and an `e2e/<name>.paths.spec.ts`; " +
     "`procedure` a `LEVELS` entry and a test that calls it through the router; `route` an e2e spec that holds a `@golden` and an `@error` test and visits its path; " +
     "`component` and `primitive` a sandbox entry; `declaration` no code that runs; `spec-helper` an e2e spec that imports it; `covered-by` a named test that exists and asserts. " +
     "Also a source file that imports test support.",

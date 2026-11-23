@@ -2,6 +2,7 @@ import { sql } from "drizzle-orm";
 import { describe, expect, it, vi } from "vitest";
 import { PROTECTED_USER_MESSAGE } from "@/lib/constants/admin";
 import { APP_ERROR_TAGS } from "@/lib/constants/errors";
+import { appRouter } from "@/trpc/router";
 import { type AppCaller, startSeededApp } from "./seeded-caller";
 
 vi.mock("@/lib/log-format", async (importOriginal) => ({
@@ -76,7 +77,7 @@ describe("a failing database reaches the client as a generic 500 from every proc
   it.each(READS_THROUGH_USER_TABLE)(
     "%s fails with INTERNAL_SERVER_ERROR and the QueryError message, so a driver failure is not a defect with no tag and the client sees no SQL",
     async (_path, call, message) => {
-      const app = startSeededApp("many-users");
+      const app = startSeededApp(appRouter, "many-users");
       await breakUserTable(app);
       const failure = await call(app.callerAs()).then(
         () => undefined,
@@ -89,14 +90,14 @@ describe("a failing database reaches the client as a generic 500 from every proc
 
 describe("each tagged error a procedure can raise arrives with the status tagToTRPC names", () => {
   it("NotFoundError from admin.getUser is NOT_FOUND", async () => {
-    const app = startSeededApp("many-users");
+    const app = startSeededApp(appRouter, "many-users");
     await expect(app.callerAs().admin.getUser({ userId: GHOST })).rejects.toMatchObject({
       code: "NOT_FOUND",
     });
   });
 
   it("ValidationError from admin.deleteUser on an admin is BAD_REQUEST with the protected-user message", async () => {
-    const app = startSeededApp("many-users");
+    const app = startSeededApp(appRouter, "many-users");
     await expect(app.callerAs().admin.deleteUser({ userId: "seed-admin" })).rejects.toMatchObject({
       code: "BAD_REQUEST",
       message: PROTECTED_USER_MESSAGE,
@@ -146,7 +147,7 @@ describe("each tagged error a procedure can raise arrives with the status tagToT
   it.each(WRITES)(
     "%s with a write the database refuses is INTERNAL_SERVER_ERROR (UpdateError or DeletionError) and the driver's text stays out of the message",
     async (_path, event, call, message) => {
-      const app = startSeededApp("many-users");
+      const app = startSeededApp(appRouter, "many-users");
       await refuseWrites(app, event);
       const failure = await call(app.callerAs()).then(
         () => undefined,

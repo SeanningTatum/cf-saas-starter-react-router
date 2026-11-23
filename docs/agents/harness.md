@@ -228,6 +228,7 @@ Listed in `gates` in [`harness.config.json`](../../harness.config.json) and run 
 | harness | `./scripts/harness-check.sh` | baseline, full |
 | secrets | `bun run scripts/secret-scan.ts` | baseline, full |
 | audit | `bun run scripts/package-audit.ts` | baseline, full |
+| coverage | `bun run scripts/coverage-floors.ts` ([floors](#coverage-floors)) | full |
 | build | `bun run build` | full |
 | e2e | `bun run test:e2e` | full |
 
@@ -238,6 +239,12 @@ Listed in `gates` in [`harness.config.json`](../../harness.config.json) and run 
 The `e2e` gate needs the network: the sign-in and sign-up pages load Turnstile from `challenges.cloudflare.com`. Each spec file sends its own client IP (`e2e/lib/client-ip.ts`), so the auth rate limits count per file ([`docs/auth.md`](../auth.md#rate-limits)).
 
 The `e2e` gate never retries (`retries: 0` in `playwright.config.ts`), so a test that fails one run in three turns the gate red instead of passing on a second try; the trace of the failing run is kept under `test-results/`. `future.unstable_optimizeDeps` in `react-router.config.ts` makes Vite pre-bundle every dependency the routes import at start, so a cold first load gets no "504 Outdated Optimize Dep" and no spec needs to reload. To hunt a flake, run the spec with `--repeat-each=20` on a cold cache (`rm -rf node_modules/.vite`).
+
+### Coverage floors
+
+The `coverage` gate runs the `app/` and `workers/` unit tests under vitest's v8 coverage (`@vitest/coverage-v8`, set as the provider in `vitest.config.ts`) and fails when a folder runs fewer of its lines than its floor: 90% for `app/repositories`, `app/services`, `app/trpc` and `app/lib`. The floors are `COVERAGE_FLOORS` in `scripts/lib/coverage-constants.ts`; a test fails any floor under the 90% bar, so a floor can rise and cannot fall below it. A failure names the folder, how far under it is, how many lines must run and the files with the most lines not run, and says to write a test beside each. Never lower a floor or add a test that asserts nothing to pass it.
+
+It runs in the full tier, not the quick set or the lean job: it reruns the app tests, which costs as much as the `test` gate again. CI runs it as a step of the required Baseline job, so a PR into the default branch or production cannot drop a folder under its floor.
 
 The `lint` gate is the one entry point: Biome, the house linter, import cycles and dead code, one finding shape ([`lint.md`](lint.md)). The two `non-negotiables` gates run the house linter (`bun run lint:house`) and its self-test on their own: one file per rule in `scripts/lint/rules/`, findings that say the fix, and a baseline that only shrinks. The rules, the baseline and how to add a rule: [`lint-rules.md`](lint-rules.md).
 

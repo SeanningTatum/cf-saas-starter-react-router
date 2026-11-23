@@ -11,7 +11,7 @@ import { Analytics } from "@/services/analytics";
 import { Database } from "@/services/database";
 import { makeSeededDatabase } from "@/services/database.seeded-layer";
 import { createCallerFactory, type Context } from "@/trpc";
-import { appRouter } from "@/trpc/router";
+import type { AppRouter } from "@/trpc/router";
 
 export type Actor = { readonly id: string; readonly role: "admin" | "user" };
 
@@ -23,7 +23,7 @@ afterEach(async () => {
   await Promise.all(disposers.splice(0).map((dispose) => dispose()));
 });
 
-export const startSeededApp = (scenario: ScenarioName) => {
+export const startSeededApp = (router: AppRouter, scenario: ScenarioName) => {
   const events: AnalyticsEvent[] = [];
   const analytics = Layer.succeed(Analytics, {
     capture: (event) =>
@@ -41,7 +41,7 @@ export const startSeededApp = (scenario: ScenarioName) => {
   disposers.push(() => runtime.dispose());
 
   const callerAs = (actor: Actor | null = ADMIN_ACTOR) =>
-    createCallerFactory(appRouter)({
+    createCallerFactory(router)({
       headers: new Headers(),
       runtime: runtime as unknown as AppRuntime,
       auth: actor === null ? null : { session: { id: `session-${actor.id}` }, user: actor },

@@ -4,7 +4,8 @@ import { describe, expect, it, vi } from "vitest";
 import { PROTECTED_USER_MESSAGE } from "@/lib/constants/admin";
 import { getScenario } from "@/lib/fixtures/scenarios";
 import type { UserFixture } from "@/lib/fixtures/schema";
-import { startSeededApp } from "./seeded-caller";
+import { startSeededApp } from "@/trpc/__tests__/seeded-caller";
+import { appRouter } from "@/trpc/router";
 
 vi.mock("@/lib/log-format", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/log-format")>()),
@@ -55,7 +56,7 @@ const startSession = (app: ReturnType<typeof startSeededApp>, userId: string) =>
 
 describe("admin reads, through the real procedure on many-users", () => {
   it("getUsers returns the first page newest first with the scenario's total, so a page is never cut from the wrong end or counted short", async () => {
-    const app = startSeededApp("many-users");
+    const app = startSeededApp(appRouter, "many-users");
     const result = await app.callerAs().admin.getUsers({ page: 0, limit: PAGE });
     expect(result.users.map((u) => u.id)).toEqual(
       newestFirst(scenario.users)
@@ -67,7 +68,7 @@ describe("admin reads, through the real procedure on many-users", () => {
   });
 
   it("getUsers with a status filter returns only matching rows and a matching total, so a filter is not applied to the page and not the count", async () => {
-    const app = startSeededApp("many-users");
+    const app = startSeededApp(appRouter, "many-users");
     const banned = scenario.users.filter((u) => u.banned);
     const result = await app.callerAs().admin.getUsers({ page: 0, limit: 100, status: "banned" });
     expect(result.total).toBe(banned.length);
@@ -75,7 +76,7 @@ describe("admin reads, through the real procedure on many-users", () => {
   });
 
   it("getUsers with a role and a status together returns the rows that meet both, so dropping either filter changes the answer (no admin is banned)", async () => {
-    const app = startSeededApp("many-users");
+    const app = startSeededApp(appRouter, "many-users");
     const caller = app.callerAs();
     const both = await caller.admin.getUsers({
       page: 0,
@@ -91,20 +92,20 @@ describe("admin reads, through the real procedure on many-users", () => {
   });
 
   it("getUsers past the last page returns no rows and the same total, so an out-of-range page does not fail", async () => {
-    const app = startSeededApp("many-users");
+    const app = startSeededApp(appRouter, "many-users");
     const result = await app.callerAs().admin.getUsers({ page: 99, limit: PAGE });
     expect(result.users).toEqual([]);
     expect(result.total).toBe(scenario.users.length);
   });
 
   it("getUser returns the row for an id, so the detail page shows the user asked for", async () => {
-    const app = startSeededApp("many-users");
+    const app = startSeededApp(appRouter, "many-users");
     const found = await app.callerAs().admin.getUser({ userId: BANNED });
     expect(found).toMatchObject({ id: BANNED, banned: true });
   });
 
   it("getUser for an unknown id is NOT_FOUND naming the user, so a missing user is a 404 and not an empty page", async () => {
-    const app = startSeededApp("many-users");
+    const app = startSeededApp(appRouter, "many-users");
     await expect(app.callerAs().admin.getUser({ userId: GHOST })).rejects.toMatchObject({
       code: "NOT_FOUND",
       message: `user not found: ${GHOST}`,
@@ -112,7 +113,7 @@ describe("admin reads, through the real procedure on many-users", () => {
   });
 
   it("dbHealth reports ok with a check time, so the health panel reads a live database", async () => {
-    const app = startSeededApp("base");
+    const app = startSeededApp(appRouter, "base");
     const health = await app.callerAs().admin.dbHealth();
     expect(health.ok).toBe(true);
     expect(new Date(health.checkedAt).getTime()).not.toBeNaN();
@@ -121,7 +122,7 @@ describe("admin reads, through the real procedure on many-users", () => {
 
 describe("admin.updateUser", () => {
   it("renames the user and leaves the other fields alone, so a partial update does not blank a column", async () => {
-    const app = startSeededApp("many-users");
+    const app = startSeededApp(appRouter, "many-users");
     const before = await userRow(app, PLAIN);
     await expect(
       app.callerAs().admin.updateUser({ userId: PLAIN, data: { name: "Renamed" } }),
@@ -130,7 +131,7 @@ describe("admin.updateUser", () => {
   });
 
   it("refuses an admin target with BAD_REQUEST and the protected-user message, and writes nothing", async () => {
-    const app = startSeededApp("many-users");
+    const app = startSeededApp(appRouter, "many-users");
     await expect(
       app.callerAs().admin.updateUser({ userId: ADMIN, data: { name: "Hijacked" } }),
     ).rejects.toMatchObject({ code: "BAD_REQUEST", message: PROTECTED_USER_MESSAGE });
@@ -138,7 +139,7 @@ describe("admin.updateUser", () => {
   });
 
   it("is NOT_FOUND for an unknown id, so an edit of a deleted user does not look like a success", async () => {
-    const app = startSeededApp("many-users");
+    const app = startSeededApp(appRouter, "many-users");
     await expect(
       app.callerAs().admin.updateUser({ userId: GHOST, data: { name: "x" } }),
     ).rejects.toMatchObject({ code: "NOT_FOUND" });
@@ -147,7 +148,7 @@ describe("admin.updateUser", () => {
 
 describe("admin.banUser", () => {
   it("bans the user with the reason, ends their sessions and reports the event, so a ban takes hold at once and is counted", async () => {
-    const app = startSeededApp("many-users");
+    const app = startSeededApp(appRouter, "many-users");
     await startSession(app, PLAIN);
     await startSession(app, SECOND);
     await expect(app.callerAs().admin.banUser({ userId: PLAIN, reason: "spam" })).resolves.toEqual({
@@ -168,7 +169,7 @@ describe("admin.banUser", () => {
   });
 
   it("refuses to ban the caller with BAD_REQUEST, leaves the row and reports no event, so an admin cannot lock themselves out", async () => {
-    const app = startSeededApp("many-users");
+    const app = startSeededApp(appRouter, "many-users");
     await expect(app.callerAs().admin.banUser({ userId: ADMIN })).rejects.toMatchObject({
       code: "BAD_REQUEST",
       message: PROTECTED_USER_MESSAGE,
@@ -180,7 +181,7 @@ describe("admin.banUser", () => {
 
 describe("admin.unbanUser", () => {
   it("clears the flag, the reason and the expiry, so an unbanned user is not half banned", async () => {
-    const app = startSeededApp("many-users");
+    const app = startSeededApp(appRouter, "many-users");
     await app.exec(
       sql`update user set ban_expires = ${Date.now() + SESSION_TTL_MS} where id = ${BANNED}`,
     );
@@ -196,7 +197,7 @@ describe("admin.unbanUser", () => {
   });
 
   it("is NOT_FOUND for an unknown id, so a stale unban click does not report success", async () => {
-    const app = startSeededApp("many-users");
+    const app = startSeededApp(appRouter, "many-users");
     await expect(app.callerAs().admin.unbanUser({ userId: GHOST })).rejects.toMatchObject({
       code: "NOT_FOUND",
     });
@@ -205,7 +206,7 @@ describe("admin.unbanUser", () => {
 
 describe("admin.deleteUser", () => {
   it("deletes the user and their accounts and sessions, so no login or session outlives the row", async () => {
-    const app = startSeededApp("many-users");
+    const app = startSeededApp(appRouter, "many-users");
     await startSession(app, PLAIN);
     expect(await countOf(app, "account", PLAIN)).toBe(1);
     await expect(app.callerAs().admin.deleteUser({ userId: PLAIN })).resolves.toEqual({
@@ -217,7 +218,7 @@ describe("admin.deleteUser", () => {
   });
 
   it("refuses to delete the caller with BAD_REQUEST and keeps the row, so an admin cannot delete themselves", async () => {
-    const app = startSeededApp("many-users");
+    const app = startSeededApp(appRouter, "many-users");
     await expect(app.callerAs().admin.deleteUser({ userId: ADMIN })).rejects.toMatchObject({
       code: "BAD_REQUEST",
       message: PROTECTED_USER_MESSAGE,
@@ -231,7 +232,7 @@ describe("admin bulk procedures on many-users", () => {
   const plainIds = everyId.filter((id) => id !== ADMIN);
 
   it("bulkBanUsers bans every id but the caller's and counts the caller as skipped, so the cap-sized call reports what it did", async () => {
-    const app = startSeededApp("many-users");
+    const app = startSeededApp(appRouter, "many-users");
     const result = await app.callerAs().admin.bulkBanUsers({ userIds: everyId, reason: "wave" });
     expect(result).toEqual({ success: true, affectedCount: plainIds.length, skippedCount: 1 });
     const banned = await app.rows<{ n: number }>(sql`select count(*) as n from user where banned`);
@@ -240,20 +241,20 @@ describe("admin bulk procedures on many-users", () => {
   });
 
   it("bulkBanUsers counts an unknown id as skipped and bans the rest, so a stale selection does not fail the batch", async () => {
-    const app = startSeededApp("many-users");
+    const app = startSeededApp(appRouter, "many-users");
     const result = await app.callerAs().admin.bulkBanUsers({ userIds: [FIRST, SECOND, GHOST] });
     expect(result).toEqual({ success: true, affectedCount: 2, skippedCount: 1 });
   });
 
   it("bulkBanUsers over only protected ids returns zero affected and touches no row, so a self-only selection is a no-op and not an error", async () => {
-    const app = startSeededApp("many-users");
+    const app = startSeededApp(appRouter, "many-users");
     const result = await app.callerAs().admin.bulkBanUsers({ userIds: [ADMIN] });
     expect(result).toEqual({ success: true, affectedCount: 0, skippedCount: 1 });
     expect((await userRow(app, ADMIN))?.banned).toBe(0);
   });
 
   it("bulkDeleteUsers deletes the chosen users and their accounts and keeps the rest, so the delete is bound to its ids", async () => {
-    const app = startSeededApp("many-users");
+    const app = startSeededApp(appRouter, "many-users");
     const result = await app.callerAs().admin.bulkDeleteUsers({ userIds: [FIRST, SECOND, ADMIN] });
     expect(result).toEqual({ success: true, affectedCount: 2, skippedCount: 1 });
     const left = await app.rows<{ n: number }>(sql`select count(*) as n from user`);
@@ -263,7 +264,7 @@ describe("admin bulk procedures on many-users", () => {
   });
 
   it("bulkUpdateUserRoles sets the role on the chosen users only, so a role change does not spread past its ids", async () => {
-    const app = startSeededApp("many-users");
+    const app = startSeededApp(appRouter, "many-users");
     const result = await app
       .callerAs()
       .admin.bulkUpdateUserRoles({ userIds: [FIRST, SECOND], role: "admin" });

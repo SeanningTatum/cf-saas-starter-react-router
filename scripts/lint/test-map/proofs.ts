@@ -3,7 +3,7 @@ import { E2E_DIR, E2E_SPEC, MIN_TEST_FILE_CHARS, SANDBOX_DIR, SANDBOX_ISSUE, SOU
 import { isLiteralConstant } from "../literals";
 import { isSourcePath, isTestPath, lineOf, walkNodes } from "../source";
 import type { Repo, Source } from "../types";
-import { importedModules, importsFile } from "./imports";
+import { importedModules, importsFile, usesFile } from "./imports";
 import type { MapEntry } from "./map";
 
 export interface Problem {
@@ -100,9 +100,18 @@ export function unitProblems(repo: Repo, path: string): Problem[] {
   }
   const empty = emptyTest(test);
   if (empty) return [empty];
-  if (importsFile(test, path)) return [];
+  if (!importsFile(test, path)) {
+    return [
+      { file: test.path, message: `this test never imports ${path}, the file it is named after`, fix: `import ${path} here and assert on what it exports` },
+    ];
+  }
+  if (usesFile(test, path)) return [];
   return [
-    { file: test.path, message: `this test never imports ${path}, the file it is named after`, fix: `import ${path} here and assert on what it exports` },
+    {
+      file: test.path,
+      message: `this test imports ${path} and never calls or reads anything it exports`,
+      fix: `call what ${path} exports (or pass it to the code under test) and assert on the result; an import alone proves nothing`,
+    },
   ];
 }
 

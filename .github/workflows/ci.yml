@@ -75,6 +75,12 @@ jobs:
           # ruleset with .github/repo-rules.json; without it the gate prints a notice.
           GH_TOKEN: ${{ github.token }}
 
+      # The line-coverage floors (scripts/coverage-floors.ts), a full-tier gate: it reruns the app
+      # tests under v8 coverage, so it stays out of the quick set and the lean job. Here it runs in
+      # a required job, so a PR into the default branch or production cannot drop a folder under its floor.
+      - name: Coverage floors
+        run: ./scripts/verify.sh --only coverage
+
   build:
     name: Build (Cloudflare Workers)
     if: github.event_name != 'pull_request' || github.base_ref == github.event.repository.default_branch || github.base_ref == 'production'
