@@ -6,6 +6,10 @@ import { RateLimiter, type RateLimitRule } from "@/services/rate-limit";
 import { RateLimitError } from "@/models/errors/rate-limit";
 import { loggers } from "@/lib/logger";
 import { CLIENT_IP_HEADER } from "@/lib/constants/auth";
+import { ROUTE_ERROR_RESPONSE_NAME } from "@/lib/constants/error-reporting";
+import type { ErrorReport, ErrorReporterAdapter } from "@/lib/error-reporting/adapter";
+import { makeRequestContext } from "@/lib/request-context";
+import { makeErrorReporter, reportError as deliverReport } from "@/services/error-reporter";
 import {
   AUTH_GATE_FAULT_MESSAGE,
   HTTP_TOO_MANY_REQUESTS,
@@ -118,4 +122,173 @@ describe("/api/auth/* loader", () => {
     expect(handler).toHaveBeenCalledWith(request);
     expect(seen).toEqual([]);
   });
+});
+
+const SECRET_PASSWORD = "hunter2-correct-horse";
+const SECRET_EMAIL = "person@example.com";
+const SECRET_COOKIE = "session_token=cookie-value-abc123";
+const SECRET_AUTHORIZATION = "Bearer authorization-value-xyz789";
+const SECRET_QUERY = "callback-token-q1w2e3";
+const SECRET_RESPONSE_BODY = "response-body-detail-r4t5y6";
+const SECRET_SET_COOKIE = "set-cookie-value-u7i8o9";
+const SECRETS = [
+  SECRET_PASSWORD,
+  SECRET_EMAIL,
+  SECRET_COOKIE,
+  SECRET_AUTHORIZATION,
+  SECRET_QUERY,
+  SECRET_RESPONSE_BODY,
+  SECRET_SET_COOKIE,
+];
+const SIGN_IN_PATH = "/api/auth/sign-in/email";
+
+const credentialedRequest = (method: "GET" | "POST") =>
+  new Request(`${ORIGIN}${SIGN_IN_PATH}?token=${SECRET_QUERY}`, {
+    method,
+    headers: {
+      [CLIENT_IP_HEADER]: "203.0.113.20",
+      "content-type": "application/json",
+      cookie: SECRET_COOKIE,
+      authorization: SECRET_AUTHORIZATION,
+    },
+    ...(method === "POST"
+      ? { body: JSON.stringify({ email: SECRET_EMAIL, password: SECRET_PASSWORD }) }
+      : {}),
+  });
+
+const reportingContext = (request: Request, status: number) => {
+  const reports: ErrorReport[] = [];
+  const deliveries: Array<Promise<void>> = [];
+  const adapter: ErrorReporterAdapter = {
+    name: "recording",
+    send: (batch) => Effect.sync(() => void reports.push(...batch)),
+  };
+  const requestContext = makeRequestContext(request);
+  const reporter = makeErrorReporter({
+    adapter,
+    release: "v0.0.0-test",
+    environment: "test",
+    request: requestContext,
+    waitUntil: (delivery) => void deliveries.push(delivery),
+  });
+  const runtime = ManagedRuntime.make(limiterLayer(true));
+  runtimes.push(runtime as ManagedRuntime.ManagedRuntime<never, never>);
+  const answer = new Response(SECRET_RESPONSE_BODY, {
+    status,
+    headers: { "set-cookie": SECRET_SET_COOKIE },
+  });
+  const handler = vi.fn(async (_request: Request) => answer);
+  const reportError = vi.fn((capture: Parameters<AppLoadContext["reportError"]>[0]) =>
+    deliverReport(reporter, capture),
+  );
+  const context = {
+    runtime,
+    auth: { handler },
+    reportError,
+    requestId: requestContext.requestId,
+  } as unknown as AppLoadContext;
+  return {
+    context,
+    answer,
+    reportError,
+    requestId: requestContext.requestId,
+    reports: async () => {
+      await Promise.all(deliveries);
+      return reports;
+    },
+  };
+};
+
+describe("/api/auth/* server errors that Better Auth returns as a response", () => {
+  it.each([500, 503])(
+    "reports a returned %i once, as a defect, with only the status, the path without its query, and the request id",
+    async (status) => {
+      const request = credentialedRequest("POST");
+      const { context, answer, reportError, requestId, reports } = reportingContext(
+        request,
+        status,
+      );
+
+      const response = await callAction(request, context);
+
+      expect(response).toBe(answer);
+      expect(response.status).toBe(status);
+      expect(await response.text()).toBe(SECRET_RESPONSE_BODY);
+      expect(reportError).toHaveBeenCalledOnce();
+      expect(reportError).toHaveBeenCalledWith({
+        error: { status, statusText: "" },
+        source: "action",
+        requestId,
+      });
+      const sent = await reports();
+      expect(sent).toHaveLength(1);
+      const [report] = sent;
+      expect(report).toEqual({
+        id: expect.any(String),
+        timestamp: expect.any(String),
+        source: "action",
+        kind: "defect",
+        level: "error",
+        name: ROUTE_ERROR_RESPONSE_NAME,
+        message: String(status),
+        tag: String(status),
+        requestId,
+        release: "v0.0.0-test",
+        environment: "test",
+        method: "POST",
+        path: SIGN_IN_PATH,
+      });
+    },
+  );
+
+  it("reports a returned 500 from the loader as a loader defect", async () => {
+    const request = credentialedRequest("GET");
+    const { context, answer, reportError, requestId } = reportingContext(request, 500);
+
+    const response = await loader({ request, context, params: {} } as unknown as LoaderArgs);
+
+    expect(response).toBe(answer);
+    expect(reportError).toHaveBeenCalledOnce();
+    expect(reportError).toHaveBeenCalledWith({
+      error: { status: 500, statusText: "" },
+      source: "loader",
+      requestId,
+    });
+  });
+
+  it.each([401, 403, 429])(
+    "does not report a returned %i, since a refused sign-in is expected",
+    async (status) => {
+      const request = credentialedRequest("POST");
+      const { context, answer, reportError, reports } = reportingContext(request, status);
+
+      const response = await callAction(request, context);
+
+      expect(response).toBe(answer);
+      expect(response.status).toBe(status);
+      expect(await response.text()).toBe(SECRET_RESPONSE_BODY);
+      expect(reportError).not.toHaveBeenCalled();
+      expect(await reports()).toEqual([]);
+    },
+  );
+
+  it.each(["GET", "POST"] as const)(
+    "never carries a body, a cookie, an authorization value, an email or a query string into a %s report",
+    async (method) => {
+      const request = credentialedRequest(method);
+      const { context, reportError, reports } = reportingContext(request, 500);
+
+      await (method === "GET"
+        ? loader({ request, context, params: {} } as unknown as LoaderArgs)
+        : callAction(request, context));
+
+      const captured = JSON.stringify(reportError.mock.calls);
+      const sent = JSON.stringify(await reports());
+      expect(sent).not.toBe("[]");
+      for (const secret of SECRETS) {
+        expect(captured).not.toContain(secret);
+        expect(sent).not.toContain(secret);
+      }
+    },
+  );
 });
