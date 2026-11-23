@@ -11,6 +11,7 @@ import {
   NESTED_KEYS,
   configChecksum,
   loadHarnessConfig,
+  loadHarnessConfigFromDisk,
   shownConfig,
   stableJson,
   type HarnessConfig,
@@ -74,6 +75,10 @@ describe("loadHarnessConfig defaults", () => {
       reviewRounds: 1,
       models: { plan: "opus", design: "opus", build: "sonnet", review: "sonnet", mechanical: "haiku" },
     });
+  });
+
+  it("this repo runs three tracks at once: the owner's choice for wave 2 must not fall back to the default", () => {
+    expect(loadHarnessConfigFromDisk().wave.tracksAtOnce).toBe(3);
   });
 
   it("a wave section with one model set keeps the other models and the counts: a partial wave must not blank the planner's model", () => {

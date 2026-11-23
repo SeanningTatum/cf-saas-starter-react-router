@@ -128,7 +128,7 @@ Settings for the `run-wave` workflow ([how to run a wave](harness.md#running-a-w
 
 | Key | Type | Default | Meaning |
 |---|---|---|---|
-| `tracksAtOnce` | integer, 1 to 8 | `2` | How many tickets a batch builds at once. `args.tracks` may lower it for one wave, never raise it |
+| `tracksAtOnce` | integer, 1 to 8 | `2` | How many tickets a batch builds at once (this repo sets 3). `args.tracks` may lower it for one wave, never raise it |
 | `reviewRounds` | integer, 0 to 3 | `1` | Review rounds per ticket PR. A P0 or P1 in the last round earns one more round, never more |
 | `models` | object | see below | The model for each kind of work. A model name is lower-case letters, digits, dots and dashes |
 

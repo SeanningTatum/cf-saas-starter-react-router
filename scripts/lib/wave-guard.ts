@@ -111,6 +111,6 @@ export function readGuard(gh: GhRunner, pr: number, wave: string, branch?: strin
 }
 
 export function mergePr(gh: GhRunner, pr: number, head: string): Either.Either<true, string> {
-  const r = gh(["pr", "merge", String(pr), "--squash", "--match-head-commit", head]);
+  const r = gh(["pr", "merge", String(pr), "--merge", "--match-head-commit", head]);
   return r.code === 0 ? Either.right(true) : Either.left(r.stderr.trim() || r.stdout.trim() || `gh pr merge exited ${r.code}`);
 }

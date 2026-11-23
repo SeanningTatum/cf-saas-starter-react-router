@@ -135,7 +135,7 @@ describe("mergePr", () => {
   it("squash-merges only the head the guard saw, so a push after the guard cannot slip in", () => {
     const { gh, calls } = fakeGh({});
     expect(mergePr(gh, 101, SHA_A)).toEqual(Either.right(true));
-    expect(calls).toEqual([["pr", "merge", "101", "--squash", "--match-head-commit", SHA_A]]);
+    expect(calls).toEqual([["pr", "merge", "101", "--merge", "--match-head-commit", SHA_A]]);
   });
 
   it("a refused merge returns gh's reason", () => {

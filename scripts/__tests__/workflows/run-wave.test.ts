@@ -48,9 +48,9 @@ describe("run-wave: a wave of two batches, approved, run to the roll-up", () => 
     const { w, r } = await go();
     expect(r.result).toMatchObject({ status: "needs-rollup", pr: ROLLUP_PR });
     expect(merges(w)).toEqual([
-      `pr merge 111 --squash --match-head-commit ${w.sha(11, 1)}`,
-      `pr merge 112 --squash --match-head-commit ${w.sha(12, 1)}`,
-      `pr merge 113 --squash --match-head-commit ${w.sha(13, 1)}`,
+      `pr merge 111 --merge --match-head-commit ${w.sha(11, 1)}`,
+      `pr merge 112 --merge --match-head-commit ${w.sha(12, 1)}`,
+      `pr merge 113 --merge --match-head-commit ${w.sha(13, 1)}`,
     ]);
     expect(w.gh.some((g) => g.includes(`merge ${ROLLUP_PR}`))).toBe(false);
     const gates = r.calls.filter((c) => c.label.startsWith("wave:gate:")).map((c) => c.n);
@@ -130,7 +130,7 @@ describe("run-wave: the merge guard", () => {
     });
     expect(r.result).toMatchObject({ status: "needs-help", reason: "stuck", tickets: [{ n: 12, pr: 112 }] });
     expect(steps(r, "fix-check").map((c) => ticketOf(c.label))).toEqual([12]);
-    expect(merges(w)).toEqual([`pr merge 111 --squash --match-head-commit ${w.sha(11, 1)}`]);
+    expect(merges(w)).toEqual([`pr merge 111 --merge --match-head-commit ${w.sha(11, 1)}`]);
     expect(r.calls.filter((c) => c.label.startsWith("wave:gate:"))).toHaveLength(1);
     expect(r.calls.at(-1)?.label).toMatch(/^memory:stuck:/);
   });
@@ -253,6 +253,6 @@ describe("run-wave: args and settings", () => {
     expect(low.state()).toMatchObject({ tracksAtOnce: 1, projected: [[11], [12], [13]] });
     const high = world();
     await dryRun("run-wave", { args: { ...ARGS, tracks: 6 }, answers: answers(high) });
-    expect(high.state().tracksAtOnce).toBe(2);
+    expect(high.state().tracksAtOnce).toBe(3);
   });
 });

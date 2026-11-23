@@ -176,7 +176,7 @@ describe("wave CLI", () => {
     await w.guard(13);
     expect(await w.step()).toEqual({ kind: "merge", batch: 0 });
     expect(await w.out(["merge", SLUG])).toEqual({ merged: [11, 13], refused: [], halt: null, paused: false });
-    expect(w.calls).toContainEqual(["pr", "merge", "111", "--squash", "--match-head-commit", SHA_B]);
+    expect(w.calls).toContainEqual(["pr", "merge", "111", "--merge", "--match-head-commit", SHA_B]);
     expect(await w.step()).toEqual({ kind: "gate", batch: 0 });
     expect(await w.out(["gate", SLUG, "--head", SHA_A, "--code", "0"])).toEqual({ gate: "pass", failures: 0, tail: "" });
     expect(await w.step()).toMatchObject({ kind: "tickets", batch: 1, tickets: [{ n: 12, step: "build" }] });
