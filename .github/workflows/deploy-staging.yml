@@ -1,0 +1,149 @@
+# Staging deploy after CI passes on a push to staging (the default branch). Skipped, not
+# failed, until set up: the account variable, a real staging D1 id under env.staging in
+# wrangler.jsonc (bun run setup creates it) and the STAGING_URL variable.
+# It migrates the staging D1, deploys the staging Worker with its release, smoke-checks
+# /healthz and runs the @deployed e2e specs against it. A failure fails this run, and the
+# job summary says which step. See docs/ci/pipelines.md#staging
+name: Deploy Staging
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [staging]
+
+concurrency:
+  group: deploy-staging
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  readiness:
+    name: Check staging setup
+    runs-on: ubuntu-latest
+    if: github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push'
+    timeout-minutes: 5
+    outputs:
+      ready: ${{ steps.gate.outputs.ready }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+          ref: ${{ github.event.workflow_run.head_sha }}
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version-file: .bun-version
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile --ignore-scripts
+
+      - name: Check staging setup
+        id: gate
+        env:
+          HAS_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID != '' }}
+          HAS_STAGING_URL: ${{ vars.STAGING_URL != '' }}
+        run: bun scripts/ci/deploy-gate.ts ready staging
+
+  deploy:
+    name: Deploy to Cloudflare (staging)
+    needs: readiness
+    runs-on: ubuntu-24.04
+    if: needs.readiness.outputs.ready == 'true'
+    timeout-minutes: 30
+    # Takes deploys only from the default branch once applied (.github/repo-rules.json), so
+    # pull-request code cannot read a token set on it. Without one there, the repo-level
+    # CLOUDFLARE_API_TOKEN answers.
+    environment: staging
+    env:
+      CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+      DEPLOY_SHA: ${{ github.event.workflow_run.head_sha }}
+      STAGING_URL: ${{ vars.STAGING_URL }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+          ref: ${{ github.event.workflow_run.head_sha }}
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version-file: .bun-version
+
+      - name: Check staging token
+        id: token
+        env:
+          HAS_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN != '' }}
+        run: |
+          if [ "$HAS_TOKEN" != "true" ]; then
+            echo "::notice::Deploy Staging skipped: neither the staging environment nor the repo has a CLOUDFLARE_API_TOKEN secret. See docs/ci/pipelines.md#staging"
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Install dependencies
+        if: steps.token.outputs.ready == 'true'
+        run: bun install --frozen-lockfile
+
+      # Before the build: the Cloudflare Vite plugin writes a deploy config for one env, and
+      # the migration reads the env block from wrangler.jsonc itself.
+      - name: Apply staging D1 migrations
+        if: steps.token.outputs.ready == 'true'
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          bunx wrangler d1 migrations apply DATABASE --env staging --remote || {
+            echo "::error::Staging D1 migration failed. If the log says Authentication error, the token lacks D1 Edit. See docs/ci/pipelines.md#staging"
+            exit 1
+          }
+
+      - name: Build (staging env)
+        if: steps.token.outputs.ready == 'true'
+        env:
+          CLOUDFLARE_ENV: staging
+        run: bun run build
+
+      - name: Deploy to Cloudflare Workers (staging)
+        if: steps.token.outputs.ready == 'true'
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: bunx wrangler deploy --var "RELEASE_VERSION:$DEPLOY_SHA" --var ENVIRONMENT:staging
+
+      - name: Smoke check /healthz
+        if: steps.token.outputs.ready == 'true'
+        run: bun scripts/ci/smoke-check.ts --url "$STAGING_URL" --release "$DEPLOY_SHA"
+
+      - name: Install Playwright browsers
+        if: steps.token.outputs.ready == 'true'
+        run: bunx playwright install --with-deps chromium
+
+      - name: Run the @deployed e2e specs against staging
+        if: steps.token.outputs.ready == 'true'
+        env:
+          E2E_BASE_URL: ${{ vars.STAGING_URL }}
+          E2E_EXPECT_RELEASE: ${{ github.event.workflow_run.head_sha }}
+          CI: "1"
+        run: bunx playwright test --grep @deployed
+
+      - name: Upload Playwright report
+        if: failure() && steps.token.outputs.ready == 'true'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: staging-playwright-report
+          path: playwright-report/
+          retention-days: 7
+
+      - name: Deploy summary
+        if: always() && steps.token.outputs.ready == 'true'
+        env:
+          OUTCOME: ${{ job.status }}
+        run: |
+          {
+            echo "### Staging deploy"
+            echo
+            echo "Commit \`$DEPLOY_SHA\` to the staging Worker: **$OUTCOME**. The failed step above says what broke; a failed smoke check or e2e spec leaves the new version live on staging."
+          } >> "$GITHUB_STEP_SUMMARY"

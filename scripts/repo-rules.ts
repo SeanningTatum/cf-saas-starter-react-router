@@ -26,7 +26,7 @@ import { Effect, Either, Schema } from "effect";
 import { ghSpawn, type GhResult, type GhRunner } from "./lib/gh";
 import { PENDING_APPLIED_NOTICE, PENDING_DRY_RUN_NOTICE, CONFIG_PATH } from "./lib/repo-rules-constants";
 import { differ, sorted, stable } from "./lib/repo-rules-diff";
-import { planRepository, planRuleset, type Action, type Plan } from "./lib/repo-rules-plan";
+import { planRepository, planRuleset, withEnvPending, type Action, type Plan } from "./lib/repo-rules-plan";
 import { jobNames, requiredContexts } from "./lib/repo-rules-workflow-checks";
 import {
   BranchPolicies,
@@ -442,7 +442,7 @@ export function run(argv: string[], deps: Deps = defaultDeps): Outcome {
   const base = `repos/${repo.value.nwo}`;
   const plans = [
     ...gathered.value.rulesets.map((r) => planRuleset(r.decl, r.found, base)),
-    ...gathered.value.envs.map((e) => planEnv(e, envPath(repo.value, e.decl.name))),
+    ...gathered.value.envs.map((e, i) => withEnvPending(planEnv(e, envPath(repo.value, e.decl.name)), e.decl.name, config.environments[i]?.pending)),
     ...(config.repository ? [planRepository(config.repository, repo.value.squashTitle, repo.value.nwo)] : []),
   ];
 

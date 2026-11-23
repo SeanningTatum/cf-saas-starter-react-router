@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { Either } from "effect";
 import fs from "node:fs";
 import path from "node:path";
-import { decide, isRealD1Id, readCommittedD1Id, run, withProductionD1, type Deps, type Facts } from "../ci/deploy-gate";
+import { decide, isRealD1Id, readCommittedD1Id, readStagingD1Id, run, withProductionD1, type Deps, type Facts } from "../ci/deploy-gate";
 import { stripJsonc } from "../lib/wrangler-config";
 
 const REAL_ID = "1b2c3d4e-5f60-4718-8293-a4b5c6d7e8f9";
@@ -16,10 +16,12 @@ const ready: Facts = {
   prodTokenAtRepoLevel: false,
   committedD1Id: REAL_ID,
   d1Override: "",
+  hasStagingUrl: true,
+  stagingD1Id: OTHER_ID,
 };
 const facts = (over: Partial<Facts>): Facts => ({ ...ready, ...over });
 
-function wrangler(top: string, preview = ZERO_ID): string {
+function wrangler(top: string, preview = ZERO_ID, staging = ZERO_ID): string {
   return `// header comment line
 {
   "name": "demo",
@@ -30,6 +32,11 @@ function wrangler(top: string, preview = ZERO_ID): string {
     "preview": {
       "d1_databases": [
         { "binding": "DATABASE", "database_name": "demo-db-preview", "database_id": "${preview}" }
+      ]
+    },
+    "staging": {
+      "d1_databases": [
+        { "binding": "DATABASE", "database_name": "demo-db-staging", "database_id": "${staging}" }
       ]
     }
   }
@@ -185,7 +192,46 @@ describe("withProductionD1", () => {
   });
 });
 
+describe("decide staging", () => {
+  it("is ready with the account, a real staging D1 id and STAGING_URL, and needs no production id, so that staging deploys before production is set up", () => {
+    expect(decide("staging", facts({ committedD1Id: ZERO_ID })).ready).toBe(true);
+  });
+
+  it("skips with a reason for each missing part, in order, so that a fresh fork stays green and the notice names the next step", () => {
+    expect(decide("staging", facts({ hasAccountId: false })).reason).toBe("the CLOUDFLARE_ACCOUNT_ID variable is not set");
+    expect(decide("staging", facts({ stagingD1Id: ZERO_ID })).reason).toContain("env.staging");
+    expect(decide("staging", facts({ stagingD1Id: undefined })).reason).toContain("env.staging");
+    expect(decide("staging", facts({ hasStagingUrl: false })).reason).toBe("the STAGING_URL variable is not set");
+  });
+
+  it("does not let the production override variable stand in for the staging id, so that staging can never be pointed at the production database", () => {
+    expect(decide("staging", facts({ stagingD1Id: ZERO_ID, d1Override: REAL_ID })).ready).toBe(false);
+  });
+});
+
+describe("readStagingD1Id", () => {
+  it("reads the DATABASE id under env.staging and nothing else, so that the top-level id is never taken for staging", () => {
+    expect(readStagingD1Id(wrangler(REAL_ID, ZERO_ID, OTHER_ID))).toEqual(Either.right(OTHER_ID));
+    expect(readStagingD1Id('{"name":"x"}')).toEqual(Either.right(undefined));
+    expect(Either.isLeft(readStagingD1Id('{"env":{"staging":{"d1_databases":"no"}}}'))).toBe(true);
+  });
+
+  it("finds the placeholder id in the committed wrangler.jsonc, so that this template skips staging until setup runs", () => {
+    expect(readStagingD1Id(REAL_FILE)).toEqual(Either.right(ZERO_ID));
+  });
+});
+
 describe("run ready", () => {
+  it("reads the staging id from the file and skips staging with its own name while it is the placeholder", () => {
+    const h = harness({ HAS_ACCOUNT_ID: "true", HAS_STAGING_URL: "true", GITHUB_OUTPUT: "out" });
+    expect(run(["ready", "staging"], h.deps)).toBe(0);
+    expect(h.out[0]).toMatch(/^::notice::Deploy Staging skipped: wrangler.jsonc has no real staging D1 id/);
+    const set = harness({ HAS_ACCOUNT_ID: "true", HAS_STAGING_URL: "true", GITHUB_OUTPUT: "out" }, { w: wrangler(ZERO_ID, ZERO_ID, REAL_ID) });
+    run(["ready", "staging"], set.deps);
+    expect(set.out).toEqual(["ready"]);
+    expect(set.appended.out).toBe("ready=true\n");
+  });
+
   it("prints one notice, writes ready=false and exits 0 on a repo that is not set up", () => {
     const h = harness({ HAS_ACCOUNT_ID: "true", GITHUB_OUTPUT: "out" });
     expect(run(["ready", "production"], h.deps)).toBe(0);
@@ -236,7 +282,7 @@ describe("run ready", () => {
   it("exits 2 on bad usage", () => {
     expect(run([], harness({}).deps)).toBe(2);
     expect(run(["ready"], harness({}).deps)).toBe(2);
-    expect(run(["ready", "staging"], harness({}).deps)).toBe(2);
+    expect(run(["ready", "nowhere"], harness({}).deps)).toBe(2);
     expect(run(["ready", "preview", "extra"], harness({}).deps)).toBe(2);
     expect(run(["deploy"], harness({}).deps)).toBe(2);
   });

@@ -4,7 +4,7 @@ import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { intro, outro, select, spinner, text, password, confirm, cancel, isCancel } from "@clack/prompts";
-import { buildWranglerConfig, writeWranglerJsonc } from "./lib/wrangler-config";
+import { buildWranglerConfig, REMOTE_MIGRATION_TARGETS, resourceNames, writeWranglerJsonc } from "./lib/wrangler-config";
 import { run as runRepoRules, type Outcome as RepoRulesOutcome } from "./repo-rules";
 
 function sanitizeResourceName(name: string): string {
@@ -279,15 +279,12 @@ async function runDatabaseMigrations(accountId?: string) {
   executeCommand(`bunx wrangler d1 migrations apply DATABASE --local`, true, env);
   localSpinner.stop("\x1b[32m✓ Local migrations applied\x1b[0m");
 
-  const remoteSpinner = spinner();
-  remoteSpinner.start("Applying remote migrations (production)...");
-  executeCommand(`bunx wrangler d1 migrations apply DATABASE --remote`, true, env);
-  remoteSpinner.stop("\x1b[32m✓ Production migrations applied\x1b[0m");
-
-  const previewSpinner = spinner();
-  previewSpinner.start("Applying remote migrations (preview)...");
-  executeCommand(`bunx wrangler d1 migrations apply DATABASE --env preview --remote`, true, env);
-  previewSpinner.stop("\x1b[32m✓ Preview migrations applied\x1b[0m");
+  for (const [label, flags] of REMOTE_MIGRATION_TARGETS) {
+    const remoteSpinner = spinner();
+    remoteSpinner.start(`Applying remote migrations (${label})...`);
+    executeCommand(`bunx wrangler d1 migrations apply DATABASE${flags} --remote`, true, env);
+    remoteSpinner.stop(`\x1b[32m✓ Remote migrations applied (${label})\x1b[0m`);
+  }
 }
 
 // Updates (or adds) KEY=value in the text of a .env file.
@@ -559,18 +556,17 @@ async function main() {
   const enableR2 = enableR2Answer;
 
   // Generate resource names based on project name
-  const dbName = `${projectName}-db`;
-  const previewDbName = `${dbName}-preview`;
-  const bucketName = `${projectName}-bucket`;
-  const previewBucketName = `${bucketName}-preview`;
+  const { dbName, previewDbName, stagingDbName, bucketName, previewBucketName, stagingBucketName } = resourceNames(projectName);
 
   console.log("\n\x1b[33mResource names:\x1b[0m");
   console.log(`  • Project: ${projectName}`);
   console.log(`  • Database: ${dbName}`);
   console.log(`  • Database (preview): ${previewDbName}`);
+  console.log(`  • Database (staging): ${stagingDbName}`);
   if (enableR2) {
     console.log(`  • Bucket: ${bucketName}`);
     console.log(`  • Bucket (preview): ${previewBucketName}`);
+    console.log(`  • Bucket (staging): ${stagingBucketName}`);
   } else {
     console.log(`  • R2 file storage: disabled`);
   }
@@ -590,9 +586,11 @@ async function main() {
 
   let dbId: string;
   let previewDbId: string;
+  let stagingDbId: string;
   try {
     dbId = await createDatabase(dbName, accountId);
     previewDbId = await createDatabase(previewDbName, accountId);
+    stagingDbId = await createDatabase(stagingDbName, accountId);
   } catch (error) {
     console.error("\x1b[31mError creating database:", error, "\x1b[0m");
     cancel("Operation cancelled.");
@@ -602,6 +600,7 @@ async function main() {
   if (enableR2) {
     await createBucket(bucketName, accountId);
     await createBucket(previewBucketName, accountId);
+    await createBucket(stagingBucketName, accountId);
   } else {
     console.log("\x1b[33m⚠ Skipping R2 bucket creation (disabled)\x1b[0m");
   }
@@ -620,6 +619,7 @@ async function main() {
     projectName,
     dbId,
     previewDbId,
+    stagingDbId,
     enableR2,
   });
   writeWranglerJsonc(wranglerConfig);

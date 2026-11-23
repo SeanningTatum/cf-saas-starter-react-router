@@ -104,7 +104,7 @@ describe(".github/dependabot.yml", () => {
 });
 
 describe("workflows keep secrets and PR data out of shell text", () => {
-  it.each(["deploy.yml", "preview.yml", "preview-cleanup.yml"])(
+  it.each(["deploy.yml", "deploy-staging.yml", "preview.yml", "preview-cleanup.yml"])(
     "%s has no ${{ }} expression inside a run script: PR-controlled values must go through env",
     (f) => {
       const lines = codeLines(f);

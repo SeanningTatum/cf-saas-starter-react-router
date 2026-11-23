@@ -32,7 +32,7 @@ const hydrated = (node: Locator, timeout: number) =>
 
 test.describe("Request id (issue #74, seen from outside the Worker; see docs/features/request-context.md)", () => {
   test("a page and an API response each carry their own x-request-id, so the header is not page-only and no id is shared across requests", {
-    tag: "@golden",
+    tag: ["@golden", "@deployed"],
   }, async ({ request }) => {
     const page = await request.get("/");
     expect(page.status()).toBe(200);

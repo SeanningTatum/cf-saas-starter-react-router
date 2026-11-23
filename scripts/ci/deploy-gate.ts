@@ -4,14 +4,14 @@
 // one-line notice, never as failed.
 //
 // Usage:
-//   bun scripts/ci/deploy-gate.ts ready <production|preview|preview-cleanup>
+//   bun scripts/ci/deploy-gate.ts ready <production|staging|preview|preview-cleanup>
 //   bun scripts/ci/deploy-gate.ts use-d1
 //   bun scripts/ci/deploy-gate.ts project-name   (prints the Worker name from wrangler.jsonc)
 //
 // `ready` reads facts from env. The workflow sets each one to "true" or
 // "false" from `vars` and `secrets`, so no secret value ever reaches this
 // script:
-//   production       HAS_ACCOUNT_ID, D1_DATABASE_ID (optional override)
+//   production HAS_ACCOUNT_ID, D1_DATABASE_ID (optional); staging HAS_ACCOUNT_ID, HAS_STAGING_URL
 //   preview          HAS_ACCOUNT_ID, HAS_TOKEN, HAS_SEED_SECRET
 //   preview-cleanup  HAS_ACCOUNT_ID, HAS_TOKEN
 //   any target       PROD_TOKEN_AT_REPO_LEVEL (adds a warning)
@@ -27,11 +27,12 @@ import fs from "node:fs";
 import path from "node:path";
 import { stripJsonc } from "../lib/wrangler-config";
 
-export type Target = "production" | "preview" | "preview-cleanup";
-export const TARGETS: readonly Target[] = ["production", "preview", "preview-cleanup"];
+export type Target = "production" | "staging" | "preview" | "preview-cleanup";
+export const TARGETS: readonly Target[] = ["production", "staging", "preview", "preview-cleanup"];
 
 const WORKFLOW_NAMES: Record<Target, string> = {
   production: "Deploy Production",
+  staging: "Deploy Staging",
   preview: "Preview Deploy",
   "preview-cleanup": "Preview Cleanup",
 };
@@ -50,6 +51,8 @@ export interface Facts {
   committedD1Id: string | undefined;
   /** The CLOUDFLARE_D1_DATABASE_ID repo variable, "" when unset. */
   d1Override: string;
+  hasStagingUrl: boolean;
+  stagingD1Id: string | undefined;
 }
 
 export interface Decision {
@@ -73,10 +76,11 @@ export function decide(target: Target, facts: Facts): Decision {
 
 function firstMissing(target: Target, facts: Facts): string | undefined {
   const accountVariable =
-    target === "production"
+    target === "production" || target === "staging"
       ? "the CLOUDFLARE_ACCOUNT_ID variable is not set"
       : "neither the CLOUDFLARE_PREVIEW_ACCOUNT_ID nor the CLOUDFLARE_ACCOUNT_ID variable is set";
   if (!facts.hasAccountId) return accountVariable;
+  if (target === "staging") return stagingMissing(facts);
 
   if (target === "production") {
     const hasRealId = isRealD1Id(facts.committedD1Id) || isRealD1Id(facts.d1Override);
@@ -89,6 +93,11 @@ function firstMissing(target: Target, facts: Facts): string | undefined {
   return undefined;
 }
 
+function stagingMissing(facts: Facts): string | undefined {
+  if (!isRealD1Id(facts.stagingD1Id)) return 'wrangler.jsonc has no real staging D1 id under env.staging; run "bun run setup"';
+  return facts.hasStagingUrl ? undefined : "the STAGING_URL variable is not set";
+}
+
 // --- wrangler.jsonc ---------------------------------------------------------
 
 const D1Entry = Schema.Struct({
@@ -97,6 +106,9 @@ const D1Entry = Schema.Struct({
 });
 const WranglerShape = Schema.Struct({
   d1_databases: Schema.optional(Schema.Array(D1Entry)),
+});
+const StagingShape = Schema.Struct({
+  env: Schema.optional(Schema.Struct({ staging: Schema.optional(WranglerShape) })),
 });
 const RawJson = Schema.parseJson(Schema.Unknown);
 
@@ -133,6 +145,15 @@ export function readCommittedD1Id(text: string): Either.Either<string | undefine
   return Either.flatMap(parseJsonc(text), (raw) => Either.map(findTopLevelDatabase(raw), (found) => found.id));
 }
 
+export function readStagingD1Id(text: string): Either.Either<string | undefined, string> {
+  return Either.flatMap(parseJsonc(text), (raw) =>
+    Either.match(Schema.decodeUnknownEither(StagingShape)(raw), {
+      onLeft: () => Either.left("wrangler.jsonc has a malformed env.staging block"),
+      onRight: (shape) => Either.right(shape.env?.staging?.d1_databases?.find((d) => d.binding === "DATABASE")?.database_id),
+    }),
+  );
+}
+
 /** wrangler.jsonc text with the top-level DATABASE binding pointed at `id`. */
 export function withProductionD1(text: string, id: string): Either.Either<string, string> {
   if (!isRealD1Id(id)) {
@@ -161,7 +182,7 @@ export interface Deps {
 
 const isTrue = (value: string | undefined) => value === "true";
 
-export function factsFromEnv(env: Deps["env"], committedD1Id: string | undefined): Facts {
+export function factsFromEnv(env: Deps["env"], committedD1Id: string | undefined, stagingD1Id?: string): Facts {
   return {
     hasAccountId: isTrue(env.HAS_ACCOUNT_ID),
     hasToken: isTrue(env.HAS_TOKEN),
@@ -169,12 +190,14 @@ export function factsFromEnv(env: Deps["env"], committedD1Id: string | undefined
     prodTokenAtRepoLevel: isTrue(env.PROD_TOKEN_AT_REPO_LEVEL),
     committedD1Id,
     d1Override: (env.D1_DATABASE_ID ?? "").trim(),
+    hasStagingUrl: isTrue(env.HAS_STAGING_URL),
+    stagingD1Id,
   };
 }
 
 function usage(deps: Deps, message: string): number {
   deps.log(`::error::${message}`);
-  deps.log("usage: deploy-gate.ts ready <production|preview|preview-cleanup> | use-d1 | project-name");
+  deps.log(`usage: deploy-gate.ts ready <${TARGETS.join("|")}> | use-d1 | project-name`);
   return 2;
 }
 
@@ -199,7 +222,8 @@ function withWrangler<T>(deps: Deps, step: (text: string) => Either.Either<T, st
 }
 
 function ready(target: Target, deps: Deps): number {
-  return withWrangler(deps, readCommittedD1Id, (committed) => report(target, decide(target, factsFromEnv(deps.env, committed)), deps));
+  const ids = (text: string) => Either.all({ committed: readCommittedD1Id(text), staging: readStagingD1Id(text) });
+  return withWrangler(deps, ids, ({ committed, staging }) => report(target, decide(target, factsFromEnv(deps.env, committed, staging)), deps));
 }
 
 function useD1(deps: Deps): number {
