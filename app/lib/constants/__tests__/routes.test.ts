@@ -1,7 +1,7 @@
 import type { RouteConfigEntry } from "@react-router/dev/routes";
 import { describe, expect, it } from "vitest";
 import routeTable from "@/routes";
-import { API_ROUTES, ROUTES } from "../routes";
+import { API_ROUTES, OPS_ROUTES, ROUTES } from "../routes";
 
 const normalise = (path: string): string => `/${path.split("/").filter(Boolean).join("/")}`;
 
@@ -19,7 +19,11 @@ const fixedPaths = (): string[] =>
 
 describe("route constants", () => {
   it("hold every fixed path app/routes.ts serves and no path it does not, so a renamed route cannot leave a dead link behind", () => {
-    const constants = [...Object.values(ROUTES), ...Object.values(API_ROUTES)].sort();
+    const constants = [
+      ...Object.values(ROUTES),
+      ...Object.values(API_ROUTES),
+      ...Object.values(OPS_ROUTES),
+    ].sort();
 
     expect(constants).toEqual(fixedPaths());
   });
@@ -27,5 +31,12 @@ describe("route constants", () => {
   it("keep page paths and API paths apart, so a redirect is never pointed at an endpoint", () => {
     expect(Object.values(ROUTES).filter((path) => path.startsWith("/api/"))).toEqual([]);
     expect(Object.values(API_ROUTES).filter((path) => !path.startsWith("/api/"))).toEqual([]);
+  });
+
+  it("keep the health route out of the page and API groups, so a redirect never lands on it and no /api/ rule covers it", () => {
+    const pagesAndApi: readonly string[] = [...Object.values(ROUTES), ...Object.values(API_ROUTES)];
+
+    expect(Object.values(OPS_ROUTES).filter((path) => pagesAndApi.includes(path))).toEqual([]);
+    expect(Object.values(OPS_ROUTES).filter((path) => path.startsWith("/api/"))).toEqual([]);
   });
 });
