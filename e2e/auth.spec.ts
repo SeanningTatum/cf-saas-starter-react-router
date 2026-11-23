@@ -69,15 +69,19 @@ test.describe("Authentication", () => {
     await expect(page.getByTestId("dashboard-account")).toBeVisible();
   });
 
-  test("login form shows an error and stays on /login for bad credentials", {
+  test("login form shows an error and stays on /login for bad credentials, without the card moving and with no dead links", {
     tag: "@error",
   }, async ({ page }) => {
     await page.goto("/login");
     await waitForAuthFormReady(page, "login");
+    const card = page.getByTestId("login-card");
+    await expect(card.locator('a[href="#"], a:not([href])')).toHaveCount(0);
+    const topBefore = (await card.boundingBox())?.y;
     await fillLogin(page, `nobody-${crypto.randomUUID()}@test.local`, "WrongPass123!");
     await page.getByTestId("login-submit").click();
     await expect(page.getByTestId("login-error")).toBeVisible();
     await expect(page).toHaveURL(/\/login$/);
+    expect((await card.boundingBox())?.y, "the alert pushed the card").toBe(topBefore);
   });
 });
 

@@ -13,7 +13,7 @@
   "upload_another": "Upload Another File",
   "failed": "Upload failed",
   "try_again": "Try Again",
-  "file_input_label": "File input",
+  "file_input_label": "Choose a file to upload",
   "size_limit_exceeded": "File size exceeds {{size}}MB limit",
   "unreachable": "We couldn't reach the server. Check your connection and try again."
 }

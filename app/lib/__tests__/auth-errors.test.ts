@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { authRefusalFor } from "../auth-errors";
+import { authRefusalFor, retryWaitSeconds } from "../auth-errors";
 
 describe("authRefusalFor", () => {
   it("reads a 429 as rate limited even when the body has no code", () => {
@@ -38,5 +38,37 @@ describe("authRefusalFor", () => {
   it("maps by code, not by the message text", () => {
     const error = { status: 403, code: "VERIFICATION_FAILED", message: "Too many attempts" };
     expect(authRefusalFor(error, true)).toBe("captcha_failed");
+  });
+});
+
+const refused = (status: number, retryAfter: string | null) => ({
+  status,
+  headers: new Headers(retryAfter === null ? {} : { "Retry-After": retryAfter }),
+});
+
+describe("retryWaitSeconds", () => {
+  const now = Date.parse("2026-11-23T12:00:00Z");
+
+  it("reads a delay in seconds from a 429's Retry-After", () => {
+    expect(retryWaitSeconds(refused(429, "60"), now)).toBe(60);
+    expect(retryWaitSeconds(refused(429, " 7 "), now)).toBe(7);
+  });
+
+  it("reads an HTTP date as the seconds left until it, rounded up", () => {
+    expect(retryWaitSeconds(refused(429, "Mon, 23 Nov 2026 12:00:42 GMT"), now)).toBe(42);
+    expect(retryWaitSeconds(refused(429, "Mon, 23 Nov 2026 12:00:00 GMT"), now - 1)).toBe(1);
+  });
+
+  it("gives no wait for a date already past, a zero delay, a missing or unreadable header", () => {
+    expect(retryWaitSeconds(refused(429, "Mon, 23 Nov 2026 11:59:00 GMT"), now)).toBeNull();
+    expect(retryWaitSeconds(refused(429, "0"), now)).toBeNull();
+    expect(retryWaitSeconds(refused(429, null), now)).toBeNull();
+    expect(retryWaitSeconds(refused(429, "soon"), now)).toBeNull();
+    expect(retryWaitSeconds(refused(429, "-5"), now)).toBeNull();
+  });
+
+  it("ignores Retry-After on any status but 429, so a 503 or a wrong password never locks the form", () => {
+    expect(retryWaitSeconds(refused(503, "60"), now)).toBeNull();
+    expect(retryWaitSeconds(refused(401, "60"), now)).toBeNull();
   });
 });

@@ -31,6 +31,7 @@
   "loading": "加载中...",
   "loading_protected_data": "正在加载受保护的数据...",
   "notifications_region": "通知",
+  "close_notification": "关闭通知",
   "theme": {
     "toggle_label": "切换主题",
     "light": "浅色",

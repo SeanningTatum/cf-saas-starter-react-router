@@ -25,6 +25,7 @@ export const API_PATHS = {
   signOut: "/api/auth/sign-out",
   getSession: "/api/auth/get-session",
   removeUser: "/api/auth/admin/remove-user",
+  stopImpersonating: "/api/auth/admin/stop-impersonating",
 } as const;
 
 export const CLIENT_IPS = {

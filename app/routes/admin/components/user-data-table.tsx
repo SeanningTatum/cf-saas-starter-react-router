@@ -5,16 +5,9 @@ import {
   IconChevronRight,
   IconChevronsLeft,
   IconChevronsRight,
-  IconDotsVertical,
   IconSearch,
-  IconUserCheck,
-  IconUserX,
-  IconShieldCheck,
-  IconShield,
-  IconUserCog,
 } from "@tabler/icons-react";
 import {
-  type ColumnDef,
   flexRender,
   getCoreRowModel,
   getFacetedRowModel,
@@ -24,24 +17,14 @@ import {
   useReactTable,
   type VisibilityState,
 } from "@tanstack/react-table";
-import { toast } from "sonner";
-import { reportHandledError } from "@/lib/error-reporting/browser";
 import { useSearchParams, useRevalidator } from "react-router";
 import { useTranslation } from "react-i18next";
 
-import { authClient } from "@/auth/client";
-import { formatDate } from "@/lib/date-utils";
-import { getInitials } from "@/lib/utils";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
 import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
   DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
@@ -61,9 +44,10 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import type { User } from "@/db/schema";
 import { USER_SEARCH_DEBOUNCE_MS } from "@/lib/constants/admin";
+import { buildUserColumns } from "./user-table-columns";
+import { useUserRowActions } from "./use-user-row-actions";
 
 type UserDataTableProps = {
   initialUsers: User[];
@@ -71,34 +55,6 @@ type UserDataTableProps = {
   initialPage: number;
   initialPageSize: number;
 };
-
-const reloadToApplyImpersonatedSession = () => window.location.reload();
-
-async function runAdminAction<T extends { error?: unknown } | null | undefined>(
-  action: () => Promise<T>,
-  {
-    successMessage,
-    errorMessage,
-    onSuccess,
-  }: {
-    successMessage: string;
-    errorMessage: string;
-    onSuccess?: () => void;
-  },
-): Promise<void> {
-  try {
-    const response = await action();
-    if (response?.error) {
-      toast.error(errorMessage);
-      return;
-    }
-    toast.success(successMessage);
-    onSuccess?.();
-  } catch (error) {
-    reportHandledError(error);
-    toast.error(errorMessage);
-  }
-}
 
 export function UserDataTable({
   initialUsers,
@@ -108,6 +64,7 @@ export function UserDataTable({
 }: UserDataTableProps) {
   const [searchParams, setSearchParams] = useSearchParams();
   const revalidator = useRevalidator();
+  const { revalidate } = revalidator;
   const { t, i18n } = useTranslation("admin");
   const [rowSelection, setRowSelection] = React.useState({});
   const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>({});
@@ -137,216 +94,19 @@ export function UserDataTable({
     setSearchParams(newSearchParams);
   };
 
-  const handleImpersonate = (userId: string, userName: string) =>
-    runAdminAction(() => authClient.admin.impersonateUser({ userId }), {
-      successMessage: t("users_table.toasts.impersonate_success", { name: userName }),
-      errorMessage: t("users_table.toasts.impersonate_error", { name: userName }),
-      onSuccess: reloadToApplyImpersonatedSession,
-    });
+  const actions = useUserRowActions(t, revalidate);
 
-  const handleBanUser = (userId: string, userName: string) =>
-    runAdminAction(() => authClient.admin.banUser({ userId, banReason: "Banned by admin" }), {
-      successMessage: t("users_table.toasts.ban_success", { name: userName }),
-      errorMessage: t("users_table.toasts.ban_error", { name: userName }),
-      onSuccess: () => revalidator.revalidate(),
-    });
-
-  const handleUnbanUser = (userId: string, userName: string) =>
-    runAdminAction(() => authClient.admin.unbanUser({ userId }), {
-      successMessage: t("users_table.toasts.unban_success", { name: userName }),
-      errorMessage: t("users_table.toasts.unban_error", { name: userName }),
-      onSuccess: () => revalidator.revalidate(),
-    });
-
-  const handleRoleChange = (userId: string, userName: string, newRole: "user" | "admin") =>
-    runAdminAction(() => authClient.admin.setRole({ userId, role: newRole }), {
-      successMessage: t("users_table.toasts.role_update_success", {
-        name: userName,
-        role: t(`users_table.roles.${newRole}`),
-      }),
-      errorMessage: t("users_table.toasts.role_update_error", { name: userName }),
-      onSuccess: () => revalidator.revalidate(),
-    });
-
-  const columns: ColumnDef<User>[] = [
-    {
-      id: "select",
-      header: ({ table }) => (
-        <div className="flex items-center justify-center">
-          <Checkbox
-            checked={
-              table.getIsAllPageRowsSelected() ||
-              (table.getIsSomePageRowsSelected() && "indeterminate")
-            }
-            onCheckedChange={(value) => table.toggleAllPageRowsSelected(!!value)}
-            aria-label={t("users_table.select_all")}
-          />
-        </div>
-      ),
-      cell: ({ row }) => (
-        <div className="flex items-center justify-center">
-          <Checkbox
-            checked={row.getIsSelected()}
-            onCheckedChange={(value) => row.toggleSelected(!!value)}
-            aria-label={t("users_table.select_row")}
-          />
-        </div>
-      ),
-      enableSorting: false,
-      enableHiding: false,
-    },
-    {
-      accessorKey: "name",
-      header: t("users_table.columns.user"),
-      cell: ({ row }) => {
-        const user = row.original;
-        return (
-          <div className="flex items-center gap-3">
-            <Avatar className="h-8 w-8">
-              <AvatarImage src={user.image || undefined} alt={user.name} />
-              <AvatarFallback>{getInitials(user.name)}</AvatarFallback>
-            </Avatar>
-            <div className="flex flex-col">
-              <span className="font-medium">{user.name}</span>
-              <span className="text-muted-foreground text-sm">{user.email}</span>
-            </div>
-          </div>
-        );
-      },
-      enableHiding: false,
-    },
-    {
-      accessorKey: "role",
-      header: t("users_table.columns.role"),
-      cell: ({ row }) => {
-        const role = row.original.role;
-        return (
-          <Badge variant={role === "admin" ? "default" : "outline"} className="capitalize">
-            {role === "admin" ? (
-              <IconShieldCheck className="mr-1 h-3 w-3" />
-            ) : (
-              <IconShield className="mr-1 h-3 w-3" />
-            )}
-            {t(`users_table.roles.${role === "admin" ? "admin" : "user"}`)}
-          </Badge>
-        );
-      },
-      filterFn: (row, id, value) => {
-        return value.includes(row.getValue(id));
-      },
-    },
-    {
-      accessorKey: "emailVerified",
-      header: t("users_table.columns.status"),
-      cell: ({ row }) => {
-        const verified = row.original.emailVerified;
-        const banned = row.original.banned;
-
-        if (banned) {
-          return (
-            <Badge variant="destructive">
-              <IconUserX className="mr-1 h-3 w-3" />
-              {t("users_table.statuses.banned")}
-            </Badge>
-          );
-        }
-
-        return (
-          <Badge variant={verified ? "default" : "outline"}>
-            {verified ? <IconUserCheck className="mr-1 h-3 w-3" /> : null}
-            {verified ? t("users_table.statuses.verified") : t("users_table.statuses.unverified")}
-          </Badge>
-        );
-      },
-      filterFn: (row, _id, value) => {
-        if (value === "verified") return row.original.emailVerified === true;
-        if (value === "unverified") return row.original.emailVerified === false;
-        if (value === "banned") return row.original.banned === true;
-        return true;
-      },
-    },
-    {
-      accessorKey: "createdAt",
-      header: t("users_table.columns.joined"),
-      cell: ({ row }) => {
-        return formatDate(new Date(row.original.createdAt), "MMM d, yyyy", i18n.language);
-      },
-    },
-    {
-      id: "actions",
-      cell: ({ row }) => {
-        const user = row.original;
-
-        return (
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                variant="ghost"
-                className="data-[state=open]:bg-muted text-muted-foreground flex size-8"
-                size="icon"
-              >
-                <IconDotsVertical className="h-4 w-4" />
-                <span className="sr-only">{t("users_table.open_menu")}</span>
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-48">
-              <DropdownMenuLabel>{t("users_table.actions_label")}</DropdownMenuLabel>
-              <DropdownMenuItem
-                onClick={() => handleImpersonate(user.id, user.name)}
-                className="cursor-pointer"
-              >
-                <IconUserCog className="mr-2 h-4 w-4" />
-                {t("users_table.impersonate")}
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuLabel>{t("users_table.change_role")}</DropdownMenuLabel>
-              <DropdownMenuItem
-                onClick={() => handleRoleChange(user.id, user.name, "admin")}
-                disabled={user.role === "admin"}
-                className="cursor-pointer"
-              >
-                <IconShieldCheck className="mr-2 h-4 w-4" />
-                {t("users_table.make_admin")}
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                onClick={() => handleRoleChange(user.id, user.name, "user")}
-                disabled={user.role === "user"}
-                className="cursor-pointer"
-              >
-                <IconShield className="mr-2 h-4 w-4" />
-                {t("users_table.make_user")}
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              {user.banned ? (
-                <DropdownMenuItem
-                  onClick={() => handleUnbanUser(user.id, user.name)}
-                  className="cursor-pointer"
-                >
-                  <IconUserCheck className="mr-2 h-4 w-4" />
-                  {t("users_table.unban_user")}
-                </DropdownMenuItem>
-              ) : (
-                <DropdownMenuItem
-                  onClick={() => handleBanUser(user.id, user.name)}
-                  variant="destructive"
-                  className="cursor-pointer"
-                >
-                  <IconUserX className="mr-2 h-4 w-4" />
-                  {t("users_table.ban_user")}
-                </DropdownMenuItem>
-              )}
-            </DropdownMenuContent>
-          </DropdownMenu>
-        );
-      },
-    },
-  ];
+  const columns = React.useMemo(
+    () => buildUserColumns({ t, language: i18n.language, actions }),
+    [t, i18n.language, actions],
+  );
 
   const totalPages = Math.ceil(initialTotal / initialPageSize);
 
   const table = useReactTable({
     data: initialUsers,
     columns,
+    getRowId: (user) => user.id,
     state: {
       sorting,
       columnVisibility,
