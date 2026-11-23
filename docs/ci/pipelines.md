@@ -60,7 +60,7 @@ bun run size --json size.json                 # save a report; pass it later as 
 - **entry.client and root chunks**: the JavaScript every page loads.
 - **`/path` first-load JS and CSS**: everything the browser fetches before that page can run: the entry, each route from the root down, and their imports, each file counted once. Read from the React Router manifest in `build/client/assets/manifest-*.js`.
 
-The line under the table turns the largest first-load change into time: the extra bytes over Lighthouse's slow 4G link (1,638.4 kbit/s), `ms = bytes × 8 ÷ 1,638.4`. 10 KB is about 49 ms. It is transfer time alone, before the browser parses and runs the code. A page that exists on one side only has nothing to compare with, so the line names it as new or removed instead of counting it. `bun run size` builds with `CI=1`, so it opens no remote-bindings session and needs no Cloudflare login.
+The line under the table turns the largest first-load change into time: the extra bytes over Lighthouse's slow 4G link (1,638.4 kbit/s), `ms = bytes × 8 ÷ 1,638.4`. 10 KB is about 49 ms. It is transfer time alone, before the browser parses and runs the code. A page that exists on one side only has nothing to compare with, so the line names it as new or removed instead of counting it.
 
 `PR body (size table)` fails a PR that changes shipped code with no filled comparison table (the header row and a Worker row with numbers; a table inside a code fence does not count), and one whose body claims "No shipped code changed." when it does. It reads the body and the list of changed files, so it re-runs in seconds when you edit the body.
 

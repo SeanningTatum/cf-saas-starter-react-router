@@ -25,9 +25,6 @@
       "bucket_name": "cf-saas-starter-react-router-bucket"
     }
   ],
-  "ai": {
-    "binding": "AI"
-  },
   "ratelimits": [
     {
       "name": "AUTH_SIGN_IN_LIMITER",
@@ -90,9 +87,6 @@
           "bucket_name": "cf-saas-starter-react-router-bucket-preview"
         }
       ],
-      "ai": {
-        "binding": "AI"
-      },
       "ratelimits": [
         {
           "name": "AUTH_SIGN_IN_LIMITER",
@@ -153,9 +147,6 @@
           "bucket_name": "cf-saas-starter-react-router-bucket-staging"
         }
       ],
-      "ai": {
-        "binding": "AI"
-      },
       "ratelimits": [
         {
           "name": "AUTH_SIGN_IN_LIMITER",
