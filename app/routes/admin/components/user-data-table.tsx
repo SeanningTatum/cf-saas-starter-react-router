@@ -127,8 +127,8 @@ export function UserDataTable({
   return (
     <div className="w-full space-y-4">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex flex-1 items-center gap-2">
-          <div className="relative flex-1 sm:max-w-sm">
+        <div className="flex flex-1 flex-wrap items-center gap-2">
+          <div className="relative w-full sm:w-auto sm:max-w-sm sm:flex-1">
             <IconSearch className="text-muted-foreground absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2" />
             <Input
               placeholder={t("users_table.search_placeholder")}
@@ -247,16 +247,16 @@ export function UserDataTable({
         </Table>
       </div>
 
-      <div className="flex items-center justify-between px-2">
+      <div className="flex flex-col gap-3 px-2 sm:flex-row sm:items-center sm:justify-between">
         <div className="text-muted-foreground flex-1 text-sm">
           {t("users_table.rows_selected", {
             selected: table.getFilteredSelectedRowModel().rows.length,
             total: initialTotal,
           })}
         </div>
-        <div className="flex items-center gap-6">
+        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 sm:gap-6">
           <div className="flex items-center gap-2">
-            <Label htmlFor="rows-per-page" className="text-sm font-medium">
+            <Label htmlFor="rows-per-page" className="text-sm font-medium whitespace-nowrap">
               {t("users_table.rows_per_page")}
             </Label>
             <Select
@@ -280,7 +280,7 @@ export function UserDataTable({
               </SelectContent>
             </Select>
           </div>
-          <div className="flex w-fit items-center justify-center text-sm font-medium">
+          <div className="flex w-fit items-center justify-center text-sm font-medium whitespace-nowrap">
             {t("users_table.page_of", { page: initialPage, total: totalPages || 1 })}
           </div>
           <div className="flex items-center gap-2">

@@ -68,7 +68,9 @@ function Toaster(props: ToasterProps) {
         closeButtonAriaLabel: t("close_notification"),
         classNames: {
           toast:
-            "focus-visible:shadow-md focus-visible:ring-3! focus-visible:ring-muted-foreground",
+            "pe-12! focus-visible:shadow-md focus-visible:ring-3! focus-visible:ring-muted-foreground",
+          closeButton:
+            "start-auto! end-2! top-1/2! size-8! -translate-y-1/2! transform-none! rounded-md! border-0! bg-transparent! text-muted-foreground! hover:bg-muted! hover:text-foreground! focus-visible:ring-3! focus-visible:ring-ring/50! [&>svg]:size-4",
         },
       }}
       {...props}

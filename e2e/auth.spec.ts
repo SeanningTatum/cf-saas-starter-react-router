@@ -2,7 +2,14 @@ import { test, expect, type Page } from "@playwright/test";
 import { TURNSTILE_TEST_TOKEN, TURNSTILE_TOKEN_HEADER } from "../app/lib/constants/turnstile";
 import { fillLogin, isSignInPost, isSignUpPost, waitForAuthFormReady } from "./lib/auth-form";
 import { useClientIpPerFile } from "./lib/client-ip";
-import { API_PATHS, HTTP_STATUS, PAGE_PATHS, SEEDED_LOGINS, SEEDED_PASSWORD } from "./lib/values";
+import {
+  API_PATHS,
+  HTTP_STATUS,
+  PAGE_PATHS,
+  SEEDED_LOGINS,
+  SEEDED_PASSWORD,
+  TALL_DESKTOP_VIEWPORT,
+} from "./lib/values";
 
 const holdScriptsUntilReleased = async (page: Page) => {
   let release = () => {};
@@ -69,9 +76,10 @@ test.describe("Authentication", () => {
     await expect(page.getByTestId("dashboard-account")).toBeVisible();
   });
 
-  test("login form shows an error and stays on /login for bad credentials, without the card moving and with no dead links", {
+  test("login form shows an error and stays on /login for bad credentials, without the card moving on a tall screen and with no dead links", {
     tag: "@error",
   }, async ({ page }) => {
+    await page.setViewportSize(TALL_DESKTOP_VIEWPORT);
     await page.goto("/login");
     await waitForAuthFormReady(page, "login");
     const card = page.getByTestId("login-card");

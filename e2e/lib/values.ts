@@ -65,6 +65,8 @@ export const HTTP_STATUS = {
   unauthorized: 401,
 } as const;
 
+export const TALL_DESKTOP_VIEWPORT = { width: 1280, height: 1000 } as const;
+
 export const TIMEOUTS_MS = {
   oneLook: 1_000,
   hydration: 15_000,
