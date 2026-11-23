@@ -24,8 +24,6 @@ interface FileUploadProps {
 
 const toMB = (bytes: number) => (bytes / 1024 / 1024).toFixed(0);
 
-const skipI18nextEscaping = { interpolation: { escapeValue: false } } as const;
-
 const listWithBreakPoints = (accept: string) =>
   accept
     .split(",")
@@ -147,7 +145,7 @@ export function FileUpload({
             className="text-xs text-foreground/90 mb-4 font-mono max-w-full break-all text-center"
             data-testid="file-upload-key"
           >
-            {t("key_label", { key, ...skipI18nextEscaping })}
+            {t("key_label", { key })}
           </p>
           <Button onClick={reset} variant="outline" size="sm" data-testid="file-upload-reset">
             {t("upload_another")}
@@ -181,7 +179,7 @@ export function FileUpload({
               <Spinner size="lg" />
               <div className="text-center">
                 <p className="text-sm font-medium text-foreground max-w-full truncate">
-                  {t("uploading", { name: file?.name, ...skipI18nextEscaping })}
+                  {t("uploading", { name: file?.name })}
                 </p>
                 <p className="text-xs text-muted-foreground mt-1">{t("please_wait")}</p>
               </div>
@@ -209,10 +207,7 @@ export function FileUpload({
                 </p>
                 <p className="text-xs text-muted-foreground text-balance break-words">
                   {accept
-                    ? t("dropzone.accepted_formats", {
-                        formats: listWithBreakPoints(accept),
-                        ...skipI18nextEscaping,
-                      })
+                    ? t("dropzone.accepted_formats", { formats: listWithBreakPoints(accept) })
                     : t("dropzone.any_file_type")}
                 </p>
                 <p className="text-xs text-muted-foreground mt-1">
