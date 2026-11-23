@@ -240,7 +240,7 @@ The preview jobs never read `CLOUDFLARE_API_TOKEN`. The preview `readiness` job 
 2. Set the repo variable `CLOUDFLARE_ACCOUNT_ID` (Settings, Secrets and variables, Actions, Variables).
 3. Protect the `production` environment (see [Who can read what](#who-can-read-what)): a required reviewer, and deploys only from the default branch.
 4. Create a Cloudflare API token ([Create the tokens](#create-the-tokens)).
-5. Add it as the secret `CLOUDFLARE_API_TOKEN` in the `production` environment (Settings, Environments, production). `bun run setup` can do steps 2 and 5 when the GitHub CLI is available; it asks you to protect the environment first. It never replaces an environment that already exists.
+5. Add it as the secret `CLOUDFLARE_API_TOKEN` in the `production` environment (Settings, Environments, production). `bun run setup` does steps 2 and 5 when the GitHub CLI is available, and `bun run setup --security` does step 3 first ([the set-up wizard](../setup.md)). It never replaces an environment that already exists.
 6. Optional, for a repo that keeps placeholder ids committed: set the repo variable `CLOUDFLARE_D1_DATABASE_ID` to your production database id. The deploy job writes it into the checkout; the file in git does not change.
 7. Delete any old repo-level `CLOUDFLARE_API_TOKEN` secret.
 8. Optional: turn on the pre-migration export ([owner steps](rollback.md#owner-steps-to-turn-the-export-on)).

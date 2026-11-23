@@ -160,17 +160,15 @@ export function parseJsonc<T>(text: string): T | null {
   }
 }
 
-/**
- * Writes the given config object to the repo-root wrangler.jsonc, prefixed
- * with a header comment explaining that the file is generated/restored by
- * scripts/first-time-setup.ts and scripts/teardown.ts.
- */
-export function writeWranglerJsonc(config: object): void {
-  const wranglerJsonPath = path.join(__dirname, "..", "..", "wrangler.jsonc");
+const WRANGLER_PATH = path.join(__dirname, "..", "..", "wrangler.jsonc");
 
-  const jsonContent = `${HEADER_COMMENT}\n${JSON.stringify(config, null, 2)}\n`;
+const renderWranglerJsonc = (config: object): string => `${HEADER_COMMENT}\n${JSON.stringify(config, null, 2)}\n`;
 
-  fs.writeFileSync(wranglerJsonPath, jsonContent);
+export const readWranglerJsonc = (filePath: string = WRANGLER_PATH): Record<string, unknown> | null =>
+  fs.existsSync(filePath) ? parseJsonc<Record<string, unknown>>(fs.readFileSync(filePath, "utf-8")) : null;
+
+export function writeWranglerJsonc(config: object, filePath: string = WRANGLER_PATH): void {
+  fs.writeFileSync(filePath, renderWranglerJsonc(config));
 }
 
 /**
