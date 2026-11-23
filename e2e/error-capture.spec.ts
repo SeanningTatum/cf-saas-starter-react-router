@@ -1,17 +1,11 @@
-import {
-  test,
-  expect,
-  type Locator,
-  type Page,
-  type Request,
-  type Response,
-} from "@playwright/test";
+import { test, expect, type Page, type Request } from "@playwright/test";
 import {
   BROWSER_REPORT_CONTENT_TYPE,
   BROWSER_REPORT_PATH,
   CSP_REPORT_CONTENT_TYPE,
   MAX_REPORT_BODY_BYTES,
 } from "../app/lib/constants/error-reporting";
+import { loadHydrated } from "./lib/hydration";
 
 type SentReport = {
   source: string;
@@ -31,40 +25,6 @@ const sentReport = (request: Request): SentReport =>
 
 const carries = (request: Request, marker: string) =>
   isReport(request.url()) && (request.postData() ?? "").includes(marker);
-
-const hydrated = (node: Locator, timeout: number) =>
-  expect
-    .poll(
-      () =>
-        node
-          .evaluate((el) => Object.keys(el).some((k) => k.startsWith("__reactProps$")), undefined, {
-            timeout: 1_000,
-          })
-          .catch(() => false),
-      { timeout, message: "the page never hydrated" },
-    )
-    .toBe(true)
-    .then(
-      () => true,
-      () => false,
-    );
-
-const loadHydrated = async (
-  page: Page,
-  url: string,
-  ready: (page: Page) => Locator,
-  beforeLoad: () => void = () => undefined,
-): Promise<Response> => {
-  beforeLoad();
-  let response = await page.goto(url);
-  if (!(await hydrated(ready(page), 15_000))) {
-    beforeLoad();
-    response = await page.reload();
-    expect(await hydrated(ready(page), 30_000), `${url} never hydrated`).toBe(true);
-  }
-  if (response === null) throw new Error(`${url}: no document response`);
-  return response;
-};
 
 const signInLink = (page: Page) => page.getByTestId("topbar-sign-in");
 const notFoundHeading = (page: Page) => page.getByRole("heading", { level: 1, name: "404" });
@@ -166,9 +126,7 @@ test.describe("Browser error capture", () => {
     page.on("request", (request) => {
       if (isReport(request.url())) sent.push(request);
     });
-    const response = await loadHydrated(page, MISSING, notFoundHeading, () => {
-      sent.length = 0;
-    });
+    const response = await loadHydrated(page, MISSING, notFoundHeading);
     expect(response.status()).toBe(404);
 
     const sentinel = `e2e-sentinel-${crypto.randomUUID()}`;
@@ -204,9 +162,8 @@ test.describe("Browser error capture", () => {
       if (isReport(request.url())) sent.push(request);
     });
     await loadHydrated(page, "/login", (page) => page.getByTestId("login-form"));
-    await loadHydrated(page, "/", signInLink, () => {
-      sent.length = 0;
-    });
+    sent.length = 0;
+    await loadHydrated(page, "/", signInLink);
 
     const forced: string[] = [];
     await page.route(

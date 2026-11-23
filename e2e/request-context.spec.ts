@@ -1,4 +1,5 @@
-import { test, expect, type Locator, type Page } from "@playwright/test";
+import { test, expect } from "@playwright/test";
+import { loadHydrated } from "./lib/hydration";
 
 const HEADER = "x-request-id";
 
@@ -12,23 +13,6 @@ const idOf = (headers: Record<string, string>, where: string): string => {
   expect(id, `${where}: no ${HEADER} header`).toBeTruthy();
   return id ?? "";
 };
-
-const hydrated = (node: Locator, timeout: number) =>
-  expect
-    .poll(
-      () =>
-        node
-          .evaluate((el) => Object.keys(el).some((k) => k.startsWith("__reactProps$")), undefined, {
-            timeout: 1_000,
-          })
-          .catch(() => false),
-      { timeout, message: "the page never hydrated" },
-    )
-    .toBe(true)
-    .then(
-      () => true,
-      () => false,
-    );
 
 test.describe("Request id (issue #74, seen from outside the Worker; see docs/features/request-context.md)", () => {
   test("a page and an API response each carry their own x-request-id, so the header is not page-only and no id is shared across requests", {
@@ -72,23 +56,12 @@ test.describe("Request id (issue #74, seen from outside the Worker; see docs/fea
 test.describe("Error page (/:lng matches any single segment, so the missing page needs several)", () => {
   const MISSING = "/no/such/page/here";
 
-  const loadErrorPage = async (page: Page) => {
-    const response = await page.goto(MISSING);
-    if (response === null) throw new Error(`${MISSING}: no document response`);
-    return response;
-  };
-
   test("a 404 page shows the request id of its own response, so the error page always has the id a user needs, equal to the response's and kept through hydration", {
     tag: "@error",
   }, async ({ page }) => {
-    let response = await loadErrorPage(page);
-    const heading = page.getByRole("heading", { level: 1, name: "404" });
-    await test.step("wait on the heading, which renders with or without an id; a cold dev server can die on Vite 504 Outdated Optimize Dep and never hydrate (issue #50), so one reload recovers it", async () => {
-      if (!(await hydrated(heading, 15_000))) {
-        response = await loadErrorPage(page);
-        expect(await hydrated(heading, 30_000), `${MISSING} never hydrated`).toBe(true);
-      }
-    });
+    const response = await loadHydrated(page, MISSING, (p) =>
+      p.getByRole("heading", { level: 1, name: "404" }),
+    );
 
     expect(response.status()).toBe(404);
     const id = idOf(await response.allHeaders(), MISSING);

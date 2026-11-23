@@ -32,6 +32,7 @@ A key with no default is empty. A consumer that needs it fails with a line that 
 | `paths` | object | none | the workflows, `scripts/harness-check.sh` |
 | `ship` | object | none | `ship-feature` |
 | `brandInit` | object | none | `brand-init` |
+| `wave` | object | see below | `run-wave` and `scripts/wave.ts` |
 
 ### `gates`
 
@@ -120,6 +121,26 @@ All optional. Each is a path from the repo root. Folder settings load without a 
 | `homeLane` | `{ name, motion, owns }` | The lane that runs only when the home page is rebuilt |
 
 `owns` is a list of repo paths; a path ending in `/**` owns the folder.
+
+### `wave`
+
+Settings for the `run-wave` workflow ([how to run a wave](harness.md#running-a-wave)). A wave freezes `tracksAtOnce` and `reviewRounds` into its state file when it is planned, so a change here applies to the next wave.
+
+| Key | Type | Default | Meaning |
+|---|---|---|---|
+| `tracksAtOnce` | integer, 1 to 8 | `2` | How many tickets a batch builds at once (this repo sets 3). `args.tracks` may lower it for one wave, never raise it |
+| `reviewRounds` | integer, 0 to 3 | `1` | Review rounds per ticket PR. A P0 or P1 in the last round earns one more round, never more |
+| `models` | object | see below | The model for each kind of work. A model name is lower-case letters, digits, dots and dashes |
+
+| `models` key | Default | The work |
+|---|---|---|
+| `plan` | `opus` | Reading the tickets into the plan |
+| `design` | `opus` | A ticket the planner marks design-heavy, and its fixes |
+| `build` | `sonnet` | Any other ticket, and its fixes |
+| `review` | `sonnet` | The review round on each ticket PR |
+| `mechanical` | `haiku` | Merging the wave branch into a ticket branch, answering review threads, a ticket the planner marks mechanical (a format or clean-up pass) |
+
+Checking and merging a PR and running the gates use no model of their own: the `runner` runs `scripts/wave.ts`, and the script decides.
 
 ## Commands
 
