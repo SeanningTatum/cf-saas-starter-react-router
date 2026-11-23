@@ -10,7 +10,7 @@ import { everythingSaid, newWorld, worldRunner, type World } from "./helpers/set
 const ACCOUNT = "a".repeat(32);
 const VALUES: Record<string, string> = {
   "account-id": ACCOUNT,
-  "production-token": "SENTINEL-production-token-000001",
+  "production-token": "SENTINEL-production-token-000001", // secret-scan: allow secret-assignment
   "preview-token": "SENTINEL-preview-token-0000002",
   "staging-token": "SENTINEL-staging-token-00000003",
   "turnstile-secret-key": "SENTINEL-turnstile-secret-0004",
