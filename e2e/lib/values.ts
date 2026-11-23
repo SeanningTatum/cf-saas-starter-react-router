@@ -60,8 +60,7 @@ export const HTTP_STATUS = {
 
 export const TIMEOUTS_MS = {
   oneLook: 1_000,
-  firstHydration: 15_000,
-  hydrationAfterReload: 30_000,
+  hydration: 15_000,
   turnstileReady: 30_000,
   rateLimitWindowWait: 25_000,
 } as const;

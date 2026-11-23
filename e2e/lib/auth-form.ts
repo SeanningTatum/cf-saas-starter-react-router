@@ -1,5 +1,5 @@
 import { expect, type Page, type Request } from "@playwright/test";
-import { hydrated } from "./hydration";
+import { expectHydrated } from "./hydration";
 import {
   API_PATHS,
   TIMEOUTS_MS,
@@ -20,15 +20,8 @@ export const expectTurnstileState = (page: Page, state: string, message: string)
     timeout: TIMEOUTS_MS.turnstileReady,
   });
 
-export const waitForAuthFormHydrated = async (page: Page, form: AuthForm) => {
-  const submit = page.getByTestId(`${form}-submit`);
-  if (await hydrated(submit, TIMEOUTS_MS.firstHydration)) return;
-  await page.reload();
-  expect(
-    await hydrated(submit, TIMEOUTS_MS.hydrationAfterReload),
-    `the ${form} form never hydrated, even after a reload past Vite's "Outdated Optimize Dep" 504`,
-  ).toBe(true);
-};
+export const waitForAuthFormHydrated = (page: Page, form: AuthForm) =>
+  expectHydrated(page.getByTestId(`${form}-submit`), `the ${form} form`);
 
 export const waitForAuthFormReady = async (page: Page, form: AuthForm) => {
   await waitForAuthFormHydrated(page, form);
