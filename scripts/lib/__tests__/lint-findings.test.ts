@@ -1,15 +1,14 @@
 import { describe, expect, it } from "vitest";
 import { Either } from "effect";
-import { FORMAT_FIX } from "../lib/lint-constants";
+import { FORMAT_FIX } from "../lint-constants";
 import {
   type Finding,
   formatFinding,
   parseBiome,
   parseHouse,
   parseKnip,
-  parseLegacyHouse,
   sortFindings,
-} from "../lib/lint-findings";
+} from "../lint-findings";
 
 const BIOME_FORMAT =
   '{"summary":{"changed":0,"unchanged":1,"matches":0,"duration":87897208,"errors":1,"warnings":0,"infos":0,"skipped":0,"suggestedFixesSkipped":0,"diagnosticsNotPrinted":0,"scannerDuration":2361579625},"diagnostics":[{"severity":"error","message":"Formatter would have printed the following content:","category":"format","location":{"path":"scripts/lint-all.ts","start":{"line":0,"column":0},"end":{"line":0,"column":0}},"advices":[]}],"command":"check"}';
@@ -163,55 +162,28 @@ describe("parseKnip", () => {
 });
 
 describe("parseHouse", () => {
-  it("reads path:line and path:line:column findings and keeps colons inside the message", () => {
+  it("reads path:line and path:line:column findings, keeps colons inside the message and marks each rule as the house linter's", () => {
     const output = [
-      "app/lib/a.ts:12 house/no-throw: use Effect.fail: see docs/effect.md",
-      "app/lib/b.tsx:4:9 house/no-zod: import Schema from effect",
+      "app/lib/a.ts:12 no-throw: use Effect.fail: see docs/effect.md",
+      "app/lib/b.tsx:4:9 house/no-process-env: read the binding from CloudflareEnv",
+      "scripts/lint/baseline.json:1 baseline-stale: lower the count",
     ].join("\n");
     expect(parseHouse(output)).toEqual([
       { path: "app/lib/a.ts", line: 12, rule: "house/no-throw", message: "use Effect.fail: see docs/effect.md" },
-      { path: "app/lib/b.tsx", line: 4, column: 9, rule: "house/no-zod", message: "import Schema from effect" },
+      { path: "app/lib/b.tsx", line: 4, column: 9, rule: "house/no-process-env", message: "read the binding from CloudflareEnv" },
+      { path: "scripts/lint/baseline.json", line: 1, rule: "house/baseline-stale", message: "lower the count" },
     ]);
   });
 
   it("ignores summaries, command echoes and blank lines, so noise never becomes a finding", () => {
     const output = [
-      "$ bun scripts/house-lint.ts app/lib/a.ts",
+      "$ bun scripts/lint/cli.ts app/lib/a.ts",
       "",
-      "house: 2 finding(s)",
+      "house lint: 2 finding(s). Each line says the fix.",
+      "house lint: clean. 518 file(s), 13 rule(s).",
       'error: script "lint:house" exited with code 1',
-      "Five non-negotiables: 3 violation(s)",
     ].join("\n");
     expect(parseHouse(output)).toEqual([]);
-  });
-});
-
-describe("parseLegacyHouse", () => {
-  const LEGACY = [
-    "Five non-negotiables: 3 violation(s)",
-    "",
-    "  1-effect-ts (2):",
-    "    app/lib/a.ts:12 — `throw` statement. Use Effect.fail",
-    "    app/lib/b.ts:4 — try/catch outside Effect.tryPromise",
-    "",
-    "  4-unit-tests (1):",
-    "    app/lib/c.ts:1 — no unit test at app/lib/__tests__/c.test.ts",
-    "",
-    "  12 source file(s) swept. Grandfathered for #4: none",
-  ].join("\n");
-
-  it("gives each line the rule of the heading above it, so a finding is never filed under the wrong rule", () => {
-    expect(parseLegacyHouse(LEGACY)).toEqual([
-      { path: "app/lib/a.ts", line: 12, rule: "house/1-effect-ts", message: "`throw` statement. Use Effect.fail" },
-      { path: "app/lib/b.ts", line: 4, rule: "house/1-effect-ts", message: "try/catch outside Effect.tryPromise" },
-      { path: "app/lib/c.ts", line: 1, rule: "house/4-unit-tests", message: "no unit test at app/lib/__tests__/c.test.ts" },
-    ]);
-  });
-
-  it("finds nothing in the clean summary, so a clean checker is a clean run", () => {
-    expect(
-      parseLegacyHouse("Five non-negotiables: clean — 120 source file(s), AST-swept (throw, try/catch, zod, process.env)\n"),
-    ).toEqual([]);
   });
 });
 

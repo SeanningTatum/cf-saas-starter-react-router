@@ -4,21 +4,28 @@ One command checks all of it and prints one finding per line:
 
 ```bash
 bun run lint                 # the whole repo: Biome, the house linter, import cycles, dead code
-bun run lint app/lib/x.ts    # some files: Biome and the house linter only
+bun run lint app/lib/x.ts    # some files: Biome and the house linter (its per-file mode) only
 bun run lint --fix <files>   # the same, after Biome formats them and applies its safe fixes
 bun run lint:staged          # the staged files (for a commit hook)
 bun run format               # format every file Biome covers
 ```
 
-A finding reads `path[:line[:column]] rule: message`. Exit 0 is clean, 1 means findings, 2 means a tool could not run. A tool that could not run is a failure, never a pass.
+A finding reads `path[:line[:column]] rule: message`, where the rule is `lint/<group>/<rule>` (Biome), `house/<id>` (the house linter) or `knip/<kind>` (dead code). Exit 0 is clean, 1 means findings, 2 means a tool could not run. A tool that could not run is a failure, never a pass.
 
-`./scripts/verify.sh` runs `bun run lint` as the `lint` gate, in the baseline set, so CI runs it too.
+`./scripts/verify.sh` runs `bun run lint` as the `lint` gate, in the lean tier, so every CI job that runs gates has it. `./scripts/verify.sh --changed` runs it on the changed files.
 
 ## Where a rule lives
 
 1. **Biome** ([`biome.jsonc`](../../biome.jsonc)) when one of its built-in rules states the rule exactly.
-2. **The house linter** (`scripts/check-non-negotiables.ts` today) when it needs the TypeScript compiler or the repo's own layout: tagged-error mapping, test parity, `throw` and `try/catch`.
+2. **The house linter** (`scripts/lint/`, `bun run lint:house`; [`lint-rules.md`](lint-rules.md)) when it needs the TypeScript compiler or the repo's own layout: tagged-error mapping, the test map, `throw` and `try/catch`, comments, constants, file size.
 3. **Never both**, and never as prose in `AGENTS.md` or an agent brief once a tool checks it.
+
+Two rules were in both and now have one home, chosen by running the house rule's own cases through Biome:
+
+| Rule | Home | Why |
+|------|------|-----|
+| No Zod | Biome, `style/noRestrictedImports` (a path for `zod` and a pattern for `zod/**`) | With the pattern, Biome flags all six of the house rule's "finding" cases (static, dynamic and `require` loads, subpaths included) and neither "clean" case. The house rule `no-zod` is deleted. |
+| No `process.env` | The house linter, `no-process-env` | Biome's `noProcessEnv` misses `const { env } = process` and `const { env: e } = process`, two of the house rule's cases. Biome's rule is off. |
 
 No ESLint and no Oxlint: a second general linter would mean a second parser and config for rules the two above already cover.
 
@@ -36,12 +43,13 @@ On top of its recommended set (which includes the accessibility rules for JSX):
 | Kebab-case file names | everywhere except React Router's `*.$.ts` splat routes | `style/useFilenamingConvention` |
 | No unused import or variable | everywhere | `correctness/noUnusedImports`, `correctness/noUnusedVariables` |
 | No `dangerouslySetInnerHTML` | everywhere | `security/noDangerouslySetInnerHtml` |
-| No Zod | everywhere | `style/noRestrictedImports` |
-| One icon set (`lucide-react`) | everywhere; nine older files are listed in `biome.jsonc` and that list only shrinks | `style/noRestrictedImports` |
+| No Zod, subpaths included | everywhere | `style/noRestrictedImports` |
+| One icon set (`lucide-react`) | everywhere; ten older files are listed in `biome.jsonc` and that list only shrinks | `style/noRestrictedImports` |
+| Cognitive complexity of a function at most 15 | everywhere but the ShadCN primitives; 29 files listed in `biome.jsonc` held a function over 15 when the rule came in, and that list only shrinks | `complexity/noExcessiveCognitiveComplexity` |
+| No bare number inline | `app/`, `workers/`; not in tests, `e2e/`, `app/lib/constants/` (where numbers are named) or the ShadCN primitives; 21 files listed in `biome.jsonc` held one when the rule came in, and that list only shrinks | `style/noMagicNumbers` |
 | A provider SDK stays in its adapter | `posthog-js` and `posthog-node` outside `app/lib/analytics/adapters/` | `style/noRestrictedImports` |
 | A primitive never reads the data layer | `app/components/ui/` may not import `@/db`, `@/repositories`, `@/services`, `@/trpc`, `@/auth` or `drizzle-orm` | `style/noRestrictedImports` |
-| No `console` | `app/`, `workers/`, `workflows/`; the logger's sink `app/lib/log-format.ts` is the one exception | `suspicious/noConsole` |
-| No `process.env` | `app/`, `workers/`, `workflows/` | `style/noProcessEnv` |
+| No `console` | `app/`, `workers/`, `workflows/`; the two lines of the logger's sink in `app/lib/log-format.ts` carry a `biome-ignore` with the reason | `suspicious/noConsole` |
 | Hooks rules | `app/`, `workers/`, `workflows/` | `correctness/useExhaustiveDependencies`, `correctness/useHookAtTopLevel`, the `react` domain |
 | No skipped or focused test | test files and `e2e/` | `suspicious/noSkippedTests`, `suspicious/noFocusedTests`, the `test` domain |
 | Playwright rules (no `waitForTimeout`, no `networkidle`, no `page.pause`, no forced clicks, awaited calls) | `e2e/` | the `playwright` domain |
@@ -67,15 +75,20 @@ To add a provider SDK, add its package to `noRestrictedImports` in `biome.jsonc`
 // biome-ignore lint/a11y/useSemanticElements: <the specific reason>
 ```
 
-A reason is required. Prefer fixing the code.
+A reason is required, on the same line: the house linter's `no-comments` rule allows this one form, at most 160 characters. Prefer fixing the code. Scripts are the exception for one rule: `noTemplateCurlyInString` is off in `scripts/`, which holds GitHub Actions `${{ }}` and shell `${VAR}` text on purpose.
 
 ## Format
 
-Biome formats TypeScript, JavaScript, JSON and CSS: two spaces, double quotes, semicolons, trailing commas, 100 columns. The `lint` gate fails on a file that is not formatted. The whole repo was formatted in one commit by one command, `bunx biome format --write .`; that commit is listed in `.git-blame-ignore-revs` (`git config blame.ignoreRevsFile .git-blame-ignore-revs` makes `git blame` skip it; GitHub reads the file on its own).
+Biome formats TypeScript, JavaScript, JSON and CSS: two spaces, double quotes, semicolons, trailing commas, 100 columns, 160 in `scripts/`. The `lint` gate fails on a file that is not formatted. The whole repo was formatted in one commit by one command, `bunx biome format --write .`; that commit is listed in `.git-blame-ignore-revs` (`git config blame.ignoreRevsFile .git-blame-ignore-revs` makes `git blame` skip it; GitHub reads the file on its own).
+
+Two choices keep the formatter and the house linter's 400-line cap (`file-size`, whose baseline only shrinks) from fighting:
+
+- `scripts/` is formatted at 160 columns. The scripts are dense (long test titles, command lines, tables of cases); at 100 columns the formatter grew 19 of them past the cap.
+- Six files that would still grow past their recorded length are left out of the formatter by name (`formatter.includes` in `biome.jsonc`). Split one, then delete its line.
 
 ## The edit hook
 
-[`.claude/hooks/lint-edit.sh`](../../.claude/hooks/lint-edit.sh) runs after every `Edit` and `Write` (a `PostToolUse` hook in `.claude/settings.json`). It runs `bun run lint --fix` on the one file: the file is formatted, safe fixes are applied, and what is left goes back to the agent on stderr with exit 2. A clean file is silent. With no `jq`, no `bun` or no installed tools it does nothing. It finds the checkout from the edited file, so it works in a git worktree.
+[`.claude/hooks/lint-edit.sh`](../../.claude/hooks/lint-edit.sh) runs after every `Edit` and `Write` (a `PostToolUse` hook in `.claude/settings.json`). It runs `bun run lint --fix` on the one file, which is Biome and the house linter in its per-file mode: the file is formatted, safe fixes are applied, and what is left goes back to the agent on stderr with exit 2. A clean file is silent. With no `jq`, no `bun` or no installed tools it does nothing. It finds the checkout from the edited file, so it works in a git worktree.
 
 ## Dead code
 
@@ -88,11 +101,12 @@ Biome formats TypeScript, JavaScript, JSON and CSS: two spaces, double quotes, s
 | Project | Covers |
 |---------|--------|
 | `tsconfig.cloudflare.json` | `app/`, `workers/` |
-| `tsconfig.node.json` | `scripts/`, the root `*.config.ts` files |
+| `tsconfig.node.json` | the root `*.config.ts` files |
+| `scripts/tsconfig.json` | `scripts/` (its own project, not a reference, because two scripts import app files; listing those files in a referenced project breaks the Effect language service below) |
 | `e2e/tsconfig.json` | `e2e/` (its own project because the specs import app and worker code) |
 
 All three have `strict`, `noUncheckedIndexedAccess`, `noUnusedLocals`, `noUnusedParameters`, `noImplicitOverride` and `noFallthroughCasesInSwitch`.
 
 ## Effect diagnostics
 
-`bun run lint:effect` runs the Effect language service over `app/` and `workers/` (floating effects, untyped failures and more). It takes about 30 seconds, so it is not a gate; run it when you touch Effect code. The same plugin is set in `tsconfig.cloudflare.json`, so an editor that loads TypeScript plugins shows the diagnostics live.
+`bun run lint:effect` runs the Effect language service over `app/` and `workers/` (floating effects, untyped failures and more). It takes about 20 seconds, so it is not a local gate. CI runs it as its own job, `Effect diagnostics`, on a pull request into the default branch or `production`, beside the other jobs, so it costs no wall time; it fails on an error, not on a warning or a message. Run it yourself when you touch Effect code. The same plugin is set in `tsconfig.cloudflare.json`, so an editor that loads TypeScript plugins shows the diagnostics live.

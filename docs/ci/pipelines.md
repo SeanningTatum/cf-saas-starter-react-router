@@ -6,7 +6,7 @@ Eight workflows live in `.github/workflows/`. Deploy and preview stay off until 
 
 | Workflow | Runs on | What it does |
 |----------|---------|--------------|
-| `ci.yml` | every push to `staging` or `production`, every pull request | typecheck, tests, build, e2e smoke; on a PR into `staging` or `production` also the size table and Lighthouse in one comment ([reading it](#reading-the-size-table)); on a stacked PR only the lean job ([which checks run where](#which-checks-run-where)) |
+| `ci.yml` | every push to `staging` or `production`, every pull request | typecheck, lint, tests, build, e2e smoke; on a PR into `staging` or `production` also the Effect diagnostics, and the size table and Lighthouse in one comment ([reading it](#reading-the-size-table)); on a stacked PR only the lean job ([which checks run where](#which-checks-run-where)) |
 | `pr-body.yml` (PR body) | every pull request, opened, edited, updated or reopened | fails a PR that changes shipped code and whose body has no size table ([reading it](#reading-the-size-table)) |
 | `codeql.yml` (CodeQL) | every push to `staging` or `production`, every pull request into the default branch or `production`, and Mondays | reads the source for injection and workflow mistakes |
 | `production-guard.yml` (Production Guard) | a pull request into `production` | fails unless the pull request comes from this repo's `staging` |
@@ -25,6 +25,7 @@ A stacked PR is one whose base is neither the default branch nor `production`: a
 | Baseline (typecheck + test + harness-check) | — | yes, required | yes, required | yes |
 | Build (Cloudflare Workers) | — | yes, required | yes, required | yes |
 | E2E smoke (Playwright) | — | yes, required | yes, required | yes |
+| Effect diagnostics (`bun run lint:effect`) | — | yes | yes | — |
 | CodeQL | — | yes | yes | yes (and Mondays) |
 | Preview Deploy | — | yes | yes | — |
 | Size (against the base branch) | — | yes | yes | — |
@@ -35,7 +36,7 @@ A stacked PR is one whose base is neither the default branch nor `production`: a
 | Source branch is staging | — | — | yes, required | — |
 | Greptile (`greptile.json`) | — | yes | yes | — |
 
-- The lean job runs `./scripts/verify.sh --lean`: typecheck, the house linter over the whole tree with its shrink-only baseline (and its self-test), and every unit test. It leaves out the migration check, the harness gate, the secret scan, the package audit (it reads the network), the build, e2e, the code scan and the preview. All of those run on the roll-up.
+- The lean job runs `./scripts/verify.sh --lean`: typecheck, `bun run lint` (Biome, the house linter, import cycles and dead code), the house linter over the whole tree with its shrink-only baseline (and its self-test), and every unit test. It leaves out the migration check, the harness gate, the secret scan, the package audit (it reads the network), the build, e2e, the code scan and the preview. All of those run on the roll-up.
 - The jobs choose with a job-level `if:` that compares `github.base_ref` with `github.event.repository.default_branch` and `production`, so a fork with another default branch name needs no edit. `scripts/__tests__/github-workflows.test.ts` reads the workflow files and proves which jobs run for each base.
 - GitHub counts a skipped job as passed. A stacked PR that is later retargeted to the default branch keeps the skipped results of its last push, and retargeting starts no new run. After a retarget, push a commit (or close and reopen the PR) so the full suite runs before the merge. `ship-feature` never retargets a stacked PR onto the default branch: the roll-up is a new PR.
 - `greptile.json` names `staging` and `production` in `includeBranches`, since Greptile has no word for "the default branch". A fork with another default branch name edits that list.

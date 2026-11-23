@@ -3,18 +3,15 @@ import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { Either, Schema } from "effect";
+import { Either } from "effect";
 import {
   BIOME_BIN,
   EXIT,
   HOUSE_SCRIPT,
   IMPORT_CYCLE_RULE,
   KNIP_BIN,
-  LEGACY_HOUSE_CHECKER,
-  LEGACY_HOUSE_SCOPE,
   LINTABLE_FILE,
   MAX_OUTPUT_BYTES,
-  PACKAGE_FILE,
   SPAWN_FAILED_STATUS,
   STAGED_FILES_ARGS,
   TOOL,
@@ -25,7 +22,6 @@ import {
   parseBiome,
   parseHouse,
   parseKnip,
-  parseLegacyHouse,
   sortFindings,
 } from "./lib/lint-findings";
 
@@ -37,7 +33,6 @@ export interface RunResult {
 
 export interface Deps {
   run: (command: string, args: readonly string[]) => RunResult;
-  readFile: (file: string) => string | undefined;
   exists: (file: string) => boolean;
   print: (line: string) => void;
   printError: (line: string) => void;
@@ -61,15 +56,6 @@ export function parseArgs(argv: readonly string[]): Request {
     fix: argv.includes("--fix"),
     files: argv.filter((arg) => !arg.startsWith("--")).map((file) => path.posix.normalize(file)),
   };
-}
-
-const PackageScripts = Schema.parseJson(
-  Schema.Struct({ scripts: Schema.optional(Schema.Record({ key: Schema.String, value: Schema.String })) }),
-);
-
-function hasHouseScript(deps: Deps): boolean {
-  const decoded = Schema.decodeUnknownEither(PackageScripts)(deps.readFile(PACKAGE_FILE) ?? "");
-  return Either.isRight(decoded) && decoded.right.scripts?.[HOUSE_SCRIPT] !== undefined;
 }
 
 function stagedFiles(deps: Deps): Either.Either<string[], string> {
@@ -122,22 +108,12 @@ function runImportCycles(deps: Deps): ToolOutcome {
 }
 
 function runHouse(deps: Deps, scoped: boolean, files: readonly string[]): ToolOutcome {
-  if (hasHouseScript(deps)) {
-    const result = deps.run("bun", ["run", HOUSE_SCRIPT, ...(scoped ? files : [])]);
-    const findings = parseHouse(`${result.stdout}\n${result.stderr}`);
-    if (result.status !== 0 && findings.length === 0) {
-      return { tool: TOOL.house, findings, error: `the house linter failed with no finding. ${result.stderr.trim()}` };
-    }
-    return { tool: TOOL.house, findings };
+  const result = deps.run("bun", ["run", HOUSE_SCRIPT, ...(scoped ? files : [])]);
+  const findings = parseHouse(`${result.stdout}\n${result.stderr}`);
+  if (result.status !== 0 && findings.length === 0) {
+    return { tool: TOOL.house, findings, error: `the house linter failed with no finding. ${result.stderr.trim()}` };
   }
-  if (scoped && !files.some((file) => LEGACY_HOUSE_SCOPE.test(file))) return { tool: TOOL.house, findings: [] };
-  const result = deps.run("bun", ["run", LEGACY_HOUSE_CHECKER]);
-  const all = parseLegacyHouse(`${result.stdout}\n${result.stderr}`);
-  if (result.status !== 0 && all.length === 0) {
-    return { tool: TOOL.house, findings: all, error: `the house linter failed with no finding. ${result.stderr.trim()}` };
-  }
-  const wanted = new Set(files);
-  return { tool: TOOL.house, findings: scoped ? all.filter((finding) => wanted.has(finding.path)) : all };
+  return { tool: TOOL.house, findings };
 }
 
 function runDeadCode(deps: Deps): ToolOutcome {
@@ -199,10 +175,6 @@ export function realDeps(): Deps {
         return { status: SPAWN_FAILED_STATUS, stdout: "", stderr: `cannot run ${command}: ${result.error.message}` };
       }
       return { status: result.status ?? EXIT.findings, stdout: result.stdout ?? "", stderr: result.stderr ?? "" };
-    },
-    readFile: (file) => {
-      const full = path.join(root, file);
-      return fs.existsSync(full) ? fs.readFileSync(full, "utf8") : undefined;
     },
     exists: (file) => fs.existsSync(path.join(root, file)),
     print: (line) => console.log(line),

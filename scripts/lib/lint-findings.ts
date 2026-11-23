@@ -4,8 +4,7 @@ import {
   FORMAT_CATEGORY,
   FORMAT_FIX,
   HOUSE_FINDING,
-  LEGACY_HOUSE_FINDING,
-  LEGACY_HOUSE_RULE_HEADING,
+  HOUSE_RULE_PREFIX,
 } from "./lint-constants";
 
 export interface Finding {
@@ -84,6 +83,28 @@ const KnipItems = Schema.Array(Schema.Union(KnipItem, Schema.Array(KnipItem)));
 type DeadCodeKind = keyof typeof DEAD_CODE_FIX;
 const DEAD_CODE_KINDS = Object.keys(DEAD_CODE_FIX) as DeadCodeKind[];
 
+type KnipEntry = typeof KnipItem.Type;
+
+function knipFinding(file: string, kind: DeadCodeKind, group: readonly KnipEntry[]): Finding | undefined {
+  const [first] = group;
+  if (first === undefined) return undefined;
+  const named = kind === "files" ? "" : `\`${group.map((entry) => entry.name).join(", ")}\`: `;
+  return {
+    path: file,
+    ...(first.line === undefined ? {} : { line: first.line, column: first.col }),
+    rule: `knip/${kind}`,
+    message: `${named}${DEAD_CODE_FIX[kind]}`,
+  };
+}
+
+function knipKind(file: string, kind: DeadCodeKind, list: unknown): Either.Either<Finding[], string> {
+  const items = Schema.decodeUnknownEither(KnipItems)(list);
+  if (Either.isLeft(items)) return Either.left(`knip printed a \`${kind}\` list in a shape this parser does not know`);
+  return Either.right(
+    items.right.flatMap((item) => knipFinding(file, kind, "name" in item ? [item] : item) ?? []),
+  );
+}
+
 export function parseKnip(stdout: string): Either.Either<Finding[], string> {
   const decoded = Schema.decodeUnknownEither(KnipReport)(stdout);
   if (Either.isLeft(decoded)) return Either.left("the output is not the JSON that `knip --reporter json` prints");
@@ -91,21 +112,9 @@ export function parseKnip(stdout: string): Either.Either<Finding[], string> {
   for (const issue of decoded.right.issues) {
     for (const kind of DEAD_CODE_KINDS) {
       if (issue[kind] === undefined) continue;
-      const items = Schema.decodeUnknownEither(KnipItems)(issue[kind]);
-      if (Either.isLeft(items)) return Either.left(`knip printed a \`${kind}\` list in a shape this parser does not know`);
-      for (const item of items.right) {
-        const group = "name" in item ? [item] : item;
-        const [first] = group;
-        if (first === undefined) continue;
-        const names = group.map((entry) => entry.name).join(", ");
-        const named = kind === "files" ? "" : `\`${names}\`: `;
-        findings.push({
-          path: issue.file,
-          ...(first.line === undefined ? {} : { line: first.line, column: first.col }),
-          rule: `knip/${kind}`,
-          message: `${named}${DEAD_CODE_FIX[kind]}`,
-        });
-      }
+      const found = knipKind(issue.file, kind, issue[kind]);
+      if (Either.isLeft(found)) return found;
+      findings.push(...found.right);
     }
   }
   return Either.right(findings);
@@ -122,27 +131,10 @@ export function parseHouse(output: string): Finding[] {
       path,
       line: Number(lineNumber),
       ...(column === undefined ? {} : { column: Number(column) }),
-      rule,
+      rule: rule.startsWith(HOUSE_RULE_PREFIX) ? rule : `${HOUSE_RULE_PREFIX}${rule}`,
       message,
     });
   }
   return findings;
 }
 
-export function parseLegacyHouse(output: string): Finding[] {
-  const findings: Finding[] = [];
-  let rule = "house";
-  for (const line of output.split("\n")) {
-    const heading = LEGACY_HOUSE_RULE_HEADING.exec(line);
-    if (heading?.[1] !== undefined) {
-      rule = `house/${heading[1].replace(/\s+/g, "-").toLowerCase()}`;
-      continue;
-    }
-    const match = LEGACY_HOUSE_FINDING.exec(line);
-    if (match === null) continue;
-    const [, path, lineNumber, message] = match;
-    if (path === undefined || lineNumber === undefined || message === undefined) continue;
-    findings.push({ path, line: Number(lineNumber), rule, message });
-  }
-  return findings;
-}

@@ -1,18 +1,10 @@
 {
   "extends": "./tsconfig.json",
-  "include": [
-    "*.config.ts",
-    "scripts/**/*.ts",
-    ".claude/workflow-src/lib.js",
-    "app/db/schema.ts",
-    "app/lib/constants/rate-limit.ts"
-  ],
+  "include": ["*.config.ts"],
   "compilerOptions": {
     "composite": true,
     "strict": true,
-    "allowJs": true,
-    "checkJs": false,
-    "types": ["node", "bun"],
+    "types": ["node"],
     "lib": ["ES2023", "DOM"],
     "target": "ES2022",
     "module": "ES2022",

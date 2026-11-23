@@ -82,7 +82,6 @@
       "app/routes/authentication/components/signup-form.tsx": 1,
       "workers/app.ts": 1
     },
-    "no-zod": {},
     "route-paths": {},
     "procedure-span": {},
     "tagged-error-mapped": {},

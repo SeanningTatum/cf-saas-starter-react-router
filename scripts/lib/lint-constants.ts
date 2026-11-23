@@ -7,9 +7,6 @@ export const TOOL = { biome: "biome", house: "house", importCycles: "import-cycl
 export const BIOME_BIN = "node_modules/.bin/biome";
 export const KNIP_BIN = "node_modules/.bin/knip";
 export const HOUSE_SCRIPT = "lint:house";
-export const LEGACY_HOUSE_CHECKER = "scripts/check-non-negotiables.ts";
-export const LEGACY_HOUSE_SCOPE = /^(?:app|workers)\//;
-export const PACKAGE_FILE = "package.json";
 
 export const IMPORT_CYCLE_RULE = "suspicious/noImportCycles";
 export const FORMAT_CATEGORY = "format";
@@ -34,9 +31,8 @@ export const DEAD_CODE_FIX = {
   catalogReferences: "This catalog reference names an entry that does not exist. Do this instead: add the entry, or pin a version.",
 } as const;
 
-export const LEGACY_HOUSE_RULE_HEADING = /^\s{2}(\S.*?) \(\d+\):$/;
-export const LEGACY_HOUSE_FINDING = /^\s{4}(\S+?):(\d+) — (.*)$/;
 export const HOUSE_FINDING = /^(\S+?):(\d+)(?::(\d+))? (\S+): (.*)$/;
+export const HOUSE_RULE_PREFIX = "house/";
 
 export const LINTABLE_FILE = /\.(?:ts|tsx|js|jsx|mjs|cjs|json|jsonc|css)$/;
 export const STAGED_FILES_ARGS = ["diff", "--cached", "--name-only", "--diff-filter=ACMR"] as const;

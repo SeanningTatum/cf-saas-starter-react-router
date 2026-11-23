@@ -102,7 +102,7 @@ You're working in a codebase with strict conventions. Skipping the plan will cos
 4. **Verify.** The `feature-verifier` sub-agent walks the flow in a browser, saves screenshots to `.verify/<slug>/`, and writes a PASS / FAIL / BLOCKED verdict you paste into the PR.
 5. **Done.** `./scripts/verify.sh` is green and the verdict is PASS. Merge the PR that closes the issue.
 
-**The five non-negotiables** (enforced by the `non-negotiables` gate, [`scripts/check-non-negotiables.ts`](scripts/check-non-negotiables.ts)):
+**The five non-negotiables** (enforced by the `lint` gate: Biome refuses Zod, the house linter in [`scripts/lint/`](scripts/lint) checks the rest):
 
 1. **Effect TS by default.** No `throw`. No `try/catch` outside `Effect.tryPromise`.
 2. **Effect Schema for validation.** No Zod.
@@ -174,7 +174,7 @@ These run automatically — you do not need to remember them.
 `commit-msg` runs commitlint on the message (types and scopes in [`.commitlintrc.json`](.commitlintrc.json)). `pre-commit` skips entirely if no `.ts/.tsx/.js/.jsx` files are staged. Otherwise:
 
 ```bash
-./scripts/verify.sh --only non-negotiables   # or `bun run lint:staged` when the package has it
+bun run lint:staged                          # Biome and the house linter on the staged files
 ./scripts/verify.sh --only typecheck         # cf-typegen + react-router typegen + tsc -b
 ```
 

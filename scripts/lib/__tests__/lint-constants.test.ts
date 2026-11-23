@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { DEAD_CODE_FIX, EXIT, FORMAT_FIX, LINTABLE_FILE, SPAWN_FAILED_STATUS } from "../lib/lint-constants";
+import { DEAD_CODE_FIX, EXIT, FORMAT_FIX, LINTABLE_FILE, SPAWN_FAILED_STATUS } from "../lint-constants";
 
 describe("lint constants", () => {
   it("keeps clean at 0 and the three exit codes distinct, so findings and a broken tool never read as a pass or as each other", () => {

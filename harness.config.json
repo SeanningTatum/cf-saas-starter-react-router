@@ -5,6 +5,7 @@
   "scratchDirs": [".verify/", "tmp/"],
   "gates": [
     {"name": "typecheck", "run": "bun run typecheck", "tier": "lean", "limitSeconds": 600},
+    {"name": "lint", "run": "bun run lint", "tier": "lean", "limitSeconds": 300},
     {"name": "test", "run": "bun run test", "tier": "lean", "limitSeconds": 600},
     {
       "name": "non-negotiables-selftest",

@@ -11,7 +11,7 @@
     "postinstall": "npm run cf-typegen",
     "prepare": "bun scripts/install-hooks.ts",
     "preview": "bun run build && vite preview",
-    "typecheck": "npm run cf-typegen && react-router typegen && tsc -b tsconfig.json e2e/tsconfig.json",
+    "typecheck": "npm run cf-typegen && react-router typegen && tsc -b tsconfig.json scripts/tsconfig.json e2e/tsconfig.json",
     "lint": "bun run scripts/lint-all.ts",
     "lint:staged": "bun run scripts/lint-all.ts --staged",
     "lint:effect": "effect-language-service diagnostics --project tsconfig.cloudflare.json --format text",

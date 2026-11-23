@@ -25,7 +25,18 @@
     "enabled": true,
     "indentStyle": "space",
     "indentWidth": 2,
-    "lineWidth": 100
+    "lineWidth": 100,
+    "includes": [
+      "**",
+      // Formatting would push these past the house linter's 400-line cap (file-size), and its baseline
+      // may only shrink. This list only shrinks: split the file, then delete its line.
+      "!scripts/__tests__/repo-rules.test.ts",
+      "!scripts/__tests__/workflows/brand-init.test.ts",
+      "!scripts/__tests__/workflows/plan-feature.test.ts",
+      "!scripts/__tests__/workflows/ship-feature.test.ts",
+      "!scripts/lint/test-map/cases.ts",
+      "!scripts/memory.ts"
+    ]
   },
   "javascript": {
     "formatter": { "quoteStyle": "double", "semicolons": "always", "trailingCommas": "all" }
@@ -59,9 +70,13 @@
               "@tabler/icons-react": "One icon set: import the icon from lucide-react.",
               "posthog-js": "A provider SDK stays inside its adapter: app/lib/analytics/adapters/.",
               "posthog-node": "A provider SDK stays inside its adapter: app/lib/analytics/adapters/."
-            }
+            },
+            "patterns": [{ "group": ["zod/**"], "message": "Use Effect Schema: import { Schema } from \"effect\"." }]
           }
         }
+      },
+      "complexity": {
+        "noExcessiveCognitiveComplexity": { "level": "error", "options": { "maxAllowedComplexity": 15 } }
       },
       "suspicious": {
         "noExplicitAny": "error"
@@ -73,12 +88,19 @@
   },
   "overrides": [
     {
+      // Scripts are dense (long test titles, command lines, tables of cases); at 100 columns the
+      // formatter grows 19 of them past the 400-line cap. 160 keeps all but the six listed above under it.
+      "includes": ["scripts/**"],
+      "formatter": { "lineWidth": 160 }
+    },
+    {
       "includes": ["app/**", "workers/**", "workflows/**"],
       "linter": {
         "domains": { "react": "recommended" },
         "rules": {
           "correctness": { "useExhaustiveDependencies": "error", "useHookAtTopLevel": "error" },
-          "style": { "noProcessEnv": "error" },
+          // process.env is the house linter's rule (no-process-env): it also catches `const { env } = process`, which Biome's noProcessEnv misses.
+          "style": { "noMagicNumbers": "error" },
           "suspicious": { "noConsole": "error" }
         }
       }
@@ -92,7 +114,10 @@
       "includes": ["**/__tests__/**", "**/*.test.ts", "**/*.test.tsx", "e2e/**"],
       "linter": {
         "domains": { "test": "recommended" },
-        "rules": { "suspicious": { "noFocusedTests": "error", "noSkippedTests": "error" } }
+        "rules": {
+          "style": { "noMagicNumbers": "off" },
+          "suspicious": { "noFocusedTests": "error", "noSkippedTests": "error" }
+        }
       }
     },
     {
@@ -113,13 +138,18 @@
     },
     {
       // React Router names a splat route file with `$`.
-      "includes": ["app/routes/api/*.$.ts"],
+      "includes": ["app/routes/api/*.$.ts", "app/routes/api/__tests__/*.$.test.ts"],
       "linter": { "rules": { "style": { "useFilenamingConvention": "off" } } }
     },
     {
-      // The one place the app writes to the console: the logger's sink.
-      "includes": ["app/lib/log-format.ts"],
-      "linter": { "rules": { "suspicious": { "noConsole": "off" } } }
+      // Constants live here by rule (the house linter's constants-home), so a bare number is the point.
+      "includes": ["app/lib/constants/**"],
+      "linter": { "rules": { "style": { "noMagicNumbers": "off" } } }
+    },
+    {
+      // Scripts hold GitHub Actions `${{ }}` and shell `${VAR}` text on purpose, in code and tests alike.
+      "includes": ["scripts/**"],
+      "linter": { "rules": { "suspicious": { "noTemplateCurlyInString": "off" } } }
     },
     {
       "includes": ["app/lib/analytics/adapters/**"],
@@ -132,7 +162,8 @@
                 "paths": {
                   "zod": "Use Effect Schema: import { Schema } from \"effect\".",
                   "@tabler/icons-react": "One icon set: import the icon from lucide-react."
-                }
+                },
+                "patterns": [{ "group": ["zod/**"], "message": "Use Effect Schema: import { Schema } from \"effect\"." }]
               }
             }
           }
@@ -140,11 +171,12 @@
       }
     },
     {
-      // The nine files that still use the second icon set. This list only shrinks: move a file to
+      // The files that still use the second icon set. This list only shrinks: move a file to
       // lucide-react, then delete its line. When it is empty, drop @tabler/icons-react from package.json.
       "includes": [
         "app/components/analytics/stat-card.tsx",
         "app/components/feature-card.tsx",
+        "app/components/turnstile-widget.tsx",
         "app/routes/admin/components/user-data-table.tsx",
         "app/routes/admin/layout/app-sidebar.tsx",
         "app/routes/admin/layout/nav-main.tsx",
@@ -163,12 +195,77 @@
                   "zod": "Use Effect Schema: import { Schema } from \"effect\".",
                   "posthog-js": "A provider SDK stays inside its adapter: app/lib/analytics/adapters/.",
                   "posthog-node": "A provider SDK stays inside its adapter: app/lib/analytics/adapters/."
-                }
+                },
+                "patterns": [{ "group": ["zod/**"], "message": "Use Effect Schema: import { Schema } from \"effect\"." }]
               }
             }
           }
         }
       }
+    },
+    {
+      // Debt, not design: functions in these files were over a cognitive complexity of 15 when the rule
+      // came in (#79). This list only shrinks: split the function, then delete the file's line.
+      "includes": [
+        "app/lib/log-format.ts",
+        "app/trpc/__tests__/input-bounds.test.ts",
+        "e2e/file-upload.paths.spec.ts",
+        "scripts/__tests__/github-workflows.test.ts",
+        "scripts/__tests__/migration-check.test.ts",
+        "scripts/__tests__/pr-review-wait.test.ts",
+        "scripts/__tests__/repo-rules.test.ts",
+        "scripts/__tests__/tracker.test.ts",
+        "scripts/check-feature-doc.ts",
+        "scripts/e2e-videos.ts",
+        "scripts/first-time-setup.ts",
+        "scripts/lib/colour.ts",
+        "scripts/lib/repo-rules-diff.ts",
+        "scripts/lib/run-telemetry-ingest.ts",
+        "scripts/lib/run-telemetry-report.ts",
+        "scripts/lib/workflow-dry-run.ts",
+        "scripts/lint/effect-ast.ts",
+        "scripts/lint/rules/no-process-env.ts",
+        "scripts/lint/rules/procedure-span.ts",
+        "scripts/lint/test-map/routes.ts",
+        "scripts/memory.ts",
+        "scripts/migration-check.ts",
+        "scripts/pr-review-wait.ts",
+        "scripts/repo-rules.ts",
+        "scripts/roster.ts",
+        "scripts/stack.ts",
+        "scripts/teardown.ts",
+        "scripts/tracker.ts",
+        "scripts/workflows.ts"
+      ],
+      "linter": { "rules": { "complexity": { "noExcessiveCognitiveComplexity": "off" } } }
+    },
+    {
+      // Debt, not design: these files held bare numbers when noMagicNumbers came in (#79). This list only
+      // shrinks: name the number in app/lib/constants/, then delete the file's line.
+      "includes": [
+        "app/components/analytics/distribution-chart.tsx",
+        "app/components/analytics/time-series-chart.tsx",
+        "app/components/file-upload.tsx",
+        "app/lib/analytics/adapters/posthog.ts",
+        "app/lib/insights.ts",
+        "app/lib/log-format.ts",
+        "app/lib/request-context.ts",
+        "app/lib/schemas/analytics.ts",
+        "app/lib/schemas/auth.ts",
+        "app/lib/schemas/bucket.ts",
+        "app/lib/schemas/pagination.ts",
+        "app/lib/schemas/user.ts",
+        "app/repositories/analytics.ts",
+        "app/root.tsx",
+        "app/routes/admin/_index.tsx",
+        "app/routes/admin/components/user-data-table.tsx",
+        "app/routes/admin/kitchen-sink.tsx",
+        "app/services/tracing.ts",
+        "app/trpc/index.ts",
+        "app/trpc/query-client.tsx",
+        "workers/security-headers.ts"
+      ],
+      "linter": { "rules": { "style": { "noMagicNumbers": "off" } } }
     },
     {
       // ShadCN primitives are vendored: `shadcn add` writes them, so only the boundary is checked.
@@ -183,13 +280,14 @@
             "useExhaustiveDependencies": "off",
             "useHookAtTopLevel": "off"
           },
+          "complexity": { "noExcessiveCognitiveComplexity": "off" },
           "performance": { "noBarrelFile": "off", "noReExportAll": "off" },
           "security": { "noDangerouslySetInnerHtml": "off" },
           "suspicious": { "noExplicitAny": "off", "noConsole": "off" },
           "style": {
             "noDefaultExport": "off",
             "noNonNullAssertion": "off",
-            "noProcessEnv": "off",
+            "noMagicNumbers": "off",
             "noRestrictedImports": {
               "level": "error",
               "options": {
@@ -201,6 +299,7 @@
                   "drizzle-orm": "A primitive takes data as props; it never reads the data layer."
                 },
                 "patterns": [
+                  { "group": ["zod/**"], "message": "Use Effect Schema: import { Schema } from \"effect\"." },
                   {
                     "group": [
                       "@/db",

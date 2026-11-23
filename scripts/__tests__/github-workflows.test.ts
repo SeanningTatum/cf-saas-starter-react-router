@@ -118,7 +118,6 @@ describe(".github/dependabot.yml", () => {
 
 describe("workflows keep secrets and PR data out of shell text", () => {
   it.each(["deploy.yml", "preview.yml", "preview-cleanup.yml"])(
-    // biome-ignore lint/suspicious/noTemplateCurlyInString: the title names the GitHub Actions ${{ }} syntax, not a template placeholder
     "%s has no ${{ }} expression inside a run script: PR-controlled values must go through env",
     (f) => {
       const lines = codeLines(f);
@@ -346,7 +345,7 @@ describe("which jobs run for which base: the full suite into the default branch 
   });
   const ran = (f: string, context: Context) => jobsThatRun(jobsOf(read(f)), context);
   const pushed = ["baseline", "build", "e2e"];
-  const full = { "ci.yml": [...pushed, "size", "lighthouse", "report"], "codeql.yml": ["analyze"], "preview.yml": ["readiness", "deploy-preview"], "pr-body.yml": ["size-table"] };
+  const full = { "ci.yml": [...pushed, "effect-diagnostics", "size", "lighthouse", "report"], "codeql.yml": ["analyze"], "preview.yml": ["readiness", "deploy-preview"], "pr-body.yml": ["size-table"] };
   const lean = { "ci.yml": ["lean"], "codeql.yml": [], "preview.yml": [], "pr-body.yml": ["size-table"] };
   const required = JSON.parse(fs.readFileSync(path.join(ROOT, ".github", "repo-rules.json"), "utf-8")).rulesets.flatMap(
     (set: { rules: { type: string; parameters?: { required_status_checks?: { context: string }[] } }[] }) =>
@@ -365,7 +364,7 @@ describe("which jobs run for which base: the full suite into the default branch 
   });
 
   it("a PR from a fork into the default branch measures size and Lighthouse but skips the comment: its token cannot write", () => {
-    expect(ran("ci.yml", event("pull_request", "staging", "staging", "someone/fork"))).toEqual([...pushed, "size", "lighthouse"]);
+    expect(ran("ci.yml", event("pull_request", "staging", "staging", "someone/fork"))).toEqual([...pushed, "effect-diagnostics", "size", "lighthouse"]);
   });
 
   it("a push runs the full suite and not the lean job, the size job, Lighthouse or the comment (no PR to compare or comment on)", () => {

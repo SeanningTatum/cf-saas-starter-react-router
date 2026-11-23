@@ -22,6 +22,10 @@ export const FULL_RUN_TRIGGERS = [
   { match: "scripts/secret-scan.ts", reason: "a gate script" },
   { match: "scripts/package-audit.ts", reason: "a gate script" },
   { match: "scripts/lint/**", reason: "the house linter, its rules, map or baseline" },
+  { match: "scripts/lint-all.ts", reason: "the lint runner" },
+  { match: "scripts/lib/lint-*.ts", reason: "the lint runner" },
+  { match: "biome.jsonc", reason: "a config file" },
+  { match: "knip.json", reason: "a config file" },
   { match: "docs/agents/lint-rules.md", reason: "a page the harness gate checks" },
   { match: "package.json", reason: "a config file" },
   { match: "tsconfig*.json", reason: "a config file" },
@@ -44,11 +48,11 @@ export const FULL_RUN_TRIGGERS = [
   { match: "app/db/schema.ts", reason: "the schema, which the migrations gate reads" },
 ] as const;
 
-export const GATE = { typecheck: "typecheck", lint: "non-negotiables", test: "test", e2e: "e2e" } as const;
+export const GATE = { typecheck: "typecheck", lint: "lint", test: "test", e2e: "e2e" } as const;
 
 export const COMMAND = {
   typecheck: "bun run typecheck",
-  lint: "bun run lint:house",
+  lint: "bun run lint",
   test: "bunx vitest related --run --passWithNoTests",
   e2e: "CI=1 bun run test:e2e",
 } as const;

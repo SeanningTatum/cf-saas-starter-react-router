@@ -55,7 +55,6 @@ describe("scanText: each rule fires on a fake credential", () => {
 
 describe("scanText: near misses stay quiet", () => {
   const quiet: [string, string][] = [
-    // biome-ignore lint/suspicious/noTemplateCurlyInString: a literal GitHub Actions ${{ secrets.X }} reference is the input under test
     ["a secrets reference in a workflow", "CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}"],
     ["a shell variable", 'CLOUDFLARE_API_TOKEN="$CLOUDFLARE_API_TOKEN"'],
     ["process.env", "const token = process.env.CLOUDFLARE_API_TOKEN;"],
@@ -72,7 +71,6 @@ describe("scanText: near misses stay quiet", () => {
     ["an env secret that is a file path", "TOKEN_FILE=/var/lib/some/very/long/path/to/a/token/file"],
     ["an env secret that is short", `SESSION_SECRET=${alnum(20)}`],
     ["an env name without a secret word", `BUCKET_NAME=${alnum(40)}`],
-    // biome-ignore lint/suspicious/noTemplateCurlyInString: a literal GitHub Actions ${{ secrets.X }} reference is the input under test
     ["a cloudflare token name with no literal", "CLOUDFLARE_PREVIEW_API_TOKEN: ${{ secrets.CLOUDFLARE_PREVIEW_API_TOKEN }}"],
     ["an AKIA word that is too short", "AKIA" + "SHORT"],
   ];
