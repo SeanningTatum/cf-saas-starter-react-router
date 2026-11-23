@@ -6,6 +6,7 @@ import { trackedUpload } from "./tracked-upload";
 import { RateLimiter, type RateLimitRule } from "@/services/rate-limit";
 import { ErrorReporterFrom } from "@/services/error-reporter";
 import { RateLimitError } from "@/models/errors/rate-limit";
+import { UploadQuotaError } from "@/models/errors/bucket";
 import type { ErrorCapture } from "@/lib/error-reporting/report";
 import {
   HTTP_TOO_MANY_REQUESTS,
@@ -19,13 +20,16 @@ import {
   HTTP_PAYLOAD_TOO_LARGE,
   HTTP_UNAUTHORIZED,
   MAX_UPLOAD_REQUEST_BYTES,
+  UPLOAD_QUOTA_BYTES,
+  UPLOAD_QUOTA_MESSAGE,
   UPLOAD_NO_FILE_MESSAGE,
   UPLOAD_NOT_A_FORM_MESSAGE,
   UPLOAD_TOO_LARGE_MESSAGE,
   UPLOAD_UNAUTHORIZED_MESSAGE,
 } from "@/lib/constants/upload";
-import { BucketRepository } from "@/repositories/bucket";
-import { Bucket } from "@/services/bucket";
+import { UploadRepository } from "@/repositories/upload";
+import { makeFakeBucket } from "@/services/__tests__/fake-bucket";
+import { makeSeededDatabase } from "@/services/database.seeded-layer";
 import { makeOtlpTracer, makeSpanBuffer } from "@/services/tracing";
 import {
   AUTH_GET_SESSION_SPAN,
@@ -50,10 +54,13 @@ interface LoggedLine {
 
 const URL_UNDER_TEST = "https://app.example.com/api/upload-file";
 const USER_ID = "user-upload-test";
+const OWNER_ID = "seed-user";
+const QUOTA_LEFT_BYTES = 200 * 1024;
 
-const runtimes: Array<ManagedRuntime.ManagedRuntime<RateLimiter, never>> = [];
+const runtimes: Array<{ dispose: () => Promise<void> }> = [];
 
 const harness = ({ signedIn, allow }: { readonly signedIn: boolean; readonly allow: boolean }) => {
+  const roomFor: number[] = [];
   const asked: Array<[RateLimitRule, string]> = [];
   const captures: ErrorCapture[] = [];
   const logged: LoggedLine[] = [];
@@ -70,6 +77,15 @@ const harness = ({ signedIn, allow }: { readonly signedIn: boolean; readonly all
         },
       }),
       ErrorReporterFrom({ capture: (capture) => Effect.sync(() => void captures.push(capture)) }),
+      Layer.succeed(UploadRepository, {
+        assertRoom: (_userId: string, bytes: number) => {
+          roomFor.push(bytes);
+          return bytes > QUOTA_LEFT_BYTES
+            ? Effect.fail(new UploadQuotaError({ limitBytes: UPLOAD_QUOTA_BYTES, message: "full" }))
+            : Effect.void;
+        },
+        store: () => Effect.succeed({ id: "stored", key: "uploads/stored" }),
+      } as unknown as UploadRepository),
       Logger.replace(
         Logger.defaultLogger,
         Logger.make(
@@ -86,7 +102,7 @@ const harness = ({ signedIn, allow }: { readonly signedIn: boolean; readonly all
     reportError,
     auth: { api: { getSession: vi.fn(async () => session) } },
   } as unknown as AppLoadContext;
-  return { context, asked, captures, logged, reportError };
+  return { context, asked, captures, logged, reportError, roomFor };
 };
 
 const upload = async (request: Request, context: AppLoadContext) =>
@@ -149,6 +165,20 @@ describe("upload-file action, checks before the body is read", () => {
 
     expect(result.init?.status).toBe(HTTP_PAYLOAD_TOO_LARGE);
     expect(result.data).toEqual({ success: false, error: UPLOAD_TOO_LARGE_MESSAGE });
+    expect(bodyRead()).toBe(false);
+  });
+
+  it("refuses with 413 before reading the body when the declared length would pass the user's quota", async () => {
+    const { context, roomFor } = harness({ signedIn: true, allow: true });
+    const { request, bodyRead } = await trackedUpload(URL_UNDER_TEST, {
+      contentLength: 64 * 1024 + QUOTA_LEFT_BYTES + 1,
+    });
+
+    const result = await upload(request, context);
+
+    expect(roomFor).toEqual([QUOTA_LEFT_BYTES + 1]);
+    expect(result.init?.status).toBe(HTTP_PAYLOAD_TOO_LARGE);
+    expect(result.data).toEqual({ success: false, error: UPLOAD_QUOTA_MESSAGE });
     expect(bodyRead()).toBe(false);
   });
 
@@ -219,13 +249,14 @@ describe("upload-file action, error reporting", () => {
 describe("upload-file action spans", () => {
   it("runs the upload under one upload.store_file span with the session lookup, the head read and the put inside it, so a slow upload shows where its time went", async () => {
     const buffer = makeSpanBuffer();
-    const bucket = Layer.succeed(Bucket, {
-      bucket: { put: async () => {} } as unknown as R2Bucket,
-    });
+    const fake = makeFakeBucket();
     const runtime = ManagedRuntime.make(
       Layer.mergeAll(
         Layer.setTracer(makeOtlpTracer(buffer)),
-        BucketRepository.Default.pipe(Layer.provide(bucket)),
+        UploadRepository.Default.pipe(
+          Layer.provideMerge(fake.layer),
+          Layer.provideMerge(makeSeededDatabase("base")),
+        ),
         Layer.succeed(RateLimiter, { check: () => Effect.void }),
       ),
     );
@@ -233,7 +264,7 @@ describe("upload-file action spans", () => {
     form.set("file", new File([PNG_SIGNATURE], "a.png", { type: "image/png" }));
     const context = {
       auth: {
-        api: { getSession: async () => ({ user: { id: "u1" }, session: {} }) },
+        api: { getSession: async () => ({ user: { id: OWNER_ID }, session: {} }) },
       },
       runtime,
       reportError: vi.fn(),
@@ -250,6 +281,9 @@ describe("upload-file action spans", () => {
     await runtime.dispose();
 
     expect(result.data).toMatchObject({ success: true });
+    const stored = result.data as unknown as { key: string };
+    expect(stored.key.startsWith(`uploads/${OWNER_ID}/`)).toBe(true);
+    expect(fake.keys()).toEqual([stored.key]);
     const root = buffer.spans.find((span) => span.name === UPLOAD_STORE_FILE_SPAN);
     const parentOf = (name: string) =>
       Option.getOrUndefined(

@@ -11,3 +11,5 @@ export const FIXTURES_LOAD_SCENARIO_SPAN = "fixtures.load_scenario";
 export const FIXTURES_OPEN_DATABASE_SPAN = "fixtures.open_database";
 export const FIXTURES_APPLY_MIGRATIONS_SPAN = "fixtures.apply_migrations";
 export const FIXTURES_APPLY_SCENARIO_SPAN = "fixtures.apply_scenario";
+export const UPLOAD_RESERVE_SPAN = "upload.reserve";
+export const UPLOAD_PURGE_SPAN = "upload.purge";

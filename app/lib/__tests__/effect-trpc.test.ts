@@ -27,6 +27,7 @@ import {
   BucketDeleteError,
   BucketListError,
   BucketValidationError,
+  UploadQuotaError,
 } from "@/models/errors/bucket";
 import { RateLimitError } from "@/models/errors/rate-limit";
 import {
@@ -148,6 +149,13 @@ describe("tagToTRPC error mapping", () => {
     Effect.gen(function* () {
       const exit = yield* failExit(new BucketListError({}));
       expectTRPC(exit, "INTERNAL_SERVER_ERROR");
+    }),
+  );
+
+  it.effect("UploadQuotaError → PAYLOAD_TOO_LARGE", () =>
+    Effect.gen(function* () {
+      const exit = yield* failExit(new UploadQuotaError({ limitBytes: 1, message: "full" }));
+      expectTRPC(exit, "PAYLOAD_TOO_LARGE");
     }),
   );
 

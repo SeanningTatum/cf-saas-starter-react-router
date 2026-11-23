@@ -250,6 +250,7 @@ export class UserRepository extends Effect.Service<UserRepository>()("app/UserRe
       });
 
     return {
+      assertMutable,
       getUsers,
       filterProtectedUsers,
       bulkBanUsers,

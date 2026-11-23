@@ -65,6 +65,7 @@ export const SCENARIO_DESCRIPTIONS = {
 export const CREDENTIAL_PROVIDER_ID = "credential";
 export const ACCOUNT_ID_SUFFIX = "-account";
 
+export const SEED_DELETE_UPLOADS_SQL = "DELETE FROM upload WHERE user_id LIKE ?";
 export const SEED_DELETE_SESSIONS_SQL = "DELETE FROM session WHERE user_id LIKE ?";
 export const SEED_DELETE_ACCOUNTS_SQL = "DELETE FROM account WHERE user_id LIKE ?";
 export const SEED_DELETE_USERS_SQL = "DELETE FROM user WHERE id LIKE ?";
@@ -72,6 +73,11 @@ export const SEED_INSERT_USER_SQL =
   "INSERT INTO user (id, name, email, email_verified, role, banned, ban_reason, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)";
 export const SEED_INSERT_ACCOUNT_SQL =
   "INSERT INTO account (id, account_id, provider_id, user_id, password, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)";
+export const SEED_INSERT_UPLOAD_SQL =
+  "INSERT INTO upload (id, user_id, key, content_type, size, created_at) VALUES (?, ?, ?, ?, ?, ?)";
+export const UPLOAD_ID_SUFFIX = "-upload";
+export const SEED_UPLOAD_CONTENT_TYPE = "image/png";
+export const SEED_UPLOAD_SIZE_BYTES = 2048;
 export const SQL_PLACEHOLDER = "?";
 export const SQL_NULL = "NULL";
 export const SQL_QUOTE = "'";

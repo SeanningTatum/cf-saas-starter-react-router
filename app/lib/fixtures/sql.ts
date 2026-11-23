@@ -3,6 +3,11 @@ import {
   CREDENTIAL_PROVIDER_ID,
   SEED_DELETE_ACCOUNTS_SQL,
   SEED_DELETE_SESSIONS_SQL,
+  SEED_DELETE_UPLOADS_SQL,
+  SEED_INSERT_UPLOAD_SQL,
+  SEED_UPLOAD_CONTENT_TYPE,
+  SEED_UPLOAD_SIZE_BYTES,
+  UPLOAD_ID_SUFFIX,
   SEED_DELETE_USERS_SQL,
   SEED_ID_LIKE,
   SEED_INSERT_ACCOUNT_SQL,
@@ -13,6 +18,7 @@ import {
   SQL_QUOTE,
   SQL_STATEMENT_END,
 } from "@/lib/constants/fixtures";
+import { uploadKeyFor } from "@/lib/constants/upload";
 import type { Scenario, UserFixture } from "./schema";
 
 export type SqlValue = string | number | null;
@@ -52,15 +58,32 @@ const insertAccount = (user: UserFixture, passwordHash: string): SqlStatement =>
   ],
 });
 
+const insertUpload = (user: UserFixture): SqlStatement => {
+  const id = `${user.id}${UPLOAD_ID_SUFFIX}`;
+  return {
+    sql: SEED_INSERT_UPLOAD_SQL,
+    args: [
+      id,
+      user.id,
+      uploadKeyFor(user.id, id),
+      SEED_UPLOAD_CONTENT_TYPE,
+      SEED_UPLOAD_SIZE_BYTES,
+      user.createdAtMs,
+    ],
+  };
+};
+
 export const buildScenarioStatements = (
   scenario: Scenario,
   opts: { readonly passwordHash: string },
 ): ReadonlyArray<SqlStatement> => [
+  { sql: SEED_DELETE_UPLOADS_SQL, args: [SEED_ID_LIKE] },
   { sql: SEED_DELETE_SESSIONS_SQL, args: [SEED_ID_LIKE] },
   { sql: SEED_DELETE_ACCOUNTS_SQL, args: [SEED_ID_LIKE] },
   { sql: SEED_DELETE_USERS_SQL, args: [SEED_ID_LIKE] },
   ...scenario.users.map(insertUser),
   ...scenario.users.map((user) => insertAccount(user, opts.passwordHash)),
+  ...scenario.users.filter((user) => user.fixtureRole !== undefined).map(insertUpload),
 ];
 
 const literal = (value: SqlValue): string => {

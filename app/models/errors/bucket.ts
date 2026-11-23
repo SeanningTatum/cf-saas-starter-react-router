@@ -29,6 +29,11 @@ export class BucketValidationError extends Data.TaggedError("BucketValidationErr
   readonly field?: string;
 }> {}
 
+export class UploadQuotaError extends Data.TaggedError("UploadQuotaError")<{
+  readonly limitBytes: number;
+  readonly message: string;
+}> {}
+
 export type BucketError =
   | BucketBindingError
   | BucketUploadError
@@ -36,4 +41,5 @@ export type BucketError =
   | BucketNotFoundError
   | BucketDeleteError
   | BucketListError
-  | BucketValidationError;
+  | BucketValidationError
+  | UploadQuotaError;

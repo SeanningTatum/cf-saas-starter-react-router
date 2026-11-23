@@ -4,7 +4,10 @@ import {
   MAX_UPLOAD_REQUEST_BYTES,
   MAX_UPLOAD_SIZE_BYTES,
   ALLOWED_UPLOAD_CONTENT_TYPES,
+  declaredPayloadBytes,
   declaresOversizedUpload,
+  uploadKeyFor,
+  uploadPrefixFor,
   isAllowedUploadContentType,
   matchesMagicBytes,
 } from "../upload";
@@ -101,4 +104,25 @@ describe("declaresOversizedUpload", () => {
       expect(declaresOversizedUpload(withLength(value))).toBe(false);
     },
   );
+});
+
+describe("uploadKeyFor", () => {
+  it("puts the owner's id in the key and under the owner's prefix, so one prefix lists exactly one user's objects", () => {
+    expect(uploadKeyFor("u1", "abc")).toBe("uploads/u1/abc");
+    expect(uploadKeyFor("u1", "abc").startsWith(uploadPrefixFor("u1"))).toBe(true);
+    expect(uploadKeyFor("u1", "abc").startsWith(uploadPrefixFor("u"))).toBe(false);
+  });
+});
+
+describe("declaredPayloadBytes", () => {
+  it("is the declared length less the multipart allowance, never negative, so a pre-read quota check never refuses a body that would fit", () => {
+    const at = (value: string) => new Headers({ [CONTENT_LENGTH_HEADER]: value });
+    expect(declaredPayloadBytes(at(String(64 * 1024 + 500)))).toBe(500);
+    expect(declaredPayloadBytes(at("10"))).toBe(0);
+  });
+
+  it("is 0 when the header is missing or not a number", () => {
+    expect(declaredPayloadBytes(new Headers())).toBe(0);
+    expect(declaredPayloadBytes(new Headers({ [CONTENT_LENGTH_HEADER]: "abc" }))).toBe(0);
+  });
 });

@@ -11,6 +11,7 @@ export type UploadOptions = typeof UploadOptions.Type;
 
 export const ListR2Input = Schema.Struct({
   prefix: Schema.optional(R2Key),
+  cursor: Schema.optional(Schema.String),
   limit: Schema.Number.pipe(
     Schema.int(),
     Schema.greaterThanOrEqualTo(1),
