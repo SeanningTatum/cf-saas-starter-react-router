@@ -1,5 +1,5 @@
 import { DEV_ROUTES } from "../../app/lib/constants/routes";
-import { SANDBOX_BUILD_FLAG, SANDBOX_ENABLED_VAR, SANDBOX_ON } from "../../app/lib/constants/sandbox";
+import { SANDBOX_BUILD_FLAG, SANDBOX_ENABLED_VAR, SANDBOX_MODULE_TABLE, SANDBOX_ON } from "../../app/lib/constants/sandbox";
 import { SANDBOX_LOAD_MANIFEST_SPAN, SANDBOX_LOAD_PAGE_SPAN, SANDBOX_RESOLVE_SELECTION_SPAN } from "../../app/lib/constants/spans";
 
 export const SANDBOX_MARKERS: ReadonlyArray<string> = [
@@ -9,6 +9,9 @@ export const SANDBOX_MARKERS: ReadonlyArray<string> = [
   SANDBOX_LOAD_MANIFEST_SPAN,
   SANDBOX_RESOLVE_SELECTION_SPAN,
   "routes/sandbox/",
+  "not-built",
+  "flag-off",
+  ...SANDBOX_MODULE_TABLE.map((module) => module.description),
 ];
 
 export const DEFAULT_BUILD_DIR = "build";

@@ -8,9 +8,13 @@ const read = (file: string): string => fs.readFileSync(path.join(ROOT, file), "u
 
 describe("SANDBOX_MARKERS", () => {
   it("are strings the sandbox code really holds, so the scan cannot pass by looking for text that never ships", () => {
-    const sources = [read("app/routes.ts"), read("app/lib/constants/routes.ts"), read("app/lib/constants/spans.ts"), read("app/lib/sandbox/gate.ts")].join(
-      "\n",
-    );
+    const sources = [
+      read("app/routes.ts"),
+      read("app/lib/constants/routes.ts"),
+      read("app/lib/constants/spans.ts"),
+      read("app/lib/sandbox/gate.ts"),
+      read("app/lib/constants/sandbox.ts"),
+    ].join("\n");
     for (const marker of SANDBOX_MARKERS) expect(sources, marker).toContain(marker);
   });
 

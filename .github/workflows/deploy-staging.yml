@@ -108,6 +108,12 @@ jobs:
           CLOUDFLARE_ENV: staging
         run: bun run build
 
+      # The build that ships: fail before deploy when a sandbox route, its code or the
+      # SANDBOX_ENABLED var reached it. Only preview.yml sets VITE_SANDBOX (issue #47).
+      - name: No sandbox in the build that ships
+        if: steps.token.outputs.ready == 'true'
+        run: bun scripts/ci/sandbox-absent.ts
+
       - name: Deploy to Cloudflare Workers (staging)
         if: steps.token.outputs.ready == 'true'
         env:

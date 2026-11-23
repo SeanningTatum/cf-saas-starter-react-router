@@ -193,6 +193,11 @@ const NO_PROCEDURE_RAISES_IT: Readonly<Record<string, string>> = {
   DevServerRunningError: "raised by the seed scripts, never under a request",
   FixtureLoginError: "raised by Playwright global setup, never under a request",
   RealAnalyticsProviderError: "raised by Playwright global setup, never under a request",
+  SandboxDisabledError:
+    "raised by the sandbox route loaders, which fold it into a 404; no procedure",
+  SandboxUnknownModuleError: "raised by the sandbox page loader, which folds it into a 404",
+  SandboxUnknownScenarioError: "raised by the sandbox page loader, which folds it into a 404",
+  SandboxCaseNotDeclaredError: "raised by the sandbox page loader, which folds it into a 404",
 };
 
 describe("every tagged error is accounted for", () => {
