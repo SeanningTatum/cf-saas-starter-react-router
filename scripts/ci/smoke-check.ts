@@ -4,6 +4,7 @@ import fs from "node:fs";
 import { HEALTH_DOWN, HEALTH_UP, HEALTHZ_PATH } from "../../app/lib/constants/health";
 import {
   ENV_SUMMARY,
+  ERROR_BAD_RELEASE,
   ERROR_BAD_URL,
   ERROR_BAD_VERSION,
   ERROR_BAD_WORKER,
@@ -21,6 +22,7 @@ import {
   REASON_DOWN,
   REASON_NOT_JSON,
   REASON_NO_ANSWER,
+  RELEASE_RULE,
   ROOT_PATH,
   SECURE_PROTOCOL,
   SMOKE_ATTEMPTS,
@@ -75,7 +77,9 @@ export const DEFAULT_OPTIONS: SmokeOptions = {
   timeoutMs: SMOKE_TIMEOUT_MS,
 };
 
-const HealthBody = Schema.parseJson(Schema.Struct({ status: Schema.Literal(HEALTH_UP, HEALTH_DOWN), release: Schema.String }));
+const HealthBody = Schema.parseJson(
+  Schema.Struct({ status: Schema.Literal(HEALTH_UP, HEALTH_DOWN), release: Schema.String.pipe(Schema.pattern(RELEASE_RULE)) }),
+);
 const decodeBody = Schema.decodeUnknownEither(HealthBody);
 
 const isAllowedOrigin = (url: URL): boolean => {
@@ -97,6 +101,11 @@ export function parsePin(worker: string | undefined, versionId: string | undefin
   if (!WORKER_NAME_RULE.test(worker)) return Either.left(ERROR_BAD_WORKER);
   if (!VERSION_ID_RULE.test(versionId)) return Either.left(ERROR_BAD_VERSION);
   return Either.right({ worker, versionId });
+}
+
+export function parseRelease(release: string | undefined): Either.Either<string | undefined, string> {
+  if (release === undefined) return Either.right(undefined);
+  return RELEASE_RULE.test(release) ? Either.right(release) : Either.left(ERROR_BAD_RELEASE);
 }
 
 export const healthUrl = (origin: string): string => `${origin}${HEALTHZ_PATH}`;
@@ -149,8 +158,8 @@ export function parseArgs(argv: readonly string[]): Either.Either<SmokeTarget, s
   return Either.gen(function* () {
     const origin = yield* parseOrigin(rawUrl);
     const pin = yield* parsePin(values.get(FLAG_WORKER), values.get(FLAG_VERSION_ID));
-    const release = values.get(FLAG_RELEASE);
-    return { origin, ...(release ? { release } : {}), ...(pin ? { pin } : {}) };
+    const release = yield* parseRelease(values.get(FLAG_RELEASE));
+    return { origin, ...(release === undefined ? {} : { release }), ...(pin ? { pin } : {}) };
   });
 }
 

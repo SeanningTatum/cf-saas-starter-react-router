@@ -10,6 +10,7 @@ export const HEALTHY_STATUS = 200;
 export const VERSION_OVERRIDES_HEADER = "Cloudflare-Workers-Version-Overrides";
 export const WORKER_NAME_RULE = /^[a-z0-9][a-z0-9-]{0,62}$/;
 export const VERSION_ID_RULE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+export const RELEASE_RULE = /^[A-Za-z0-9._+-]{1,64}$/;
 export const LOCAL_HOSTS: ReadonlySet<string> = new Set(["localhost", "127.0.0.1", "[::1]"]);
 export const SECURE_PROTOCOL = "https:";
 export const LOCAL_PROTOCOL = "http:";
@@ -31,6 +32,7 @@ export const ERROR_BAD_URL = "the URL must be an https origin (or http on localh
 export const ERROR_HALF_PIN = `${FLAG_WORKER} and ${FLAG_VERSION_ID} go together`;
 export const ERROR_BAD_WORKER = "the Worker name must be lower-case letters, digits and hyphens";
 export const ERROR_BAD_VERSION = "the version id must be a Worker version UUID";
+export const ERROR_BAD_RELEASE = "the release must be 1 to 64 letters, digits, dots, hyphens, underscores or plus signs";
 
 export const REASON_NO_ANSWER = "no answer (network error or timeout)";
 export const REASON_NOT_JSON = "the body is not the health shape";

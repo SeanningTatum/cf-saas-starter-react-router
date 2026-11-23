@@ -1,31 +1,49 @@
-import { describe, expect, it } from "vitest";
-import { healthReport, makeHealthMemo } from "../health-check";
+import { describe, expect, it, vi } from "vitest";
+import { healthReport, makeSharedCheck } from "../health-check";
 
 const TTL = 5_000;
 
-describe("makeHealthMemo", () => {
-  it("has nothing before the first write, so that the first request always checks the database", () => {
-    expect(makeHealthMemo(TTL).read(1_000)).toBeUndefined();
+describe("makeSharedCheck", () => {
+  it("runs the check on the first call and hands back its answer, so that the first request always asks the database", async () => {
+    const check = vi.fn(() => Promise.resolve(true));
+    expect(await makeSharedCheck(TTL).get(1_000, check)).toBe(true);
+    expect(check).toHaveBeenCalledTimes(1);
   });
 
-  it("returns the last answer inside the window and nothing once it has passed, so that a stale up never hides a database that went down", () => {
-    const memo = makeHealthMemo(TTL);
-    memo.write(10_000, true);
-    expect(memo.read(10_000)).toBe(true);
-    expect(memo.read(10_000 + TTL - 1)).toBe(true);
-    expect(memo.read(10_000 + TTL)).toBeUndefined();
+  it("reuses the answer inside the window and checks again once it has passed, so that a stale up never hides a database that went down", async () => {
+    const shared = makeSharedCheck(TTL);
+    const check = vi.fn(() => Promise.resolve(true));
+    await shared.get(10_000, check);
+    await shared.get(10_000 + TTL - 1, check);
+    expect(check).toHaveBeenCalledTimes(1);
+    await shared.get(10_000 + TTL, check);
+    expect(check).toHaveBeenCalledTimes(2);
   });
 
-  it("keeps a down answer for the window too, so that an outage does not send every request to the database", () => {
-    const memo = makeHealthMemo(TTL);
-    memo.write(0, false);
-    expect(memo.read(1)).toBe(false);
+  it("gives every caller that arrives while a check is running the same pending answer, so that a burst at the window's edge is one query, not one per request", async () => {
+    const shared = makeSharedCheck(TTL);
+    let finish: (up: boolean) => void = () => undefined;
+    const check = vi.fn(() => new Promise<boolean>((resolve) => (finish = resolve)));
+    const answers = [shared.get(0, check), shared.get(1, check), shared.get(2, check)];
+    finish(true);
+    expect(await Promise.all(answers)).toEqual([true, true, true]);
+    expect(check).toHaveBeenCalledTimes(1);
   });
 
-  it("ignores a clock that went backwards, so that a skewed time cannot pin an old answer forever", () => {
-    const memo = makeHealthMemo(TTL);
-    memo.write(10_000, true);
-    expect(memo.read(9_999)).toBeUndefined();
+  it("keeps a down answer and a rejected check for the window as down, so that an outage or a broken runtime does not run, and report, once per request", async () => {
+    const shared = makeSharedCheck(TTL);
+    const check = vi.fn(() => Promise.reject(new Error("runtime did not build")));
+    expect(await shared.get(0, check)).toBe(false);
+    expect(await shared.get(1, check)).toBe(false);
+    expect(check).toHaveBeenCalledTimes(1);
+  });
+
+  it("checks again when the clock went backwards, so that a skewed time cannot pin an old answer", async () => {
+    const shared = makeSharedCheck(TTL);
+    const check = vi.fn(() => Promise.resolve(true));
+    await shared.get(10_000, check);
+    await shared.get(9_999, check);
+    expect(check).toHaveBeenCalledTimes(2);
   });
 });
 

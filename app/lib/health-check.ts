@@ -5,19 +5,22 @@ export interface HealthReport {
   readonly release: string;
 }
 
-export interface HealthMemo {
-  readonly read: (nowMs: number) => boolean | undefined;
-  readonly write: (nowMs: number, up: boolean) => void;
+export interface SharedCheck {
+  readonly get: (nowMs: number, check: () => Promise<boolean>) => Promise<boolean>;
 }
 
-export const makeHealthMemo = (ttlMs: number): HealthMemo => {
-  let checkedAt = Number.NEGATIVE_INFINITY;
-  let last = false;
+export const makeSharedCheck = (ttlMs: number): SharedCheck => {
+  let startedAt = Number.NEGATIVE_INFINITY;
+  let last: Promise<boolean> = Promise.resolve(false);
   return {
-    read: (nowMs) => (nowMs >= checkedAt && nowMs < checkedAt + ttlMs ? last : undefined),
-    write: (nowMs, up) => {
-      checkedAt = nowMs;
-      last = up;
+    get: (nowMs, check) => {
+      if (nowMs >= startedAt && nowMs < startedAt + ttlMs) return last;
+      startedAt = nowMs;
+      last = check().then(
+        (up) => up,
+        () => false,
+      );
+      return last;
     },
   };
 };

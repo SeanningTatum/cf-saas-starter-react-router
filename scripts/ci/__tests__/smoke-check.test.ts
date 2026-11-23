@@ -72,6 +72,20 @@ describe("judge", () => {
   });
 });
 
+describe("release text from the body", () => {
+  it("refuses a release with a newline, a workflow command or 65 characters, so that a hostile body cannot write a line into the job log or summary", () => {
+    for (const release of ["v1\n::error::forged", "a".repeat(65), "", "v1 two"]) {
+      const verdict = judge({ status: 200, body: JSON.stringify({ status: "up", release }) }, undefined);
+      expect(verdict, JSON.stringify(release)).toMatchObject({ ok: false, reason: expect.stringContaining("health shape") });
+    }
+  });
+
+  it("refuses an empty or unsafe --release, so that an unset CI variable cannot silently turn the release check off", () => {
+    expect(Either.isLeft(parseArgs(["--url", "https://a.example.com", "--release", ""]))).toBe(true);
+    expect(Either.isLeft(parseArgs(["--url", "https://a.example.com", "--release", "v1\nx"]))).toBe(true);
+  });
+});
+
 describe("smokeCheck", () => {
   it("retries until the new release answers and stops there, so that a deployment still spreading is not rolled back", async () => {
     const h = harness([undefined, up("v3.0.9"), up("v3.1.0"), up("v3.1.0")]);

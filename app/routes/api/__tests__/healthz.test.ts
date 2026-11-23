@@ -94,16 +94,18 @@ describe("/healthz", () => {
       Effect.fail(new ConfigurationError({ service: "Database", field: "DATABASE" })),
     );
     const reported: ErrorCapture[] = [];
-    const response = await route.loader({
-      context: {
-        runtime: ManagedRuntime.make(broken),
-        cloudflare: { env: { RELEASE_VERSION: "v3.1.0" } },
-        reportError: (capture) => void reported.push(capture),
-      },
-    });
+    const context = {
+      runtime: ManagedRuntime.make(broken),
+      cloudflare: { env: { RELEASE_VERSION: "v3.1.0" } },
+      reportError: (capture: ErrorCapture) => void reported.push(capture),
+    };
+    const response = await route.loader({ context });
     expect(response.status).toBe(503);
     expect(await response.json()).toEqual({ status: "down", release: "v3.1.0" });
-    expect(reported).toHaveLength(1);
+    for (let call = 0; call < 4; call += 1) {
+      expect((await route.loader({ context })).status).toBe(503);
+    }
+    expect(reported, "a flood of requests became a flood of error reports").toHaveLength(1);
     expect(reported[0]?.source).toBe("loader");
   });
 });

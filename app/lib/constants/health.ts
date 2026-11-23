@@ -9,7 +9,6 @@ export const HEALTHZ_WRONG_METHOD_STATUS = 405;
 export const HEALTHZ_ALLOWED_METHODS = "GET, HEAD";
 
 export const HEALTHZ_CHECK_TTL_MS = 5_000;
-export const HEALTHZ_CACHED_ATTRIBUTE = "healthz.cached";
 export const HEALTHZ_UP_ATTRIBUTE = "healthz.up";
 
 export const HEALTHZ_HEADERS: Readonly<Record<string, string>> = {
