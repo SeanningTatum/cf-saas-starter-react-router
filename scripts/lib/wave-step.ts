@@ -1,6 +1,7 @@
 import {
   MAX_CHECK_FAILURES,
   MAX_GATE_FAILURES,
+  MAX_LIST,
   MAX_MERGE_PASSES,
   MAX_PENDING_ROUNDS,
   MAX_THREAD_ROUNDS,
@@ -122,6 +123,7 @@ export function applyEvent(state: WaveState, e: WaveEvent): WaveState {
         reviewBlocking: e.blocking.length > 0,
         needsFix: e.blocking.length > 0,
         findings: [...e.blocking],
+        kept: [...new Set([...t.kept, ...(e.kept ?? [])])].slice(-MAX_LIST),
       }));
     case "fixed": {
       const after = e.cause ? recordFailure(state, e.n, e.cause) : state;

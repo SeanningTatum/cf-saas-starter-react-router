@@ -1,5 +1,6 @@
 import { stableJson } from "./harness-config";
 import { ledgerChecksum } from "./run-telemetry";
+import { RUN_HEADING_PREFIX, SECTION_PREFIX, SIZE_HEADING_LINE, WHOLE_WAVE_NOTE } from "./wave-constants";
 import type { Ticket, WaveState } from "./wave-state";
 
 export const outLine = (out: unknown): string => JSON.stringify({ out, check: ledgerChecksum(stableJson(out)) });
@@ -29,12 +30,16 @@ const ticketLine = (t: Ticket) => `  #${t.n} ${t.status} ${prText(t)} [${t.kind}
 const trackLines = (state: WaveState): string[] =>
   state.tracks.flatMap((track) => [`track ${track.id}:`, ...state.tickets.filter((t) => track.tickets.includes(t.n)).map(ticketLine)]);
 
+const keptFindings = (state: WaveState): { n: number; text: string }[] => state.tickets.flatMap((t) => t.kept.map((text) => ({ n: t.n, text })));
+
 function tailLines(state: WaveState): string[] {
   const steps = ownerSteps(state);
+  const kept = keptFindings(state);
   return [
     ...(state.projected.length ? [`planned batches: ${state.projected.map((b, i) => `${i + 1}: ${list(b)}`).join(" | ")}`] : []),
     ...state.notes.map((note) => `note: ${note}`),
     ...(steps.length ? ["owner steps:", ...steps.map((s) => `  #${s.n}: ${s.step}`)] : []),
+    ...(kept.length ? ["kept findings (P2 and P3, never blocking):", ...kept.map((k) => `  #${k.n}: ${k.text}`)] : []),
     ...(state.rollupPr === null ? [] : [`roll-up: PR #${state.rollupPr} (never merged by the run)`]),
     ...(state.log.length ? ["last events:", ...state.log.slice(-8).map((l) => `  ${l}`)] : []),
   ];
@@ -42,18 +47,52 @@ function tailLines(state: WaveState): string[] {
 
 export const statusLines = (state: WaveState): string[] => [...headLines(state), ...trackLines(state), ...tailLines(state)];
 
-export function rollupBody(state: WaveState): string {
-  const merged = state.tickets.filter((t) => t.status === "merged");
-  const skipped = state.tickets.filter((t) => t.status === "skipped");
+const mergedLines = (state: WaveState): string[] =>
+  state.tickets.filter((t) => t.status === "merged").map((t) => `- #${t.n} ${t.title}${t.pr === null ? "" : ` (PR #${t.pr})`}`);
+
+const stepLines = (state: WaveState): string[] => {
   const steps = ownerSteps(state);
+  return steps.length ? steps.map((s) => `- #${s.n}: ${s.step}`) : ["- None reported."];
+};
+
+const skippedLines = (state: WaveState): string[] =>
+  state.tickets.filter((t) => t.status === "skipped").map((t) => `- #${t.n} ${t.title}${t.why ? `: ${t.why}` : ""}`);
+
+const skippedBlock = (state: WaveState): string[] => {
+  const lines = skippedLines(state);
+  return lines.length ? ["", "### Skipped", ...lines] : [];
+};
+
+export function rollupBody(state: WaveState, size = ""): string {
+  const skipped = skippedLines(state);
   return [
     `Roll-up of wave \`${state.wave}\` into \`${state.into}\`. The wave workflow opened this PR and never merges it.`,
+    WHOLE_WAVE_NOTE,
     "",
     "## Merged",
-    ...merged.map((t) => `- #${t.n} ${t.title}${t.pr === null ? "" : ` (PR #${t.pr})`}`),
-    ...(skipped.length ? ["", "## Skipped", ...skipped.map((t) => `- #${t.n} ${t.title}${t.why ? `: ${t.why}` : ""}`)] : []),
+    ...mergedLines(state),
+    ...(skipped.length ? ["", "## Skipped", ...skippedLines(state)] : []),
     "",
     "## Human steps",
-    ...(steps.length ? steps.map((s) => `- #${s.n}: ${s.step}`) : ["- None reported."]),
+    ...stepLines(state),
+    ...(size.trim() ? ["", size.trim()] : []),
   ].join("\n");
+}
+
+const dropSection = (body: string, isHeading: (line: string) => boolean): string => {
+  const lines = body.split("\n");
+  const from = lines.findIndex(isHeading);
+  if (from < 0) return body;
+  const length = lines.slice(from + 1).findIndex((line) => line.startsWith(SECTION_PREFIX));
+  const kept = length < 0 ? lines.slice(0, from) : [...lines.slice(0, from), ...lines.slice(from + 1 + length)];
+  return kept.join("\n");
+};
+
+export function mergeRollupBody(existing: string, state: WaveState, date: string, size = ""): string {
+  const heading = `${RUN_HEADING_PREFIX}${date} (${state.slug})`;
+  const withoutOwn = dropSection(existing, (line) => line.trim() === heading);
+  const human = (size.trim() ? dropSection(withoutOwn, (line) => line.trim() === SIZE_HEADING_LINE) : withoutOwn).trimEnd();
+  const note = human.includes(WHOLE_WAVE_NOTE) ? "" : WHOLE_WAVE_NOTE;
+  const section = [heading, "", ...mergedLines(state), ...skippedBlock(state), "", "### Human steps", ...stepLines(state)].join("\n");
+  return [human, note, section, ...(size.trim() ? [size.trim()] : [])].filter(Boolean).join("\n\n");
 }

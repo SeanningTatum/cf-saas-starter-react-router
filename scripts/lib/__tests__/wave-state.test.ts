@@ -17,6 +17,13 @@ describe("decodeState", () => {
     expect(decodeState(JSON.stringify(state))).toEqual(Either.right(state));
   });
 
+  it("a state file written before findings were kept still decodes, with none kept", () => {
+    const old = JSON.parse(JSON.stringify(waveOf([ticket(1)])));
+    delete old.tickets[0].kept;
+    const decoded = decodeState(JSON.stringify(old));
+    expect(Either.isRight(decoded) && decoded.right.tickets[0]?.kept).toEqual([]);
+  });
+
   it("an unknown key is refused, so a hand-edited typo cannot be silently dropped on the next save", () => {
     expect(leftOf(decodeState(stateText({ pasued: true })))).toContain("pasued");
   });

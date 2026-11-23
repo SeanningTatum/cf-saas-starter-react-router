@@ -162,6 +162,16 @@ describe("merge", () => {
   });
 });
 
+describe("kept findings", () => {
+  it("a review keeps its P2 and P3 findings on the ticket without blocking it, once each across rounds", () => {
+    let s = opened(started([ticket(1)]), 1);
+    s = applyEvent(s, { type: "reviewed", n: 1, blocking: [], kept: ["P3 a", "P2 b"] });
+    s = applyEvent(s, { type: "reviewed", n: 1, blocking: [], kept: ["P3 a", "P3 c"] });
+    expect(tk(s, 1).kept).toEqual(["P3 a", "P2 b", "P3 c"]);
+    expect(tk(s, 1).needsFix).toBe(false);
+  });
+});
+
 describe("nextWaveStep", () => {
   it("a stuck ticket stops the wave only after the batch's green tickets are merged and gated", () => {
     let s = started([ticket(1), ticket(2), ticket(3)]);

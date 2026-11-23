@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { stableJson } from "../harness-config";
 import { ledgerChecksum } from "../run-telemetry";
 import { withTicket } from "../wave-state";
-import { outLine, ownerSteps, rollupBody, statusLines } from "../wave-report";
+import { mergeRollupBody, outLine, ownerSteps, rollupBody, statusLines } from "../wave-report";
 import { ticket, waveOf } from "./helpers/wave-fixture";
 
 const finished = () => {
@@ -78,5 +78,64 @@ describe("rollupBody", () => {
     const body = rollupBody(s);
     expect(body).toContain("## Human steps\n- None reported.");
     expect(body).not.toContain("## Skipped");
+  });
+});
+
+describe("rollupBody and mergeRollupBody", () => {
+  it("says the roll-up holds the whole wave branch, so a reader does not take the ticket list for all of it", () => {
+    expect(rollupBody(finished())).toContain("not only the tickets of one run");
+  });
+
+  it("puts the size section in the body when one is given", () => {
+    expect(rollupBody(finished(), "## Size\n\ntable\n")).toMatch(/\n\n## Size\n\ntable$/);
+    expect(rollupBody(finished())).not.toContain("## Size");
+  });
+
+  it("keeps the text a person wrote, adds this run's tickets under a dated heading, and swaps the old size section", () => {
+    const existing = "Hand-written intro.\n\n## Run 2026-11-20 (wave-two)\n\n- #9 Earlier\n\n## Notes from me\nkeep this\n\n## Size\n\nold table";
+    const body = mergeRollupBody(existing, finished(), "2026-11-23", "## Size\n\nnew table");
+    expect(body.startsWith("Hand-written intro.")).toBe(true);
+    expect(body).toContain("## Run 2026-11-20 (wave-two)\n\n- #9 Earlier");
+    expect(body).toContain("## Notes from me\nkeep this");
+    expect(body).toContain(
+      "## Run 2026-11-23 (wave-two)\n\n- #1 Add billing (PR #101)\n- #3 Docs (PR #103)\n\n### Skipped\n- #2 Wide rename: skipped by a person\n\n### Human steps\n- #1: set STRIPE_KEY",
+    );
+    expect(body).not.toContain("old table");
+    expect(body.endsWith("## Size\n\nnew table")).toBe(true);
+  });
+
+  it("keeps the old size section when no new one is given, and swaps it when one is", () => {
+    const existing = "Intro\n\n## Size\n\nold table\n\n## Notes\nkeep";
+    const kept = mergeRollupBody(existing, finished(), "2026-11-23");
+    expect(kept).toContain("## Size\n\nold table");
+    expect(kept).toContain("## Notes\nkeep");
+    expect(mergeRollupBody(existing, finished(), "2026-11-23", "## Size\n\nnew")).not.toContain("old table");
+  });
+
+  it("lists the run's skipped tickets and their reasons in the dated section, and no Skipped heading when none", () => {
+    expect(mergeRollupBody("", finished(), "2026-11-23")).toContain("### Skipped\n- #2 Wide rename: skipped by a person");
+    const clean = withTicket(waveOf([ticket(1)]), 1, () => ({ status: "merged", pr: 101 }));
+    expect(mergeRollupBody("", clean, "2026-11-23")).not.toContain("### Skipped");
+  });
+
+  it("adds the whole-wave note to an older body once, and never twice", () => {
+    const once = mergeRollupBody("Old body", finished(), "2026-11-23");
+    expect(once).toContain("not only the tickets of one run");
+    const twice = mergeRollupBody(once, finished(), "2026-11-24");
+    expect(twice.split("not only the tickets of one run")).toHaveLength(2);
+  });
+
+  it("run twice on one day, it writes its own section once", () => {
+    const once = mergeRollupBody("Intro", finished(), "2026-11-23", "## Size\n\nt");
+    expect(mergeRollupBody(once, finished(), "2026-11-23", "## Size\n\nt")).toBe(once);
+  });
+});
+
+describe("kept findings in status", () => {
+  it("lists each ticket's kept P2 and P3 findings", () => {
+    const s = withTicket(finished(), 1, () => ({ kept: ["P3 app/a.ts rename x", "P2 app/b.ts slow loop"] }));
+    expect(statusLines(s)).toContain("kept findings (P2 and P3, never blocking):");
+    expect(statusLines(s)).toContain("  #1: P2 app/b.ts slow loop");
+    expect(statusLines(finished()).join("\n")).not.toContain("kept findings");
   });
 });
