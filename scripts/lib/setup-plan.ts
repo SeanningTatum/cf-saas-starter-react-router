@@ -113,7 +113,8 @@ const pairProblems = (entries: ReadonlyArray<Entry>, snapshot: Snapshot): { drop
 };
 
 export const buildPlan = async (input: PlanInput): Promise<Plan> => {
-  const interactive = input.ask !== undefined && !input.request.yes && !allResolved(input.request);
+  const targeted = input.request.values.size > 0;
+  const interactive = input.ask !== undefined && !input.request.yes && !targeted && !allResolved(input.request);
   const asked = interactive && input.ask ? await prompted(input, input.ask) : [];
   const gathered = [...fromRequest(input), ...asked];
   const { dropped, problems } = pairProblems(gathered, input.snapshot);

@@ -95,3 +95,8 @@ export const SECURITY_QUESTION =
   "Apply the security settings now (repo rules, dependency alerts, secret scanning, private reports, production approval)? Needs repo admin.";
 export const SECURITY_HINT = `${SETUP_COMMAND} --${MODE_FLAGS.security}`;
 export const UNPROTECTED_NOTE = `A deploy token is set. Until the production environment has a required reviewer and deploys only from the default branch, a branch in this repo can read it. Protect it with: ${SECURITY_HINT}`;
+
+export const PRODUCTION_TOKEN_ID = "production-token";
+
+export const WITHHELD_TOKEN_PROBLEM =
+  "the production deploy token was not stored: the production environment is not protected yet; apply the repo rules as a repo admin, then run setup again";

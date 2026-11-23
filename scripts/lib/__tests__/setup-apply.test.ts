@@ -95,6 +95,38 @@ describe("applyPlan", () => {
   });
 });
 
+describe("applyPlan when an upload fails", () => {
+  it("keeps the Turnstile site key out of the file when the secret key did not upload", () => {
+    const { deps, written, world } = setup();
+    world.failing.add("TURNSTILE_SECRET_KEY");
+    const outcome = applyPlan(plan(entry("turnstile-site-key", "0x4AAAAAAAsite"), entry("turnstile-secret-key", SENTINEL)), deps);
+    expect(written).toEqual([]);
+    expect(outcome.varsChanged).toBe(false);
+    expect(outcome.applied.every((applied) => applied.error !== undefined)).toBe(true);
+  });
+
+  it("reports a missing environment block on a service whose secret went in", () => {
+    const { deps } = setup({ name: "x" });
+    const outcome = applyPlan(plan(entry("sentry-dsn-staging", "https://abc@o1.ingest.sentry.io/42")), deps);
+    expect(outcome.applied[0]?.error).toMatch(/no staging block/);
+  });
+
+  it("sets no companion variable when the secret did not upload", () => {
+    const { deps, written, world } = setup();
+    world.failing.add("SENTRY_DSN");
+    const outcome = applyPlan(plan(entry("sentry-dsn", "https://abc@o1.ingest.sentry.io/42")), deps);
+    expect(written).toEqual([]);
+    expect(outcome.applied[0]?.error).toBeDefined();
+  });
+
+  it("retries the preview seed on a plain re-run when the token is already set and the seed is not", () => {
+    const { deps, saved } = setup(config, new Set(["CLOUDFLARE_PREVIEW_API_TOKEN"]));
+    const outcome = applyPlan(plan(), deps);
+    expect(saved).toEqual([["PREVIEW_SEED_SECRET", SEED]]);
+    expect(outcome.notes.join("\n")).toMatch(/PREVIEW_SEED_SECRET set/);
+  });
+});
+
 describe("describeApplied", () => {
   it("names the item and the environment and never a value", () => {
     const line = describeApplied({ item: itemById("auth-url-preview") as SetupItem, source: "flag", error: undefined });

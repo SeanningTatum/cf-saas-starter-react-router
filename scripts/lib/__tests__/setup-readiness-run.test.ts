@@ -107,6 +107,18 @@ describe("runPass unattended", () => {
     expect(firstSecurity).toBeLessThan(tokenPut);
   });
 
+  it("withholds the production token when the repo rules were not applied", async () => {
+    const { deps, world } = harness();
+    const failedRules = (): Outcome => ({ code: 1, stdout: [], stderr: ["error: no admin"] });
+    const outcome = await runPass(request(["--skip", "all", "--security"], { SETUP_PRODUCTION_TOKEN: VALUES["production-token"] ?? "" }), {
+      ...deps,
+      applyRules: failedRules,
+    });
+    expect(world.ghEnvSecrets.production?.has("CLOUDFLARE_API_TOKEN")).toBe(false);
+    expect(outcome.code).toBe(1);
+    expect(outcome.lines.join("\n")).toMatch(/refused: .*production deploy token was not stored/);
+  });
+
   it("leaves the security settings alone without the flag, and warns when a token went in unprotected", async () => {
     const { deps, world } = harness();
     const outcome = await runPass(request(["--skip", "all"], { SETUP_PRODUCTION_TOKEN: VALUES["production-token"] ?? "" }), deps);

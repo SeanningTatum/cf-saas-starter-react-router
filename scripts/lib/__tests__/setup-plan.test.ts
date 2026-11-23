@@ -153,3 +153,12 @@ describe("buildPlan by prompt", () => {
     expect(asked).toEqual([]);
   });
 });
+
+describe("a targeted command", () => {
+  it("asks no question when an item came by flag", async () => {
+    const { ask, asked } = scripted({});
+    const plan = await buildPlan({ ...base, request: request(["--auth-url", URL_VALUE]), snapshot: snapshotOf(), ask });
+    expect(asked).toEqual([]);
+    expect(plan.entries.map((entry) => entry.item.id)).toContain("auth-url");
+  });
+});

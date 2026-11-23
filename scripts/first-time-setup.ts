@@ -461,7 +461,7 @@ async function main() {
   console.log("\n\x1b[36m✅ Production readiness\x1b[0m");
   const outcome = await runPass(request, buildDeps(interactive ? clackAsk : undefined, accountId));
   printLines(outcome.lines);
-  if (provisioning && outcome.varsChanged) {
+  if (provisioning && outcome.varsChanged && outcome.code === 0) {
     executeDeploy("production", "deploy", accountId);
     executeDeploy("preview", "deploy:preview", accountId);
   }

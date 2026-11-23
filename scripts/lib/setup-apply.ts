@@ -1,7 +1,7 @@
 import { PRODUCTION_ENVIRONMENT, SEED_SECRET_NAME } from "./setup-constants";
 import type { Entry, Plan } from "./setup-plan";
-import type { SetupItem } from "./setup-items";
-import type { Snapshot } from "./setup-readiness";
+import { itemById, type SetupItem } from "./setup-items";
+import { isSet, type Snapshot } from "./setup-readiness";
 import { putNamedGhSecret, putItem, type StoreContext } from "./setup-stores";
 import { applyVarEdits, missingBlocks, type VarEdit, type WranglerConfig } from "./setup-wrangler-vars";
 
@@ -34,44 +34,53 @@ const varEditsOf = (entries: ReadonlyArray<Entry>): ReadonlyArray<VarEdit> =>
     ...(item.companion ? [{ environment: item.environment, name: item.companion.name, value: item.companion.value }] : []),
   ]);
 
-const applyVars = (entries: ReadonlyArray<Entry>, deps: ApplyDeps): { applied: Applied[]; notes: string[]; changed: boolean } => {
+const applyVars = (entries: ReadonlyArray<Entry>, deps: ApplyDeps, failed: ReadonlySet<string>): { applied: Applied[]; notes: string[]; changed: boolean } => {
   const varEntries = entries.filter(({ item }) => item.store === VAR_STORE || item.companion !== undefined);
-  const edits = varEditsOf(varEntries);
-  if (edits.length === 0) return { applied: [], notes: [], changed: false };
+  const held = varEntries.filter(({ item }) => item.store === VAR_STORE && item.pairWith !== undefined && failed.has(item.pairWith));
+  const live = varEntries.filter((entry) => !held.includes(entry) && !failed.has(entry.item.id));
+  const heldApplied = held.map(({ item, source }) => ({ item, source, error: `not saved: the paired secret ${item.pairWith} was not stored` }));
+  const edits = varEditsOf(live);
+  if (edits.length === 0) return { applied: heldApplied, notes: [], changed: false };
   if (deps.config === null) {
-    return { applied: varEntries.map(({ item, source }) => ({ item, source, error: "wrangler.jsonc cannot be read" })), notes: [], changed: false };
+    const unread = live.map(({ item, source }) => ({ item, source, error: "wrangler.jsonc cannot be read" }));
+    return { applied: [...heldApplied, ...unread], notes: [], changed: false };
   }
   const absent = missingBlocks(deps.config, edits);
   const usable = edits.filter((edit) => !absent.includes(edit.environment));
   if (usable.length > 0) deps.writeConfig(applyVarEdits(deps.config, usable));
-  const applied = varEntries.map(({ item, source }) => ({
+  const applied = live.map(({ item, source }) => ({
     item,
     source,
     error: absent.includes(item.environment) ? `wrangler.jsonc has no ${item.environment} block` : undefined,
   }));
   return {
-    applied,
+    applied: [...heldApplied, ...applied],
     notes: usable.length > 0 ? ["wrangler.jsonc changed: commit it, then redeploy so the Worker reads the new values"] : [],
     changed: usable.length > 0,
   };
 };
 
 const seedNotes = (deps: ApplyDeps, applied: ReadonlyArray<Applied>): string[] => {
-  const previewDone = applied.some((entry) => entry.item.id === "preview-token" && entry.error === undefined);
-  if (!previewDone || deps.snapshot.ghSecrets?.has(SEED_SECRET_NAME) === true) return [];
+  const previewItem = itemById("preview-token");
+  const uploaded = applied.some((entry) => entry.item.id === "preview-token" && entry.error === undefined);
+  const existing = previewItem !== undefined && isSet(previewItem, deps.snapshot) === true && deps.snapshot.ghSecrets !== undefined;
+  if (!(uploaded || existing) || deps.snapshot.ghSecrets?.has(SEED_SECRET_NAME) === true) return [];
   const seed = deps.generateSecret();
   const error = putNamedGhSecret(SEED_SECRET_NAME, seed, deps.context);
-  if (error !== undefined) return [`${SEED_SECRET_NAME} was not set: ${error}`];
+  if (error !== undefined) return [`${SEED_SECRET_NAME} was not set: ${error}; run setup again to retry`];
   deps.saveLocalEnv(SEED_SECRET_NAME, seed);
   return [`${SEED_SECRET_NAME} set and saved to .env`];
 };
 
 export const applyPlan = (plan: Plan, deps: ApplyDeps): ApplyOutcome => {
-  const vars = applyVars(plan.entries, deps);
   const stored = plan.entries
     .filter(({ item }) => item.store !== VAR_STORE)
     .map(({ item, value, source }) => ({ item, source, error: putItem(item, value, deps.context) }));
-  const applied = [...vars.applied.filter((entry) => entry.item.store === VAR_STORE), ...stored];
+  const failed = new Set(stored.filter((entry) => entry.error !== undefined).map((entry) => entry.item.id));
+  const vars = applyVars(plan.entries, deps, failed);
+  const companionErrors = new Map(vars.applied.map((entry) => [entry.item.id, entry.error]));
+  const settled = stored.map((entry) => (entry.error === undefined && entry.item.companion ? { ...entry, error: companionErrors.get(entry.item.id) } : entry));
+  const applied = [...vars.applied.filter((entry) => entry.item.store === VAR_STORE), ...settled];
   const notes = [...vars.notes, ...seedNotes(deps, applied)];
   return { applied, notes, varsChanged: vars.changed };
 };

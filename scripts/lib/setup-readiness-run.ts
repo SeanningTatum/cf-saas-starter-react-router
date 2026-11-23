@@ -1,7 +1,7 @@
 import type { Outcome } from "../repo-rules";
 import { applyPlan, describeApplied, type Applied } from "./setup-apply";
 import type { SetupRequest } from "./setup-args";
-import { SECURITY_HINT, SECURITY_QUESTION, UNPROTECTED_NOTE } from "./setup-constants";
+import { PRODUCTION_TOKEN_ID, SECURITY_HINT, SECURITY_QUESTION, UNPROTECTED_NOTE, WITHHELD_TOKEN_PROBLEM } from "./setup-constants";
 import { buildPlan, type Ask } from "./setup-plan";
 import { evaluate, exitCodeOf, readSnapshot, renderTable } from "./setup-readiness";
 import type { Runner } from "./setup-run";
@@ -42,14 +42,21 @@ const authLines = (applied: ReadonlyArray<Applied>): { set: string[]; failed: bo
   failed: applied.some((entry) => entry.error !== undefined),
 });
 
-const TOKEN_IDS: ReadonlyArray<string> = ["production-token", "staging-token"];
+const TOKEN_IDS: ReadonlyArray<string> = [PRODUCTION_TOKEN_ID, "staging-token"];
 
 export const runPass = async (request: SetupRequest, deps: ReadinessDeps): Promise<ReadinessOutcome> => {
   const before = readSnapshot(deps.run, deps.readConfig());
   const lines: string[] = [];
   const secured = await wantsSecurity(request, deps);
   const securityResults = secured ? runSecurityPass({ run: deps.run, applyRules: deps.applyRules }) : [];
-  const plan = await buildPlan({ request, snapshot: before, ask: deps.ask, generateSecret: deps.generateSecret, detectedAccountId: deps.accountId });
+  const drafted = await buildPlan({ request, snapshot: before, ask: deps.ask, generateSecret: deps.generateSecret, detectedAccountId: deps.accountId });
+  const unprotected = securityResults.some((entry) => entry.id === "repo-rules" && entry.status === "left");
+  const withheld = unprotected ? drafted.entries.filter((entry) => entry.item.id === PRODUCTION_TOKEN_ID) : [];
+  const plan = {
+    ...drafted,
+    entries: drafted.entries.filter((entry) => !withheld.includes(entry)),
+    problems: [...drafted.problems, ...withheld.map(() => WITHHELD_TOKEN_PROBLEM)],
+  };
   const context: StoreContext = { run: deps.run, ...(deps.accountId ? { accountId: deps.accountId } : {}) };
   const outcome = applyPlan(plan, {
     context,

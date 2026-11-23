@@ -18,6 +18,7 @@ export interface World {
   workersExist: boolean;
   ghWorks: boolean;
   denySettings: boolean;
+  readonly failing: Set<string>;
 }
 
 export const newWorld = (): World => ({
@@ -31,6 +32,7 @@ export const newWorld = (): World => ({
   workersExist: true,
   ghWorks: true,
   denySettings: false,
+  failing: new Set(),
 });
 
 const ok = (stdout = ""): RunResult => ({ code: 0, stdout, stderr: "" });
@@ -49,6 +51,7 @@ const wranglerCall = (world: World, args: ReadonlyArray<string>, input: string |
   if (args.includes("list")) return names(store);
   const name = args[args.indexOf("put") + 1] ?? "";
   if (input === undefined || input === "") return bad("no value");
+  if (world.failing.has(name)) return bad("upload refused");
   store.add(name);
   return ok();
 };
@@ -91,6 +94,13 @@ const secretStore = (world: World, environment: string | undefined): Set<string>
   return store;
 };
 
+const ghSecretSet = (world: World, store: Set<string>, name: string, input: string | undefined): RunResult => {
+  if (input === undefined || input === "") return bad("no value");
+  if (world.failing.has(name)) return bad("upload refused");
+  store.add(name);
+  return ok();
+};
+
 const ghCall = (world: World, args: ReadonlyArray<string>, input: string | undefined): RunResult => {
   if (!world.ghWorks) return bad("gh: not logged in");
   const [area, verb] = args;
@@ -98,11 +108,7 @@ const ghCall = (world: World, args: ReadonlyArray<string>, input: string | undef
   const store = secretStore(world, flagAfter(args, "--env"));
   if (area === "secret" && verb === "list") return names(store);
   if (area === "variable" && verb === "list") return names(world.ghVariables);
-  if (area === "secret" && verb === "set") {
-    if (input === undefined || input === "") return bad("no value");
-    store.add(args[2] ?? "");
-    return ok();
-  }
+  if (area === "secret" && verb === "set") return ghSecretSet(world, store, args[2] ?? "", input);
   if (area === "variable" && verb === "set") {
     world.ghVariables.add(args[2] ?? "");
     return ok();
