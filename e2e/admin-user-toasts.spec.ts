@@ -7,7 +7,7 @@ import { useAdminSessionSignedInOncePerFile } from "./lib/admin-session";
 import { postAppApi, postSignUp } from "./lib/auth-api";
 import { appOrigin } from "./lib/client-ip";
 import { API_PATHS, CLIENT_IPS } from "./lib/values";
-import { loadHydratedReloadingWhileViteReoptimizesDeps } from "./lib/hydration";
+import { loadHydrated } from "./lib/hydration";
 
 type Member = { id: string; name: string; email: string };
 
@@ -59,10 +59,8 @@ const rowMenuTrigger = (page: Page, member: Member) =>
   memberRow(page, member).getByRole("button", { name: text.open_menu });
 
 const openUsersTable = async (page: Page, member: Member) => {
-  await loadHydratedReloadingWhileViteReoptimizesDeps(
-    page,
-    `/admin/users?${new URLSearchParams({ search: member.email })}`,
-    (p) => rowMenuTrigger(p, member),
+  await loadHydrated(page, `/admin/users?${new URLSearchParams({ search: member.email })}`, (p) =>
+    rowMenuTrigger(p, member),
   );
   await expect(memberRow(page, member)).toBeVisible();
 };

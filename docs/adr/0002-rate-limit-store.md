@@ -1,9 +1,11 @@
 ---
-status: proposed
-date: 2026-11-22
+status: accepted
+date: 2026-11-23
 ---
 
 # The Workers Rate Limiting binding is the store for rate limits, behind the `RateLimiter` service
+
+**Status: accepted on 2026-11-23** by the owner, as written.
 
 Rate limits on sign-in, sign-up, the rest of the auth API and uploads count in Cloudflare's Workers Rate Limiting binding. Code reaches it only through `RateLimiter` (`app/services/rate-limit.ts`). Better Auth's own limiter is off.
 

@@ -440,7 +440,7 @@ The Action also comments the URL (and a per-commit version URL) on the PR.
 
 Local D1 (`bun run db:seed`) uses the password `Password123!`, for local use only. A preview never uses it: see [Preview passwords](docs/ci/pipelines.md#preview-passwords).
 
-Seeding is idempotent (`INSERT OR IGNORE` on fixed `seed-*` ids) — safe to rerun on every PR synchronize. New tables/features must extend these fixtures.
+Seeding restores the fixtures: it deletes every row with a `seed-` id and inserts the scenario again in one batch, so a run never starts from drifted fixtures, and rows you create yourself survive. `bun run dev` and every Playwright run seed local D1 on their own. The fixtures live in `app/lib/fixtures/` (scenarios `base`, `empty`, `many-users`); new tables and features extend them there.
 
 > **Free plan note:** Cloudflare's D1 free plan caps you at 10 databases, so per-PR databases assume a paid plan. On the free plan, revert the "Provision per-PR D1" step in `preview.yml` back to migrating the shared `<name>-db-preview` database (a one-line change).
 

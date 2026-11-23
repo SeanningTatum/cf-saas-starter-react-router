@@ -13,6 +13,13 @@ The harness (24 agents, 4 workflows, about 20 scripts, a hook and a command) is 
 
 How that maps to the design below is the main thread's reading, not the owner's text: "just a .claude" is the committed copy this ADR proposed; "always pull from latest" drops the pin to a tagged release that the proposal had, and turns the lock file from a pin into a record.
 
+**Settled by the owner on 2026-11-23.** Three points that the reading above left open are now decided, and one fact is recorded:
+
+- A harness update arrives as a pull request, not as a plain pull onto the working branch.
+- A project that is behind the shared source gets a notice, not a failing check.
+- Third-party skills are pinned by commit. They do not follow latest the way the harness itself does.
+- The shared harness repo will be public. Its name is not chosen yet.
+
 Evidence ids (`D9`, `T6`, `L1`, `C4`, `U3`) point into the [spike notes](0001-harness-delivery-spike-notes.md). `D` is a line in the Claude Code docs, `T` and `L` are tests, `C` is a count over this repo, `U` is an unknown.
 
 ## What decided it
@@ -36,8 +43,8 @@ Evidence ids (`D9`, `T6`, `L1`, `C4`, `U3`) point into the [spike notes](0001-ha
 - **The lock file is a record, not a pin.** It names the shared repo, the branch and the commit the copy came from, and holds a hash for each copied file. No command reads it to choose what to fetch: `sync` always takes the head.
 - **Three commands:**
   - `sync` fetches the head of the default branch and writes the files and the lock. It needs the network.
-  - `sync --check` compares the files on disk with the hashes in the lock. It needs no network. It runs in the `harness` gate, so CI fails when a copied file was changed by hand. With the network it also asks the source for its head and prints how many commits the copy is behind. Behind is a notice, not a failure: if it failed, every push to the shared repo would turn every project's CI red.
-  - `update` runs `sync` on a branch and opens a pull request that lists the source commits since the one in the lock.
+  - `sync --check` compares the files on disk with the hashes in the lock. It needs no network. It runs in the `harness` gate, so CI fails when a copied file was changed by hand. With the network it also asks the source for its head and prints how many commits the copy is behind. Behind is a notice, not a failure (**decided by the owner, 2026-11-23**): if it failed, every push to the shared repo would turn every project's CI red.
+  - `update` runs `sync` on a branch and opens a pull request that lists the source commits since the one in the lock. **Decided by the owner, 2026-11-23:** an update always arrives as a pull request, never as a plain pull onto the working branch.
 - **The two drifts stay apart without a pin.** A hash that does not match is a hand edit here. A recorded commit that is not the head is a copy behind the source. Neither needs a tag. To undo a hand edit, restore the file from git; to roll back an update, revert its pull request.
 - **Paths and names stay as they are.** Agents land in `.claude/agents/`, workflows in `.claude/workflows/`, commands in `.claude/commands/`, the hook script in `.claude/hooks/`. Agent names stay bare. Scripts land in a folder the harness owns.
 - **A project changes harness behaviour in this order:** first a setting in `harness.config.json` (#86); then an agent or skill of its own under a new name; last, a copied file marked in the lock as kept, which `sync` leaves alone and `sync --check` reports on every run.
@@ -87,6 +94,8 @@ Options 1, 3 and 6 all end with files in the clone. Option 1 is the one where th
 - **#101 and #102 speak of "a second plugin" and "a third plugin".** Under this ADR they are packs: folders in the shared repo that the lock file names and `sync` copies.
 - **#96 and #103 block each other as written.** #96 takes the core "by the road the ADR chose", which is `sync`; #103 builds `sync` and waits on #96.
 - **#65, #96, #101 and #103 speak of pins, tags and releases.** Under this decision a project takes the head and the lock records it; nothing is tagged.
+- **Third-party skills are pinned by commit (decided by the owner, 2026-11-23).** The harness follows the head of its default branch; a third-party skill does not. Wherever one is copied in or fetched, its source is fixed to one commit, and moving to a newer commit is a deliberate change. #102 still decides whether any is copied in.
+- **The shared repo will be public (recorded 2026-11-23).** Its name is not chosen yet. Nothing in it may hold a secret, an email or a private detail.
 - **Third-party plugins stay plugins.** They do not load in cloud sessions (D9), so `brand-init`, which calls `impeccable:impeccable-documenter` and searches `~/.claude/plugins` (C6), cannot run there today. This ADR does not fix that; #102 decides whether any third-party skill is copied in too.
 - **The second CLI keeps working.** `.kimi-code/agents` points at `.claude/agents` (C7), which still holds real files.
 - **Headless runs must not use `--bare`.** It drops sub-agents and the Workflow tool (D22, T9). The docs say it will become the default for `-p`; when it does, harness runs in CI must turn it off.

@@ -10,14 +10,17 @@ const VIDEO = !!process.env.E2E_VIDEO;
 
 export default defineConfig({
   testDir: "./e2e",
+  globalSetup: "./e2e/global-setup.ts",
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
-  retries: process.env.CI ? 2 : 0,
+  // No retries, in CI or locally: a test that passes only on a second try is a bug, and a retry
+  // would turn it green and hide it (issue #175). The trace keeps the failing run itself.
+  retries: 0,
   workers: process.env.CI ? 1 : undefined,
   reporter: "html",
   use: {
     baseURL: `http://localhost:${PORT}`,
-    trace: "on-first-retry",
+    trace: "retain-on-failure",
     screenshot: "only-on-failure",
     video: VIDEO ? { mode: "on", size: { width: 1280, height: 720 } } : "off",
     launchOptions: { slowMo: VIDEO ? 250 : 0 },
