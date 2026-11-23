@@ -52,7 +52,7 @@ export const startRealApp = async () => {
 
   const signUp = async (email: string): Promise<Account> => {
     const res = await auth.api.signUpEmail({
-      body: { name: email.split("@")[0], email, password: PASSWORD },
+      body: { name: email.split("@")[0] ?? email, email, password: PASSWORD },
       returnHeaders: true,
     });
     return { userId: res.response.user.id, email, headers: headersFrom(res.headers) };

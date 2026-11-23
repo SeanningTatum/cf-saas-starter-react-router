@@ -56,7 +56,6 @@ const ReportSchema = Schema.Struct({ rows: Schema.Array(RowSchema) });
 
 export type Manifest = typeof ManifestSchema.Type;
 export type ManifestRoute = typeof RouteSchema.Type;
-export type SizeRow = typeof RowSchema.Type;
 export type SizeReport = typeof ReportSchema.Type;
 
 export interface ComparedRow {
@@ -101,10 +100,7 @@ export const pathOf = (chain: ManifestRoute[]): string =>
 
 export const pages = (manifest: Manifest): ManifestRoute[] =>
   Object.values(manifest.routes).filter(
-    (route) =>
-      route.id !== ROOT_ROUTE_ID &&
-      route.hasDefaultExport === true &&
-      !Object.values(manifest.routes).some((other) => other.parentId === route.id),
+    (route) => route.id !== ROOT_ROUTE_ID && route.hasDefaultExport === true && !Object.values(manifest.routes).some((other) => other.parentId === route.id),
   );
 
 export function firstLoad(manifest: Manifest, id: string): { js: string[]; css: string[] } {
@@ -114,8 +110,7 @@ export function firstLoad(manifest: Manifest, id: string): { js: string[]; css: 
   return { js: [...new Set(js)], css: [...new Set(css)] };
 }
 
-const total = (files: string[], gzipSizes: Record<string, number>): number =>
-  files.reduce((sum, file) => sum + (gzipSizes[file] ?? 0), 0);
+const total = (files: string[], gzipSizes: Record<string, number>): number => files.reduce((sum, file) => sum + (gzipSizes[file] ?? 0), 0);
 
 export function measure(manifest: Manifest, gzipSizes: Record<string, number>, workerGzip: number): SizeReport {
   const root = manifest.routes[ROOT_ROUTE_ID];
@@ -146,7 +141,7 @@ export function compare(base: SizeReport, head: SizeReport): ComparedRow[] {
   ];
 }
 
-export const formatBytes = (bytes: number): string => bytes.toLocaleString(NUMBER_LOCALE);
+const formatBytes = (bytes: number): string => bytes.toLocaleString(NUMBER_LOCALE);
 
 const signed = (value: number, text: string): string => (value > 0 ? `+${text}` : value < 0 ? `-${text}` : text);
 
@@ -207,11 +202,9 @@ export function loadTimeLine(rows: ComparedRow[]): string {
 }
 
 export const touchesShippedCode = (paths: string[]): string[] =>
-  paths.filter(
-    (path) => SHIPPED_FILES.includes(path) || (SHIPPED_PREFIXES.some((prefix) => path.startsWith(prefix)) && !TEST_PATH_PATTERN.test(path)),
-  );
+  paths.filter((path) => SHIPPED_FILES.includes(path) || (SHIPPED_PREFIXES.some((prefix) => path.startsWith(prefix)) && !TEST_PATH_PATTERN.test(path)));
 
-export const carriesTable = (body: string): boolean => {
+const carriesTable = (body: string): boolean => {
   const prose = body.replace(FENCED_BLOCK_PATTERN, "");
   return COMPARISON_HEADER_PATTERN.test(prose) && WORKER_ROW_PATTERN.test(prose);
 };

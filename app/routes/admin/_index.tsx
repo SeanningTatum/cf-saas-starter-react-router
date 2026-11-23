@@ -1,11 +1,8 @@
 import { SiteHeader } from "./layout/site-header";
-import {
-  StatCard,
-  StatCardGrid,
-  TimeSeriesChart,
-  DistributionChart,
-  InsightsCard,
-} from "@/components/analytics";
+import { DistributionChart } from "@/components/analytics/distribution-chart";
+import { InsightsCard } from "@/components/analytics/insights-card";
+import { StatCard, StatCardGrid } from "@/components/analytics/stat-card";
+import { TimeSeriesChart } from "@/components/analytics/time-series-chart";
 import { buildUserInsights } from "@/lib/insights";
 import { Users, ShieldCheck, UserX, Shield } from "lucide-react";
 import type { Route } from "./+types/_index";
@@ -18,13 +15,12 @@ export const loader = async ({ context }: Route.LoaderArgs) => {
   const startDate = new Date();
   startDate.setDate(startDate.getDate() - 90);
 
-  const [stats, growthData, roleDistribution, verificationDistribution] =
-    await Promise.all([
-      context.trpc.analytics.getUserStats(),
-      context.trpc.analytics.getUserGrowth({ startDate, endDate }),
-      context.trpc.analytics.getRoleDistribution(),
-      context.trpc.analytics.getVerificationDistribution(),
-    ]);
+  const [stats, growthData, roleDistribution, verificationDistribution] = await Promise.all([
+    context.trpc.analytics.getUserStats(),
+    context.trpc.analytics.getUserGrowth({ startDate, endDate }),
+    context.trpc.analytics.getRoleDistribution(),
+    context.trpc.analytics.getVerificationDistribution(),
+  ]);
 
   return { stats, growthData, roleDistribution, verificationDistribution };
 };
@@ -44,8 +40,7 @@ export default function AdminHome({ loaderData }: Route.ComponentProps) {
     );
   }
 
-  const { stats, growthData, roleDistribution, verificationDistribution } =
-    loaderData;
+  const { stats, growthData, roleDistribution, verificationDistribution } = loaderData;
 
   const insights = buildUserInsights(stats, growthData, t);
 
@@ -67,7 +62,9 @@ export default function AdminHome({ loaderData }: Route.ComponentProps) {
                   label={t("dashboard.verified_users")}
                   value={stats.verifiedUsers}
                   icon={ShieldCheck}
-                  description={t("dashboard.verified_users_description", { rate: stats.verificationRate })}
+                  description={t("dashboard.verified_users_description", {
+                    rate: stats.verificationRate,
+                  })}
                 />
                 <StatCard
                   label={t("dashboard.admins")}

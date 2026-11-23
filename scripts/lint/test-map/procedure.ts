@@ -35,7 +35,7 @@ function standaloneProcedures(source: Source): string[] {
           const builder = declaration.initializer ? builderName(declaration.initializer) : undefined;
           return ts.isIdentifier(declaration.name) && builder && PROCEDURE_BUILDER.test(builder) ? [declaration.name.text] : [];
         })
-      : []
+      : [],
   );
 }
 
@@ -106,7 +106,11 @@ export function procedureProblems(repo: Repo, path: string): Problem[] {
   const router = routerKey(repo, path);
   const unlistedRouted = routed
     .filter((name) => (router ? !keys.includes(`${router}.${name}`) : !keys.some((key) => key.split(".").pop() === name)))
-    .map((name) => ({ message: `the procedure \`${name}\` has no entry in \`${LEVELS_NAME}\``, fix: levelsFix(`${router ?? "<router>"}.${name}`), related: LEVEL_SOURCES }));
+    .map((name) => ({
+      message: `the procedure \`${name}\` has no entry in \`${LEVELS_NAME}\``,
+      fix: levelsFix(`${router ?? "<router>"}.${name}`),
+      related: LEVEL_SOURCES,
+    }));
   const unlistedStandalone = standalone
     .filter((name) => !keys.some((key) => key.split(".").pop() === name))
     .map((name) => ({ message: `the procedure \`${name}\` has no entry in \`${LEVELS_NAME}\``, fix: levelsFix(`<router>.${name}`), related: LEVEL_SOURCES }));

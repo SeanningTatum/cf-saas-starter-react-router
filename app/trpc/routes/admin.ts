@@ -22,11 +22,8 @@ function runBulkUserAction<E>(
   userIds: readonly string[],
   logEvent: string,
   span: string,
-  performAction: (
-    repo: UserRepository,
-    validUserIds: string[]
-  ) => Effect.Effect<number, E>,
-  extraLogFields: Record<string, unknown> = {}
+  performAction: (repo: UserRepository, validUserIds: string[]) => Effect.Effect<number, E>,
+  extraLogFields: Record<string, unknown> = {},
 ) {
   return runProcedure(
     ctx.runtime,
@@ -51,40 +48,36 @@ function runBulkUserAction<E>(
             affectedCount: result.affectedCount,
             skippedCount: result.skippedCount,
             ...extraLogFields,
-          })
-        )
-      )
+          }),
+        ),
+      ),
     ),
-    { span }
+    { span },
   );
 }
 
 export const adminRouter = createTRPCRouter({
-  getUsers: adminProcedure
-    .input(Schema.standardSchemaV1(GetUsersInput))
-    .query(({ ctx, input }) =>
-      runProcedure(
-        ctx.runtime,
-        Effect.gen(function* () {
-          const repo = yield* UserRepository;
-          return yield* repo.getUsers(input);
-        }),
-        { span: "trpc.admin.getUsers" }
-      )
+  getUsers: adminProcedure.input(Schema.standardSchemaV1(GetUsersInput)).query(({ ctx, input }) =>
+    runProcedure(
+      ctx.runtime,
+      Effect.gen(function* () {
+        const repo = yield* UserRepository;
+        return yield* repo.getUsers(input);
+      }),
+      { span: "trpc.admin.getUsers" },
     ),
+  ),
 
-  getUser: adminProcedure
-    .input(Schema.standardSchemaV1(GetUserInput))
-    .query(({ ctx, input }) =>
-      runProcedure(
-        ctx.runtime,
-        Effect.gen(function* () {
-          const repo = yield* UserRepository;
-          return yield* repo.getUser(input);
-        }),
-        { span: "trpc.admin.getUser" }
-      )
+  getUser: adminProcedure.input(Schema.standardSchemaV1(GetUserInput)).query(({ ctx, input }) =>
+    runProcedure(
+      ctx.runtime,
+      Effect.gen(function* () {
+        const repo = yield* UserRepository;
+        return yield* repo.getUser(input);
+      }),
+      { span: "trpc.admin.getUser" },
     ),
+  ),
 
   updateUser: adminProcedure
     .input(Schema.standardSchemaV1(UpdateUserInput))
@@ -98,34 +91,32 @@ export const adminRouter = createTRPCRouter({
             currentUserId: ctx.auth.user.id,
           });
         }),
-        { span: "trpc.admin.updateUser" }
-      )
+        { span: "trpc.admin.updateUser" },
+      ),
     ),
 
-  banUser: adminProcedure
-    .input(Schema.standardSchemaV1(BanUserInput))
-    .mutation(({ ctx, input }) =>
-      runProcedure(
-        ctx.runtime,
-        Effect.gen(function* () {
-          const repo = yield* UserRepository;
-          const analytics = yield* Analytics;
-          const result = yield* repo.banUser({
-            ...input,
-            currentUserId: ctx.auth.user.id,
-          });
-          yield* analytics.capture({
-            _tag: "user_banned",
-            distinctId: ctx.auth.user.id,
-            targetUserId: input.userId,
-            hasReason: Boolean(input.reason),
-            hasExpiry: input.expiresAt != null,
-          });
-          return result;
-        }),
-        { span: "trpc.admin.banUser" }
-      )
+  banUser: adminProcedure.input(Schema.standardSchemaV1(BanUserInput)).mutation(({ ctx, input }) =>
+    runProcedure(
+      ctx.runtime,
+      Effect.gen(function* () {
+        const repo = yield* UserRepository;
+        const analytics = yield* Analytics;
+        const result = yield* repo.banUser({
+          ...input,
+          currentUserId: ctx.auth.user.id,
+        });
+        yield* analytics.capture({
+          _tag: "user_banned",
+          distinctId: ctx.auth.user.id,
+          targetUserId: input.userId,
+          hasReason: Boolean(input.reason),
+          hasExpiry: input.expiresAt != null,
+        });
+        return result;
+      }),
+      { span: "trpc.admin.banUser" },
     ),
+  ),
 
   unbanUser: adminProcedure
     .input(Schema.standardSchemaV1(UnbanUserInput))
@@ -136,8 +127,8 @@ export const adminRouter = createTRPCRouter({
           const repo = yield* UserRepository;
           return yield* repo.unbanUser(input);
         }),
-        { span: "trpc.admin.unbanUser" }
-      )
+        { span: "trpc.admin.unbanUser" },
+      ),
     ),
 
   deleteUser: adminProcedure
@@ -152,28 +143,37 @@ export const adminRouter = createTRPCRouter({
             currentUserId: ctx.auth.user.id,
           });
         }),
-        { span: "trpc.admin.deleteUser" }
-      )
+        { span: "trpc.admin.deleteUser" },
+      ),
     ),
 
   bulkBanUsers: adminProcedure
     .input(Schema.standardSchemaV1(BulkBanUsersInput))
     .mutation(({ ctx, input }) =>
-      runBulkUserAction(ctx, input.userIds, "users.bulk_banned", "trpc.admin.bulkBanUsers", (repo, validUserIds) =>
-        repo.bulkBanUsers({
-          userIds: validUserIds,
-          reason: input.reason,
-          expiresAt: input.expiresAt,
-        })
-      )
+      runBulkUserAction(
+        ctx,
+        input.userIds,
+        "users.bulk_banned",
+        "trpc.admin.bulkBanUsers",
+        (repo, validUserIds) =>
+          repo.bulkBanUsers({
+            userIds: validUserIds,
+            reason: input.reason,
+            expiresAt: input.expiresAt,
+          }),
+      ),
     ),
 
   bulkDeleteUsers: adminProcedure
     .input(Schema.standardSchemaV1(BulkDeleteUsersInput))
     .mutation(({ ctx, input }) =>
-      runBulkUserAction(ctx, input.userIds, "users.bulk_deleted", "trpc.admin.bulkDeleteUsers", (repo, validUserIds) =>
-        repo.bulkDeleteUsers({ userIds: validUserIds })
-      )
+      runBulkUserAction(
+        ctx,
+        input.userIds,
+        "users.bulk_deleted",
+        "trpc.admin.bulkDeleteUsers",
+        (repo, validUserIds) => repo.bulkDeleteUsers({ userIds: validUserIds }),
+      ),
     ),
 
   bulkUpdateUserRoles: adminProcedure
@@ -186,8 +186,8 @@ export const adminRouter = createTRPCRouter({
         "trpc.admin.bulkUpdateUserRoles",
         (repo, validUserIds) =>
           repo.bulkUpdateUserRoles({ userIds: validUserIds, role: input.role }),
-        { role: input.role }
-      )
+        { role: input.role },
+      ),
     ),
 
   dbHealth,

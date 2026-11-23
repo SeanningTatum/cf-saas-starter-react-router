@@ -10,8 +10,7 @@ const joinPath = (base: string, segment: string): string => {
   return joined.length > 1 ? joined.replace(/\/$/, "") : ROOT_PATH;
 };
 
-const literal = (node: ts.Node | undefined): string | undefined =>
-  node && ts.isStringLiteralLike(node) ? node.text : undefined;
+const literal = (node: ts.Node | undefined): string | undefined => (node && ts.isStringLiteralLike(node) ? node.text : undefined);
 
 const children = (call: ts.CallExpression): readonly ts.Expression[] =>
   call.arguments.flatMap((argument) => (ts.isArrayLiteralExpression(argument) ? argument.elements : []));

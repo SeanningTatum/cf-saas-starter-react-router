@@ -15,10 +15,7 @@ export function StackBadge({ children, className, active = false }: StackBadgePr
       )}
     >
       <span
-        className={cn(
-          "size-1.5 rounded-full",
-          active ? "bg-primary" : "bg-muted-foreground/40",
-        )}
+        className={cn("size-1.5 rounded-full", active ? "bg-primary" : "bg-muted-foreground/40")}
       />
       {children}
     </span>

@@ -70,10 +70,7 @@ describe("lint: whole repo", () => {
     const outcome = cli(withBaseline({ "app/a.ts": "const GOOD = 1;\nconst BAD = 2;" })).run();
 
     expect(outcome.code).toBe(1);
-    expect(outcome.stderr).toEqual([
-      "app/a.ts:2 no-bad: BAD found. Do this instead: write GOOD.",
-      "house lint: 1 finding(s). Each line says the fix.",
-    ]);
+    expect(outcome.stderr).toEqual(["app/a.ts:2 no-bad: BAD found. Do this instead: write GOOD.", "house lint: 1 finding(s). Each line says the fix."]);
   });
 
   it.each([
@@ -137,10 +134,7 @@ describe("lint: file mode", () => {
     expect(run.gitCalls).toEqual([]);
     expect(run.asked).toEqual([]);
     expect(outcome.code).toBe(1);
-    expect(outcome.stderr).toEqual([
-      "app/a.ts:1 no-bad: BAD found. Do this instead: write GOOD.",
-      "house lint: 1 finding(s). Each line says the fix.",
-    ]);
+    expect(outcome.stderr).toEqual(["app/a.ts:1 no-bad: BAD found. Do this instead: write GOOD.", "house lint: 1 finding(s). Each line says the fix."]);
   });
 
   it("resolves a named file against the working directory, not the repo root", () => {
@@ -201,7 +195,7 @@ describe("lint: registry problems", () => {
       expect(outcome.code).toBe(1);
       expect(outcome.stderr).toContain(problem);
       expect(run.written).toEqual([]);
-    }
+    },
   );
 });
 
@@ -219,7 +213,10 @@ describe("lint: --lower-baseline", () => {
   });
 
   it("writes nothing when a file has more findings than its count, because it only lowers", () => {
-    const run = cli({ "scripts/lint/baseline.json": baselineText({ debt: { "no-bad": { "app/a.ts": 1 } } }), "app/a.ts": "const BAD = 1;\nconst BAD_TOO = 2;" });
+    const run = cli({
+      "scripts/lint/baseline.json": baselineText({ debt: { "no-bad": { "app/a.ts": 1 } } }),
+      "app/a.ts": "const BAD = 1;\nconst BAD_TOO = 2;",
+    });
 
     const outcome = run.run("--lower-baseline");
 

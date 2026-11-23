@@ -2,15 +2,7 @@ import { describe, it, expect } from "vitest";
 import { Either } from "effect";
 import fs from "node:fs";
 import path from "node:path";
-import {
-  decide,
-  isRealD1Id,
-  readCommittedD1Id,
-  run,
-  withProductionD1,
-  type Deps,
-  type Facts,
-} from "../ci/deploy-gate";
+import { decide, isRealD1Id, readCommittedD1Id, run, withProductionD1, type Deps, type Facts } from "../ci/deploy-gate";
 import { stripJsonc } from "../lib/wrangler-config";
 
 const REAL_ID = "1b2c3d4e-5f60-4718-8293-a4b5c6d7e8f9";
@@ -91,9 +83,7 @@ describe("decide production", () => {
   it("blocks on the placeholder id and says how to fix it", () => {
     const d = decide("production", facts({ committedD1Id: ZERO_ID }));
     expect(d.ready).toBe(false);
-    expect(d.reason).toBe(
-      'wrangler.jsonc still has the placeholder D1 id; run "bun run setup" or set the CLOUDFLARE_D1_DATABASE_ID variable',
-    );
+    expect(d.reason).toBe('wrangler.jsonc still has the placeholder D1 id; run "bun run setup" or set the CLOUDFLARE_D1_DATABASE_ID variable');
   });
 
   it("is ready when the placeholder is overridden by the variable: this template keeps placeholders committed", () => {
@@ -113,23 +103,15 @@ describe("decide production", () => {
 describe("decide preview and preview-cleanup", () => {
   it("names the first missing item: account id, then token, then seed secret", () => {
     const none = facts({ hasAccountId: false, hasToken: false, hasSeedSecret: false });
-    expect(decide("preview", none).reason).toBe(
-      "neither the CLOUDFLARE_PREVIEW_ACCOUNT_ID nor the CLOUDFLARE_ACCOUNT_ID variable is set",
-    );
-    expect(decide("preview", facts({ hasToken: false, hasSeedSecret: false })).reason).toBe(
-      "the CLOUDFLARE_PREVIEW_API_TOKEN secret is not set",
-    );
-    expect(decide("preview", facts({ hasSeedSecret: false })).reason).toBe(
-      "the PREVIEW_SEED_SECRET secret is not set",
-    );
+    expect(decide("preview", none).reason).toBe("neither the CLOUDFLARE_PREVIEW_ACCOUNT_ID nor the CLOUDFLARE_ACCOUNT_ID variable is set");
+    expect(decide("preview", facts({ hasToken: false, hasSeedSecret: false })).reason).toBe("the CLOUDFLARE_PREVIEW_API_TOKEN secret is not set");
+    expect(decide("preview", facts({ hasSeedSecret: false })).reason).toBe("the PREVIEW_SEED_SECRET secret is not set");
     expect(decide("preview", ready).ready).toBe(true);
   });
 
   it("cleanup needs the account id and token but not the seed secret: it only deletes a database", () => {
     expect(decide("preview-cleanup", facts({ hasSeedSecret: false })).ready).toBe(true);
-    expect(decide("preview-cleanup", facts({ hasToken: false })).reason).toBe(
-      "the CLOUDFLARE_PREVIEW_API_TOKEN secret is not set",
-    );
+    expect(decide("preview-cleanup", facts({ hasToken: false })).reason).toBe("the CLOUDFLARE_PREVIEW_API_TOKEN secret is not set");
   });
 
   it("ignores the D1 placeholder: previews use their own per-PR database", () => {

@@ -33,9 +33,7 @@ const DeclaredEnv = Schema.Struct({
   deployment_branches: Schema.Array(PathSafe),
 });
 
-const PendingReason = Schema.String.pipe(
-  Schema.filter((s) => s.trim().length > 0, { message: () => "pending must be a non-empty string" }),
-);
+const PendingReason = Schema.String.pipe(Schema.filter((s) => s.trim().length > 0, { message: () => "pending must be a non-empty string" }));
 
 const DeclaredRepository = Schema.Struct({
   squash_merge_commit_title: Schema.Literal("PR_TITLE", "COMMIT_OR_PR_TITLE"),
@@ -109,9 +107,7 @@ export const LiveEnv = Schema.Struct({
       }),
     ),
   ),
-  deployment_branch_policy: Schema.optional(
-    Schema.NullOr(Schema.Struct({ protected_branches: Schema.Boolean, custom_branch_policies: Schema.Boolean })),
-  ),
+  deployment_branch_policy: Schema.optional(Schema.NullOr(Schema.Struct({ protected_branches: Schema.Boolean, custom_branch_policies: Schema.Boolean }))),
 });
 
 export const BranchPolicies = Schema.Struct({

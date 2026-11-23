@@ -5,11 +5,7 @@ import path from "node:path";
 import { intro, outro, confirm, spinner, cancel } from "@clack/prompts";
 import { DUMMY_INPUT, buildWranglerConfig, parseJsonc, writeWranglerJsonc } from "./lib/wrangler-config";
 
-function executeCommand(
-  command: string,
-  silent = false,
-  env?: Record<string, string>
-) {
+function executeCommand(command: string, silent = false, env?: Record<string, string>) {
   if (!silent) {
     console.log(`\x1b[33m${command}\x1b[0m`);
   }
@@ -19,8 +15,9 @@ function executeCommand(
       stdio: silent ? "pipe" : "inherit",
       env: env ? { ...process.env, ...env } : undefined,
     });
-  } catch (error: any) {
-    return { error: true, message: error.stdout || error.stderr || "" };
+  } catch (error) {
+    const failure = error as { stdout?: string; stderr?: string };
+    return { error: true, message: failure.stdout || failure.stderr || "" };
   }
 }
 
@@ -29,8 +26,7 @@ function extractAccountDetails(output: string): { name: string; id: string }[] {
   const accountDetails: { name: string; id: string }[] = [];
 
   for (const line of lines) {
-    const isValidLine =
-      line.trim().startsWith("│ ") && line.trim().endsWith(" │");
+    const isValidLine = line.trim().startsWith("│ ") && line.trim().endsWith(" │");
 
     if (isValidLine) {
       const regex = /\b[a-f0-9]{32}\b/g;
@@ -59,7 +55,7 @@ function restorePackageJsonName() {
 
   const pkg = JSON.parse(fs.readFileSync(packageJsonPath, "utf-8"));
   pkg.name = "cf-saas-starter-react-router";
-  fs.writeFileSync(packageJsonPath, JSON.stringify(pkg, null, 2) + "\n");
+  fs.writeFileSync(packageJsonPath, `${JSON.stringify(pkg, null, 2)}\n`);
   console.log("\x1b[32m✓ Restored package.json name\x1b[0m");
 }
 
@@ -93,10 +89,7 @@ function readWranglerConfig(): WranglerConfig | null {
  * CI via scripts/ci/setup-preview-db.ts). Returns null if the list fails
  * (e.g. not authenticated yet) — callers should warn + skip in that case.
  */
-function listPerPrDatabases(
-  projectName: string,
-  env?: Record<string, string>
-): string[] | null {
+function listPerPrDatabases(projectName: string, env?: Record<string, string>): string[] | null {
   const result = executeCommand("bunx wrangler d1 list --json", true, env);
   if (!result || typeof result !== "string") {
     return null;
@@ -127,9 +120,7 @@ async function main() {
   const config = readWranglerConfig();
 
   if (!config) {
-    console.error(
-      "\x1b[31m✗ wrangler.jsonc not found. Nothing to tear down.\x1b[0m"
-    );
+    console.error("\x1b[31m✗ wrangler.jsonc not found. Nothing to tear down.\x1b[0m");
     cancel("Operation cancelled.");
     process.exit(1);
   }
@@ -138,27 +129,16 @@ async function main() {
   const previewWorkerName = `${projectName}-preview`;
 
   // Collect top-level + preview-env resources, deduped by name/id.
-  const databases = [
-    ...(config.d1_databases ?? []),
-    ...(config.env?.preview?.d1_databases ?? []),
-  ].filter(
-    (db, index, arr) =>
-      arr.findIndex((d) => d.database_name === db.database_name) === index
+  const databases = [...(config.d1_databases ?? []), ...(config.env?.preview?.d1_databases ?? [])].filter(
+    (db, index, arr) => arr.findIndex((d) => d.database_name === db.database_name) === index,
   );
 
-  const buckets = [
-    ...(config.r2_buckets ?? []),
-    ...(config.env?.preview?.r2_buckets ?? []),
-  ].filter(
-    (bucket, index, arr) =>
-      arr.findIndex((b) => b.bucket_name === bucket.bucket_name) === index
+  const buckets = [...(config.r2_buckets ?? []), ...(config.env?.preview?.r2_buckets ?? [])].filter(
+    (bucket, index, arr) => arr.findIndex((b) => b.bucket_name === bucket.bucket_name) === index,
   );
 
-  const kvNamespaces = [
-    ...(config.kv_namespaces ?? []),
-    ...(config.env?.preview?.kv_namespaces ?? []),
-  ].filter(
-    (kv, index, arr) => arr.findIndex((k) => k.id === kv.id) === index
+  const kvNamespaces = [...(config.kv_namespaces ?? []), ...(config.env?.preview?.kv_namespaces ?? [])].filter(
+    (kv, index, arr) => arr.findIndex((k) => k.id === kv.id) === index,
   );
 
   // Sweep for orphaned per-PR preview databases BEFORE the confirm prompt,
@@ -178,13 +158,9 @@ async function main() {
     console.log(`  • KV:       ${kv.id}`);
   }
   if (perPrDatabases === null) {
-    console.log(
-      `  \x1b[33m⚠ Could not list per-PR preview databases (wrangler d1 list failed) — sweep will be skipped\x1b[0m`
-    );
+    console.log(`  \x1b[33m⚠ Could not list per-PR preview databases (wrangler d1 list failed) — sweep will be skipped\x1b[0m`);
   } else {
-    console.log(
-      `  • plus any per-PR preview databases (${perPrDatabases.length} found)`
-    );
+    console.log(`  • plus any per-PR preview databases (${perPrDatabases.length} found)`);
     for (const name of perPrDatabases) {
       console.log(`      - ${name}`);
     }
@@ -204,14 +180,8 @@ async function main() {
   console.log("\n\x1b[36mChecking Wrangler authentication...\x1b[0m");
   const whoamiOutput = executeCommand("wrangler whoami", true);
 
-  if (
-    !whoamiOutput ||
-    typeof whoamiOutput !== "string" ||
-    whoamiOutput.includes("not authenticated")
-  ) {
-    console.error(
-      "\x1b[31m✗ Not logged in. Please run `wrangler login` first.\x1b[0m"
-    );
+  if (!whoamiOutput || typeof whoamiOutput !== "string" || whoamiOutput.includes("not authenticated")) {
+    console.error("\x1b[31m✗ Not logged in. Please run `wrangler login` first.\x1b[0m");
     cancel("Operation cancelled.");
     process.exit(1);
   }
@@ -224,9 +194,7 @@ async function main() {
   if (accounts.length > 1) {
     // Import select dynamically since we only need it for multi-account
     const { select } = await import("@clack/prompts");
-    console.log(
-      `\n\x1b[33m⚠ Multiple Cloudflare accounts detected (${accounts.length} accounts)\x1b[0m`
-    );
+    console.log(`\n\x1b[33m⚠ Multiple Cloudflare accounts detected (${accounts.length} accounts)\x1b[0m`);
     const options = accounts.map((account) => ({
       value: account.id,
       label: account.name,
@@ -246,11 +214,7 @@ async function main() {
   for (const workerName of [projectName, previewWorkerName]) {
     const workerSpinner = spinner();
     workerSpinner.start(`Deleting worker: ${workerName}...`);
-    const workerResult = executeCommand(
-      `wrangler delete --name ${workerName} --force`,
-      true,
-      env
-    );
+    const workerResult = executeCommand(`wrangler delete --name ${workerName} --force`, true, env);
     if (workerResult && typeof workerResult === "object" && workerResult.error) {
       workerSpinner.stop(`\x1b[33m⚠ Worker deletion failed (may not exist): ${workerName}\x1b[0m`);
     } else {
@@ -263,22 +227,12 @@ async function main() {
   for (const db of databases) {
     const dbSpinner = spinner();
     dbSpinner.start(`Deleting database: ${db.database_name}...`);
-    const dbResult = executeCommand(
-      `wrangler d1 delete ${db.database_name} -y`,
-      true,
-      env
-    );
+    const dbResult = executeCommand(`wrangler d1 delete ${db.database_name} -y`, true, env);
     if (dbResult && typeof dbResult === "object" && dbResult.error) {
       // Try by ID if name fails
-      const dbResult2 = executeCommand(
-        `wrangler d1 delete ${db.database_id} -y`,
-        true,
-        env
-      );
+      const dbResult2 = executeCommand(`wrangler d1 delete ${db.database_id} -y`, true, env);
       if (dbResult2 && typeof dbResult2 === "object" && dbResult2.error) {
-        dbSpinner.stop(
-          `\x1b[33m⚠ Failed to delete database: ${db.database_name}\x1b[0m`
-        );
+        dbSpinner.stop(`\x1b[33m⚠ Failed to delete database: ${db.database_name}\x1b[0m`);
       } else {
         dbSpinner.stop(`\x1b[32m✓ Database deleted: ${db.database_name}\x1b[0m`);
       }
@@ -292,12 +246,9 @@ async function main() {
   // Re-list now that the account is resolved — the pre-confirm listing ran
   // without an account id and may have failed (or hit the wrong account) in
   // multi-account setups.
-  const sweepDatabases =
-    listPerPrDatabases(projectName, env) ?? perPrDatabases;
+  const sweepDatabases = listPerPrDatabases(projectName, env) ?? perPrDatabases;
   if (sweepDatabases === null) {
-    console.log(
-      "\x1b[33m⚠ Skipping per-PR preview database sweep (wrangler d1 list failed)\x1b[0m"
-    );
+    console.log("\x1b[33m⚠ Skipping per-PR preview database sweep (wrangler d1 list failed)\x1b[0m");
   } else {
     const alreadyDeleted = new Set(databases.map((db) => db.database_name));
     for (const name of sweepDatabases) {
@@ -306,9 +257,7 @@ async function main() {
       prDbSpinner.start(`Deleting per-PR database: ${name}...`);
       const prDbResult = executeCommand(`wrangler d1 delete ${name} -y`, true, env);
       if (prDbResult && typeof prDbResult === "object" && prDbResult.error) {
-        prDbSpinner.stop(
-          `\x1b[33m⚠ Failed to delete per-PR database: ${name}\x1b[0m`
-        );
+        prDbSpinner.stop(`\x1b[33m⚠ Failed to delete per-PR database: ${name}\x1b[0m`);
       } else {
         prDbSpinner.stop(`\x1b[32m✓ Per-PR database deleted: ${name}\x1b[0m`);
       }
@@ -320,15 +269,9 @@ async function main() {
   for (const bucket of buckets) {
     const bucketSpinner = spinner();
     bucketSpinner.start(`Deleting bucket: ${bucket.bucket_name}...`);
-    const bucketResult = executeCommand(
-      `wrangler r2 bucket delete ${bucket.bucket_name}`,
-      true,
-      env
-    );
+    const bucketResult = executeCommand(`wrangler r2 bucket delete ${bucket.bucket_name}`, true, env);
     if (bucketResult && typeof bucketResult === "object" && bucketResult.error) {
-      bucketSpinner.stop(
-        `\x1b[33m⚠ Failed to delete bucket: ${bucket.bucket_name}\x1b[0m`
-      );
+      bucketSpinner.stop(`\x1b[33m⚠ Failed to delete bucket: ${bucket.bucket_name}\x1b[0m`);
     } else {
       bucketSpinner.stop(`\x1b[32m✓ Bucket deleted: ${bucket.bucket_name}\x1b[0m`);
     }
@@ -340,11 +283,7 @@ async function main() {
     for (const kv of kvNamespaces) {
       const kvSpinner = spinner();
       kvSpinner.start(`Deleting KV namespace: ${kv.id}...`);
-      const kvResult = executeCommand(
-        `wrangler kv namespace delete --namespace-id ${kv.id}`,
-        true,
-        env
-      );
+      const kvResult = executeCommand(`wrangler kv namespace delete --namespace-id ${kv.id}`, true, env);
       if (kvResult && typeof kvResult === "object" && kvResult.error) {
         kvSpinner.stop(`\x1b[33m⚠ Failed to delete KV namespace: ${kv.id}\x1b[0m`);
       } else {
@@ -380,9 +319,7 @@ async function main() {
 
   console.log("\n\x1b[36m✅ Teardown Complete!\x1b[0m\n");
   console.log("\x1b[32mAll Cloudflare resources have been deleted.\x1b[0m");
-  console.log(
-    "\x1b[33mTo set up again, run: bun run setup\x1b[0m\n"
-  );
+  console.log("\x1b[33mTo set up again, run: bun run setup\x1b[0m\n");
 
   outro("🏁 Done!");
 }

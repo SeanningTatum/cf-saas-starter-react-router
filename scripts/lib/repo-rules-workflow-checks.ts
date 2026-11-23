@@ -15,9 +15,7 @@ export function jobNames(yml: string): string[] {
 
 export function requiredContexts(rulesets: readonly Ruleset[]): string[] {
   const all = rulesets.flatMap((rs) =>
-    rs.rules.flatMap((r) =>
-      r.type === "required_status_checks" ? checkEntriesOf(r.parameters?.required_status_checks).map((c) => c.context) : [],
-    ),
+    rs.rules.flatMap((r) => (r.type === "required_status_checks" ? checkEntriesOf(r.parameters?.required_status_checks).map((c) => c.context) : [])),
   );
   return [...new Set(all)].sort();
 }

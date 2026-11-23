@@ -19,7 +19,7 @@ const adminSession = () => ({
 const contextWith = (reportError: AppLoadContext["reportError"]) => {
   const api = { getSession: () => Promise.resolve(adminSession()) };
   const runtime = ManagedRuntime.make(
-    Layer.succeed(AuthApi, { auth: {}, api } as unknown as AuthApiShape)
+    Layer.succeed(AuthApi, { auth: {}, api } as unknown as AuthApiShape),
   );
   return {
     runtime,
@@ -46,8 +46,7 @@ afterAll(() => {
   vi.unstubAllEnvs();
 });
 
-const failingQuery = () =>
-  new Request("https://app.example.com/api/trpc/analytics.getUserStats");
+const failingQuery = () => new Request("https://app.example.com/api/trpc/analytics.getUserStats");
 
 describe("tRPC route", () => {
   it("hands a failed procedure's TRPCError to reportError with source trpc, so a 500 from the API is reported", async () => {

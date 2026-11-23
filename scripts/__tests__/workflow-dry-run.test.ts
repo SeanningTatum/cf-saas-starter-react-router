@@ -23,12 +23,32 @@ describe("a run fails when the script swallowed the problem", () => {
 
   it("an answer that breaks its schema fails the run though the script caught it; a fitting answer or a dead agent (null) passes", async () => {
     const args = { schema: { type: "object", properties: { ok: { type: "boolean" } }, required: ["ok"] } };
-    await expect(run("swallow", { args, answers: [["try", { ok: "yes" }], ["par", 1]] })).rejects.toThrow(/"try" \(call 0\) does not fit its schema: \$\.ok: want boolean, got string/);
+    await expect(
+      run("swallow", {
+        args,
+        answers: [
+          ["try", { ok: "yes" }],
+          ["par", 1],
+        ],
+      }),
+    ).rejects.toThrow(/"try" \(call 0\) does not fit its schema: \$\.ok: want boolean, got string/);
 
-    const fits = await run("swallow", { args, answers: [["try", { ok: true }], ["par", 1]] });
+    const fits = await run("swallow", {
+      args,
+      answers: [
+        ["try", { ok: true }],
+        ["par", 1],
+      ],
+    });
     expect(fits.result).toEqual({ caught: 0, p: 1 });
     // null is an agent that died: the script must see it, not a schema failure.
-    const died = await run("swallow", { args, answers: [["try", null], ["par", 1]] });
+    const died = await run("swallow", {
+      args,
+      answers: [
+        ["try", null],
+        ["par", 1],
+      ],
+    });
     expect(died.result).toEqual({ caught: 0, p: 1 });
   });
 });
@@ -98,7 +118,12 @@ describe("resume", () => {
 
 describe("parallel and pipeline", () => {
   it("a throw becomes null and the rest still finish; pipeline stages get (prev, item, index)", async () => {
-    const r = await run("fanout", { answers: [["p1", "one"], ["p3", "three"]] });
+    const r = await run("fanout", {
+      answers: [
+        ["p1", "one"],
+        ["p3", "three"],
+      ],
+    });
     expect(r.result).toEqual({
       p: ["one", null, "three"],
       q: [{ prev: 10, item: 1, i: 0 }, null, { prev: 30, item: 3, i: 2 }],
@@ -119,7 +144,13 @@ describe("clock and randomness", () => {
 
 describe("answer rules", () => {
   it("the first matching rule wins, even over a more specific later one", async () => {
-    const r = await run("steps", { args: steps("x", "y"), answers: [[/./, "broad"], ["x", "exact"]] });
+    const r = await run("steps", {
+      args: steps("x", "y"),
+      answers: [
+        [/./, "broad"],
+        ["x", "exact"],
+      ],
+    });
     expect(r.result).toEqual(["broad", "broad"]);
   });
 

@@ -16,15 +16,11 @@ const inRepository = (call: string): Record<string, string> => ({
 
 const isPipeCall = (call: ts.CallExpression): boolean => {
   const callee = call.expression;
-  return (
-    (ts.isPropertyAccessExpression(callee) && callee.name.text === PIPE) ||
-    (ts.isIdentifier(callee) && callee.text === PIPE)
-  );
+  return (ts.isPropertyAccessExpression(callee) && callee.name.text === PIPE) || (ts.isIdentifier(callee) && callee.text === PIPE);
 };
 
 function pipedIntoSpan(node: ts.Node, spanMakers: ReadonlySet<string>): boolean {
-  const makesSpan = (argument: ts.Node): boolean =>
-    ts.isCallExpression(argument) && spanMakers.has(calleeName(argument) ?? "");
+  const makesSpan = (argument: ts.Node): boolean => ts.isCallExpression(argument) && spanMakers.has(calleeName(argument) ?? "");
   for (let child = node, parent = node.parent; parent; child = parent, parent = parent.parent) {
     if (!ts.isCallExpression(parent) || !isPipeCall(parent)) continue;
     const position = parent.expression === child ? -1 : parent.arguments.indexOf(child as ts.Expression);
@@ -74,8 +70,7 @@ export const rule: FileRule = {
     {
       name: "a renamed Effect import is caught",
       files: {
-        "app/repositories/x.ts":
-          'import { Effect as Eff } from "effect";\nexport const get = () => Eff.tryPromise({ try: () => fetch(u), catch: (e) => e });',
+        "app/repositories/x.ts": 'import { Effect as Eff } from "effect";\nexport const get = () => Eff.tryPromise({ try: () => fetch(u), catch: (e) => e });',
       },
       expect: "finding",
     },
@@ -119,8 +114,7 @@ export const rule: FileRule = {
     {
       name: "a call piped through a local helper that makes the span is clean",
       files: {
-        "app/repositories/x.ts":
-          'const span = (n: string) => Effect.withSpan(n, { kind: "client" });\n' + `export const get = () => ${TRY}.pipe(span("x.get"));`,
+        "app/repositories/x.ts": `const span = (n: string) => Effect.withSpan(n, { kind: "client" });\nexport const get = () => ${TRY}.pipe(span("x.get"));`,
       },
       expect: "clean",
     },

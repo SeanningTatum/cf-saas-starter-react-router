@@ -56,7 +56,7 @@ const readText = (value: unknown, key: string): string | undefined => {
 };
 
 const routeResponseOf = (
-  error: unknown
+  error: unknown,
 ): { readonly status: number; readonly statusText: string } | undefined => {
   const status = readData(error, "status");
   const statusText = readData(error, "statusText");
@@ -81,10 +81,7 @@ export const toBrowserPayload = (
       ? UNKNOWN_ERROR_MESSAGE
       : `${response.status} ${response.statusText}`.trim());
   const stack = readText(error, "stack");
-  const url = clip(
-    page.url.split(URL_SUFFIX_PATTERN)[0] ?? "",
-    MAX_REPORT_URL_LENGTH,
-  );
+  const url = clip(page.url.split(URL_SUFFIX_PATTERN)[0] ?? "", MAX_REPORT_URL_LENGTH);
   const requestId =
     page.requestId !== undefined && REQUEST_ID_PATTERN.test(page.requestId)
       ? page.requestId
@@ -93,20 +90,16 @@ export const toBrowserPayload = (
     source,
     name: clip(name, MAX_ERROR_NAME_LENGTH),
     message: clip(message, MAX_ERROR_MESSAGE_LENGTH),
-    ...(stack === undefined
-      ? {}
-      : { stack: clip(stack, MAX_ERROR_STACK_LENGTH) }),
+    ...(stack === undefined ? {} : { stack: clip(stack, MAX_ERROR_STACK_LENGTH) }),
     url,
     ...(requestId === undefined ? {} : { requestId }),
   };
 };
 
 const fingerprintOf = (payload: BrowserErrorPayload): string =>
-  [
-    payload.name,
-    payload.message,
-    payload.stack?.split(STACK_LINE_BREAK)[0] ?? "",
-  ].join(FINGERPRINT_SEPARATOR);
+  [payload.name, payload.message, payload.stack?.split(STACK_LINE_BREAK)[0] ?? ""].join(
+    FINGERPRINT_SEPARATOR,
+  );
 
 export const makeBrowserReporter = (deps: BrowserReporterDeps) => {
   const seenObjects = new WeakSet<object>();
@@ -149,17 +142,14 @@ const reporter = makeBrowserReporter({
   page: readPage,
 });
 
-export const reportHandledError = (error: unknown): void =>
-  reporter.report(error, "handled");
+export const reportHandledError = (error: unknown): void => reporter.report(error, "handled");
 
 export const reportRecoverableError = (error: unknown): void =>
   reporter.report(error, "recoverable");
 
 const installedTargets = new WeakSet<object>();
 
-export const installBrowserErrorReporting = (
-  target: ListenerTarget = window,
-): void => {
+export const installBrowserErrorReporting = (target: ListenerTarget = window): void => {
   if (installedTargets.has(target)) return;
   installedTargets.add(target);
   target.addEventListener(BROWSER_ERROR_EVENT, (event) => {
@@ -171,10 +161,7 @@ export const installBrowserErrorReporting = (
   });
 };
 
-export const shouldReportBoundaryError = (
-  error: unknown,
-  serverRendered: unknown,
-): boolean => {
+export const shouldReportBoundaryError = (error: unknown, serverRendered: unknown): boolean => {
   if (error === serverRendered) return false;
   const response = routeResponseOf(error);
   return response === undefined || response.status >= FIRST_SERVER_ERROR_STATUS;
@@ -185,11 +172,7 @@ const clientSnapshot = () => false;
 const hydrationSnapshot = () => true;
 
 export const useReportBoundaryError = (error: unknown): void => {
-  const hydrating = useSyncExternalStore(
-    subscribeToNothing,
-    clientSnapshot,
-    hydrationSnapshot,
-  );
+  const hydrating = useSyncExternalStore(subscribeToNothing, clientSnapshot, hydrationSnapshot);
   const serverRendered = useRef<unknown>(undefined);
   if (hydrating && serverRendered.current === undefined) {
     serverRendered.current = error;

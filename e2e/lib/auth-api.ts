@@ -9,7 +9,11 @@ export interface AppApiCaller {
   readonly turnstileToken?: string | null;
 }
 
-export const appApiHeaders = ({ origin, clientIp, turnstileToken = TURNSTILE_TEST_TOKEN }: AppApiCaller) => ({
+const appApiHeaders = ({
+  origin,
+  clientIp,
+  turnstileToken = TURNSTILE_TEST_TOKEN,
+}: AppApiCaller) => ({
   Origin: origin,
   [CLIENT_IP_HEADER]: clientIp,
   ...(turnstileToken === null ? {} : { [TURNSTILE_TOKEN_HEADER]: turnstileToken }),
@@ -39,5 +43,8 @@ export const postAppApi = (
 export const sessionCookiesSetBy = (response: APIResponse): ReadonlyArray<string> =>
   response
     .headersArray()
-    .filter(({ name, value }) => name.toLowerCase() === SET_COOKIE_HEADER && value.includes(SESSION_COOKIE_FRAGMENT))
+    .filter(
+      ({ name, value }) =>
+        name.toLowerCase() === SET_COOKIE_HEADER && value.includes(SESSION_COOKIE_FRAGMENT),
+    )
     .map(({ value }) => value);

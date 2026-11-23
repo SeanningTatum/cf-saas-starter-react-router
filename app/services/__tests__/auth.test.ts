@@ -16,13 +16,9 @@ vi.mock("@/auth/server", () => ({
 
 import { AuthApi, AuthApiLive } from "../auth";
 import { CloudflareEnv } from "../cloudflare";
-import {
-  ConfigurationError,
-  ExternalServiceError,
-} from "@/models/errors/repository";
+import { ConfigurationError, ExternalServiceError } from "@/models/errors/repository";
 
-const envLayer = (env: Partial<Env>) =>
-  Layer.succeed(CloudflareEnv, env as Env);
+const envLayer = (env: Partial<Env>) => Layer.succeed(CloudflareEnv, env as Env);
 
 const prodEnv = {
   DATABASE: {} as D1Database,
@@ -39,7 +35,7 @@ const configOf = (env: Partial<Env>, options: Parameters<typeof AuthApiLive>[0])
 const siteKeyOf = (env: Partial<Env>, options: Parameters<typeof AuthApiLive>[0]) =>
   Effect.map(
     AuthApi.pipe(Effect.provide(AuthApiLive(options).pipe(Layer.provide(envLayer(env))))),
-    (service) => service.turnstileSiteKey
+    (service) => service.turnstileSiteKey,
   );
 
 const failureOf = (env: Partial<Env>, options: Parameters<typeof AuthApiLive>[0]) =>
@@ -60,7 +56,7 @@ describe("AuthApiLive", () => {
         secureCookies: true,
         turnstile: null,
       });
-    })
+    }),
   );
 
   it.effect("passes the request origin through to createAuth in dev", () =>
@@ -71,24 +67,26 @@ describe("AuthApiLive", () => {
       });
       expect(config.baseURL).toBe("http://localhost:5173");
       expect(config.secureCookies).toBe(false);
-    })
+    }),
   );
 
-  it.effect("ignores the request origin outside dev, so a forged Host cannot move the base URL", () =>
-    Effect.gen(function* () {
-      const config = yield* configOf(prodEnv, {
-        dev: false,
-        requestOrigin: "https://spoofed.test",
-      });
-      expect(config.baseURL).toBe("https://app.example.test");
-    })
+  it.effect(
+    "ignores the request origin outside dev, so a forged Host cannot move the base URL",
+    () =>
+      Effect.gen(function* () {
+        const config = yield* configOf(prodEnv, {
+          dev: false,
+          requestOrigin: "https://spoofed.test",
+        });
+        expect(config.baseURL).toBe("https://app.example.test");
+      }),
   );
 
   it.effect("fails with the ConfigurationError when the config is bad, not a later crash", () =>
     Effect.gen(function* () {
       const failure = yield* failureOf(
         { DATABASE: {} as D1Database, BETTER_AUTH_SECRET: SECRET },
-        { dev: false, requestOrigin: "https://app.example.test" }
+        { dev: false, requestOrigin: "https://app.example.test" },
       );
       expect(Option.isSome(failure)).toBe(true);
       if (Option.isSome(failure)) {
@@ -98,42 +96,48 @@ describe("AuthApiLive", () => {
           field: "BETTER_AUTH_URL",
         });
       }
-    })
+    }),
   );
 
-  it.effect("hands the configured Turnstile site key to loaders, so the widget and the server use one pair", () =>
-    Effect.gen(function* () {
-      const siteKey = yield* siteKeyOf(
-        { ...prodEnv, TURNSTILE_SITE_KEY: "0x4AAAAAAA-fake-site-key", TURNSTILE_SECRET_KEY: "0x4AAAAAAA-fake-secret" },
-        { dev: false }
-      );
-      expect(siteKey).toBe("0x4AAAAAAA-fake-site-key");
-    })
+  it.effect(
+    "hands the configured Turnstile site key to loaders, so the widget and the server use one pair",
+    () =>
+      Effect.gen(function* () {
+        const siteKey = yield* siteKeyOf(
+          {
+            ...prodEnv,
+            TURNSTILE_SITE_KEY: "0x4AAAAAAA-fake-site-key",
+            TURNSTILE_SECRET_KEY: "0x4AAAAAAA-fake-secret",
+          },
+          { dev: false },
+        );
+        expect(siteKey).toBe("0x4AAAAAAA-fake-site-key");
+      }),
   );
 
   it.effect("gives a null site key when Turnstile is off, so the forms render no widget", () =>
     Effect.gen(function* () {
       expect(yield* siteKeyOf(prodEnv, { dev: false })).toBeNull();
-    })
+    }),
   );
 
   it.effect("gives the always-pass test site key in dev when no keys are set", () =>
     Effect.gen(function* () {
       expect(yield* siteKeyOf(prodEnv, { dev: true })).toBe(TURNSTILE_TEST_SITE_KEY);
-    })
+    }),
   );
 
   it.effect("fails with ExternalServiceError when createAuth throws", () =>
     Effect.gen(function* () {
       const failure = yield* failureOf(
         { ...prodEnv, BETTER_AUTH_SECRET: THROWING_SECRET },
-        { dev: false }
+        { dev: false },
       );
       expect(Option.isSome(failure)).toBe(true);
       if (Option.isSome(failure)) {
         expect(failure.value).toBeInstanceOf(ExternalServiceError);
         expect((failure.value as ExternalServiceError).service).toBe("BetterAuth");
       }
-    })
+    }),
   );
 });

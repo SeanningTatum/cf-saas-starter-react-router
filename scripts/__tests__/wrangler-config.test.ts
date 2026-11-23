@@ -1,13 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import {
-  buildWranglerConfig,
-  DUMMY_INPUT,
-  parseJsonc,
-  RATE_LIMITS,
-  stripJsonc,
-} from "../lib/wrangler-config";
+import { buildWranglerConfig, DUMMY_INPUT, parseJsonc, RATE_LIMITS, stripJsonc } from "../lib/wrangler-config";
 import { RATE_LIMIT_BINDINGS, RATE_LIMIT_PERIOD_SECONDS } from "../../app/lib/constants/rate-limit";
 
 interface RateLimitEntry {
@@ -21,9 +15,7 @@ interface WranglerShape {
   env: { preview: { ratelimits?: RateLimitEntry[] } };
 }
 
-const committed = JSON.parse(
-  stripJsonc(fs.readFileSync(path.join(__dirname, "..", "..", "wrangler.jsonc"), "utf-8"))
-) as WranglerShape;
+const committed = JSON.parse(stripJsonc(fs.readFileSync(path.join(__dirname, "..", "..", "wrangler.jsonc"), "utf-8"))) as WranglerShape;
 
 const built = buildWranglerConfig(DUMMY_INPUT) as WranglerShape;
 
@@ -47,9 +39,7 @@ describe("buildWranglerConfig", () => {
   });
 
   it("uses the period the app sends as Retry-After, so the header never undercounts the wait", () => {
-    const periods = [...(built.ratelimits ?? []), ...(built.env.preview.ratelimits ?? [])].map(
-      (entry) => entry.simple.period
-    );
+    const periods = [...(built.ratelimits ?? []), ...(built.env.preview.ratelimits ?? [])].map((entry) => entry.simple.period);
     expect(new Set(periods)).toEqual(new Set([RATE_LIMIT_PERIOD_SECONDS]));
   });
 

@@ -32,6 +32,15 @@ interface World {
   checkRuns?: unknown[][];
 }
 
+interface Waited {
+  status: string;
+  sha: string;
+  review: { id: number } | null;
+  confidence: number | null;
+  summary: string;
+  comments: unknown[];
+}
+
 /** A gh stub plus a fake clock: `sleep` advances time, so no test waits. */
 function harness(w: World, flags: { commentFails?: boolean; reviewBot?: ReviewBot } = {}) {
   const calls: string[][] = [];
@@ -50,7 +59,7 @@ function harness(w: World, flags: { commentFails?: boolean; reviewBot?: ReviewBo
       if (j.includes(`/commits/${SHA}/check-runs`)) {
         // `--paginate --jq .check_runs[]` prints one run per line across every page.
         const runs = w.checkRuns ?? [[]];
-        return out(runs[Math.min(checkPoll++, runs.length - 1)].map((x) => JSON.stringify(x)).join("\n"));
+        return out((runs[Math.min(checkPoll++, runs.length - 1)] ?? []).map((x) => JSON.stringify(x)).join("\n"));
       }
       if (j.endsWith("/reviews")) return out(w.reviews[Math.min(poll++, w.reviews.length - 1)]);
       if (j.endsWith("/pulls/5/comments")) return out(w.comments ?? []);
@@ -80,8 +89,8 @@ describe("pr-review-wait", () => {
       { reviewBot },
     );
     const o = await run(["5", "--retrigger-after", "30", "--interval", "30"], deps);
-    expect((o.out as any).review.id).toBe(4);
-    expect((o.out as any).confidence).toBe(4);
+    expect((o.out as Waited).review?.id).toBe(4);
+    expect((o.out as Waited).confidence).toBe(4);
     expect(retriggers(calls)).toEqual([["pr", "comment", "5", "--body", "/acme review"]]);
   });
 
@@ -91,28 +100,28 @@ describe("pr-review-wait", () => {
     const { deps } = harness({ reviews: [[review({ id: 4, user: acme })]], issueComments: [{ user: acme, body: summaryBody(5) }] }, { reviewBot });
     const o = await run(["5"], deps);
     expect(o.code).toBe(0);
-    expect((o.out as any).review.id).toBe(4);
+    expect((o.out as Waited).review?.id).toBe(4);
   });
 
   it("matches on the head sha: a bot review of an older commit is ignored and the wait continues", async () => {
     const { deps } = harness({ reviews: [[review({ id: 1, commit_id: "old000" })], [review({ id: 1, commit_id: "old000" }), review({ id: 2 })]] });
     const o = await run(["5"], deps);
     expect(o.code).toBe(0);
-    expect((o.out as any).status).toBe("reviewed");
-    expect((o.out as any).review.id).toBe(2);
+    expect((o.out as Waited).status).toBe("reviewed");
+    expect((o.out as Waited).review?.id).toBe(2);
   });
 
   it("matches the bot by login prefix and ignores human reviews of the same commit", async () => {
     const { deps } = harness({ reviews: [[review({ id: 1, user: { login: "sean" } })], [review({ id: 1, user: { login: "sean" } }), review({ id: 9 })]] });
     const o = await run(["5"], deps);
-    expect((o.out as any).review.id).toBe(9);
+    expect((o.out as Waited).review?.id).toBe(9);
   });
 
   it("reads the PR's current head sha and reports it", async () => {
     const a = harness({ reviews: [[review()]] });
     const o = await run(["5"], a.deps);
     expect(a.calls.some((c) => c[0] === "pr" && c[1] === "view")).toBe(true);
-    expect((o.out as any).sha).toBe(SHA);
+    expect((o.out as Waited).sha).toBe(SHA);
   });
 
   it("retriggers exactly once however many polls follow, with the Greptile trigger text", async () => {
@@ -148,7 +157,7 @@ describe("pr-review-wait", () => {
       ],
     });
     const o = await run(["5"], deps);
-    expect((o.out as any).comments).toEqual([
+    expect((o.out as Waited).comments).toEqual([
       { id: 1, path: "a.ts", line: 12, body: "mine", url: "u1" },
       { id: 3, path: "c.ts", line: 9, body: "outdated", url: "u3" },
     ]);
@@ -157,35 +166,51 @@ describe("pr-review-wait", () => {
   it("reads confidence from the LAST summary comment: a retrigger posts a newer summary", async () => {
     const { deps } = harness({
       reviews: [[review()]],
-      issueComments: [{ user: bot, body: summaryBody(2) }, { user: bot, body: "unrelated 5/5" }, { user: bot, body: summaryBody(4) }],
+      issueComments: [
+        { user: bot, body: summaryBody(2) },
+        { user: bot, body: "unrelated 5/5" },
+        { user: bot, body: summaryBody(4) },
+      ],
     });
     const o = await run(["5"], deps);
-    expect((o.out as any).confidence).toBe(4);
-    expect((o.out as any).summary).toContain("Confidence Score: 4/5");
+    expect((o.out as Waited).confidence).toBe(4);
+    expect((o.out as Waited).summary).toContain("Confidence Score: 4/5");
   });
 
   it("confidence is null, not 0, when no summary comment exists", async () => {
     const { deps } = harness({ reviews: [[review()]], issueComments: [{ body: "Confidence Score: 3/5 but no marker" }] });
     const o = await run(["5"], deps);
-    expect((o.out as any).confidence).toBeNull();
-    expect((o.out as any).summary).toBe("");
+    expect((o.out as Waited).confidence).toBeNull();
+    expect((o.out as Waited).summary).toBe("");
   });
 
   it("ignores a marker comment from a human or tied to another commit: no score beats a wrong one", async () => {
     const { deps } = harness({
       reviews: [[review()]],
-      issueComments: [{ user: { login: "someone" }, body: summaryBody(1) }, { user: bot, body: summaryBody(2, "old999") }],
+      issueComments: [
+        { user: { login: "someone" }, body: summaryBody(1) },
+        { user: bot, body: summaryBody(2, "old999") },
+      ],
     });
     const o = await run(["5"], deps);
-    expect((o.out as any).confidence).toBeNull();
-    expect((o.out as any).summary).toBe("");
+    expect((o.out as Waited).confidence).toBeNull();
+    expect((o.out as Waited).summary).toBe("");
   });
 
   describe("a clean review: no inline comments, so Greptile submits no PR review", () => {
-    const check = (status: string) => ({ name: "Greptile Review", status, conclusion: status === "completed" ? "success" : null, app: { slug: "greptile-apps" } });
+    const check = (status: string) => ({
+      name: "Greptile Review",
+      status,
+      conclusion: status === "completed" ? "success" : null,
+      app: { slug: "greptile-apps" },
+    });
 
     it("a completed Greptile check plus a summary naming the head is reviewed, with no review and no comments", async () => {
-      const { deps, calls } = harness({ reviews: [[]], checkRuns: [[check("in_progress")], [check("completed")]], issueComments: [{ user: bot, body: summaryBody(5) }] });
+      const { deps, calls } = harness({
+        reviews: [[]],
+        checkRuns: [[check("in_progress")], [check("completed")]],
+        issueComments: [{ user: bot, body: summaryBody(5) }],
+      });
       const o = await run(["5"], deps);
       expect(o.code).toBe(0);
       expect(o.out).toMatchObject({ status: "reviewed", review: null, confidence: 5, comments: [], retriggered: false });
@@ -199,13 +224,17 @@ describe("pr-review-wait", () => {
       h.deps.gh = (args) => {
         if (args.join(" ").endsWith("/issues/5/comments")) {
           n++;
-          return { code: 0, stdout: JSON.stringify(n < 3 ? [{ user: bot, body: summaryBody(3, "old999") }] : [{ user: bot, body: summaryBody(4) }]), stderr: "" };
+          return {
+            code: 0,
+            stdout: JSON.stringify(n < 3 ? [{ user: bot, body: summaryBody(3, "old999") }] : [{ user: bot, body: summaryBody(4) }]),
+            stderr: "",
+          };
         }
         return gh(args);
       };
       const o = await run(["5"], h.deps);
       expect(o.code).toBe(0);
-      expect((o.out as any).confidence).toBe(4);
+      expect((o.out as Waited).confidence).toBe(4);
       expect(n).toBe(3);
     });
 
@@ -217,8 +246,8 @@ describe("pr-review-wait", () => {
         issueComments: [{ user: bot, body: summaryBody(3) }],
       });
       const o = await run(["5"], deps);
-      expect((o.out as any).review.id).toBe(7);
-      expect((o.out as any).comments).toHaveLength(1);
+      expect((o.out as Waited).review?.id).toBe(7);
+      expect((o.out as Waited).comments).toHaveLength(1);
     });
 
     it("no retrigger while a Greptile check is queued or running on the head", async () => {
@@ -241,7 +270,7 @@ describe("pr-review-wait", () => {
       const { deps, calls } = harness({ reviews: [[]], checkRuns: [[...others, check("completed")]], issueComments: [{ user: bot, body: summaryBody(5) }] });
       const o = await run(["5"], deps);
       expect(o.code).toBe(0);
-      expect((o.out as any).confidence).toBe(5);
+      expect((o.out as Waited).confidence).toBe(5);
       expect(calls.find((c) => c.join(" ").includes("check-runs"))).toEqual(expect.arrayContaining(["--paginate", "--jq", ".check_runs[]"]));
     });
 

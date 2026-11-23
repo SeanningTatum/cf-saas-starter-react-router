@@ -1,4 +1,4 @@
-import type { Insight } from "@/components/analytics";
+import type { Insight } from "@/components/analytics/insights-card";
 import type { UserStats, UserGrowthPoint } from "@/lib/schemas/analytics";
 import {
   BANNED_PERCENT_HIGH_THRESHOLD,
@@ -9,20 +9,16 @@ import {
 
 export {
   BANNED_PERCENT_HIGH_THRESHOLD,
-  RECENT_SIGNUPS_WINDOW_DAYS,
   VERIFICATION_RATE_EXCELLENT_THRESHOLD,
   VERIFICATION_RATE_MODERATE_THRESHOLD,
 };
 
-export type InsightsTranslator = (
-  key: string,
-  options?: Record<string, unknown>
-) => string;
+export type InsightsTranslator = (key: string, options?: Record<string, unknown>) => string;
 
 export function buildUserInsights(
   stats: UserStats,
   growthData: readonly UserGrowthPoint[],
-  t: InsightsTranslator
+  t: InsightsTranslator,
 ): Insight[] {
   const insights: Insight[] = [];
 
@@ -48,9 +44,7 @@ export function buildUserInsights(
   }
 
   if (stats.bannedUsers > 0) {
-    const bannedPercent = Math.round(
-      (stats.bannedUsers / stats.totalUsers) * 100
-    );
+    const bannedPercent = Math.round((stats.bannedUsers / stats.totalUsers) * 100);
     insights.push({
       text: t("insights.banned_users", {
         count: stats.bannedUsers,

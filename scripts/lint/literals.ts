@@ -40,9 +40,7 @@ function hasLiteralArguments(items: readonly ts.Expression[]): boolean {
 
 export function isLiteralConstant(statement: ts.Statement): boolean {
   if (!ts.isVariableStatement(statement) || !(statement.declarationList.flags & ts.NodeFlags.Const)) return false;
-  return statement.declarationList.declarations.every(
-    (declaration) => declaration.initializer !== undefined && isLiteralValue(declaration.initializer)
-  );
+  return statement.declarationList.declarations.every((declaration) => declaration.initializer !== undefined && isLiteralValue(declaration.initializer));
 }
 
 const isExported = (statement: ts.VariableStatement): boolean =>

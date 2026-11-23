@@ -1,9 +1,5 @@
 import type { Effect } from "effect";
-import type {
-  ERROR_KINDS,
-  ERROR_LEVELS,
-  ERROR_SOURCES,
-} from "@/lib/constants/error-reporting";
+import type { ERROR_KINDS, ERROR_LEVELS, ERROR_SOURCES } from "@/lib/constants/error-reporting";
 import type { ExternalServiceError } from "@/models/errors/repository";
 
 export type ErrorSource = (typeof ERROR_SOURCES)[number];
@@ -31,7 +27,5 @@ export interface ErrorReport {
 
 export interface ErrorReporterAdapter {
   readonly name: string;
-  readonly send: (
-    batch: ReadonlyArray<ErrorReport>
-  ) => Effect.Effect<void, ExternalServiceError>;
+  readonly send: (batch: ReadonlyArray<ErrorReport>) => Effect.Effect<void, ExternalServiceError>;
 }

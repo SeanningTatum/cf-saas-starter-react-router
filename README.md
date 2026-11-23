@@ -102,7 +102,7 @@ You're working in a codebase with strict conventions. Skipping the plan will cos
 4. **Verify.** The `feature-verifier` sub-agent walks the flow in a browser, saves screenshots to `.verify/<slug>/`, and writes a PASS / FAIL / BLOCKED verdict you paste into the PR.
 5. **Done.** `./scripts/verify.sh` is green and the verdict is PASS. Merge the PR that closes the issue.
 
-**The five non-negotiables** (enforced by the `non-negotiables` gate, [`scripts/check-non-negotiables.ts`](scripts/check-non-negotiables.ts)):
+**The five non-negotiables** (enforced by the `lint` gate: Biome refuses Zod, the house linter in [`scripts/lint/`](scripts/lint) checks the rest):
 
 1. **Effect TS by default.** No `throw`. No `try/catch` outside `Effect.tryPromise`.
 2. **Effect Schema for validation.** No Zod.
@@ -131,6 +131,7 @@ State lives in GitHub: the spec is an issue, each ticket is an issue, and a merg
 | Gate | Command | Runs in |
 |------|---------|--------|
 | typecheck | `bun run typecheck` | lean, baseline, full |
+| lint | `bun run lint` (Biome, the house linter, dead code; [`docs/agents/lint.md`](docs/agents/lint.md)) | lean, baseline, full |
 | test | `bun run test` | lean, baseline, full |
 | non-negotiables-selftest | `bun run scripts/check-non-negotiables.ts --selftest` | lean, baseline, full |
 | non-negotiables | `bun run scripts/check-non-negotiables.ts` | lean, baseline, full |
@@ -173,7 +174,7 @@ These run automatically — you do not need to remember them.
 `commit-msg` runs commitlint on the message (types and scopes in [`.commitlintrc.json`](.commitlintrc.json)). `pre-commit` skips entirely if no `.ts/.tsx/.js/.jsx` files are staged. Otherwise:
 
 ```bash
-./scripts/verify.sh --only non-negotiables   # or `bun run lint:staged` when the package has it
+bun run lint:staged                          # Biome and the house linter on the staged files
 ./scripts/verify.sh --only typecheck         # cf-typegen + react-router typegen + tsc -b
 ```
 
@@ -246,7 +247,9 @@ bun run build                 # Production build
 bun run deploy                # Build + deploy to Cloudflare Workers
 bun run preview               # Build + serve locally via the Cloudflare Vite plugin (vite preview)
 
-bun run typecheck             # cf-typegen + react-router typegen + tsc -b
+bun run typecheck             # cf-typegen + react-router typegen + tsc -b (app, workers, scripts, e2e, configs)
+bun run lint                  # Biome + house linter + dead code, one finding per line
+bun run format                # Format every file Biome covers
 bun run test                  # Vitest (one-shot)
 bun run test:watch            # Vitest watch
 bun run test:e2e              # Playwright
@@ -379,14 +382,14 @@ npx skills add <owner/repo> --skill <name> -y   # adds it to skills-lock.json
 ./scripts/restore-skills.sh                     # installs and links it; commit the lock only
 ```
 
-**Forms — always Effect Schema + `effectResolver`** (no Zod resolver):
+**Forms — always Effect Schema + `effectTsResolver`** (no Zod resolver):
 
 ```ts
-import { effectResolver } from "@hookform/resolvers/effect-ts";
+import { effectTsResolver } from "@hookform/resolvers/effect-ts";
 import { LoginSchema, type LoginInput } from "@/lib/schemas/auth";
 
 const form = useForm<LoginInput>({
-  resolver: effectResolver(LoginSchema),
+  resolver: effectTsResolver(LoginSchema),
 });
 ```
 

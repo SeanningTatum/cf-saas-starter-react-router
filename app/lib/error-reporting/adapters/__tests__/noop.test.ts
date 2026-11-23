@@ -33,6 +33,6 @@ describe("noopAdapter", () => {
       expect(Exit.isSuccess(exit)).toBe(true);
       expect(fetchFn).not.toHaveBeenCalled();
       expect(log).not.toHaveBeenCalled();
-    })
+    }),
   );
 });

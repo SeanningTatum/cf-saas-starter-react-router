@@ -2,7 +2,7 @@
 
 `CLAUDE.md` is a symlink to this file. **Edit `AGENTS.md` only**; never replace the symlink with a real file. Workflows, commands, gates, installs: [`docs/agents/harness.md`](docs/agents/harness.md).
 
-**Where a rule goes.** A rule a tool can check goes in the house linter (`scripts/lint/rules/`, one file per rule) or in a test; its finding says the fix, so it needs no prose here. Only a rule that needs judgment goes in this file. `bun run lint:house <files>` checks an edit; every rule and how to add one: [`docs/agents/lint-rules.md`](docs/agents/lint-rules.md).
+**Where a rule goes.** A rule a tool can check goes in Biome (`biome.jsonc`) when a built-in rule states it exactly, else in the house linter (`scripts/lint/rules/`, one file per rule) or in a test; its finding says the fix, so it needs no prose here. Only a rule that needs judgment goes in this file. `bun run lint <files>` checks an edit ([`docs/agents/lint.md`](docs/agents/lint.md)); the house rules and how to add one: [`docs/agents/lint-rules.md`](docs/agents/lint-rules.md).
 
 SaaS starter on **Cloudflare Workers + React Router v7 + tRPC + D1/Drizzle + Better Auth + Effect TS + ShadCN/Tailwind**. **Retrieval over recall:** read the issue, `context-memory` recall, `GLOSSARY.md` and `docs/adr/` first. Training data is not project state.
 
@@ -60,7 +60,7 @@ Every UI agent reads `PRODUCT.md` and `DESIGN.md` before its first edit (a fresh
 
 ## Five non-negotiables
 
-One line each, as orientation. The `non-negotiables` gate (`bun run lint:house`) checks all five and prints the fix.
+One line each, as orientation. The `lint` gate (`bun run lint`) checks all five and prints the fix.
 
 1. **Effect TS** is the default: failures travel in the Effect error channel.
 2. **Effect Schema** for all validation.

@@ -8,7 +8,7 @@
 import { readdirSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { lintTitle } from "../helpers/lint-title";
-import { configLine, labels, ledgerAt, callShape, rowShape, seq, type AnswerInput, type AnswerRule, type DryRunResult } from "../../lib/workflow-dry-run";
+import { labels, ledgerAt, callShape, rowShape, seq, type AnswerInput, type AnswerRule, type DryRunResult } from "../../lib/workflow-dry-run";
 
 import { type Obj, ROOT, OUT, UI_DIR, ANSWERS, SHIP_ARGS, run, res, byLabel, one, indexOf, fenceIn, laneDid, tokensFor, PASS, SHIPPED, rules } from "./brand-init.fixtures";
 
@@ -32,9 +32,9 @@ describe("brand-init: happy path, Preflight to Ship", () => {
     expect(labels(r1.calls).at(-1)).toBe("memory:record:needs-input");
     // The resume replays preflight, recall and the interview from cache, and does not record the brief stop again.
     expect(labels(r2.calls.filter((c) => c.cached))).toEqual(["config", "preflight", "memory:recall", "brief:interview"]);
-    expect(r2.live[0].label).toBe("brief:write");
+    expect(r2.live[0]?.label).toBe("brief:write");
     expect(byLabel(r2, "memory:record:needs-input")).toEqual([]);
-    expect(r3.live[0].label).toBe("contract:snapshot");
+    expect(r3.live[0]?.label).toBe("contract:snapshot");
 
     // An answered id replaces its draft; an id left out keeps its draft. Catches dropping either.
     const write = one(r2, "brief:write").prompt;
@@ -87,7 +87,7 @@ describe("brand-init: happy path, Preflight to Ship", () => {
     for (const r of [r1, r2]) expect(r.calls.filter((c) => c.phase === "Ship")).toEqual([]);
     const committers = r3.calls.filter((c) => /ONE commit, one PR/.test(c.prompt));
     expect(labels(committers)).toEqual(["ship:record-commit-pr"]);
-    expect(committers[0].phase).toBe("Ship");
+    expect(committers[0]?.phase).toBe("Ship");
     expect(labels(r3.calls.filter((c) => c.phase === "Ship"))).toEqual(["ship:record-commit-pr", "run:record:ship", "memory:record:ship"]);
     // DESIGN.md describes the shipped tree: it is written after every check and before the commit.
     expect(indexOf(r3, "close:design-md")).toBeGreaterThan(Math.max(...r3.calls.filter((c) => c.label.startsWith("check:")).map((c) => c.n)));
@@ -298,7 +298,7 @@ describe("brand-init: stop at the pick and resume", () => {
 
     const resumed = await run({ answers: ANSWERS, pick: 3, rebuildHome: false }, rules(), stopped);
     expect(resumed.calls.slice(0, recordAt).every((c) => c.cached)).toBe(true);
-    expect(resumed.live[0].label).toBe("contract:snapshot");
+    expect(resumed.live[0]?.label).toBe("contract:snapshot");
     expect(byLabel(resumed, "memory:record:needs-pick")).toEqual([]);
     expect(resumed.phases).not.toContain("Pick");
     expect(res(resumed)).toMatchObject({ pick: 3, rebuildHome: false, ship: { shipped: true } });
@@ -362,7 +362,7 @@ describe("brand-init: fix rounds", () => {
     const fixes = r.calls.filter((c) => c.label.startsWith("fix:"));
     // Catches routing by anything but the hardcoded fences, or handing the lane no finding.
     expect(labels(fixes)).toEqual(["fix:1:primitives:dialogs-sheets"]);
-    const fix = fixes[0];
+    const fix = one(r, "fix:1:primitives:dialogs-sheets");
     expect(fix.opts.agentType).toBe("ui-builder");
     expect(fix.prompt).toContain(`[P1] impeccable critique: ${dialogP1.issue} (${dialogP1.file})`);
     expect(fenceIn(fix.prompt)).toEqual(["app/components/ui/dialog.tsx", "app/components/ui/alert-dialog.tsx", "app/components/ui/sheet.tsx", "app/components/ui/drawer.tsx"]);
@@ -370,7 +370,7 @@ describe("brand-init: fix rounds", () => {
     for (const label of checkLabels) {
       const runs = byLabel(r, label);
       expect(runs, label).toHaveLength(2);
-      expect(runs[1].n).toBeGreaterThan(fix.n);
+      expect(runs[1]?.n).toBeGreaterThan(fix.n);
     }
     expect(res(r)).toMatchObject({ blockingFindings: [], ship: { shipped: true } });
   });

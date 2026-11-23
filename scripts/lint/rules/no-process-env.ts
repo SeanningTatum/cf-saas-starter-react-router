@@ -12,10 +12,7 @@ function processEnvRead(node: ts.Node): string | undefined {
     if (isNamed(node.expression, "process")) return "`process.env`";
     const owner = node.expression;
     const viaGlobal =
-      ts.isPropertyAccessExpression(owner) &&
-      owner.name.text === "process" &&
-      ts.isIdentifier(owner.expression) &&
-      GLOBAL_OBJECTS.has(owner.expression.text);
+      ts.isPropertyAccessExpression(owner) && owner.name.text === "process" && ts.isIdentifier(owner.expression) && GLOBAL_OBJECTS.has(owner.expression.text);
     return viaGlobal ? "`globalThis.process.env`" : undefined;
   }
   if (ts.isElementAccessExpression(node) && isNamed(node.expression, "process")) {

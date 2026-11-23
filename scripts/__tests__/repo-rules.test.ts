@@ -202,6 +202,9 @@ interface World {
   override?: (method: string, path: string) => Partial<GhResult> | undefined;
 }
 
+interface LiveRuleset { enforcement: string; bypass_actors?: unknown[]; rules: { type: string; parameters?: { required_status_checks: { context: string; integration_id?: number }[]; required_approving_review_count: number; allowed_merge_methods: string[] } }[]; conditions: { ref_name: { include: string[]; exclude: string[] } } }
+type W = World & { ruleset: LiveRuleset; production: LiveRuleset; env: { protection_rules: [{ reviewers: unknown[]; prevent_self_review: boolean }, ...unknown[]]; deployment_branch_policy: unknown }; policies: { branch_policies: unknown[] } | null };
+
 const notFound: Partial<GhResult> = { code: 1, stderr: "gh: Not Found (HTTP 404)" };
 const json = (v: unknown): Partial<GhResult> => ({ stdout: JSON.stringify(v) });
 
@@ -225,8 +228,8 @@ function harness(world: World, opts: { files?: Record<string, string>; env?: Rec
     gh: (args, input) => {
       calls.push({ args, input });
       const write = args[1] === "-X";
-      const method = write ? args[2] : "GET";
-      const path = write ? args[3] : args[1];
+      const method = (write ? args[2] : "GET") ?? "";
+      const path = (write ? args[3] : args[1]) ?? "";
       const over = world.override?.(method, path);
       if (over) return { code: 0, stdout: "", stderr: "", ...over };
       const reply = (r: Partial<GhResult>): GhResult => ({ code: 0, stdout: "", stderr: "", ...r });
@@ -247,7 +250,7 @@ function harness(world: World, opts: { files?: Record<string, string>; env?: Rec
         return reply(world.policies ? json(world.policies) : notFound);
       return reply({ code: 1, stderr: `unexpected gh call: ${args.join(" ")}` });
     },
-    readFile: (p) => (p in files ? Either.right(files[p]) : Either.left("ENOENT")),
+    readFile: (p) => (p in files ? Either.right(files[p] ?? "") : Either.left("ENOENT")),
     listDir: (dir) => {
       const names = Object.keys(files).filter((f) => f.startsWith(`${dir}/`)).map((f) => f.slice(dir.length + 1));
       return names.length ? Either.right(names) : Either.left("ENOENT");
@@ -354,9 +357,7 @@ describe("config file", () => {
   });
 
   it("a schema-invalid file gives error and exit 1: enforcement as a number must not reach GitHub", () => {
-    const broken = clone(DECLARED) as any;
-    broken.rulesets[0].enforcement = 1;
-    const { o } = bad(JSON.stringify(broken));
+    const { o } = bad(JSON.stringify({ ...DECLARED, rulesets: [{ ...DECLARED.rulesets[0], enforcement: 1 }, ...DECLARED.rulesets.slice(1)] }));
     expect(o.code).toBe(1);
     expect(lines(o.stdout, "error")[0]).toContain("is not valid");
   });
@@ -383,16 +384,16 @@ describe("config file", () => {
     expect(lines(o.stdout, "error")[0]).toContain("cannot read .github/repo-rules.json");
   });
 
-  it.each([
-    ["a reviewer with a slash path", (c: any) => (c.environments[0].reviewers = ["a/b/c"])],
-    ["a reviewer with a query", (c: any) => (c.environments[0].reviewers = ["octocat?x=1"])],
-    ["an environment name with '..'", (c: any) => (c.environments[0].name = "../rulesets")],
-    ["an environment name with '?'", (c: any) => (c.environments[0].name = "production?x")],
-    ["an environment name with whitespace", (c: any) => (c.environments[0].name = "pro duction")],
-    ["a deployment branch with '#'", (c: any) => (c.environments[0].deployment_branches = ["main#x"])],
-    ["a deployment branch with '{'", (c: any) => (c.environments[0].deployment_branches = ["{main}"])],
+  it.each<[string, (c: { environments: [Record<string, unknown>] }) => unknown]>([
+    ["a reviewer with a slash path", (c) => (c.environments[0].reviewers = ["a/b/c"])],
+    ["a reviewer with a query", (c) => (c.environments[0].reviewers = ["octocat?x=1"])],
+    ["an environment name with '..'", (c) => (c.environments[0].name = "../rulesets")],
+    ["an environment name with '?'", (c) => (c.environments[0].name = "production?x")],
+    ["an environment name with whitespace", (c) => (c.environments[0].name = "pro duction")],
+    ["a deployment branch with '#'", (c) => (c.environments[0].deployment_branches = ["main#x"])],
+    ["a deployment branch with '{'", (c) => (c.environments[0].deployment_branches = ["{main}"])],
   ])("%s is an error before any gh call: the value goes into a URL path", (_name, mutate) => {
-    const c = clone(DECLARED) as any;
+    const c = JSON.parse(JSON.stringify(DECLARED));
     mutate(c);
     const { o, calls } = bad(JSON.stringify(c));
     expect(o.code).toBe(1);
@@ -436,7 +437,7 @@ describe("cannot read GitHub", () => {
     const h = harness({ override: () => ({ code: 1, stderr: "not a git repository" }) }, { env: { GITHUB_REPOSITORY: "" } });
     const o = run(["--check"], h.deps);
     expect(o.code).toBe(0);
-    expect(h.calls[0].args.slice(0, 2)).toEqual(["repo", "view"]);
+    expect(h.calls[0]?.args.slice(0, 2)).toEqual(["repo", "view"]);
     expect(lines(o.stdout, "notice")[0]).toContain("not a git repository");
   });
 });
@@ -522,9 +523,9 @@ describe("--check: in sync", () => {
   });
 
   it("key order and rule order in the live object do not matter", () => {
-    const w = sync();
-    (w.ruleset as any).rules.reverse();
-    (w.ruleset as any).conditions.ref_name = { include: ["~DEFAULT_BRANCH"], exclude: [] };
+    const w = sync() as W;
+    w.ruleset.rules.reverse();
+    w.ruleset.conditions.ref_name = { include: ["~DEFAULT_BRANCH"], exclude: [] };
     const { o } = check(w);
     expect(o.code).toBe(0);
   });
@@ -532,7 +533,7 @@ describe("--check: in sync", () => {
 
 describe("--check: bypass list", () => {
   it("a live ruleset with no bypass_actors field gets a notice and no ok: a caller without admin rights must not see a false green", () => {
-    const w = sync() as any;
+    const w = sync() as W;
     delete w.ruleset.bypass_actors;
     const { o } = check(w);
     expect(o.code).toBe(0);
@@ -543,7 +544,7 @@ describe("--check: bypass list", () => {
   });
 
   it("other drift still reports when the bypass list is hidden", () => {
-    const w = sync() as any;
+    const w = sync() as W;
     delete w.ruleset.bypass_actors;
     w.ruleset.enforcement = "disabled";
     const { o } = check(w);
@@ -553,47 +554,46 @@ describe("--check: bypass list", () => {
 });
 
 describe("--check: drift", () => {
-  type W = World & { ruleset: any; production: any; env: any; policies: any };
-  const rule = (w: W, type: string) => w.ruleset.rules.find((r: any) => r.type === type);
+  const rule = (ruleset: LiveRuleset, type: string) => ruleset.rules.find((r) => r.type === type)?.parameters as NonNullable<LiveRuleset["rules"][number]["parameters"]>;
 
   // [regression it catches, change to the live world, text the one drift line must contain]
   const cases: [string, (w: W) => void, string[]][] = [
     ["enforcement disabled: a switched-off ruleset protects nothing", (w) => (w.ruleset.enforcement = "disabled"), ["enforcement", '"active"', '"disabled"']],
     [
       "a bypass actor added: someone can skip every rule",
-      (w) => w.ruleset.bypass_actors.push({ actor_id: 5, actor_type: "RepositoryRole", bypass_mode: "always" }),
+      (w) => w.ruleset.bypass_actors?.push({ actor_id: 5, actor_type: "RepositoryRole", bypass_mode: "always" }),
       ["bypass_actors", "declared []", "actor_id"],
     ],
     [
       "a required check removed: a red build could merge",
-      (w) => rule(w, "required_status_checks").parameters.required_status_checks.pop(),
+      (w) => rule(w.ruleset, "required_status_checks").required_status_checks.pop(),
       ["required_status_checks", "E2E smoke (Playwright)"],
     ],
     [
       "a rule type removed: force pushes could return",
-      (w) => (w.ruleset.rules = w.ruleset.rules.filter((r: any) => r.type !== "non_fast_forward")),
+      (w) => (w.ruleset.rules = w.ruleset.rules.filter((r) => r.type !== "non_fast_forward")),
       ["rules.non_fast_forward", "live absent"],
     ],
     ["an extra rule type added by hand", (w) => w.ruleset.rules.push({ type: "required_signatures" }), ["rules.required_signatures", "live present"]],
     [
       "required_approving_review_count changed: the one human-review setting must match the file",
-      (w) => (rule(w, "pull_request").parameters.required_approving_review_count = 2),
+      (w) => (rule(w.ruleset, "pull_request").required_approving_review_count = 2),
       ["required_approving_review_count", "declared 0", "live 2"],
     ],
     ["the include pattern changed: the rules would guard the wrong branch", (w) => (w.ruleset.conditions.ref_name.include = ["refs/heads/dev"]), ["conditions.ref_name.include"]],
     [
       "production takes squash too: a release would stop being a merge commit of staging",
-      (w) => (rule({ ruleset: w.production } as W, "pull_request").parameters.allowed_merge_methods = ["merge", "squash"]),
+      (w) => (rule(w.production, "pull_request").allowed_merge_methods = ["merge", "squash"]),
       ['ruleset "production"', "allowed_merge_methods", '["merge"]'],
     ],
     [
       "the production guard check removed: a pull request from any branch could reach production",
-      (w) => rule({ ruleset: w.production } as W, "required_status_checks").parameters.required_status_checks.shift(),
+      (w) => rule(w.production, "required_status_checks").required_status_checks.shift(),
       ['ruleset "production"', "required_status_checks", GUARD],
     ],
     [
       "the production guard check bound to another app: a fake status could satisfy it",
-      (w) => (rule({ ruleset: w.production } as W, "required_status_checks").parameters.required_status_checks[0].integration_id = 1),
+      (w) => Object.assign(rule(w.production, "required_status_checks").required_status_checks[0] ?? {}, { integration_id: 1 }),
       ['ruleset "production"', "required_status_checks", "(app 1)"],
     ],
     [
@@ -615,7 +615,7 @@ describe("--check: drift", () => {
     ],
     [
       "a deployment branch added: a feature branch could deploy to production",
-      (w) => w.policies.branch_policies.push({ id: 12, name: "feature/x", type: "branch" }),
+      (w) => w.policies?.branch_policies.push({ id: 12, name: "feature/x", type: "branch" }),
       ["deployment_branches", "feature/x"],
     ],
     ["a deployment branch removed: main could not deploy", (w) => (w.policies = null), ["deployment_branches", "[]"]],
@@ -650,7 +650,7 @@ describe("--check: drift", () => {
 
   it("a live check with no integration_id passes when the file does not pin one: default-branch checks carry none", () => {
     const w = sync() as W;
-    rule(w, "required_status_checks").parameters.required_status_checks.forEach((c: any) => (c.integration_id = 99));
+    for (const c of rule(w.ruleset, "required_status_checks").required_status_checks) c.integration_id = 99;
     const { o } = check(w);
     expect(o.code).toBe(0);
   });
@@ -692,14 +692,14 @@ describe("--apply", () => {
       ["-X", "PUT", `${BASE}/environments/production`, "--input", "-"],
       ["-X", "POST", `${BASE}/environments/production/deployment-branch-policies`, "--input", "-"],
     ]);
-    expect(JSON.parse(w[0].input!)).toEqual(DEFAULT_BRANCH_DECLARED);
-    expect(JSON.parse(w[1].input!)).toEqual(PRODUCTION_DECLARED);
-    expect(JSON.parse(w[2].input!)).toEqual({
+    expect(JSON.parse(w[0]?.input ?? "")).toEqual(DEFAULT_BRANCH_DECLARED);
+    expect(JSON.parse(w[1]?.input ?? "")).toEqual(PRODUCTION_DECLARED);
+    expect(JSON.parse(w[2]?.input ?? "")).toEqual({
       prevent_self_review: false,
       reviewers: [{ type: "User", id: 42 }],
       deployment_branch_policy: { protected_branches: false, custom_branch_policies: true },
     });
-    expect(JSON.parse(w[3].input!)).toEqual({ name: "main", type: "branch" });
+    expect(JSON.parse(w[3]?.input ?? "")).toEqual({ name: "main", type: "branch" });
     expect(lines(o.stdout, "did")).toHaveLength(4);
   });
 
@@ -727,7 +727,7 @@ describe("--apply", () => {
   });
 
   it("a drifted ruleset is replaced with PUT on its id, and nothing else is written", () => {
-    const w = sync() as any;
+    const w = sync() as W;
     w.ruleset.enforcement = "disabled";
     const { calls, o } = check(w, ["--apply"]);
     expect(o.code).toBe(0);
@@ -735,7 +735,7 @@ describe("--apply", () => {
   });
 
   it("drifted branch policies: POST the missing one, DELETE the extra one by id, and leave the environment alone", () => {
-    const w = sync() as any;
+    const w = sync() as W;
     w.policies = { branch_policies: [{ id: 12, name: "old", type: "branch" }] };
     const { calls, o } = check(w, ["--apply"]);
     expect(o.code).toBe(0);
@@ -744,12 +744,12 @@ describe("--apply", () => {
       ["POST", `${BASE}/environments/production/deployment-branch-policies`],
       ["DELETE", `${BASE}/environments/production/deployment-branch-policies/12`],
     ]);
-    expect(JSON.parse(made[0].input!)).toEqual({ name: "main", type: "branch" });
-    expect(made[1].input).toBeUndefined();
+    expect(JSON.parse(made[0]?.input ?? "")).toEqual({ name: "main", type: "branch" });
+    expect(made[1]?.input).toBeUndefined();
   });
 
   it("a named reviewer resolves through users/<login>, a team through orgs/<org>/teams/<slug>", () => {
-    const declared = clone(DECLARED);
+    const declared = JSON.parse(JSON.stringify(DECLARED));
     declared.environments[0].reviewers = ["octocat", "acme/core"];
     const { calls } = check(
       {
@@ -764,15 +764,15 @@ describe("--apply", () => {
       ["--apply"],
       { files: files({ ".github/repo-rules.json": JSON.stringify(declared) }) },
     );
-    const put = writes(calls).find((c) => c.args[2] === "PUT")!;
-    expect(JSON.parse(put.input!).reviewers).toEqual([
+    const put = writes(calls).find((c) => c.args[2] === "PUT");
+    expect(JSON.parse(put?.input ?? "").reviewers).toEqual([
       { type: "User", id: 1 },
       { type: "Team", id: 9 },
     ]);
   });
 
   it("an unknown reviewer login is an error before any write", () => {
-    const declared = clone(DECLARED);
+    const declared = JSON.parse(JSON.stringify(DECLARED));
     declared.environments[0].reviewers = ["ghost"];
     const { o, calls } = check(
       { ruleset: null, env: null, override: (_m, path) => (path === "users/ghost" ? notFound : undefined) },

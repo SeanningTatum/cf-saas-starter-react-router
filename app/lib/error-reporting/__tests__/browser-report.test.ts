@@ -9,11 +9,7 @@ import {
   MAX_REPORT_URL_LENGTH,
   MAX_REPORTS_PER_BODY,
 } from "@/lib/constants/error-reporting";
-import {
-  BrowserErrorReportSchema,
-  readBrowserReports,
-  readCappedText,
-} from "../browser-report";
+import { BrowserErrorReportSchema, readBrowserReports, readCappedText } from "../browser-report";
 
 const endpoint = `https://app.example.com${BROWSER_REPORT_PATH}`;
 
@@ -67,10 +63,13 @@ describe("BrowserErrorReportSchema", () => {
     ["message", "m".repeat(MAX_ERROR_MESSAGE_LENGTH + 1)],
     ["stack", "s".repeat(MAX_ERROR_STACK_LENGTH + 1)],
     ["url", `https://app.example.com/${"u".repeat(MAX_REPORT_URL_LENGTH)}`],
-  ])("rejects an over-long %s, so that a caller cannot push huge fields into reports", async (field, value) => {
-    const result = await decode({ ...goodReport(), [field]: value });
-    expect(result._tag).toBe("Left");
-  });
+  ])(
+    "rejects an over-long %s, so that a caller cannot push huge fields into reports",
+    async (field, value) => {
+      const result = await decode({ ...goodReport(), [field]: value });
+      expect(result._tag).toBe("Left");
+    },
+  );
 
   it("rejects a requestId outside the pattern, so that a forged id cannot smuggle text into reports", async () => {
     const result = await decode({ ...goodReport(), requestId: "bad id; drop" });
@@ -84,15 +83,22 @@ describe("BrowserErrorReportSchema", () => {
 
   it("drops unknown extra keys, so that a caller cannot set userId or release on a report", async () => {
     const result = await decode({ ...goodReport(), userId: "u1", release: "fake" });
-    expect(result._tag === "Right" ? Object.keys(result.right).sort() : []).toEqual(
-      ["message", "name", "requestId", "source", "stack", "url"]
-    );
+    expect(result._tag === "Right" ? Object.keys(result.right).sort() : []).toEqual([
+      "message",
+      "name",
+      "requestId",
+      "source",
+      "stack",
+      "url",
+    ]);
   });
 });
 
 describe("readCappedText", () => {
   it("returns the whole body under the cap, so that a normal report is read in full", async () => {
-    const read = await Effect.runPromise(readCappedText(post("hello", "text/plain"), MAX_REPORT_BODY_BYTES));
+    const read = await Effect.runPromise(
+      readCappedText(post("hello", "text/plain"), MAX_REPORT_BODY_BYTES),
+    );
     expect(read).toEqual({ fits: true, text: "hello" });
   });
 
@@ -101,7 +107,7 @@ describe("readCappedText", () => {
     const pulled = { count: 0 };
     const chunks = Array.from({ length: 100 }, () => chunk);
     const read = await Effect.runPromise(
-      readCappedText(streamedPost(streamOf(chunks, pulled), "1"), MAX_REPORT_BODY_BYTES)
+      readCappedText(streamedPost(streamOf(chunks, pulled), "1"), MAX_REPORT_BODY_BYTES),
     );
     expect(read).toEqual({ fits: false });
     expect(pulled.count).toBeLessThan(10);
@@ -110,7 +116,9 @@ describe("readCappedText", () => {
 
 describe("readBrowserReports", () => {
   it("maps a good browser report to one capture with its source, url and requestId, so that the report keeps its context", async () => {
-    const intake = await intakeOf(post(JSON.stringify(goodReport()), "application/json; charset=UTF-8"));
+    const intake = await intakeOf(
+      post(JSON.stringify(goodReport()), "application/json; charset=UTF-8"),
+    );
     expect(intake).toEqual({
       status: 204,
       captures: [
@@ -169,7 +177,10 @@ describe("readBrowserReports", () => {
       status: 204,
       captures: [
         {
-          error: { name: "CspViolation", message: "script-src-elem blocked https://cdn.example.com/x.js" },
+          error: {
+            name: "CspViolation",
+            message: "script-src-elem blocked https://cdn.example.com/x.js",
+          },
           source: "csp",
           level: "warning",
           url: "https://app.example.com/login?next=/admin",
@@ -200,9 +211,21 @@ describe("readBrowserReports", () => {
       },
     ]);
     const intake = await intakeOf(post(body, "application/reports+json"));
-    expect(intake.status === 204 ? intake.captures.map((c) => [c.source, c.level, c.error, c.url]) : []).toEqual([
-      ["csp", "warning", { name: "CspViolation", message: "script-src-elem blocked inline" }, "https://app.example.com/"],
-      ["csp", "warning", { name: "CspViolation", message: "img-src blocked https://img.example.com/a.png" }, "https://app.example.com/admin"],
+    expect(
+      intake.status === 204 ? intake.captures.map((c) => [c.source, c.level, c.error, c.url]) : [],
+    ).toEqual([
+      [
+        "csp",
+        "warning",
+        { name: "CspViolation", message: "script-src-elem blocked inline" },
+        "https://app.example.com/",
+      ],
+      [
+        "csp",
+        "warning",
+        { name: "CspViolation", message: "img-src blocked https://img.example.com/a.png" },
+        "https://app.example.com/admin",
+      ],
     ]);
   });
 
@@ -219,7 +242,10 @@ describe("readBrowserReports", () => {
       [`{"oops": "${marker}"`, "application/json"],
       [JSON.stringify({ ...goodReport(), source: marker }), "application/json"],
       [JSON.stringify({ "csp-report": { "document-uri": marker } }), "application/csp-report"],
-      [JSON.stringify([{ type: "csp-violation", body: { documentURL: marker } }]), "application/reports+json"],
+      [
+        JSON.stringify([{ type: "csp-violation", body: { documentURL: marker } }]),
+        "application/reports+json",
+      ],
       [marker, "text/plain"],
     ];
     for (const [body, contentType] of bodies) {
@@ -233,7 +259,7 @@ describe("readBrowserReports", () => {
 describe("readBrowserReports, errors React recovered from", () => {
   it("files a recoverable report as a warning, so a hydration mismatch is logged but never sent on as a crash", async () => {
     const intake = await intakeOf(
-      post(JSON.stringify({ ...goodReport(), source: "recoverable" }), "application/json")
+      post(JSON.stringify({ ...goodReport(), source: "recoverable" }), "application/json"),
     );
 
     expect(intake).toMatchObject({
@@ -244,7 +270,7 @@ describe("readBrowserReports, errors React recovered from", () => {
 
   it("leaves an uncaught error at its own level, so a real crash is still sent on", async () => {
     const intake = await intakeOf(
-      post(JSON.stringify({ ...goodReport(), source: "window" }), "application/json")
+      post(JSON.stringify({ ...goodReport(), source: "window" }), "application/json"),
     );
 
     expect("captures" in intake && intake.captures[0]).not.toHaveProperty("level");

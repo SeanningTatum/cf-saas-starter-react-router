@@ -1,12 +1,6 @@
-import { cn } from "@/lib/utils"
-import { Button } from "@/components/ui/button"
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card"
+import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Form,
   FormControl,
@@ -15,46 +9,46 @@ import {
   FormItem,
   FormLabel,
   FormMessage,
-} from "@/components/ui/form"
-import { Input } from "@/components/ui/input"
-import { Link, useNavigate } from "react-router"
-import { authClient } from "@/auth/client"
-import { effectResolver } from "@/lib/effect-form"
-import { useForm } from "react-hook-form"
-import { SignupSchema, type SignupInput } from "@/lib/schemas/auth"
-import { useState } from "react"
-import { useTranslation } from "react-i18next"
-import { useHydrated } from "@/hooks/use-hydrated"
-import { ProblemBox, TurnstileWidget, useTurnstile } from "@/components/turnstile-widget"
-import { captchaFetchOptions } from "@/lib/turnstile-client"
-import { authRefusalFor } from "@/lib/auth-errors"
-import { ROUTES } from "@/lib/constants/routes"
+} from "@/components/ui/form";
+import { Input } from "@/components/ui/input";
+import { Link, useNavigate } from "react-router";
+import { authClient } from "@/auth/client";
+import { effectTsResolver } from "@hookform/resolvers/effect-ts";
+import { useForm } from "react-hook-form";
+import { SignupSchema, type SignupInput } from "@/lib/schemas/auth";
+import { useState } from "react";
+import { useTranslation } from "react-i18next";
+import { useHydrated } from "@/hooks/use-hydrated";
+import { ProblemBox, TurnstileWidget, useTurnstile } from "@/components/turnstile-widget";
+import { captchaFetchOptions } from "@/lib/turnstile-client";
+import { authRefusalFor } from "@/lib/auth-errors";
+import { ROUTES } from "@/lib/constants/routes";
 
 interface SignupFormProps extends React.ComponentProps<"div"> {
-  turnstileSiteKey?: string | null
+  turnstileSiteKey?: string | null;
 }
 
 export function SignupForm({ className, turnstileSiteKey = null, ...props }: SignupFormProps) {
-  const navigate = useNavigate()
-  const [authError, setAuthError] = useState<string>()
-  const { t } = useTranslation("auth")
-  const hydrated = useHydrated()
-  const turnstile = useTurnstile(turnstileSiteKey)
-  const awaitingCheck = turnstile.enabled && turnstile.token === null
+  const navigate = useNavigate();
+  const [authError, setAuthError] = useState<string>();
+  const { t } = useTranslation("auth");
+  const hydrated = useHydrated();
+  const turnstile = useTurnstile(turnstileSiteKey);
+  const awaitingCheck = turnstile.enabled && turnstile.token === null;
 
   const form = useForm<SignupInput>({
-    resolver: effectResolver(SignupSchema),
+    resolver: effectTsResolver(SignupSchema),
     defaultValues: {
       name: "",
       email: "",
       password: "",
       confirmPassword: "",
     },
-  })
+  });
 
   async function onSubmit(data: SignupInput) {
-    setAuthError(undefined)
-    if (awaitingCheck) return
+    setAuthError(undefined);
+    if (awaitingCheck) return;
 
     try {
       const result = await authClient.signUp.email({
@@ -62,19 +56,21 @@ export function SignupForm({ className, turnstileSiteKey = null, ...props }: Sig
         password: data.password,
         name: data.name,
         fetchOptions: captchaFetchOptions(turnstile.token),
-      })
+      });
 
       if (result.error) {
-        turnstile.reset()
-        const refusal = authRefusalFor(result.error, turnstile.enabled)
-        setAuthError(refusal ? t(`refusal.${refusal}`) : result.error.message || t("signup.error_failed"))
-        return
+        turnstile.reset();
+        const refusal = authRefusalFor(result.error, turnstile.enabled);
+        setAuthError(
+          refusal ? t(`refusal.${refusal}`) : result.error.message || t("signup.error_failed"),
+        );
+        return;
       }
 
-      navigate(ROUTES.dashboard)
+      navigate(ROUTES.dashboard);
     } catch (err) {
-      turnstile.reset()
-      setAuthError(err instanceof Error ? err.message : t("signup.error_failed"))
+      turnstile.reset();
+      setAuthError(err instanceof Error ? err.message : t("signup.error_failed"));
     }
   }
 
@@ -87,7 +83,12 @@ export function SignupForm({ className, turnstileSiteKey = null, ...props }: Sig
         </CardHeader>
         <CardContent className="px-4 sm:px-6">
           <Form {...form}>
-            <form method="post" onSubmit={form.handleSubmit(onSubmit)} className="space-y-6" data-testid="signup-form">
+            <form
+              method="post"
+              onSubmit={form.handleSubmit(onSubmit)}
+              className="space-y-6"
+              data-testid="signup-form"
+            >
               <FormField
                 control={form.control}
                 name="name"
@@ -193,5 +194,5 @@ export function SignupForm({ className, turnstileSiteKey = null, ...props }: Sig
         </CardContent>
       </Card>
     </div>
-  )
+  );
 }

@@ -40,7 +40,7 @@ const serve = async (env: Env = fakeEnv()) => {
       headers: { "cf-ray": rayId() },
     }) as Parameters<typeof worker.fetch>[0],
     env,
-    ctx
+    ctx,
   );
   await Promise.all(waitUntil.mock.calls.map(([promise]) => promise));
   return { response, waitUntil };
@@ -122,25 +122,19 @@ describe("worker fetch, error capture", () => {
     });
     const reported = await serve();
 
-    expect(reported.waitUntil.mock.calls.length).toBe(
-      quiet.waitUntil.mock.calls.length + 1
-    );
+    expect(reported.waitUntil.mock.calls.length).toBe(quiet.waitUntil.mock.calls.length + 1);
   });
 });
 
 describe("worker fetch, sampling", () => {
-  const sampledOut = () =>
-    fakeEnv({ LOG_SAMPLE_RATE: "0", TRACE_SAMPLE_RATE: "0" });
+  const sampledOut = () => fakeEnv({ LOG_SAMPLE_RATE: "0", TRACE_SAMPLE_RATE: "0" });
 
-  const infoMessages = () =>
-    lines.filter((line) => line.level === "info").map((line) => line.msg);
+  const infoMessages = () => lines.filter((line) => line.level === "info").map((line) => line.msg);
 
   it("drops the plain and the Effect info lines of a request the env samples out, so the sampling rate reaches both log paths", async () => {
     mocks.handle.mockImplementation(async (_request, context) => {
       loggers.server.info("plain info");
-      await (context as AppLoadContext).runtime.runPromise(
-        Effect.logInfo("effect info")
-      );
+      await (context as AppLoadContext).runtime.runPromise(Effect.logInfo("effect info"));
       return new Response("ok");
     });
 
@@ -149,9 +143,7 @@ describe("worker fetch, sampling", () => {
     lines = [];
     await serve(sampledOut());
 
-    expect(keptByDefault).toEqual(
-      expect.arrayContaining(["plain info", "effect info"])
-    );
+    expect(keptByDefault).toEqual(expect.arrayContaining(["plain info", "effect info"]));
     expect(infoMessages()).toEqual([]);
   });
 

@@ -64,15 +64,19 @@ const harness = ({ signedIn, allow }: { readonly signedIn: boolean; readonly all
           asked.push([rule, key]);
           return allow
             ? Effect.void
-            : Effect.fail(new RateLimitError({ rule, retryAfterSeconds: RATE_LIMIT_PERIOD_SECONDS }));
+            : Effect.fail(
+                new RateLimitError({ rule, retryAfterSeconds: RATE_LIMIT_PERIOD_SECONDS }),
+              );
         },
       }),
       ErrorReporterFrom({ capture: (capture) => Effect.sync(() => void captures.push(capture)) }),
       Logger.replace(
         Logger.defaultLogger,
-        Logger.make(({ logLevel, message }) => void logged.push({ level: logLevel.label, message }))
-      )
-    )
+        Logger.make(
+          ({ logLevel, message }) => void logged.push({ level: logLevel.label, message }),
+        ),
+      ),
+    ),
   );
   runtimes.push(runtime);
   const session = signedIn ? { user: { id: USER_ID, banned: false, banExpires: null } } : null;
@@ -86,7 +90,11 @@ const harness = ({ signedIn, allow }: { readonly signedIn: boolean; readonly all
 };
 
 const upload = async (request: Request, context: AppLoadContext) =>
-  (await action({ request, context, params: {} } as unknown as ActionArgs)) as unknown as UploadResult;
+  (await action({
+    request,
+    context,
+    params: {},
+  } as unknown as ActionArgs)) as unknown as UploadResult;
 
 afterEach(async () => {
   vi.restoreAllMocks();
@@ -113,7 +121,9 @@ describe("upload-file action, checks before the body is read", () => {
     const result = await upload(request, context);
 
     expect(result.init?.status).toBe(HTTP_TOO_MANY_REQUESTS);
-    expect(new Headers(result.init?.headers).get(RETRY_AFTER_HEADER)).toBe(String(RATE_LIMIT_PERIOD_SECONDS));
+    expect(new Headers(result.init?.headers).get(RETRY_AFTER_HEADER)).toBe(
+      String(RATE_LIMIT_PERIOD_SECONDS),
+    );
     expect(result.data).toEqual({ success: false, error: UPLOAD_RATE_LIMITED_MESSAGE });
     expect(bodyRead()).toBe(false);
   });
@@ -196,7 +206,9 @@ describe("upload-file action, error reporting", () => {
 
   it("reports nothing when the program answers, so a 401 or 400 is not filed as a server error", async () => {
     const { reportError, result } = await runWithExit(
-      Exit.succeed(data({ success: false, error: UPLOAD_UNAUTHORIZED_MESSAGE }, { status: HTTP_UNAUTHORIZED }))
+      Exit.succeed(
+        data({ success: false, error: UPLOAD_UNAUTHORIZED_MESSAGE }, { status: HTTP_UNAUTHORIZED }),
+      ),
     );
 
     expect(result.init?.status).toBe(HTTP_UNAUTHORIZED);
@@ -214,8 +226,8 @@ describe("upload-file action spans", () => {
       Layer.mergeAll(
         Layer.setTracer(makeOtlpTracer(buffer)),
         BucketRepository.Default.pipe(Layer.provide(bucket)),
-        Layer.succeed(RateLimiter, { check: () => Effect.void })
-      )
+        Layer.succeed(RateLimiter, { check: () => Effect.void }),
+      ),
     );
     const form = new FormData();
     form.set("file", new File([PNG_SIGNATURE], "a.png", { type: "image/png" }));
@@ -241,7 +253,7 @@ describe("upload-file action spans", () => {
     const root = buffer.spans.find((span) => span.name === UPLOAD_STORE_FILE_SPAN);
     const parentOf = (name: string) =>
       Option.getOrUndefined(
-        buffer.spans.find((span) => span.name === name)?.parent ?? Option.none()
+        buffer.spans.find((span) => span.name === name)?.parent ?? Option.none(),
       )?.spanId;
     expect(root).toBeDefined();
     expect(parentOf(AUTH_GET_SESSION_SPAN)).toBe(root?.spanId);

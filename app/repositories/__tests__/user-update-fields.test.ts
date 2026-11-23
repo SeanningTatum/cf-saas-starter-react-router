@@ -20,16 +20,19 @@ const writtenBy = (data: UpdateUserInput["data"]) => {
     const repo = yield* UserRepository;
     yield* repo.updateUser({ userId: "u1", currentUserId: "actor", data });
     return set.mock.calls[0]?.[0];
-  }).pipe(
-    Effect.provide(UserRepository.Default.pipe(Layer.provide(makeTestDatabase(stub))))
-  );
+  }).pipe(Effect.provide(UserRepository.Default.pipe(Layer.provide(makeTestDatabase(stub)))));
 };
 
 describe("UserRepository.updateUser writes the ban expiry", () => {
-  it.effect("writes a null expiry for a ban with none, so an old past expiry cannot end the new ban", () =>
-    Effect.gen(function* () {
-      expect(yield* writtenBy({ banned: true })).toMatchObject({ banned: true, banExpires: null });
-    })
+  it.effect(
+    "writes a null expiry for a ban with none, so an old past expiry cannot end the new ban",
+    () =>
+      Effect.gen(function* () {
+        expect(yield* writtenBy({ banned: true })).toMatchObject({
+          banned: true,
+          banExpires: null,
+        });
+      }),
   );
 
   it.effect("keeps the expiry the admin sent with the ban", () =>
@@ -37,24 +40,26 @@ describe("UserRepository.updateUser writes the ban expiry", () => {
       expect(yield* writtenBy({ banned: true, banExpires: FAR_AHEAD })).toMatchObject({
         banExpires: FAR_AHEAD,
       });
-    })
+    }),
   );
 
   it.effect("leaves the expiry untouched on an update that does not ban", () =>
     Effect.gen(function* () {
       expect((yield* writtenBy({ name: "N" }))?.banExpires).toBeUndefined();
-    })
+    }),
   );
 });
 
 describe("UserRepository.updateUser resets emailVerified on an email change", () => {
-  it.effect("writes emailVerified: false for a new email even when the admin sends verified: true", () =>
-    Effect.gen(function* () {
-      expect(yield* writtenBy({ email: "new@example.test", verified: true })).toMatchObject({
-        email: "new@example.test",
-        emailVerified: false,
-      });
-    })
+  it.effect(
+    "writes emailVerified: false for a new email even when the admin sends verified: true",
+    () =>
+      Effect.gen(function* () {
+        expect(yield* writtenBy({ email: "new@example.test", verified: true })).toMatchObject({
+          email: "new@example.test",
+          emailVerified: false,
+        });
+      }),
   );
 });
 

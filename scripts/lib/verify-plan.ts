@@ -1,10 +1,11 @@
 import { Either } from "effect";
-import { E2E_DIR, E2E_SPEC, SOURCE_FILE, TEST_MAP_PATH } from "../lint/constants";
+import { E2E_DIR, E2E_SPEC, TEST_MAP_PATH } from "../lint/constants";
 import { globToRegExp } from "../lint/test-map/glob";
 import { importsFile } from "../lint/test-map/imports";
 import { parseTestMap, type TestMap } from "../lint/test-map/map";
 import { specsVisiting } from "../lint/test-map/route";
 import type { Repo } from "../lint/types";
+import { LINTABLE_FILE } from "./lint-constants";
 import {
   COMMAND,
   FIELD,
@@ -22,12 +23,12 @@ import {
   UNSAFE_PATH_REASON,
 } from "./verify-plan-constants";
 
-export interface Step {
+interface Step {
   gate: string;
   command: string;
 }
 
-export interface Skip {
+interface Skip {
   gate: string;
   reason: string;
 }
@@ -36,8 +37,7 @@ export type Plan = { kind: "full"; reasons: string[] } | { kind: "lean"; run: St
 
 const triggers = FULL_RUN_TRIGGERS.map((trigger) => ({ ...trigger, pattern: globToRegExp(trigger.match) }));
 
-export const shellQuote = (word: string): string =>
-  `${SHELL_QUOTE}${word.split(SHELL_QUOTE).join(SHELL_QUOTE_ESCAPED)}${SHELL_QUOTE}`;
+export const shellQuote = (word: string): string => `${SHELL_QUOTE}${word.split(SHELL_QUOTE).join(SHELL_QUOTE_ESCAPED)}${SHELL_QUOTE}`;
 
 const withArgs = (command: string, paths: readonly string[]): string => [command, ...paths.map(shellQuote)].join(" ");
 
@@ -76,12 +76,12 @@ export function planChanged(repo: Repo, changed: readonly string[]): Plan {
   const parsed = parseTestMap(repo.read(TEST_MAP_PATH) ?? "");
   if (Either.isLeft(parsed)) return { kind: "full", reasons: [NO_MAP_REASON] };
   const present = changed.filter((path) => repo.read(path) !== undefined);
-  const code = present.filter((path) => SOURCE_FILE.test(path));
+  const lintable = present.filter((path) => LINTABLE_FILE.test(path));
   const specs = e2eSpecsFor(repo, parsed.right, present);
   const run: Step[] = [{ gate: GATE.typecheck, command: COMMAND.typecheck }];
   const skip: Skip[] = [];
   const modules = present.filter((path) => MODULE_FILE.test(path));
-  if (code.length > 0) run.push({ gate: GATE.lint, command: withArgs(COMMAND.lint, code) });
+  if (lintable.length > 0) run.push({ gate: GATE.lint, command: withArgs(COMMAND.lint, lintable) });
   else skip.push({ gate: GATE.lint, reason: SKIP_REASON.noCode });
   if (modules.length > 0) run.push({ gate: GATE.test, command: withArgs(COMMAND.test, modules) });
   else skip.push({ gate: GATE.test, reason: SKIP_REASON.noModule });

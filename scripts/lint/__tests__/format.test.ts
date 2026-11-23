@@ -15,14 +15,12 @@ const found = (overrides: Partial<Finding> = {}): Finding => ({
 
 describe("formatFinding", () => {
   it("prints path:line rule-id: what. Do this instead: fix.", () => {
-    expect(formatFinding(found())).toBe(
-      "app/lib/x.ts:12 no-throw: `throw` outside the Effect error channel. Do this instead: return `Effect.fail(…)`."
-    );
+    expect(formatFinding(found())).toBe("app/lib/x.ts:12 no-throw: `throw` outside the Effect error channel. Do this instead: return `Effect.fail(…)`.");
   });
 
   it("appends See <example>. when the rule names one", () => {
     expect(formatFinding(found({ example: "app/repositories/bucket.ts" }))).toBe(
-      "app/lib/x.ts:12 no-throw: `throw` outside the Effect error channel. Do this instead: return `Effect.fail(…)`. See app/repositories/bucket.ts."
+      "app/lib/x.ts:12 no-throw: `throw` outside the Effect error channel. Do this instead: return `Effect.fail(…)`. See app/repositories/bucket.ts.",
     );
   });
 

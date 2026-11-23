@@ -7,8 +7,7 @@ import { routePaths } from "../routes";
 
 const HEAD = 'import { type RouteConfig, index, layout, prefix, route } from "@react-router/dev/routes";\n';
 
-const pathsOf = (table: string): Record<string, string[]> =>
-  Object.fromEntries(routePaths(sourceOf(`${HEAD}export default ${table};\n`, ROUTES_FILE)));
+const pathsOf = (table: string): Record<string, string[]> => Object.fromEntries(routePaths(sourceOf(`${HEAD}export default ${table};\n`, ROUTES_FILE)));
 
 describe("routePaths with a path it cannot read", () => {
   it("leaves out a route whose path is a constant, not a string, so it is never filed under its parent's path", () => {
@@ -64,7 +63,8 @@ describe("routePaths", () => {
   });
 
   it("a file listed twice, plainly and under a locale prefix, gets both paths in table order", () => {
-    const table = '[index("routes/home.tsx"), route("/login", "routes/login.tsx"), ...prefix(":lng", [index("routes/home.tsx", { id: "lng-home" }), route("/login", "routes/login.tsx", { id: "lng-login" })])]';
+    const table =
+      '[index("routes/home.tsx"), route("/login", "routes/login.tsx"), ...prefix(":lng", [index("routes/home.tsx", { id: "lng-home" }), route("/login", "routes/login.tsx", { id: "lng-login" })])]';
 
     expect(pathsOf(table)).toEqual({
       "app/routes/home.tsx": ["/", "/:lng"],

@@ -1,28 +1,28 @@
-import { Moon, Sun, Monitor } from "lucide-react"
-import type { LucideIcon } from "lucide-react"
-import { useTheme } from "next-themes"
-import { useTranslation } from "react-i18next"
+import { Moon, Sun, Monitor } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
+import { useTheme } from "next-themes";
+import { useTranslation } from "react-i18next";
 
-import { Button } from "@/components/ui/button"
+import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
+} from "@/components/ui/dropdown-menu";
 
 export const themeItems: ReadonlyArray<{
-  value: "light" | "dark" | "system"
-  icon: LucideIcon
+  value: "light" | "dark" | "system";
+  icon: LucideIcon;
 }> = [
   { value: "light", icon: Sun },
   { value: "dark", icon: Moon },
   { value: "system", icon: Monitor },
-]
+];
 
 export function ThemeToggle() {
-  const { setTheme } = useTheme()
-  const { t } = useTranslation("common")
+  const { setTheme } = useTheme();
+  const { t } = useTranslation("common");
 
   return (
     <DropdownMenu>
@@ -42,5 +42,5 @@ export function ThemeToggle() {
         ))}
       </DropdownMenuContent>
     </DropdownMenu>
-  )
+  );
 }

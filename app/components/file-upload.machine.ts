@@ -46,15 +46,14 @@ export const fileUploadMachine = setup({
         Effect.either(
           input.file
             ? uploadFile(input.file)
-            : Effect.fail(new ExternalServiceError({ service: "upload-file", cause: "no file" }))
+            : Effect.fail(new ExternalServiceError({ service: "upload-file", cause: "no file" })),
         ),
-        { signal }
-      )
+        { signal },
+      ),
     ),
   },
   guards: {
-    fits: ({ context, event }) =>
-      event.type === "PICK" && event.file.size <= context.maxSize,
+    fits: ({ context, event }) => event.type === "PICK" && event.file.size <= context.maxSize,
   },
   actions: {
     keepFile: assign(({ event }) => ({
@@ -122,7 +121,10 @@ export const fileUploadMachine = setup({
             actions: [
               assign({
                 error: ({ event }) =>
-                  Either.match(event.output, { onLeft: toFailure, onRight: () => UPLOAD_FAILURE_UNREACHABLE }),
+                  Either.match(event.output, {
+                    onLeft: toFailure,
+                    onRight: () => UPLOAD_FAILURE_UNREACHABLE,
+                  }),
               }),
               "emitFailed",
             ],

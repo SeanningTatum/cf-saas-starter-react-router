@@ -84,8 +84,7 @@ function parseRef(raw: string | undefined): Ref | null {
 function ghFailure(r: GhResult): Outcome {
   const text = r.stderr.trim() || r.stdout.trim() || `gh exited ${r.code}`;
   if (r.code === 127) return bad(2, "AUTH", text, "install the GitHub CLI and run: gh auth login");
-  if (/auth login|not logged in|authentication|GH_TOKEN|HTTP 401/i.test(text))
-    return bad(2, "AUTH", text, "run: gh auth login");
+  if (/auth login|not logged in|authentication|GH_TOKEN|HTTP 401/i.test(text)) return bad(2, "AUTH", text, "run: gh auth login");
   if (/could not resolve|not found|HTTP 404|no issue|no pull request/i.test(text))
     return bad(2, "NOT_FOUND", text, "check the issue number and the repository");
   return bad(2, "NOT_FOUND", text, "gh failed; run the same gh command by hand to see why");
@@ -102,7 +101,7 @@ function parseArgs(argv: string[]): Parsed | string {
   const flags = new Map<string, string[]>();
   const positional: string[] = [];
   for (let i = 0; i < argv.length; i++) {
-    const a = argv[i];
+    const a = argv[i] ?? "";
     if (a.startsWith("--")) {
       const v = argv[i + 1];
       if (v === undefined || v.startsWith("--")) return `${a} needs a value`;
@@ -131,13 +130,14 @@ const repoArgs = (ref: Ref) => (ref.repo ? ["-R", ref.repo] : []);
 
 const ISSUE_FIELDS = "number,url,title,body,state,labels,updatedAt,comments";
 
+// biome-ignore lint/suspicious/noExplicitAny: gh returns a different JSON shape for each --json field list, and callers read different subsets of it
 async function viewJson(ref: Ref, deps: Deps, fields = ISSUE_FIELDS): Promise<Outcome & { data?: any }> {
   const r = deps.gh(["issue", "view", String(ref.number), ...repoArgs(ref), "--json", fields]);
   if (r.code !== 0) return ghFailure(r);
   try {
     return { code: 0, data: JSON.parse(r.stdout) };
   } catch {
-    return bad(2, "NOT_FOUND", "gh returned unreadable JSON", "run: gh issue view <n> --json " + fields);
+    return bad(2, "NOT_FOUND", "gh returned unreadable JSON", `run: gh issue view <n> --json ${fields}`);
   }
 }
 
@@ -185,7 +185,7 @@ async function view(ref: Ref, deps: Deps): Promise<Outcome> {
     state: d.state,
     labels: (d.labels ?? []).map((l: { name: string }) => l.name),
     updatedAt: d.updatedAt,
-    comments: (d.comments ?? []).map((c: any) => ({
+    comments: (d.comments ?? []).map((c: { id: unknown; author?: { login?: string } | null; body: unknown; url: unknown }) => ({
       id: c.id,
       author: c.author?.login ?? "",
       body: c.body,
@@ -259,9 +259,7 @@ async function edit(ref: Ref, p: Parsed, deps: Deps): Promise<Outcome> {
     // record (an unchanged body creates none), fall back to the pre-write clock. GitHub stamps edits
     // to the second, so an edit in the same second as the bound is a conflict too: one of the two
     // writes overwrote the other.
-    const ours = nodes
-      .filter((n) => n.editor?.login === me && n.editedAt > expect)
-      .sort((a, b) => (a.editedAt < b.editedAt ? 1 : -1))[0];
+    const ours = nodes.filter((n) => n.editor?.login === me && n.editedAt > expect).sort((a, b) => (a.editedAt < b.editedAt ? 1 : -1))[0];
     const bound = ours && ours.editedAt > writeAt ? ours.editedAt : writeAt;
     const other = nodes
       .filter((n) => n.editor?.login !== me && n.editedAt > expect && n.editedAt <= bound)
@@ -273,7 +271,7 @@ async function edit(ref: Ref, p: Parsed, deps: Deps): Promise<Outcome> {
         `${other.editor?.login ?? "someone"} edited the issue at ${other.editedAt}, after ${expect} and before our write finished; our write may have overwritten it`,
         "the write landed; restore or merge the text in `body` (that edit's diff), then edit again",
       );
-      err.err!.body = other.diff ?? "";
+      if (err.err) err.err.body = other.diff ?? "";
       return err;
     }
   }
@@ -309,13 +307,7 @@ function upsertComment(ref: Ref, p: Parsed, deps: Deps): Outcome {
   const me = u.stdout.trim();
 
   // --jq makes gh print one JSON object per line.
-  const list = deps.gh([
-    "api",
-    "--paginate",
-    `repos/${repo.repo}/issues/${ref.number}/comments`,
-    "--jq",
-    ".[] | {id, html_url, body, author: .user.login}",
-  ]);
+  const list = deps.gh(["api", "--paginate", `repos/${repo.repo}/issues/${ref.number}/comments`, "--jq", ".[] | {id, html_url, body, author: .user.login}"]);
   if (list.code !== 0) return ghFailure(list);
   const marked = list.stdout
     .split("\n")
@@ -357,13 +349,12 @@ function upsertComment(ref: Ref, p: Parsed, deps: Deps): Outcome {
 export async function run(argv: string[], deps: Deps = defaultDeps): Promise<Outcome> {
   const p = parseArgs(argv);
   if (typeof p === "string") return usage(p);
-  if (p.backend === "linear")
-    return bad(4, "BACKEND", "the linear backend is not built", "Linear backend is task t1: the run asks the user which CLI to use");
+  if (p.backend === "linear") return bad(4, "BACKEND", "the linear backend is not built", "Linear backend is task t1: the run asks the user which CLI to use");
   if (p.backend !== "gh") return usage(`unknown backend "${p.backend}"`);
 
   if (!(p.verb in FLAGS)) return usage(p.verb ? `unknown verb "${p.verb}"` : "a verb is required");
-  const unknown = [...p.flags.keys()].filter((f) => f !== "--backend" && !FLAGS[p.verb].includes(f));
-  if (unknown.length) return usage(`unknown flag ${unknown.join(", ")} for ${p.verb}; accepts ${FLAGS[p.verb].join(" ") || "no flags"}`);
+  const unknown = [...p.flags.keys()].filter((f) => f !== "--backend" && !(FLAGS[p.verb] ?? []).includes(f));
+  if (unknown.length) return usage(`unknown flag ${unknown.join(", ")} for ${p.verb}; accepts ${(FLAGS[p.verb] ?? []).join(" ") || "no flags"}`);
   if (p.verb === "create") return create(p, deps);
   if (p.verb === "ready") return ready(deps);
   const ref = parseRef(p.positional[0]);

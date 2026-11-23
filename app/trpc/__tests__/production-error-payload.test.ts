@@ -7,7 +7,7 @@ vi.hoisted(() => {
 import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
 import { Effect, Layer, ManagedRuntime } from "effect";
 import { runProcedure } from "@/lib/effect-trpc";
-import type { AppError } from "@/models/errors";
+import type { AppError } from "@/models/errors/app-error";
 import type { AppServices } from "@/runtime";
 import { createTRPCRouter, publicProcedure } from "@/trpc";
 import { appRouter } from "@/trpc/router";
@@ -49,7 +49,7 @@ describe("outside dev, a tRPC 500 tells the client nothing about the failure", (
       expect(body).not.toContain(SECRET);
       expect(body).not.toContain("stack");
       expect(body).not.toContain("cause");
-    }
+    },
   );
 
   it("builds the router with isDev false from the build flag, so tRPC never falls back to process.env, which a Worker lacks", () => {

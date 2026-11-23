@@ -28,7 +28,7 @@ function store(files: Record<string, string> = {}, today = "2026-11-22") {
 
 const bullets = (text: string, heading: string) => {
   const m = new RegExp(`## ${heading}\\n([\\s\\S]*?)(\\n\\n## |\\n*$)`).exec(text);
-  return m ? m[1].split("\n").filter(Boolean) : [];
+  return (m?.[1] ?? "").split("\n").filter(Boolean);
 };
 
 describe("parseFields", () => {
@@ -78,7 +78,8 @@ describe("record: decisions", () => {
   });
 
   it("treats a decision the old agent marked superseded as the same text, not a new one", () => {
-    const old = "---\nfeature: demo\nstatus: in-progress\nissue: none\nupdated: 2026-01-01\n---\n\n## Decisions\n- 2026-01-01 — use KV (superseded 2026-02-01) — cheap — chat\n";
+    const old =
+      "---\nfeature: demo\nstatus: in-progress\nissue: none\nupdated: 2026-01-01\n---\n\n## Decisions\n- 2026-01-01 — use KV (superseded 2026-02-01) — cheap — chat\n";
     const m = mergeRecord(old, "demo", { decision: ["use KV — cheap — chat"] }, "2026-11-22");
     expect(m.text.match(/use KV/g)).toHaveLength(1);
   });
@@ -191,7 +192,7 @@ describe("record: hand-written files", () => {
   });
 
   it("updates front matter keys nested under `metadata:` in place instead of adding a second set: the auto-memory format wraps them", () => {
-    const nested = "---\nname: \"\"\nmetadata:\n  feature: demo\n  status: planned\n  issue: #5\n  updated: 2026-01-01\n---\n\n## Log\n- 2026-01-01 — began\n";
+    const nested = '---\nname: ""\nmetadata:\n  feature: demo\n  status: planned\n  issue: #5\n  updated: 2026-01-01\n---\n\n## Log\n- 2026-01-01 — began\n';
     const m = mergeRecord(nested, "demo", { status: ["done"], log: ["x"] }, "2026-11-22");
     expect(m.text).toContain("metadata:\n  feature: demo\n  status: done\n  issue: #5\n  updated: 2026-11-22\n---");
     expect(m.text.match(/status:/g)).toHaveLength(1);
@@ -214,7 +215,10 @@ describe("INDEX.md and MEMORY.md", () => {
     s.rec("d-stuck", "status: blocked\nlog: waiting");
     s.rec("e-live", "status: in-progress\nlog: also going");
     s.rec("c-live", "log: more");
-    const order = s.fs.get(`${DIR}/INDEX.md`)!.split("\n").filter((l) => l.startsWith("- [")).map((l) => l.slice(3, l.indexOf("]")));
+    const order = (s.fs.get(`${DIR}/INDEX.md`) ?? "")
+      .split("\n")
+      .filter((l) => l.startsWith("- ["))
+      .map((l) => l.slice(3, l.indexOf("]")));
     expect(order).toEqual(["c-live", "e-live", "d-stuck", "b-plan", "a-done"]);
   });
 
@@ -222,15 +226,15 @@ describe("INDEX.md and MEMORY.md", () => {
     const s = store();
     s.rec("demo", "issue: 9\nlog: started");
     s.rec("demo", "status: blocked\nlog: stuck on API");
-    const lines = s.fs.get(`${DIR}/INDEX.md`)!.split("\n").filter((l) => l.startsWith("- ["));
+    const lines = (s.fs.get(`${DIR}/INDEX.md`) ?? "").split("\n").filter((l) => l.startsWith("- ["));
     expect(lines).toEqual(["- [demo](demo.md) — blocked — #9 — stuck on API"]);
   });
 
   it("changes only the Feature memory line in MEMORY.md and leaves every other line byte for byte", () => {
-    const before = ["- [Other note](other.md) — keep", "- [Feature memory](features/INDEX.md) — active: old — next: old thing", "- [Pitch](pitch.md) — keep too"].join("\n") + "\n";
+    const before = `${["- [Other note](other.md) — keep", "- [Feature memory](features/INDEX.md) — active: old — next: old thing", "- [Pitch](pitch.md) — keep too"].join("\n")}\n`;
     const s = store({ [MEM]: before });
     s.rec("demo", "status: in-progress\nlog: begun\nnext: write the parser");
-    const rows = s.fs.get(MEM)!.split("\n");
+    const rows = (s.fs.get(MEM) ?? "").split("\n");
     expect(rows[0]).toBe("- [Other note](other.md) — keep");
     expect(rows[1]).toBe("- [Feature memory](features/INDEX.md) — active: demo — next: write the parser");
     expect(rows[2]).toBe("- [Pitch](pitch.md) — keep too");
@@ -264,7 +268,7 @@ describe("record: size and output", () => {
   it("prints the path then three summary lines", () => {
     const s = store();
     const r = s.rec("demo", "log: hi");
-    const lines = r.out!.split("\n");
+    const lines = (r.out ?? "").split("\n");
     expect(lines[0]).toBe(`${DIR}/demo.md`);
     expect(lines).toHaveLength(4);
   });
@@ -275,7 +279,7 @@ describe("recall", () => {
     const s = store();
     s.rec("demo", "status: in-progress\nissue: #3\ncontext: A thing.\ndecision: use D1 — cheap — chat\nlink: PR: #4\ntodo: a\ntodo: b\ndone: a\nlog: first");
     s.rec("demo", "log: second");
-    const out = run(["recall", "demo"], "", s.deps).out!;
+    const out = run(["recall", "demo"], "", s.deps).out ?? "";
     expect(out).toContain("Feature: demo — in-progress — #3");
     expect(out).toContain("Context: A thing.");
     expect(out).toContain("- [ ] b");
@@ -304,7 +308,7 @@ describe("recall", () => {
     s.rec("live", "log: two");
     s.rec("stuck", "status: blocked\nlog: waiting on keys");
     s.rec("old", "status: done\nlog: shipped");
-    const out = run(["recall", "status"], "", s.deps).out!;
+    const out = run(["recall", "status"], "", s.deps).out ?? "";
     expect(out).toContain("newest log: - 2026-11-22 — two");
     expect(out).toContain("[stuck]");
     expect(out).not.toContain("[old]");

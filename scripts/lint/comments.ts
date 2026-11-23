@@ -14,13 +14,9 @@ const BLOCK_DELIMITER_LENGTH = 2;
 const EXTRA_STARS = /^\*+|\*+$/g;
 
 export const commentBody = (text: string): string =>
-  (text.startsWith("//")
-    ? text.replace(LINE_OPEN, "")
-    : text.slice(BLOCK_DELIMITER_LENGTH, -BLOCK_DELIMITER_LENGTH).replace(EXTRA_STARS, "")
-  ).trim();
+  (text.startsWith("//") ? text.replace(LINE_OPEN, "") : text.slice(BLOCK_DELIMITER_LENGTH, -BLOCK_DELIMITER_LENGTH).replace(EXTRA_STARS, "")).trim();
 
-const isJsxContainer = (node: ts.Node | undefined): boolean =>
-  node !== undefined && (ts.isJsxElement(node) || ts.isJsxFragment(node));
+const isJsxContainer = (node: ts.Node | undefined): boolean => node !== undefined && (ts.isJsxElement(node) || ts.isJsxFragment(node));
 
 function jsxTextFollows(token: ts.Node): boolean {
   const parent = token.parent;
@@ -33,8 +29,7 @@ function jsxTextFollows(token: ts.Node): boolean {
   return false;
 }
 
-const isJsDocNode = (node: ts.Node): boolean =>
-  node.kind >= ts.SyntaxKind.FirstJSDocNode && node.kind <= ts.SyntaxKind.LastJSDocNode;
+const isJsDocNode = (node: ts.Node): boolean => node.kind >= ts.SyntaxKind.FirstJSDocNode && node.kind <= ts.SyntaxKind.LastJSDocNode;
 
 function forEachToken(node: ts.Node, ast: ts.SourceFile, visit: (token: ts.Node) => void): void {
   if (isJsDocNode(node)) return;

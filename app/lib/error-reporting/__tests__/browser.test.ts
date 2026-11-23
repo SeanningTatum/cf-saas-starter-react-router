@@ -172,9 +172,7 @@ const makeFakeTarget = (): FakeTarget => {
 };
 
 const stubBrowser = () => {
-  const fetchMock = vi.fn<typeof fetch>(() =>
-    Promise.resolve(new Response(null)),
-  );
+  const fetchMock = vi.fn<typeof fetch>(() => Promise.resolve(new Response(null)));
   vi.stubGlobal("fetch", fetchMock);
   vi.stubGlobal("location", { href: "https://app.example.com/a?x=1#y" });
   vi.stubGlobal("document", {
@@ -189,9 +187,7 @@ const firstBody = (fetchMock: ReturnType<typeof stubBrowser>) =>
 describe("installBrowserErrorReporting", () => {
   it("posts an error event with source window so that uncaught errors are captured", async () => {
     const fetchMock = stubBrowser();
-    const { installBrowserErrorReporting } = await import(
-      "@/lib/error-reporting/browser"
-    );
+    const { installBrowserErrorReporting } = await import("@/lib/error-reporting/browser");
     const target = makeFakeTarget();
     installBrowserErrorReporting(target);
     const [onError] = target.listeners.get("error") ?? [];
@@ -206,9 +202,7 @@ describe("installBrowserErrorReporting", () => {
 
   it("falls back to the event message so that a cross-origin script error is not lost", async () => {
     const fetchMock = stubBrowser();
-    const { installBrowserErrorReporting } = await import(
-      "@/lib/error-reporting/browser"
-    );
+    const { installBrowserErrorReporting } = await import("@/lib/error-reporting/browser");
     const target = makeFakeTarget();
     installBrowserErrorReporting(target);
     const [onError] = target.listeners.get("error") ?? [];
@@ -218,9 +212,7 @@ describe("installBrowserErrorReporting", () => {
 
   it("posts an unhandledrejection with source rejection so that lost promises are captured", async () => {
     const fetchMock = stubBrowser();
-    const { installBrowserErrorReporting } = await import(
-      "@/lib/error-reporting/browser"
-    );
+    const { installBrowserErrorReporting } = await import("@/lib/error-reporting/browser");
     const target = makeFakeTarget();
     installBrowserErrorReporting(target);
     const [onRejection] = target.listeners.get("unhandledrejection") ?? [];
@@ -246,9 +238,7 @@ describe("installBrowserErrorReporting", () => {
 
   it("adds no listeners on a second install so that one error is not reported twice", async () => {
     stubBrowser();
-    const { installBrowserErrorReporting } = await import(
-      "@/lib/error-reporting/browser"
-    );
+    const { installBrowserErrorReporting } = await import("@/lib/error-reporting/browser");
     const target = makeFakeTarget();
     installBrowserErrorReporting(target);
     installBrowserErrorReporting(target);
@@ -258,9 +248,7 @@ describe("installBrowserErrorReporting", () => {
 
   it("posts to the same-origin path as keepalive JSON so that the report survives a page exit", async () => {
     const fetchMock = stubBrowser();
-    const { installBrowserErrorReporting } = await import(
-      "@/lib/error-reporting/browser"
-    );
+    const { installBrowserErrorReporting } = await import("@/lib/error-reporting/browser");
     const target = makeFakeTarget();
     installBrowserErrorReporting(target);
     const [onError] = target.listeners.get("error") ?? [];
@@ -304,26 +292,18 @@ describe("shouldReportBoundaryError", () => {
 
   it("skips a 404 response so that a missing page is not counted as a defect", () => {
     expect(
-      shouldReportBoundaryError(
-        { status: 404, statusText: "Not Found", data: null },
-        undefined,
-      ),
+      shouldReportBoundaryError({ status: 404, statusText: "Not Found", data: null }, undefined),
     ).toBe(false);
   });
 
   it("reports a 500 response so that a server failure on navigation is seen", () => {
     expect(
-      shouldReportBoundaryError(
-        { status: 500, statusText: "Server Error", data: null },
-        undefined,
-      ),
+      shouldReportBoundaryError({ status: 500, statusText: "Server Error", data: null }, undefined),
     ).toBe(true);
   });
 
   it("reports a new Error so that a client render failure is seen", () => {
-    expect(
-      shouldReportBoundaryError(new Error("client"), new Error("server")),
-    ).toBe(true);
+    expect(shouldReportBoundaryError(new Error("client"), new Error("server"))).toBe(true);
   });
 });
 
@@ -332,7 +312,7 @@ describe("toBrowserPayload, route error responses", () => {
     const payload = toBrowserPayload(
       { status: 500, statusText: "Internal Server Error", data: "x" },
       "boundary",
-      page
+      page,
     );
 
     expect(payload.name).toBe("RouteErrorResponse");

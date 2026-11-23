@@ -30,7 +30,7 @@ describe("localsThatReach", () => {
         'const span = (n: string) => Effect.withSpan(n, { kind: "client" });',
         "const r2 = (n: string) => span(`r2.${n}`);",
         "function unrelated() { return 1; }",
-      ].join("\n")
+      ].join("\n"),
     );
 
     expect([...localsThatReach(ast, "withSpan")].sort()).toEqual(["r2", "span", "withSpan"]);

@@ -29,7 +29,7 @@ describe("COMMENT_FORMS", () => {
     "the %s example is claimed by its own form, legal unless the form is banned",
     (_name, form) => {
       expect(commentVerdict(commentOf(form.example))).toEqual({ form, verdict: form.banned ? "banned" : "legal" });
-    }
+    },
   );
 });
 
@@ -110,7 +110,7 @@ describe("commentVerdict", () => {
     "a marker the build or the harness gate reads out of a comment is legal, since deleting it breaks them: %j",
     (text) => {
       expect(commentVerdict(commentOf(text))?.verdict).toBe("legal");
-    }
+    },
   );
 
   it("claims no directive that runs over several lines, so prose cannot ride in behind one", () => {

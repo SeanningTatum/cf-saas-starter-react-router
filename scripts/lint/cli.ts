@@ -4,16 +4,7 @@ import { dirname, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { Either } from "effect";
 import { resolveBase, type BaseDeps } from "./base-ref";
-import {
-  applyBaseline,
-  BASELINE_CHECKS,
-  baselineFinding,
-  baselineSize,
-  compareWithBase,
-  lowerBaseline,
-  parseBaseline,
-  type Baseline,
-} from "./baseline";
+import { applyBaseline, BASELINE_CHECKS, baselineFinding, baselineSize, compareWithBase, lowerBaseline, parseBaseline, type Baseline } from "./baseline";
 import { BASELINE_PATH, GH_TIMEOUT_MS, JSON_INDENT, LINTER_ENTRY, LINT_ROOTS, RULES_PAGE, SHORT_SHA_LENGTH, USAGE } from "./constants";
 import { runCommand } from "./command";
 import { formatFinding } from "./format";
@@ -64,9 +55,7 @@ function ratchet(deps: CliDeps, head: Baseline): { findings: Finding[]; note: st
 }
 
 function toRepoPaths(deps: CliDeps, files: string[]): Set<string> {
-  const inside = files
-    .map((file) => relative(deps.root, resolve(deps.cwd, file)).split(sep).join("/"))
-    .filter((path) => path !== "" && !path.startsWith(".."));
+  const inside = files.map((file) => relative(deps.root, resolve(deps.cwd, file)).split(sep).join("/")).filter((path) => path !== "" && !path.startsWith(".."));
   return new Set(inside);
 }
 
@@ -75,12 +64,17 @@ function check(deps: CliDeps, files: string[]): Outcome {
   const only = files.length > 0 ? toRepoPaths(deps, files) : undefined;
   const missing = [...(only ?? [])].filter((path) => deps.repo.read(path) === undefined);
   if (missing.length > 0) {
-    return failed(missing.map((path) => `no such file: ${path}. Pass paths that exist; a deleted file needs no check.`), 2);
+    return failed(
+      missing.map((path) => `no such file: ${path}. Pass paths that exist; a deleted file needs no check.`),
+      2,
+    );
   }
   const text = deps.repo.read(BASELINE_PATH);
   const parsed =
     text === undefined
-      ? Either.left(baselineFinding(BASELINE_CHECKS.shape, `${BASELINE_PATH} is missing`, 'create it with `{ "suppressions": 0, "boundaries": {}, "debt": {} }`'))
+      ? Either.left(
+          baselineFinding(BASELINE_CHECKS.shape, `${BASELINE_PATH} is missing`, 'create it with `{ "suppressions": 0, "boundaries": {}, "debt": {} }`'),
+        )
       : parseBaseline(text);
   if (Either.isLeft(parsed)) return failed([formatFinding(parsed.left), "house lint: 1 finding."]);
   const baseline = parsed.right;
@@ -95,7 +89,7 @@ function check(deps: CliDeps, files: string[]): Outcome {
   const scope = `${run.filesChecked} file(s), ${rules.length} rule(s)`;
   if (only) return ok(`house lint: clean. ${scope}.`);
   return ok(
-    `house lint: clean. ${scope}. Baseline: ${size.entries} file entr(ies) in debt, ${size.boundaries} boundary file(s), ${baseline.suppressions} suppression(s); ${compared.note}.`
+    `house lint: clean. ${scope}. Baseline: ${size.entries} file entr(ies) in debt, ${size.boundaries} boundary file(s), ${baseline.suppressions} suppression(s); ${compared.note}.`,
   );
 }
 
@@ -111,7 +105,7 @@ function lower(deps: CliDeps): Outcome {
   if (unchanged) return ok(`${BASELINE_PATH} already matches the code; nothing to lower`);
   deps.writeFile(BASELINE_PATH, `${JSON.stringify(after, null, JSON_INDENT)}\n`);
   return ok(
-    `lowered ${BASELINE_PATH}: debt entries ${was.entries} to ${now.entries} (their total ${was.debt} to ${now.debt}), boundary files ${was.boundaries} to ${now.boundaries}, suppressions ${before.suppressions} to ${after.suppressions}. Nothing was raised or added.`
+    `lowered ${BASELINE_PATH}: debt entries ${was.entries} to ${now.entries} (their total ${was.debt} to ${now.debt}), boundary files ${was.boundaries} to ${now.boundaries}, suppressions ${before.suppressions} to ${after.suppressions}. Nothing was raised or added.`,
   );
 }
 
@@ -159,8 +153,7 @@ export async function main(argv: string[]): Promise<number> {
     env: process.env,
     git: (args) => runCommand("git", args, { cwd: root, env: process.env }),
     pullRequestTarget: () =>
-      runCommand("gh", ["pr", "view", "--json", "baseRefName", "--jq", ".baseRefName"], { cwd: root, env: process.env, timeout: GH_TIMEOUT_MS }) ||
-      undefined,
+      runCommand("gh", ["pr", "view", "--json", "baseRefName", "--jq", ".baseRefName"], { cwd: root, env: process.env, timeout: GH_TIMEOUT_MS }) || undefined,
     writeFile: (path, text) => writeFileSync(join(root, path), text),
   });
   for (const line of outcome.stdout) console.log(line);

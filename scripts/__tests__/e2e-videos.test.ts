@@ -15,7 +15,14 @@ const report: Report = {
       suites: [
         {
           specs: [
-            spec("signup → dashboard", ["golden"], [{ status: "failed", video: "/r/try1.webm" }, { status: "passed", video: "/r/try2.webm" }]),
+            spec(
+              "signup → dashboard",
+              ["golden"],
+              [
+                { status: "failed", video: "/r/try1.webm" },
+                { status: "passed", video: "/r/try2.webm" },
+              ],
+            ),
             spec("login rejects bad credentials", ["error"], [{ status: "passed", video: "/r/err.webm" }]),
             spec("pillars render", [], [{ status: "passed", video: "/r/home.webm" }]),
           ],
@@ -79,8 +86,8 @@ describe("run", () => {
   it("records with E2E_VIDEO and CI set, filtered to the tagged tests, on the given specs", () => {
     const { deps, calls } = stub();
     run(["--out", ".verify/x/video", "e2e/auth.spec.ts"], deps);
-    expect(calls[0].args).toEqual(["playwright", "test", "e2e/auth.spec.ts", "--grep", "@golden|@error", "--reporter=json"]);
-    expect(calls[0].env).toEqual({ E2E_VIDEO: "1", CI: "1" });
+    expect(calls[0]?.args).toEqual(["playwright", "test", "e2e/auth.spec.ts", "--grep", "@golden|@error", "--reporter=json"]);
+    expect(calls[0]?.env).toEqual({ E2E_VIDEO: "1", CI: "1" });
   });
 
   it("copies each video into --out under its kind and title", () => {
@@ -97,8 +104,18 @@ describe("run", () => {
     const long = "a".repeat(60);
     const twins: Report = {
       suites: [
-        { specs: [spec("signup", ["golden"], [{ status: "passed", video: "/a.webm" }]), spec(`${long} one`, ["golden"], [{ status: "passed", video: "/c.webm" }])] },
-        { specs: [spec("signup", ["golden"], [{ status: "passed", video: "/b.webm" }]), spec(`${long} two`, ["golden"], [{ status: "passed", video: "/d.webm" }])] },
+        {
+          specs: [
+            spec("signup", ["golden"], [{ status: "passed", video: "/a.webm" }]),
+            spec(`${long} one`, ["golden"], [{ status: "passed", video: "/c.webm" }]),
+          ],
+        },
+        {
+          specs: [
+            spec("signup", ["golden"], [{ status: "passed", video: "/b.webm" }]),
+            spec(`${long} two`, ["golden"], [{ status: "passed", video: "/d.webm" }]),
+          ],
+        },
       ],
     };
     const { deps, copies } = stub(0, JSON.stringify(twins));

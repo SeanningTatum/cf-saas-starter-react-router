@@ -1,13 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  BYTES_PER_MIB,
-  MAX_UPLOAD_BYTES,
-  MAX_UPLOAD_MIB,
-  exportTooLarge,
-  stepFailed,
-  stepTimedOut,
-  summaryExport,
-} from "../d1-backup-constants";
+import { BYTES_PER_MIB, MAX_UPLOAD_BYTES, MAX_UPLOAD_MIB, exportTooLarge, stepFailed, stepTimedOut, summaryExport } from "../d1-backup-constants";
 
 describe("d1-backup-constants builders", () => {
   it("holds the upload limit as 300 MiB in bytes: a wrong factor would let an oversized dump reach wrangler", () => {

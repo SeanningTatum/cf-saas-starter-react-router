@@ -14,20 +14,15 @@ const isStatus = Schema.is(Status);
 export const loader = async ({ context, request }: Route.LoaderArgs) => {
   const url = new URL(request.url);
 
-  const page = parseInt(url.searchParams.get("page") || "1");
-  const pageSize = parseInt(url.searchParams.get("pageSize") || "10");
+  const page = parseInt(url.searchParams.get("page") || "1", 10);
+  const pageSize = parseInt(url.searchParams.get("pageSize") || "10", 10);
   const search = url.searchParams.get("search") || undefined;
   const roleParam = url.searchParams.get("role");
   const statusParam = url.searchParams.get("status");
 
-  const role =
-    roleParam && roleParam !== "all" && isRole(roleParam)
-      ? roleParam
-      : undefined;
+  const role = roleParam && roleParam !== "all" && isRole(roleParam) ? roleParam : undefined;
   const status =
-    statusParam && statusParam !== "all" && isStatus(statusParam)
-      ? statusParam
-      : undefined;
+    statusParam && statusParam !== "all" && isStatus(statusParam) ? statusParam : undefined;
 
   const response = await context.trpc.admin.getUsers({
     page: page - 1,

@@ -151,6 +151,7 @@ Listed in `gates` in [`harness.config.json`](../../harness.config.json) and run 
 | Gate | Command | Runs in |
 |------|---------|---------|
 | typecheck | `bun run typecheck` | lean, baseline, full |
+| lint | `bun run lint` (Biome, the house linter, dead code; [`lint.md`](lint.md)) | lean, baseline, full |
 | test | `bun run test` | lean, baseline, full |
 | non-negotiables-selftest | `bun run scripts/check-non-negotiables.ts --selftest` | lean, baseline, full |
 | non-negotiables | `bun run scripts/check-non-negotiables.ts` | lean, baseline, full |
@@ -163,11 +164,11 @@ Listed in `gates` in [`harness.config.json`](../../harness.config.json) and run 
 
 `./scripts/verify.sh` runs the full set, `--baseline` the quick set, `--lean` the lean tier (CI's job on a stacked PR), `--only <gate>` one gate, `--list` prints them. To add a gate, add an object to `gates` in `harness.config.json`, with the `tier` it first runs in (see [`harness-config.md`](harness-config.md)) — CI picks it up.
 
-`./scripts/verify.sh --changed [base]` is for a stacked change. It diffs the working tree (committed, staged, unstaged and untracked) against the merge base with `base` (default: the pull request's target, else the default branch) and runs: typecheck; `bun run lint:house <changed .ts/.tsx>`; `bunx vitest related --run <changed .ts/.tsx>` (the tests that import them, at any depth); and `CI=1 bun run test:e2e <specs>` for the specs the [test map](lint-rules.md#the-test-map) ties to them (a changed spec, a `covered-by` spec, a machine's paths spec, the specs that visit a changed route, the specs that import a changed file). It prints the base, what it ran, and each gate it skipped with the reason. A change to a gate script, `harness.config.json`, `scripts/lint/**`, a config file, `.github/`, `.claude/`, a migration, the schema or the lockfile runs every gate instead and says which file caused it. The plan is `scripts/verify-changed.ts`; its rules are `scripts/lib/verify-plan.ts`.
+`./scripts/verify.sh --changed [base]` is for a stacked change. It diffs the working tree (committed, staged, unstaged and untracked) against the merge base with `base` (default: the pull request's target, else the default branch) and runs: typecheck; `bun run lint <changed .ts/.tsx>` (Biome and the house linter on those files); `bunx vitest related --run <changed .ts/.tsx>` (the tests that import them, at any depth); and `CI=1 bun run test:e2e <specs>` for the specs the [test map](lint-rules.md#the-test-map) ties to them (a changed spec, a `covered-by` spec, a machine's paths spec, the specs that visit a changed route, the specs that import a changed file). It prints the base, what it ran, and each gate it skipped with the reason. A change to a gate script, `harness.config.json`, `scripts/lint/**`, the lint runner, a config file (`biome.jsonc` and `knip.json` included), `.github/`, `.claude/`, a migration, the schema or the lockfile runs every gate instead and says which file caused it. The plan is `scripts/verify-changed.ts`; its rules are `scripts/lib/verify-plan.ts`.
 
 The `e2e` gate needs the network: the sign-in and sign-up pages load Turnstile from `challenges.cloudflare.com`. Each spec file sends its own client IP (`e2e/lib/client-ip.ts`), so the auth rate limits count per file ([`docs/auth.md`](../auth.md#rate-limits)).
 
-The two `non-negotiables` gates run the house linter (`bun run lint:house`): one file per rule in `scripts/lint/rules/`, findings that say the fix, and a baseline that only shrinks. The rules, the baseline and how to add a rule: [`lint-rules.md`](lint-rules.md).
+The `lint` gate is the one entry point: Biome, the house linter, import cycles and dead code, one finding shape ([`lint.md`](lint.md)). The two `non-negotiables` gates run the house linter (`bun run lint:house`) and its self-test on their own: one file per rule in `scripts/lint/rules/`, findings that say the fix, and a baseline that only shrinks. The rules, the baseline and how to add a rule: [`lint-rules.md`](lint-rules.md).
 
 ## Commands (README.md has the same list)
 
@@ -181,7 +182,12 @@ bun run dev               # Dev server (auto-runs local DB migrations) → http:
 bun run build             # Production build
 bun run deploy            # Build + deploy to Cloudflare Workers
 bun run deploy:preview    # Build with CLOUDFLARE_ENV=preview + deploy the -preview worker
-bun run typecheck         # Full typecheck (cf-typegen + react-router typegen + tsc)
+bun run typecheck         # Full typecheck (cf-typegen + react-router typegen + tsc): app, workers, scripts, e2e, configs
+bun run lint              # Biome + house linter + dead code, one finding per line (lint.md)
+bun run lint <files>      # The same for some files (no dead-code or import-cycle pass); --fix applies safe fixes
+bun run lint:staged       # The same for staged files
+bun run lint:effect       # Effect language service diagnostics (about 20 s; CI runs them on PRs into the default branch or production)
+bun run format            # Format every file Biome covers
 bun run test              # Vitest unit tests (one-shot)
 bun run test:watch        # Vitest watch mode
 bun run lint:house [files] # House lint rules: the named files, or the whole repo (--rules lists them)

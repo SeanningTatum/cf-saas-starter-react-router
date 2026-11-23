@@ -53,6 +53,5 @@ On `fail`, put the last ~10 lines of output in `blocked`.
 
 - CodeGraph first: when `./scripts/codegraph.sh status` works, ask `./scripts/codegraph.sh explore "<q>"` or `node <symbol|file>` (source, callers, callees) before you grep.
 - Write only inside the fence. A file you need outside it: stop, add it to `blocked`, return what you have.
-- No `any` to dodge a type.
 - No dev server, no browser, no commits, no `db:migrate:*`. `bun run db:generate` is the only database command.
 - Do not add spans beyond the procedure span; `instrumenter` runs later.

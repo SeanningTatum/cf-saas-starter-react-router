@@ -1,6 +1,6 @@
 import { initTRPC, TRPCError } from "@trpc/server";
 import superjson from "superjson";
-import { Cause, Effect, Exit, ParseResult, Schema } from "effect";
+import { Cause, Effect, Exit, ParseResult } from "effect";
 import { Session, SessionLive } from "@/services/session";
 import type { AppRuntime } from "@/runtime";
 import { loggers } from "@/lib/logger";
@@ -8,21 +8,18 @@ import { isDev } from "@/lib/log-format";
 import { setRequestUser } from "@/lib/request-context";
 import { hasAdminRole } from "@/auth/protected-user";
 
-export const createTRPCContext = async (opts: {
-  headers: Headers;
-  runtime: AppRuntime;
-}) => {
+export const createTRPCContext = async (opts: { headers: Headers; runtime: AppRuntime }) => {
   const exit = await opts.runtime.runPromiseExit(
     Session.pipe(
       Effect.provide(SessionLive(opts.headers)),
-      Effect.tap(({ user }) => setRequestUser(user?.id))
-    )
+      Effect.tap(({ user }) => setRequestUser(user?.id)),
+    ),
   );
 
   if (Exit.isFailure(exit)) {
     loggers.trpc.error(
       { cause: Cause.pretty(exit.cause) },
-      "Failed to resolve session for tRPC context"
+      "Failed to resolve session for tRPC context",
     );
     throw new TRPCError({
       code: "INTERNAL_SERVER_ERROR",
@@ -41,10 +38,7 @@ export const createTRPCContext = async (opts: {
 
 type ErrorShapeLike = { data?: Record<string, unknown>; [key: string]: unknown };
 
-export const stripStackOutsideDev = <S extends ErrorShapeLike>(
-  shape: S,
-  dev: boolean
-): S => {
+export const stripStackOutsideDev = <S extends ErrorShapeLike>(shape: S, dev: boolean): S => {
   if (dev || shape.data?.stack === undefined) return shape;
   const { stack: _stack, ...data } = shape.data;
   return { ...shape, data } as S;
@@ -72,11 +66,10 @@ const t = initTRPC.context<typeof createTRPCContext>().create({
         ...shape,
         data: {
           ...shape.data,
-          schemaError:
-            error.code === "BAD_REQUEST" ? formatSchemaError(error.cause) : null,
+          schemaError: error.code === "BAD_REQUEST" ? formatSchemaError(error.cause) : null,
         },
       },
-      isDev
+      isDev,
     ),
 });
 
@@ -103,22 +96,20 @@ const timingMiddleware = t.middleware(async ({ next, path }) => {
 
 export const publicProcedure = t.procedure.use(timingMiddleware);
 
-export const protectedProcedure = t.procedure
-  .use(timingMiddleware)
-  .use(({ ctx, next }) => {
-    if (!ctx.auth) {
-      throw new TRPCError({ code: "UNAUTHORIZED" });
-    }
-    return next({
-      ctx: {
-        ...ctx,
-        auth: {
-          session: ctx.auth.session,
-          user: ctx.auth.user,
-        },
+export const protectedProcedure = t.procedure.use(timingMiddleware).use(({ ctx, next }) => {
+  if (!ctx.auth) {
+    throw new TRPCError({ code: "UNAUTHORIZED" });
+  }
+  return next({
+    ctx: {
+      ...ctx,
+      auth: {
+        session: ctx.auth.session,
+        user: ctx.auth.user,
       },
-    });
+    },
   });
+});
 
 export const adminProcedure = protectedProcedure.use(({ ctx, next }) => {
   if (!hasAdminRole(ctx.auth.user.role)) {
@@ -133,5 +124,3 @@ export const adminProcedure = protectedProcedure.use(({ ctx, next }) => {
 export const createCallerFactory = t.createCallerFactory;
 
 export type Context = Awaited<ReturnType<typeof createTRPCContext>>;
-
-export { Schema };

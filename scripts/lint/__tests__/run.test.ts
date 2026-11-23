@@ -7,8 +7,7 @@ import { badWordRule, listedHitsRule, sourceOf } from "./fixtures";
 
 const roots = () => ["app", "workers"];
 
-const places = (findings: { file: string; line: number; rule: string }[]) =>
-  findings.map((entry) => `${entry.file}:${entry.line} ${entry.rule}`);
+const places = (findings: { file: string; line: number; rule: string }[]) => findings.map((entry) => `${entry.file}:${entry.line} ${entry.rule}`);
 
 describe("runRules", () => {
   it("walks only the roots it is given, so scripts and config stay out of a whole-repo run", () => {
@@ -62,7 +61,10 @@ describe("runRules", () => {
   it("keeps a hit's own fix over the rule's and carries the rule's example onto every finding", () => {
     const rule = badWordRule({
       example: "app/good.ts",
-      check: () => [{ line: 1, message: "own fix", fix: "do the specific thing" }, { line: 2, message: "rule fix" }],
+      check: () => [
+        { line: 1, message: "own fix", fix: "do the specific thing" },
+        { line: 2, message: "rule fix" },
+      ],
     });
 
     const [own, fallback] = runRules([rule], memoryRepo({ "app/a.ts": "x" }), roots()).findings;
@@ -110,7 +112,8 @@ describe("runRules", () => {
 describe("runRules in file mode with a rule that compares files", () => {
   const errorFile = () => 'import { Data } from "effect";\nexport class BoomError extends Data.TaggedError("BoomError")<{}> {}\n';
   const mapperWithoutBoom = () => 'export function appErrorToTRPC(tag: string) { switch (tag) { case "OtherError": return 1; } }\n';
-  const repo = () => memoryRepo({ "app/models/errors/boom.ts": errorFile(), "app/lib/effect-trpc.ts": mapperWithoutBoom(), "app/lib/other.ts": "export {};\n" });
+  const repo = () =>
+    memoryRepo({ "app/models/errors/boom.ts": errorFile(), "app/lib/effect-trpc.ts": mapperWithoutBoom(), "app/lib/other.ts": "export {};\n" });
 
   it("keeps the finding on the error class when only the mapper is named, so removing a mapping case is not reported clean", () => {
     const result = runRules([taggedErrorMapped], repo(), roots(), new Set(["app/lib/effect-trpc.ts"]));

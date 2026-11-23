@@ -24,7 +24,7 @@ export type RefResult = typeof RefSchema.Type;
 
 const firstLine = (error: Error): string => error.message.split("\n")[0] ?? "";
 
-export const samePage = (a: string, b: string): boolean => {
+const samePage = (a: string, b: string): boolean => {
   const path = (url: string): string => {
     const parsed = URL.parse(url);
     return parsed === null ? url : `${parsed.origin}${parsed.pathname.replace(/(.)\/+$/, "$1")}`;
@@ -69,7 +69,10 @@ export const summarize = (page: string, runs: Metrics[]): PageResult => ({
 });
 
 export const widestSpread = (pages: readonly PageResult[]): Metrics =>
-  perMetric(pages.map((page) => page.spread), (values) => (values.length === 0 ? 0 : Math.max(...values)));
+  perMetric(
+    pages.map((page) => page.spread),
+    (values) => (values.length === 0 ? 0 : Math.max(...values)),
+  );
 
 const ms = (value: number): string => `${Math.round(value).toLocaleString(NUMBER_LOCALE)} ms`;
 const cls = (value: number): string => value.toFixed(3);

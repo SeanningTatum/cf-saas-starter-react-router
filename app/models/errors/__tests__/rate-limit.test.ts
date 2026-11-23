@@ -13,9 +13,9 @@ describe("RateLimitError", () => {
     const caught = Effect.runSync(
       Effect.either(
         Effect.fail(new RateLimitError({ rule: "upload", retryAfterSeconds: 60 })).pipe(
-          Effect.catchTag("RateLimitError", (error) => Effect.succeed(error.rule))
-        )
-      )
+          Effect.catchTag("RateLimitError", (error) => Effect.succeed(error.rule)),
+        ),
+      ),
     );
     expect(caught).toEqual(Either.right("upload"));
   });

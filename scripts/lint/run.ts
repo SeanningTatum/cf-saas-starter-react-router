@@ -14,9 +14,7 @@ interface Suppressed {
 
 function markers(source: Source, marker: string): Marker[] {
   return commentsIn(source).flatMap((comment) =>
-    comment.body.startsWith(marker)
-      ? [{ line: comment.line, endLine: comment.endLine, reason: comment.body.slice(marker.length).trim() }]
-      : []
+    comment.body.startsWith(marker) ? [{ line: comment.line, endLine: comment.endLine, reason: comment.body.slice(marker.length).trim() }] : [],
   );
 }
 
@@ -25,8 +23,7 @@ export function applySuppression(rule: FileRule, source: Source, hits: FileHit[]
   if (!marker) return { hits, count: 0 };
   const found = markers(source, marker);
   const withReason = found.filter((entry) => entry.reason !== "");
-  const excusedBy = (hit: FileHit): Marker | undefined =>
-    withReason.find((entry) => hit.line >= entry.line && hit.line <= entry.endLine + 1);
+  const excusedBy = (hit: FileHit): Marker | undefined => withReason.find((entry) => hit.line >= entry.line && hit.line <= entry.endLine + 1);
   const used = new Set(hits.flatMap((hit) => excusedBy(hit) ?? []));
   const kept = hits.filter((hit) => !excusedBy(hit));
   const noReason = found

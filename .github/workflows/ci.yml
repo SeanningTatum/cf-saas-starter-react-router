@@ -143,6 +143,34 @@ jobs:
           path: playwright-report/
           retention-days: 7
 
+  # A PR into the default branch or production: the Effect language service's diagnostics (floating
+  # effects, untyped failures). About 20 s, so not a local gate; it runs beside the others here, costing
+  # no wall time (docs/agents/lint.md#effect-diagnostics). Fails on an error, not on a warning.
+  effect-diagnostics:
+    name: Effect diagnostics
+    if: github.event_name == 'pull_request' && (github.base_ref == github.event.repository.default_branch || github.base_ref == 'production')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version-file: .bun-version  # one pinned version for every workflow
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      # The route types the app imports are generated, as `bun run typecheck` does before tsc.
+      - name: Generate types
+        run: bun run typegen
+
+      - name: Effect diagnostics
+        run: bun run lint:effect
+
   # A PR into the default branch or production: the size table measured here against the base branch,
   # not copied from the PR body (docs/ci/pipelines.md#reading-the-size-table). Read-only; `report` posts it.
   size:

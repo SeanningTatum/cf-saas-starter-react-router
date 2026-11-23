@@ -3,9 +3,7 @@
   "name": "cf-saas-starter-react-router",
   "main": "workers/app.ts",
   "compatibility_date": "2025-03-25",
-  "compatibility_flags": [
-    "nodejs_compat"
-  ],
+  "compatibility_flags": ["nodejs_compat"],
   "assets": {
     "directory": "build/client",
     "binding": "ASSETS"

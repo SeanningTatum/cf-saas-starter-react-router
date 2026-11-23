@@ -27,8 +27,8 @@ const describe = (value: unknown): string =>
     ? value
     : Effect.runSync(
         Effect.try(() => JSON.stringify(value) ?? String(value)).pipe(
-          Effect.orElseSucceed(() => Object.prototype.toString.call(value))
-        )
+          Effect.orElseSucceed(() => Object.prototype.toString.call(value)),
+        ),
       );
 
 const stackOf = (value: Fields): { stack?: string } => {
@@ -55,10 +55,7 @@ const defect = (value: unknown): ClassifiedError =>
 const isTrpcError = (value: Fields): value is Fields & { code: string } =>
   value.name === TRPC_ERROR_NAME && typeof value.code === "string";
 
-const fromTrpcError = (
-  value: Fields & { code: string },
-  depth: number
-): ClassifiedError => {
+const fromTrpcError = (value: Fields & { code: string }, depth: number): ClassifiedError => {
   if (!TRPC_SERVER_FAILURE_CODES.includes(value.code)) {
     return {
       kind: "expected",
@@ -73,9 +70,7 @@ const fromTrpcError = (
     : { ...classify(value.cause, depth + 1), level: "error" };
 };
 
-const isResponseLike = (
-  value: Fields
-): value is Fields & { status: number; statusText: string } =>
+const isResponseLike = (value: Fields): value is Fields & { status: number; statusText: string } =>
   typeof value.status === "number" && typeof value.statusText === "string";
 
 const fromResponse = (value: {
@@ -105,10 +100,7 @@ const fromTagged = (value: Fields, tag: string): ClassifiedError => {
   };
 };
 
-const fromCause = (
-  cause: Cause.Cause<unknown>,
-  depth: number
-): ClassifiedError => {
+const fromCause = (cause: Cause.Cause<unknown>, depth: number): ClassifiedError => {
   const died = Cause.dieOption(cause);
   if (Option.isSome(died)) return defect(died.value);
   const failure = Cause.failureOption(cause);
@@ -135,5 +127,4 @@ const classify = (error: unknown, depth: number): ClassifiedError => {
   return defect(error);
 };
 
-export const classifyError = (error: unknown): ClassifiedError =>
-  classify(error, 0);
+export const classifyError = (error: unknown): ClassifiedError => classify(error, 0);

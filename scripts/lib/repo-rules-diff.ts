@@ -23,8 +23,7 @@ export function differ(prefix: string) {
   };
 }
 
-const labelOf = (context: string, integrationId: number | undefined) =>
-  integrationId === undefined ? context : `${context} (app ${integrationId})`;
+const labelOf = (context: string, integrationId: number | undefined) => (integrationId === undefined ? context : `${context} (app ${integrationId})`);
 
 function declaredCheckLabels(v: unknown): string[] {
   return sorted(checkEntriesOf(v).map((c) => labelOf(c.context, c.integration_id)));
@@ -66,7 +65,6 @@ export function rulesetDiffs(decl: Ruleset, live: LiveRulesetT): string[] {
     }
   }
   const declaredTypes = new Set(decl.rules.map((r) => r.type));
-  for (const t of liveByType.keys())
-    if (!declaredTypes.has(t)) d.lines.push(`ruleset "${decl.name}" rules.${t}: declared absent, live present`);
+  for (const t of liveByType.keys()) if (!declaredTypes.has(t)) d.lines.push(`ruleset "${decl.name}" rules.${t}: declared absent, live present`);
   return d.lines;
 }

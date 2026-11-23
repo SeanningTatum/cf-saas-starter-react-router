@@ -1,7 +1,7 @@
-import { Cause, Effect, Exit, ManagedRuntime } from "effect";
+import { Cause, Effect, Exit, type ManagedRuntime } from "effect";
 import { TRPCError } from "@trpc/server";
 import type { AppServices } from "@/runtime";
-import type { AppError } from "@/models/errors";
+import type { AppError } from "@/models/errors/app-error";
 import { loggers } from "@/lib/logger";
 import { RATE_LIMITED_MESSAGE } from "@/lib/constants/rate-limit";
 import { TRPC_SERVER_FAILURE_CODES } from "@/lib/constants/error-reporting";
@@ -14,7 +14,7 @@ const assertNever = (x: never): TRPCError => {
       : "unknown";
   loggers.trpc.error(
     { tag },
-    "appErrorToTRPC: unhandled tagged error variant — add a case + a tagToTRPC test"
+    "appErrorToTRPC: unhandled tagged error variant — add a case + a tagToTRPC test",
   );
   return new TRPCError({
     code: "INTERNAL_SERVER_ERROR",
@@ -68,9 +68,7 @@ const appErrorToTRPC = (e: AppError): TRPCError => {
     case "ConfigurationError":
       return new TRPCError({
         code: "INTERNAL_SERVER_ERROR",
-        message: `Configuration error for ${e.service}${
-          e.field ? ` (${e.field})` : ""
-        }`,
+        message: `Configuration error for ${e.service}${e.field ? ` (${e.field})` : ""}`,
       });
     case "ExternalServiceError":
       return new TRPCError({
@@ -149,23 +147,20 @@ const toTRPC = (err: unknown): TRPCError => {
 };
 
 export const tagToTRPC = <A, E, R>(
-  effect: Effect.Effect<A, E, R>
-): Effect.Effect<A, TRPCError, R> =>
-  Effect.catchAll(effect, (err) => Effect.fail(toTRPC(err)));
+  effect: Effect.Effect<A, E, R>,
+): Effect.Effect<A, TRPCError, R> => Effect.catchAll(effect, (err) => Effect.fail(toTRPC(err)));
 
 export const runProcedure = <A, E, R extends AppServices = AppServices>(
   runtime: ManagedRuntime.ManagedRuntime<AppServices, AppError>,
   effect: Effect.Effect<A, E, R>,
-  options?: { readonly span?: string }
+  options?: { readonly span?: string },
 ): Promise<A> =>
   runtime
     .runPromiseExit(
       tagToTRPC(effect).pipe(
         Effect.annotateLogs({ layer: "trpc" }),
-        options?.span
-          ? Effect.withSpan(options.span, { kind: "server" })
-          : (self) => self
-      )
+        options?.span ? Effect.withSpan(options.span, { kind: "server" }) : (self) => self,
+      ),
     )
     .then((exit) =>
       Exit.match(exit, {
@@ -181,5 +176,5 @@ export const runProcedure = <A, E, R extends AppServices = AppServices>(
             cause: Cause.squash(cause),
           });
         },
-      })
+      }),
     );

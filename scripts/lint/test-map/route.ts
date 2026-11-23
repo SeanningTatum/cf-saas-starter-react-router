@@ -73,7 +73,12 @@ export function routeProblems(repo: Repo, path: string): Problem[] {
   const proves = (visited: string, own: string): boolean =>
     visitsPath(visited, own) && !(isPattern(own) && fixedPaths.has(`/${segmentsOf(visited.split(/[?#]/)[0] ?? "").join("/")}`));
   if (paths.length === 0) {
-    return [{ message: `is classified as a route and ${ROUTES_FILE} does not list it`, fix: `add it to ${ROUTES_FILE} with its path written as a string (a path passed as a constant cannot be read), or give it another kind in ${TEST_MAP_PATH}` }];
+    return [
+      {
+        message: `is classified as a route and ${ROUTES_FILE} does not list it`,
+        fix: `add it to ${ROUTES_FILE} with its path written as a string (a path passed as a constant cannot be read), or give it another kind in ${TEST_MAP_PATH}`,
+      },
+    ];
   }
   const specs = specFacts(repo);
   const proven = specs.some((spec) => spec.smoke && spec.visits.some((visited) => paths.some((own) => proves(visited, own))));

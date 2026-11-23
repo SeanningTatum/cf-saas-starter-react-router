@@ -11,7 +11,7 @@ const Entry = Schema.Struct({
 
 const MapFile = Schema.parseJson(Schema.Struct({ entries: Schema.Array(Entry) }));
 
-export type Kind = (typeof TEST_MAP_KINDS)[number];
+type Kind = (typeof TEST_MAP_KINDS)[number];
 type RawEntry = typeof Entry.Type;
 export type MapEntry = Omit<RawEntry, "kind"> & { kind: Kind };
 

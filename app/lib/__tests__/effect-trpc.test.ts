@@ -8,7 +8,7 @@ import { makeOtlpTracer, makeSpanBuffer } from "@/services/tracing";
 import { Database, DatabaseLive } from "@/services/database";
 import { CloudflareEnv } from "@/services/cloudflare";
 import type { AppServices } from "@/runtime";
-import type { AppError } from "@/models/errors";
+import type { AppError } from "@/models/errors/app-error";
 import {
   NotFoundError,
   ValidationError,
@@ -33,10 +33,7 @@ import { RATE_LIMITED_MESSAGE } from "@/lib/constants/rate-limit";
 
 const failExit = <E>(e: E) => Effect.exit(tagToTRPC(Effect.fail(e)));
 
-const expectTRPC = (
-  exit: Exit.Exit<unknown, TRPCError>,
-  code: TRPCError["code"]
-) => {
+const expectTRPC = (exit: Exit.Exit<unknown, TRPCError>, code: TRPCError["code"]) => {
   expect(Exit.isFailure(exit)).toBe(true);
   if (Exit.isFailure(exit)) {
     const failure = Cause.failureOption(exit.cause);
@@ -51,150 +48,140 @@ const expectTRPC = (
 describe("tagToTRPC error mapping", () => {
   it.effect("NotFoundError → NOT_FOUND", () =>
     Effect.gen(function* () {
-      const exit = yield* failExit(
-        new NotFoundError({ entity: "user", identifier: "u1" })
-      );
+      const exit = yield* failExit(new NotFoundError({ entity: "user", identifier: "u1" }));
       expectTRPC(exit, "NOT_FOUND");
-    })
+    }),
   );
 
   it.effect("ValidationError → BAD_REQUEST", () =>
     Effect.gen(function* () {
-      const exit = yield* failExit(
-        new ValidationError({ entity: "user", message: "bad" })
-      );
+      const exit = yield* failExit(new ValidationError({ entity: "user", message: "bad" }));
       expectTRPC(exit, "BAD_REQUEST");
-    })
+    }),
   );
 
   it.effect("CreationError → INTERNAL_SERVER_ERROR", () =>
     Effect.gen(function* () {
       const exit = yield* failExit(new CreationError({ entity: "user" }));
       expectTRPC(exit, "INTERNAL_SERVER_ERROR");
-    })
+    }),
   );
 
   it.effect("UpdateError → INTERNAL_SERVER_ERROR", () =>
     Effect.gen(function* () {
       const exit = yield* failExit(new UpdateError({ entity: "user" }));
       expectTRPC(exit, "INTERNAL_SERVER_ERROR");
-    })
+    }),
   );
 
   it.effect("DeletionError → INTERNAL_SERVER_ERROR", () =>
     Effect.gen(function* () {
       const exit = yield* failExit(new DeletionError({ entity: "user" }));
       expectTRPC(exit, "INTERNAL_SERVER_ERROR");
-    })
+    }),
   );
 
   it.effect("QueryError → INTERNAL_SERVER_ERROR", () =>
     Effect.gen(function* () {
       const exit = yield* failExit(new QueryError({ entity: "user" }));
       expectTRPC(exit, "INTERNAL_SERVER_ERROR");
-    })
+    }),
   );
 
   it.effect("ConfigurationError → INTERNAL_SERVER_ERROR", () =>
     Effect.gen(function* () {
-      const exit = yield* failExit(
-        new ConfigurationError({ service: "Database" })
-      );
+      const exit = yield* failExit(new ConfigurationError({ service: "Database" }));
       expectTRPC(exit, "INTERNAL_SERVER_ERROR");
-    })
+    }),
   );
 
   it.effect("ExternalServiceError → BAD_GATEWAY", () =>
     Effect.gen(function* () {
-      const exit = yield* failExit(
-        new ExternalServiceError({ service: "BetterAuth" })
-      );
+      const exit = yield* failExit(new ExternalServiceError({ service: "BetterAuth" }));
       expectTRPC(exit, "BAD_GATEWAY");
-    })
+    }),
   );
 
   it.effect("BucketBindingError → INTERNAL_SERVER_ERROR", () =>
     Effect.gen(function* () {
       const exit = yield* failExit(new BucketBindingError({}));
       expectTRPC(exit, "INTERNAL_SERVER_ERROR");
-    })
+    }),
   );
 
   it.effect("BucketUploadError → INTERNAL_SERVER_ERROR", () =>
     Effect.gen(function* () {
       const exit = yield* failExit(new BucketUploadError({}));
       expectTRPC(exit, "INTERNAL_SERVER_ERROR");
-    })
+    }),
   );
 
   it.effect("BucketGetError → INTERNAL_SERVER_ERROR", () =>
     Effect.gen(function* () {
       const exit = yield* failExit(new BucketGetError({}));
       expectTRPC(exit, "INTERNAL_SERVER_ERROR");
-    })
+    }),
   );
 
   it.effect("BucketNotFoundError → NOT_FOUND", () =>
     Effect.gen(function* () {
       const exit = yield* failExit(new BucketNotFoundError({ key: "k" }));
       expectTRPC(exit, "NOT_FOUND");
-    })
+    }),
   );
 
   it.effect("BucketDeleteError → INTERNAL_SERVER_ERROR", () =>
     Effect.gen(function* () {
       const exit = yield* failExit(new BucketDeleteError({}));
       expectTRPC(exit, "INTERNAL_SERVER_ERROR");
-    })
+    }),
   );
 
   it.effect("BucketListError → INTERNAL_SERVER_ERROR", () =>
     Effect.gen(function* () {
       const exit = yield* failExit(new BucketListError({}));
       expectTRPC(exit, "INTERNAL_SERVER_ERROR");
-    })
+    }),
   );
 
   it.effect("BucketValidationError → BAD_REQUEST", () =>
     Effect.gen(function* () {
       const exit = yield* failExit(new BucketValidationError({ message: "x" }));
       expectTRPC(exit, "BAD_REQUEST");
-    })
+    }),
   );
 
-  it.effect("RateLimitError → TOO_MANY_REQUESTS with the plain wait message, so an over-limit caller is not told it hit a server fault", () =>
-    Effect.gen(function* () {
-      const exit = yield* failExit(new RateLimitError({ rule: "upload", retryAfterSeconds: 60 }));
-      expectTRPC(exit, "TOO_MANY_REQUESTS");
-      const failure = Exit.isFailure(exit) ? Cause.failureOption(exit.cause) : Option.none();
-      expect(Option.map(failure, (e) => e.message)).toEqual(Option.some(RATE_LIMITED_MESSAGE));
-    })
+  it.effect(
+    "RateLimitError → TOO_MANY_REQUESTS with the plain wait message, so an over-limit caller is not told it hit a server fault",
+    () =>
+      Effect.gen(function* () {
+        const exit = yield* failExit(new RateLimitError({ rule: "upload", retryAfterSeconds: 60 }));
+        expectTRPC(exit, "TOO_MANY_REQUESTS");
+        const failure = Exit.isFailure(exit) ? Cause.failureOption(exit.cause) : Option.none();
+        expect(Option.map(failure, (e) => e.message)).toEqual(Option.some(RATE_LIMITED_MESSAGE));
+      }),
   );
 
   it.effect("Unknown error → INTERNAL_SERVER_ERROR", () =>
     Effect.gen(function* () {
       const exit = yield* failExit(new Error("rando"));
       expectTRPC(exit, "INTERNAL_SERVER_ERROR");
-    })
+    }),
   );
 
-  it.effect(
-    "Unknown error does NOT leak the raw exception message to the client",
-    () =>
-      Effect.gen(function* () {
-        const exit = yield* failExit(
-          new Error("super secret internal stack trace detail")
-        );
-        expect(Exit.isFailure(exit)).toBe(true);
-        if (Exit.isFailure(exit)) {
-          const failure = Cause.failureOption(exit.cause);
-          expect(failure._tag).toBe("Some");
-          if (failure._tag === "Some") {
-            expect(failure.value.message).toBe("Internal Server Error");
-            expect(failure.value.message).not.toContain("secret");
-          }
+  it.effect("Unknown error does NOT leak the raw exception message to the client", () =>
+    Effect.gen(function* () {
+      const exit = yield* failExit(new Error("super secret internal stack trace detail"));
+      expect(Exit.isFailure(exit)).toBe(true);
+      if (Exit.isFailure(exit)) {
+        const failure = Cause.failureOption(exit.cause);
+        expect(failure._tag).toBe("Some");
+        if (failure._tag === "Some") {
+          expect(failure.value.message).toBe("Internal Server Error");
+          expect(failure.value.message).not.toContain("secret");
         }
-      })
+      }
+    }),
   );
 
   it.effect(
@@ -210,7 +197,7 @@ describe("tagToTRPC error mapping", () => {
             expect(failure.value.message).toBe("Internal Server Error");
           }
         }
-      })
+      }),
   );
 
   it.effect("Pre-existing TRPCError passes through", () =>
@@ -218,55 +205,52 @@ describe("tagToTRPC error mapping", () => {
       const original = new TRPCError({ code: "FORBIDDEN", message: "no" });
       const exit = yield* failExit(original);
       expectTRPC(exit, "FORBIDDEN");
-    })
+    }),
   );
 
   it.effect("Success path is preserved", () =>
     Effect.gen(function* () {
       const result = yield* tagToTRPC(Effect.succeed(42));
       expect(result).toBe(42);
-    })
+    }),
   );
 });
 
 describe("runProcedure", () => {
   it("resolves the value on success", async () => {
-    const runtime = ManagedRuntime.make(
-      Layer.empty
-    ) as unknown as ManagedRuntime.ManagedRuntime<AppServices, AppError>;
+    const runtime = ManagedRuntime.make(Layer.empty) as unknown as ManagedRuntime.ManagedRuntime<
+      AppServices,
+      AppError
+    >;
     const result = await runProcedure(runtime, Effect.succeed(42));
     expect(result).toBe(42);
     await runtime.dispose();
   });
 
   it("maps a tagged-error failure to a TRPCError", async () => {
-    const runtime = ManagedRuntime.make(
-      Layer.empty
-    ) as unknown as ManagedRuntime.ManagedRuntime<AppServices, AppError>;
+    const runtime = ManagedRuntime.make(Layer.empty) as unknown as ManagedRuntime.ManagedRuntime<
+      AppServices,
+      AppError
+    >;
     await expect(
-      runProcedure(
-        runtime,
-        Effect.fail(new NotFoundError({ entity: "user", identifier: "u1" }))
-      )
+      runProcedure(runtime, Effect.fail(new NotFoundError({ entity: "user", identifier: "u1" }))),
     ).rejects.toMatchObject({ code: "NOT_FOUND" });
     await runtime.dispose();
   });
 
   it("maps a layer-construction failure (DatabaseLive fails fast with ConfigurationError when env.DATABASE is missing) to a TRPCError, not a raw rejection", async () => {
-    const brokenLayer = DatabaseLive.pipe(
-      Layer.provide(Layer.succeed(CloudflareEnv, {} as Env))
-    );
-    const runtime = ManagedRuntime.make(brokenLayer) as unknown as
-      ManagedRuntime.ManagedRuntime<AppServices, AppError>;
+    const brokenLayer = DatabaseLive.pipe(Layer.provide(Layer.succeed(CloudflareEnv, {} as Env)));
+    const runtime = ManagedRuntime.make(brokenLayer) as unknown as ManagedRuntime.ManagedRuntime<
+      AppServices,
+      AppError
+    >;
 
     const program = Effect.gen(function* () {
       yield* Database;
       return "unreachable";
     });
 
-    await expect(runProcedure(runtime, program)).rejects.toBeInstanceOf(
-      TRPCError
-    );
+    await expect(runProcedure(runtime, program)).rejects.toBeInstanceOf(TRPCError);
     await expect(runProcedure(runtime, program)).rejects.toMatchObject({
       code: "INTERNAL_SERVER_ERROR",
       message: "Configuration error for Database (DATABASE)",
@@ -279,7 +263,7 @@ describe("runProcedure span option", () => {
   const tracingRuntime = () => {
     const buffer = makeSpanBuffer();
     const runtime = ManagedRuntime.make(
-      Layer.setTracer(makeOtlpTracer(buffer))
+      Layer.setTracer(makeOtlpTracer(buffer)),
     ) as unknown as ManagedRuntime.ManagedRuntime<AppServices, AppError>;
     return { buffer, runtime };
   };
@@ -293,7 +277,7 @@ describe("runProcedure span option", () => {
 
     expect(result).toBe(42);
     expect(buffer.spans.map((s) => s.name)).toEqual(["trpc.user.getUsers"]);
-    expect(buffer.spans[0].kind).toBe("server");
+    expect(buffer.spans[0]?.kind).toBe("server");
     await runtime.dispose();
   });
 
@@ -312,17 +296,17 @@ describe("runProcedure span option", () => {
     await runProcedure(
       runtime,
       tryQuery("widget", async () => 1),
-      { span: "trpc.user.getUsers" }
+      { span: "trpc.user.getUsers" },
     );
 
     const root = buffer.spans.find((s) => s.name === "trpc.user.getUsers");
     const child = buffer.spans.find((s) => s.name === "db.query widget");
     expect(root).toBeDefined();
     expect(child).toBeDefined();
-    expect(child!.traceId).toBe(root!.traceId);
-    expect(
-      Option.isSome(child!.parent) ? child!.parent.value.spanId : undefined
-    ).toBe(root!.spanId);
+    expect(child?.traceId).toBe(root?.traceId);
+    expect(child && Option.isSome(child.parent) ? child.parent.value.spanId : undefined).toBe(
+      root?.spanId,
+    );
     await runtime.dispose();
   });
 
@@ -330,11 +314,9 @@ describe("runProcedure span option", () => {
     const { buffer, runtime } = tracingRuntime();
 
     await expect(
-      runProcedure(
-        runtime,
-        Effect.fail(new NotFoundError({ entity: "user", identifier: "u1" })),
-        { span: "trpc.user.getUser" }
-      )
+      runProcedure(runtime, Effect.fail(new NotFoundError({ entity: "user", identifier: "u1" })), {
+        span: "trpc.user.getUser",
+      }),
     ).rejects.toMatchObject({ code: "NOT_FOUND" });
 
     expect(buffer.spans.map((s) => s.name)).toEqual(["trpc.user.getUser"]);

@@ -42,8 +42,9 @@ function stub(reply: (args: string[]) => Partial<GhResult>, files: Record<string
       return { code: 0, stdout: "", stderr: "", ...reply(args) };
     },
     readFile: (p) => {
-      if (!(p in files)) throw new Error("ENOENT");
-      return files[p];
+      const text = files[p];
+      if (text === undefined) throw new Error("ENOENT");
+      return text;
     },
     readyLabel: HARNESS_DEFAULTS.tracker.readyLabel,
   };
@@ -75,9 +76,9 @@ describe("tracker view", () => {
       state: "OPEN",
       labels: ["feature", "ui"],
       updatedAt: issue.updatedAt,
-      comments: [{ id: "IC_1", author: "sean", body: "hi", url: issue.comments[0].url }],
+      comments: [{ id: "IC_1", author: "sean", body: "hi", url: issue.comments[0]?.url }],
     });
-    expect(calls[0].slice(0, 3)).toEqual(["issue", "view", "12"]);
+    expect(calls[0]?.slice(0, 3)).toEqual(["issue", "view", "12"]);
   });
 
   it("a URL ref passes -R owner/repo: otherwise gh reads the wrong repository", async () => {
@@ -132,8 +133,7 @@ describe("tracker create", () => {
 });
 
 describe("tracker edit", () => {
-  const reply = (updatedAt: string) => (args: string[]) =>
-    args[1] === "view" ? { stdout: JSON.stringify({ url: issue.url, updatedAt }) } : {};
+  const reply = (updatedAt: string) => (args: string[]) => (args[1] === "view" ? { stdout: JSON.stringify({ url: issue.url, updatedAt }) } : {});
 
   it("writes the body and reports the new updatedAt", async () => {
     const { deps, calls } = stub(reply("2026-10-24T11:00:00Z"));
@@ -154,8 +154,7 @@ describe("tracker edit", () => {
   const guarded = (opts: { updatedAt?: string; edits?: object[] } = {}) => {
     return stub((args) => {
       if (args[0] === "api" && args[1] === "user") return { stdout: "sean\n" };
-      if (args[0] === "api" && args[1] === "graphql")
-        return { stdout: JSON.stringify({ data: { node: { userContentEdits: { nodes: opts.edits ?? [] } } } }) };
+      if (args[0] === "api" && args[1] === "graphql") return { stdout: JSON.stringify({ data: { node: { userContentEdits: { nodes: opts.edits ?? [] } } } }) };
       if (args[1] === "view") {
         const f = args[args.indexOf("--json") + 1];
         if (f === "id") return { stdout: JSON.stringify({ id: "I_node" }) };
@@ -237,7 +236,7 @@ describe("tracker upsert-comment", () => {
   const marker = "<!-- plan-feature:record -->";
   const url = "https://github.com/acme/saas/issues/12";
   const args = ["upsert-comment", "12", "--marker", "record", "--body-file", "b.md"];
-  const line = (o: object) => JSON.stringify(o) + "\n";
+  const line = (o: object) => `${JSON.stringify(o)}\n`;
   const reply = (comments: string, patch?: Partial<GhResult>) => (a: string[]) => {
     if (a[0] === "repo") return { stdout: "acme/saas\n" };
     if (a[0] === "api" && a[1] === "user") return { stdout: "sean\n" };
@@ -250,7 +249,7 @@ describe("tracker upsert-comment", () => {
     const { deps, calls } = stub(reply(line({ id: 1, html_url: "u", body: "unrelated", author: "sean" })));
     const o = await run(args, deps);
     expect(o.out).toEqual({ id: "77", url: `${url}#issuecomment-77`, action: "created" });
-    const post = calls.find((c) => c.includes("POST"))!;
+    const post = calls.find((c) => c.includes("POST"));
     expect(post).toContain("repos/acme/saas/issues/12/comments");
     expect(post).toContain(`body=${marker}\nbody text`);
   });
@@ -281,9 +280,7 @@ describe("tracker upsert-comment", () => {
   });
 
   it("a PATCH refused with 403 falls back to a new comment: the update must not abort the run", async () => {
-    const { deps } = stub(
-      reply(line({ id: 55, html_url: "u", body: marker, author: "sean" }), { code: 1, stderr: "gh: Forbidden (HTTP 403)" }),
-    );
+    const { deps } = stub(reply(line({ id: 55, html_url: "u", body: marker, author: "sean" }), { code: 1, stderr: "gh: Forbidden (HTTP 403)" }));
     const o = await run(args, deps);
     expect(o.out).toEqual({ id: "77", url: `${url}#issuecomment-77`, action: "created", superseded: ["55"] });
   });
@@ -331,6 +328,6 @@ describe("tracker backends and usage", () => {
   it("every error carries error, code and help: the workflow prints help to the user verbatim", async () => {
     const { deps } = stub(() => ({ code: 1, stderr: "HTTP 404" }));
     const o = await run(["view", "1"], deps);
-    expect(Object.keys(o.err!).sort()).toEqual(["code", "error", "help"]);
+    expect(Object.keys(o.err ?? {}).sort()).toEqual(["code", "error", "help"]);
   });
 });

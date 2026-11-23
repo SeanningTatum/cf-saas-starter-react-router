@@ -20,7 +20,7 @@ import { configChecksum, HARNESS_ROOT, loadHarnessConfig, loadHarnessConfigFromD
 import { CONFIG_FILE_NAME } from "./harness-config-constants";
 import { parseLedger, type LedgerCall } from "./run-telemetry";
 
-export interface AgentOpts {
+interface AgentOpts {
   label?: string;
   phase?: string;
   schema?: unknown;
@@ -46,13 +46,13 @@ export interface AgentCall {
 
 /** What an answer function sees: the call, and how many calls this rule has answered before it. */
 export type AnswerInput = Omit<AgentCall, "cached" | "result"> & { nth: number };
-export type Answer = unknown | ((call: AnswerInput) => unknown);
+type Answer = unknown | ((call: AnswerInput) => unknown);
 /** A string matches the whole label; a RegExp tests the label; a function sees the call. */
-export type Matcher = string | RegExp | ((call: Omit<AnswerInput, "nth">) => boolean);
+type Matcher = string | RegExp | ((call: Omit<AnswerInput, "nth">) => boolean);
 /** `[matcher, answer]`. The first rule that matches answers. Answer `null` is an agent that died. */
 export type AnswerRule = [Matcher, Answer];
 
-export interface WorkflowMeta {
+interface WorkflowMeta {
   name: string;
   description: string;
   whenToUse?: string;
@@ -105,8 +105,7 @@ type Schema = {
   enum?: unknown[];
 };
 
-const typeOf = (v: unknown): string =>
-  v === null ? "null" : Array.isArray(v) ? "array" : Number.isInteger(v) ? "integer" : typeof v;
+const typeOf = (v: unknown): string => (v === null ? "null" : Array.isArray(v) ? "array" : Number.isInteger(v) ? "integer" : typeof v);
 
 /** The JSON Schema keywords the workflows use: type, properties, required, additionalProperties, items, enum. */
 export function schemaErrors(schema: unknown, value: unknown, path = "$"): string[] {
@@ -131,7 +130,10 @@ export function schemaErrors(schema: unknown, value: unknown, path = "$"): strin
       else if (s.additionalProperties && typeof s.additionalProperties === "object") errors.push(...schemaErrors(s.additionalProperties, v, `${path}.${k}`));
     }
   }
-  if (Array.isArray(value) && s.items) value.forEach((v, i) => errors.push(...schemaErrors(s.items, v, `${path}[${i}]`)));
+  if (Array.isArray(value) && s.items)
+    value.forEach((v, i) => {
+      errors.push(...schemaErrors(s.items, v, `${path}[${i}]`));
+    });
   return errors;
 }
 
@@ -221,8 +223,8 @@ export async function dryRun(name: string, options: DryRunOptions): Promise<DryR
           let prev: unknown = item;
           for (const stage of stages) prev = await stage(prev, item, i);
           return prev;
-        })
-      )
+        }),
+      ),
     );
   const phase = (title: string) => {
     currentPhase = title;
@@ -246,7 +248,15 @@ export async function dryRun(name: string, options: DryRunOptions): Promise<DryR
   // JSON line. Diff two trace files to prove an edit to a workflow changed no prompt.
   const traceFile = process.env.WORKFLOW_DRY_RUN_TRACE;
   if (traceFile) {
-    const trace = { name, args: options.args, calls: calls.map(({ prompt, opts, cached, result: r }) => ({ prompt, opts, cached, result: r })), logs, phases, result, threw: thrown ? String(thrown) : null };
+    const trace = {
+      name,
+      args: options.args,
+      calls: calls.map(({ prompt, opts, cached, result: r }) => ({ prompt, opts, cached, result: r })),
+      logs,
+      phases,
+      result,
+      threw: thrown ? String(thrown) : null,
+    };
     appendFileSync(traceFile, `${JSON.stringify(trace)}\n`);
   }
   if (problems.length) {

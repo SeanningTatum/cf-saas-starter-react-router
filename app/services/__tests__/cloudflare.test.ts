@@ -8,10 +8,6 @@ describe("CloudflareEnvLive", () => {
     Effect.gen(function* () {
       const env = yield* CloudflareEnv;
       expect(env.BETTER_AUTH_SECRET).toBe("test-secret");
-    }).pipe(
-      Effect.provide(
-        CloudflareEnvLive({ BETTER_AUTH_SECRET: "test-secret" } as Env)
-      )
-    )
+    }).pipe(Effect.provide(CloudflareEnvLive({ BETTER_AUTH_SECRET: "test-secret" } as Env))),
   );
 });

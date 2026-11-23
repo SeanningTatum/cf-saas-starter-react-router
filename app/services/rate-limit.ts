@@ -22,7 +22,7 @@ export class RateLimiter extends Context.Tag("app/RateLimiter")<
 const bindingOf = (env: Env, rule: RateLimitRule) => {
   const field = RATE_LIMIT_BINDINGS[rule];
   return Effect.fromNullable<RateLimit | undefined>(env[field]).pipe(
-    Effect.mapError(() => new ConfigurationError({ service: RATE_LIMITER_SERVICE, field }))
+    Effect.mapError(() => new ConfigurationError({ service: RATE_LIMITER_SERVICE, field })),
   );
 };
 
@@ -32,14 +32,19 @@ const allowed = (env: Env, rule: RateLimitRule, key: string) =>
     const outcome = yield* Effect.tryPromise({
       try: () => binding.limit({ key }),
       catch: (cause) => new ExternalServiceError({ service: RATE_LIMITER_SERVICE, cause }),
-    }).pipe(Effect.withSpan(RATE_LIMIT_CHECK_SPAN, { kind: "client", attributes: { "rate_limit.rule": rule } }));
+    }).pipe(
+      Effect.withSpan(RATE_LIMIT_CHECK_SPAN, {
+        kind: "client",
+        attributes: { "rate_limit.rule": rule },
+      }),
+    );
     return outcome.success;
   });
 
 const failOpen = (rule: RateLimitRule) => (fault: ConfigurationError | ExternalServiceError) =>
   Effect.logError(RATE_LIMITER_FAULT_MESSAGE, fault).pipe(
     Effect.annotateLogs({ rule }),
-    Effect.as(true)
+    Effect.as(true),
   );
 
 export const RateLimiterLive: Layer.Layer<RateLimiter, never, CloudflareEnv> = Layer.effect(
@@ -54,8 +59,10 @@ export const RateLimiterLive: Layer.Layer<RateLimiter, never, CloudflareEnv> = L
         Effect.flatMap((pass) =>
           pass
             ? Effect.void
-            : Effect.fail(new RateLimitError({ rule, retryAfterSeconds: RATE_LIMIT_PERIOD_SECONDS }))
-        )
+            : Effect.fail(
+                new RateLimitError({ rule, retryAfterSeconds: RATE_LIMIT_PERIOD_SECONDS }),
+              ),
+        ),
       ),
-  }))
+  })),
 );

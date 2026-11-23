@@ -119,7 +119,11 @@ const finish = (out: Out): Outcome => ({ code: out.failed ? 1 : 0, stdout: out.s
 // ---------------------------------------------------------------- small helpers
 
 const squash = (s: string) => s.replace(/\s+/g, " ").trim();
-const firstLine = (s: string) => s.split("\n").find((l) => l.trim())?.trim() ?? "";
+const firstLine = (s: string) =>
+  s
+    .split("\n")
+    .find((l) => l.trim())
+    ?.trim() ?? "";
 
 // ---------------------------------------------------------------- static check
 
@@ -239,9 +243,7 @@ interface ResolvedEnv {
 function resolveReviewer(raw: string, repo: Repo, deps: Deps): Read<Reviewer> {
   if (raw === "@owner") {
     if (repo.owner.type !== "User")
-      return configError(
-        `"@owner" cannot be a reviewer because ${repo.owner.login} is an organisation; list a user or team in ${CONFIG_PATH}`,
-      );
+      return configError(`"@owner" cannot be a reviewer because ${repo.owner.login} is an organisation; list a user or team in ${CONFIG_PATH}`);
     return good({ label: raw, type: "User", id: repo.owner.id });
   }
   const isTeam = raw.includes("/");
@@ -325,9 +327,7 @@ function branchPolicyActions(decl: ResolvedEnv, policies: Policy[], path: string
     ...decl.branches
       .filter((b) => !liveNames.includes(b))
       .map((b): Action => ({ method: "POST", path: `${path}/deployment-branch-policies`, body: { name: b, type: "branch" } })),
-    ...policies
-      .filter((p) => !decl.branches.includes(p.name))
-      .map((p): Action => ({ method: "DELETE", path: `${path}/deployment-branch-policies/${p.id}` })),
+    ...policies.filter((p) => !decl.branches.includes(p.name)).map((p): Action => ({ method: "DELETE", path: `${path}/deployment-branch-policies/${p.id}` })),
   ];
 }
 
@@ -367,10 +367,8 @@ function planEnv(e: LiveEnvironment, path: string): Plan {
   d.cmp("deployment_branches", sorted(decl.branches), sorted(policies.map((p) => p.name)));
   const branchActions = branchPolicyActions(decl, policies, path);
 
-  if (bare)
-    return { findings: [{ level: "missing", text: `environment "${name}"`, adminOnly: true }], actions: [put, ...branchActions], applied: false };
-  if (!d.lines.length)
-    return { findings: [{ level: "ok", text: `environment "${name}" matches ${CONFIG_PATH}` }], actions: [], applied: true };
+  if (bare) return { findings: [{ level: "missing", text: `environment "${name}"`, adminOnly: true }], actions: [put, ...branchActions], applied: false };
+  if (!d.lines.length) return { findings: [{ level: "ok", text: `environment "${name}" matches ${CONFIG_PATH}` }], actions: [], applied: true };
   return {
     findings: d.lines.map((text) => ({ level: "drift" as const, text })),
     actions: [...(protectionDrift ? [put] : []), ...branchActions],
@@ -383,8 +381,7 @@ function planEnv(e: LiveEnvironment, path: string): Plan {
 function adminHint(method: string, path: string, stderr: string): string {
   const status = /HTTP (\d{3})/.exec(stderr)?.[1];
   if (status === "403" || status === "404") return "; the token needs admin rights on the repo";
-  if (status === "422" && method === "PUT" && path.includes("/environments/"))
-    return "; required reviewers on a private repo need a paid GitHub plan";
+  if (status === "422" && method === "PUT" && path.includes("/environments/")) return "; required reviewers on a private repo need a paid GitHub plan";
   return "";
 }
 
@@ -456,8 +453,7 @@ export function run(argv: string[], deps: Deps = defaultDeps): Outcome {
     for (const f of plans.flatMap((p) => p.findings)) {
       if (f.level === "drift" && f.softWhenFresh && !anyApplied) out.line("notice", `${f.text}; run: ${APPLY_CMD}`);
       else if (f.level !== "missing") out.line(f.level, f.text);
-      else if (anyApplied && f.adminOnly && !repo.value.admin)
-        out.line("notice", `${f.text} shows no protection to this token; only an admin can check it`);
+      else if (anyApplied && f.adminOnly && !repo.value.admin) out.line("notice", `${f.text} shows no protection to this token; only an admin can check it`);
       else if (anyApplied) out.line("drift", `${f.text} is not applied but other rules are; run: ${APPLY_CMD}`);
       else out.line("notice", `${f.text} is not applied; run: ${APPLY_CMD}`);
     }

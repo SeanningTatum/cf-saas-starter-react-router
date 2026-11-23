@@ -16,11 +16,11 @@ function getLocalD1DB() {
       }))
       .sort((a, b) => b.mtime.getTime() - a.mtime.getTime());
 
-    if (files.length === 0) {
+    const latestFile = files[0];
+    if (!latestFile) {
       throw new Error(`.sqlite file not found in ${basePath}`);
     }
 
-    const latestFile = files[0];
     console.log(`Using latest D1 database: ${latestFile.path}`);
     return latestFile.fullPath;
   } catch (err) {

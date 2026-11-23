@@ -1,12 +1,7 @@
 import { TRPCError } from "@trpc/server";
 import { Schema } from "effect";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
-import {
-  createCallerFactory,
-  createTRPCRouter,
-  protectedProcedure,
-  type Context,
-} from "@/trpc";
+import { createCallerFactory, createTRPCRouter, protectedProcedure, type Context } from "@/trpc";
 import { appRouter } from "@/trpc/router";
 import type { AppRuntime } from "@/runtime";
 import { startRealApp, type AppCaller, type RealApp } from "./real-d1";
@@ -45,7 +40,7 @@ const runtime = new Proxy(
   {
     get: (_, key) => () =>
       Promise.reject(new Error(`runtime.${String(key)} reached by a refused call`)),
-  }
+  },
 ) as unknown as AppRuntime;
 
 const contextAs = (user: { id: string; role: "admin" | "user" } | null) =>
@@ -59,8 +54,9 @@ const callAt = (caller: unknown, path: string, input?: unknown): Promise<unknown
   const procedure = path
     .split(".")
     .reduce<unknown>(
-      (node, key) => (node === null || node === undefined ? undefined : Reflect.get(Object(node), key)),
-      caller
+      (node, key) =>
+        node === null || node === undefined ? undefined : Reflect.get(Object(node), key),
+      caller,
     );
   return typeof procedure === "function"
     ? Promise.resolve(procedure(input))
@@ -70,39 +66,38 @@ const callAt = (caller: unknown, path: string, input?: unknown): Promise<unknown
 const call = (role: "admin" | "user" | null, path: string) =>
   callAt(
     createCallerFactory(appRouter)(contextAs(role === null ? null : { id: "u1", role })),
-    path
+    path,
   );
 
 const outcomeOf = (call: Promise<unknown>): Promise<string> =>
   call.then(
     () => "ok",
-    (e: unknown) => (e instanceof TRPCError ? e.code : `not a TRPCError: ${String(e)}`)
+    (e: unknown) => (e instanceof TRPCError ? e.code : `not a TRPCError: ${String(e)}`),
   );
 
 const expectOtherUsersRowRefused = async <C>(
   path: string,
   makeInput: (other: C) => Promise<unknown>,
-  callers: { me: C; other: C }
+  callers: { me: C; other: C },
 ) => {
   const input = await makeInput(callers.other);
-  expect(["FORBIDDEN", "NOT_FOUND"], `${path} with another user's row, as a user who does not own it`).toContain(
-    await outcomeOf(callAt(callers.me, path, input))
-  );
+  expect(
+    ["FORBIDDEN", "NOT_FOUND"],
+    `${path} with another user's row, as a user who does not own it`,
+  ).toContain(await outcomeOf(callAt(callers.me, path, input)));
   expect(
     await outcomeOf(callAt(callers.other, path, input)),
-    `${path} with the same input, as the row's owner`
+    `${path} with the same input, as the row's owner`,
   ).toBe("ok");
 };
 
 const REAL_CASES = Object.entries(OWNERSHIP).flatMap(([path, entry]) =>
-  entry === "takes no id" ? [] : [{ path, makeInput: entry }]
+  entry === "takes no id" ? [] : [{ path, makeInput: entry }],
 );
 
 describe("procedure auth levels (a new procedure fails here until it is listed with its level; the auth middleware runs before input parsing and the handler, so a refused call never reaches the runtime, which fails loudly to prove it)", () => {
   it("lists every procedure in the router, and nothing else, so none is added without a level and a removed one (the old user.deleteUser) cannot return unnoticed", () => {
-    expect(Object.keys(appRouter._def.procedures).sort()).toEqual(
-      Object.keys(LEVELS).sort()
-    );
+    expect(Object.keys(appRouter._def.procedures).sort()).toEqual(Object.keys(LEVELS).sort());
   });
 
   it("has no user-level procedure that deletes users, so deleting an account by id stays admin-only at admin.deleteUser (the original hole)", () => {
@@ -113,50 +108,63 @@ describe("procedure auth levels (a new procedure fails here until it is listed w
     expect(Object.keys(appRouter._def.procedures)).not.toContain("user.getUsers");
   });
 
-  it.each(Object.keys(LEVELS))("%s refuses an anonymous caller, so no procedure becomes public by moving to publicProcedure", async (path) => {
-    await expect(call(null, path)).rejects.toMatchObject({ code: "UNAUTHORIZED" });
-  });
+  it.each(Object.keys(LEVELS))(
+    "%s refuses an anonymous caller, so no procedure becomes public by moving to publicProcedure",
+    async (path) => {
+      await expect(call(null, path)).rejects.toMatchObject({ code: "UNAUTHORIZED" });
+    },
+  );
 
   it.each(Object.keys(LEVELS).filter((path) => LEVELS[path] === "admin"))(
     "%s refuses a signed-in non-admin, so no admin procedure becomes protected by moving to protectedProcedure",
     async (path) => {
       await expect(call("user", path)).rejects.toMatchObject({ code: "FORBIDDEN" });
-    }
+    },
   );
 });
 
 describe("ownership of protected procedures (the hole: a signed-in user acting on another user's row by sending its id; see docs/features/trpc-procedure-levels.md)", () => {
   it("lists every protected procedure, and nothing else, so none ships before someone decides whether it takes another user's id", () => {
     expect(Object.keys(OWNERSHIP).sort()).toEqual(
-      Object.keys(LEVELS).filter((path) => LEVELS[path] === "protected").sort()
+      Object.keys(LEVELS)
+        .filter((path) => LEVELS[path] === "protected")
+        .sort(),
     );
   });
 
-  describe.skipIf(REAL_CASES.length === 0)("on real D1 (skipped while there is no case, so workerd does not start)", { timeout: 60_000 }, () => {
-    let app: RealApp;
-    let callers: { me: AppCaller; other: AppCaller };
+  describe.skipIf(REAL_CASES.length === 0)(
+    "on real D1 (skipped while there is no case, so workerd does not start)",
+    { timeout: 60_000 },
+    () => {
+      let app: RealApp;
+      let callers: { me: AppCaller; other: AppCaller };
 
-    beforeAll(async () => {
-      app = await startRealApp();
-      const me = await app.signUp("me@ownership.test");
-      const other = await app.signUp("other@ownership.test");
-      callers = { me: await app.callerFor(me.headers), other: await app.callerFor(other.headers) };
-    }, 60_000);
+      beforeAll(async () => {
+        app = await startRealApp();
+        const me = await app.signUp("me@ownership.test");
+        const other = await app.signUp("other@ownership.test");
+        callers = {
+          me: await app.callerFor(me.headers),
+          other: await app.callerFor(other.headers),
+        };
+      }, 60_000);
 
-    afterAll(async () => {
-      await app?.dispose();
-    });
+      afterAll(async () => {
+        await app?.dispose();
+      });
 
-    it.each(REAL_CASES)("$path refuses a signed-in user another user's row", ({ path, makeInput }) =>
-      expectOtherUsersRowRefused(path, makeInput, callers)
-    );
-  });
+      it.each(REAL_CASES)(
+        "$path refuses a signed-in user another user's row",
+        ({ path, makeInput }) => expectOtherUsersRowRefused(path, makeInput, callers),
+      );
+    },
+  );
 });
 
 describe("the ownership assertion itself (run on a router built to pass or fail it, since with no real case nothing else shows it can fail)", () => {
   let owner = "";
   const NoteIdInput = Schema.standardSchemaV1(
-    Schema.Struct({ noteId: Schema.String.pipe(Schema.maxLength(64)) })
+    Schema.Struct({ noteId: Schema.String.pipe(Schema.maxLength(64)) }),
   );
 
   const fixtureRouter = createTRPCRouter({
@@ -173,7 +181,8 @@ describe("the ownership assertion itself (run on a router built to pass or fail 
     }),
   });
 
-  const callerAs = (id: string) => createCallerFactory(fixtureRouter)(contextAs({ id, role: "user" }));
+  const callerAs = (id: string) =>
+    createCallerFactory(fixtureRouter)(contextAs({ id, role: "user" }));
   const callers = { me: callerAs("alice"), other: callerAs("bob") };
   const othersNote = async (other: typeof callers.other) => ({
     noteId: (await other.notes.create()).id,
@@ -185,7 +194,7 @@ describe("the ownership assertion itself (run on a router built to pass or fail 
 
   it("fails a procedure that hands one user another user's row", async () => {
     await expect(expectOtherUsersRowRefused("notes.getLeaky", othersNote, callers)).rejects.toThrow(
-      "notes.getLeaky with another user's row, as a user who does not own it"
+      "notes.getLeaky with another user's row, as a user who does not own it",
     );
   });
 });

@@ -24,9 +24,7 @@ interface ExportedSpan {
 const env = { OTEL_EXPORTER_OTLP_ENDPOINT: "http://collector:4318" };
 
 const exportedSpans = (bodies: string[]): ExportedSpan[] =>
-  bodies.flatMap(
-    (body) => JSON.parse(body).resourceSpans[0].scopeSpans[0].spans as ExportedSpan[]
-  );
+  bodies.flatMap((body) => JSON.parse(body).resourceSpans[0].scopeSpans[0].spans as ExportedSpan[]);
 
 const runOneRequest = async (request: RequestContext) => {
   const bodies: string[] = [];
@@ -74,13 +72,12 @@ describe("observabilityLayer, the exact layer makeAppRuntime puts under the app 
         { key: "request.id", value: { stringValue: "req-1" } },
         { key: "http.request.method", value: { stringValue: "GET" } },
         { key: "url.path", value: { stringValue: "/dashboard" } },
-      ])
+      ]),
     );
     expect(child.attributes).toEqual(
-      expect.arrayContaining([{ key: "request.id", value: { stringValue: "req-1" } }])
+      expect.arrayContaining([{ key: "request.id", value: { stringValue: "req-1" } }]),
     );
   });
-
 });
 
 describe("observabilityLayer, logs outside any span", () => {
@@ -91,10 +88,10 @@ describe("observabilityLayer, logs outside any span", () => {
       sampled: true,
     };
     const runtime = ManagedRuntime.make(
-      observabilityLayer({}, request({ requestId: parent.traceId, parent }))
+      observabilityLayer({}, request({ requestId: parent.traceId, parent })),
     );
     const { refs, span } = await runtime.runPromise(
-      Effect.all({ refs: Effect.getFiberRefs, span: Effect.currentSpan })
+      Effect.all({ refs: Effect.getFiberRefs, span: Effect.currentSpan }),
     );
     await runtime.dispose();
 
@@ -124,7 +121,9 @@ describe("makeAppRuntime rate limiter", () => {
     } as unknown as Env;
     const runtime = makeAppRuntime(env, { dev: false });
 
-    await runtime.runPromise(Effect.flatMap(RateLimiter, (limiter) => limiter.check("signIn", "198.51.100.200")));
+    await runtime.runPromise(
+      Effect.flatMap(RateLimiter, (limiter) => limiter.check("signIn", "198.51.100.200")),
+    );
     await runtime.dispose();
 
     expect(keys).toEqual(["198.51.100.200"]);
@@ -142,7 +141,7 @@ describe("makeAppRuntime", () => {
       } as Env,
       { dev: true, requestOrigin: "https://app.example.com" },
       request(),
-      reporter
+      reporter,
     );
 
     const resolved = await runtime.runPromise(ErrorReporter);

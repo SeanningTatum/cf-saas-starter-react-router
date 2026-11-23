@@ -1,5 +1,6 @@
 export const TURNSTILE_ORIGIN = "https://challenges.cloudflare.com";
-export const TURNSTILE_SCRIPT_URL = "https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit";
+export const TURNSTILE_SCRIPT_URL =
+  "https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit";
 export const TURNSTILE_SITEVERIFY_URL = "https://challenges.cloudflare.com/turnstile/v0/siteverify";
 export const TURNSTILE_PROVIDER = "cloudflare-turnstile";
 export const TURNSTILE_TOKEN_HEADER = "x-captcha-response";
@@ -38,6 +39,9 @@ export const TURNSTILE_DEFAULT_LANGUAGE = "auto";
 export const TURNSTILE_LANGUAGES: Readonly<Record<string, string>> = { en: "en", zh: "zh-cn" };
 export const TURNSTILE_LOCALE_SEPARATOR = "-";
 
-export const TURNSTILE_FAILED_CODES: ReadonlyArray<string> = ["MISSING_RESPONSE", "VERIFICATION_FAILED"];
+export const TURNSTILE_FAILED_CODES: ReadonlyArray<string> = [
+  "MISSING_RESPONSE",
+  "VERIFICATION_FAILED",
+];
 export const TURNSTILE_UNAVAILABLE_CODE = "UNKNOWN_ERROR";
 export const TURNSTILE_UNAVAILABLE_STATUS = 500;

@@ -1,12 +1,6 @@
-import { cn } from "@/lib/utils"
-import { Button } from "@/components/ui/button"
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card"
+import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Form,
   FormControl,
@@ -14,63 +8,65 @@ import {
   FormItem,
   FormLabel,
   FormMessage,
-} from "@/components/ui/form"
-import { Input } from "@/components/ui/input"
-import { Link, useNavigate } from "react-router"
-import { authClient } from "@/auth/client"
-import { effectResolver } from "@/lib/effect-form"
-import { useForm } from "react-hook-form"
-import { LoginSchema, type LoginInput } from "@/lib/schemas/auth"
-import { useState } from "react"
-import { useTranslation } from "react-i18next"
-import { useHydrated } from "@/hooks/use-hydrated"
-import { ProblemBox, TurnstileWidget, useTurnstile } from "@/components/turnstile-widget"
-import { captchaFetchOptions } from "@/lib/turnstile-client"
-import { authRefusalFor } from "@/lib/auth-errors"
-import { ROUTES } from "@/lib/constants/routes"
+} from "@/components/ui/form";
+import { Input } from "@/components/ui/input";
+import { Link, useNavigate } from "react-router";
+import { authClient } from "@/auth/client";
+import { effectTsResolver } from "@hookform/resolvers/effect-ts";
+import { useForm } from "react-hook-form";
+import { LoginSchema, type LoginInput } from "@/lib/schemas/auth";
+import { useState } from "react";
+import { useTranslation } from "react-i18next";
+import { useHydrated } from "@/hooks/use-hydrated";
+import { ProblemBox, TurnstileWidget, useTurnstile } from "@/components/turnstile-widget";
+import { captchaFetchOptions } from "@/lib/turnstile-client";
+import { authRefusalFor } from "@/lib/auth-errors";
+import { ROUTES } from "@/lib/constants/routes";
 
 interface LoginFormProps extends React.ComponentProps<"div"> {
-  turnstileSiteKey?: string | null
+  turnstileSiteKey?: string | null;
 }
 
 export function LoginForm({ className, turnstileSiteKey = null, ...props }: LoginFormProps) {
-  const navigate = useNavigate()
-  const [authError, setAuthError] = useState<string>()
-  const { t } = useTranslation("auth")
-  const hydrated = useHydrated()
-  const turnstile = useTurnstile(turnstileSiteKey)
-  const awaitingCheck = turnstile.enabled && turnstile.token === null
+  const navigate = useNavigate();
+  const [authError, setAuthError] = useState<string>();
+  const { t } = useTranslation("auth");
+  const hydrated = useHydrated();
+  const turnstile = useTurnstile(turnstileSiteKey);
+  const awaitingCheck = turnstile.enabled && turnstile.token === null;
 
   const form = useForm<LoginInput>({
-    resolver: effectResolver(LoginSchema),
+    resolver: effectTsResolver(LoginSchema),
     defaultValues: {
       email: "",
       password: "",
     },
-  })
+  });
 
   async function onSubmit(data: LoginInput) {
-    setAuthError(undefined)
-    if (awaitingCheck) return
+    setAuthError(undefined);
+    if (awaitingCheck) return;
 
     try {
       const result = await authClient.signIn.email({
         email: data.email,
         password: data.password,
         fetchOptions: captchaFetchOptions(turnstile.token),
-      })
+      });
 
       if (result.error) {
-        turnstile.reset()
-        const refusal = authRefusalFor(result.error, turnstile.enabled)
-        setAuthError(refusal ? t(`refusal.${refusal}`) : result.error.message || t("login.error_invalid"))
-        return
+        turnstile.reset();
+        const refusal = authRefusalFor(result.error, turnstile.enabled);
+        setAuthError(
+          refusal ? t(`refusal.${refusal}`) : result.error.message || t("login.error_invalid"),
+        );
+        return;
       }
 
-      navigate(ROUTES.dashboard)
+      navigate(ROUTES.dashboard);
     } catch (err) {
-      turnstile.reset()
-      setAuthError(err instanceof Error ? err.message : t("login.error_failed"))
+      turnstile.reset();
+      setAuthError(err instanceof Error ? err.message : t("login.error_failed"));
     }
   }
 
@@ -83,7 +79,12 @@ export function LoginForm({ className, turnstileSiteKey = null, ...props }: Logi
         </CardHeader>
         <CardContent className="px-4 sm:px-6">
           <Form {...form}>
-            <form method="post" onSubmit={form.handleSubmit(onSubmit)} className="space-y-6" data-testid="login-form">
+            <form
+              method="post"
+              onSubmit={form.handleSubmit(onSubmit)}
+              className="space-y-6"
+              data-testid="login-form"
+            >
               <FormField
                 control={form.control}
                 name="email"
@@ -112,6 +113,7 @@ export function LoginForm({ className, turnstileSiteKey = null, ...props }: Logi
                     <div className="flex items-center">
                       <FormLabel>{t("login.password_label")}</FormLabel>
                       <a
+                        // biome-ignore lint/a11y/useValidAnchor: placeholder, no reset-password route exists yet to point at
                         href="#"
                         className="ml-auto inline-block text-sm underline-offset-4 hover:underline"
                       >
@@ -158,5 +160,5 @@ export function LoginForm({ className, turnstileSiteKey = null, ...props }: Logi
         </CardContent>
       </Card>
     </div>
-  )
+  );
 }

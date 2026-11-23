@@ -11,7 +11,7 @@ export const GetRecentSignupsCountInput = Schema.Struct({
     Schema.int(),
     Schema.greaterThanOrEqualTo(1),
     Schema.lessThanOrEqualTo(365),
-    Schema.optionalWith({ default: () => 7 })
+    Schema.optionalWith({ default: () => 7 }),
   ),
 });
 export type GetRecentSignupsCountInput = typeof GetRecentSignupsCountInput.Type;
@@ -30,9 +30,3 @@ export const UserStats = Schema.Struct({
   verificationRate: Schema.Number,
 });
 export type UserStats = typeof UserStats.Type;
-
-export const DistributionPoint = Schema.Struct({
-  name: Schema.String,
-  value: Schema.Number,
-});
-export type DistributionPoint = typeof DistributionPoint.Type;

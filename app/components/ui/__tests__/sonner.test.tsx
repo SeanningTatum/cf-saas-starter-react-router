@@ -5,7 +5,7 @@ import { I18nextProvider } from "react-i18next";
 import type { ToasterProps } from "sonner";
 import enCommon from "@/locales/en/common.json";
 import zhCommon from "@/locales/zh/common.json";
-import { defaultNS } from "@/i18n/i18n";
+import { defaultNS } from "@/lib/constants/i18n";
 import { Toaster } from "../sonner";
 
 function renderToaster(lng: "en" | "zh", props: ToasterProps = {}): string {
@@ -24,7 +24,7 @@ function renderToaster(lng: "en" | "zh", props: ToasterProps = {}): string {
   return renderToStaticMarkup(
     <I18nextProvider i18n={i18n}>
       <Toaster {...props} />
-    </I18nextProvider>
+    </I18nextProvider>,
   );
 }
 
@@ -39,8 +39,8 @@ describe("Toaster", () => {
   });
 
   it("lets a caller's containerAriaLabel beat the translated default (catches moving {...props} before the primitive's own props)", () => {
-    expect(
-      renderToaster("en", { containerAriaLabel: zhCommon.notifications_region })
-    ).toContain(`aria-label="${zhCommon.notifications_region} `);
+    expect(renderToaster("en", { containerAriaLabel: zhCommon.notifications_region })).toContain(
+      `aria-label="${zhCommon.notifications_region} `,
+    );
   });
 });

@@ -13,7 +13,8 @@ const firstCode = (text: string): string | undefined => {
   return firstRuntimeStatement(ast)?.getText(ast);
 };
 
-const HELPER = 'import { Effect } from "effect";\nimport type { User } from "@/models/user";\n\nexport type Id = string;\nexport function helper(user: User) { return Effect.succeed(user); }\n';
+const HELPER =
+  'import { Effect } from "effect";\nimport type { User } from "@/models/user";\n\nexport type Id = string;\nexport function helper(user: User) { return Effect.succeed(user); }\n';
 const TSX_TEST = 'import { expect, it } from "vitest";\nimport { helper } from "../helper";\nit("wraps", () => { expect(helper).toBeDefined(); });\n';
 
 describe("firstRuntimeStatement", () => {
@@ -22,7 +23,9 @@ describe("firstRuntimeStatement", () => {
     ['export { a } from "./a";\nexport * from "./b";\nexport type { C } from "./c";'],
     ["type A = { a: number };\nexport type B = A[];"],
     ["interface A { a: number }\nexport interface B extends A { b: string }"],
-    ['declare const a: number;\ndeclare module "x" { const b: number; }\ndeclare global { interface Window { c: number } }\nexport declare function d(): void;'],
+    [
+      'declare const a: number;\ndeclare module "x" { const b: number; }\ndeclare global { interface Window { c: number } }\nexport declare function d(): void;',
+    ],
     [";\n"],
   ])("finds no code in a file of imports, re-exports, types, interfaces and declare statements: %s", (text) => {
     expect(firstCode(text)).toBeUndefined();

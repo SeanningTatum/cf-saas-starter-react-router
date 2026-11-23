@@ -11,5 +11,5 @@ export const isBanActive = (user: BanFields, now: Date): boolean =>
 
 export const activeSession = <S extends { readonly user: BanFields }>(
   session: S | null,
-  now: Date
+  now: Date,
 ): S | null => (session && isBanActive(session.user, now) ? null : session);

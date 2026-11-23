@@ -4,9 +4,7 @@ export interface BaseDeps {
   pullRequestTarget(): string | undefined;
 }
 
-export type Base =
-  | { found: true; sha: string; from: string }
-  | { found: false; required: boolean; tried: string[] };
+export type Base = { found: true; sha: string; from: string } | { found: false; required: boolean; tried: string[] };
 
 interface Candidate {
   from: string;

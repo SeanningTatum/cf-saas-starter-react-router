@@ -2,6 +2,7 @@ import { fileURLToPath } from "node:url";
 import { expect } from "vitest";
 import { configLine, dryRun, RUN_OK, type AgentCall, type AnswerInput, type AnswerRule, type DryRunResult } from "../../lib/workflow-dry-run";
 
+// biome-ignore lint/suspicious/noExplicitAny: workflow results are untyped JSON that the tests read by path
 export type Obj = Record<string, any>;
 
 export const ROOT = "/work/acme";
@@ -17,7 +18,9 @@ export const byLabel = (r: DryRunResult, label: string) => r.calls.filter((c) =>
 export const one = (r: DryRunResult, label: string): AgentCall => {
   const found = byLabel(r, label);
   expect(found, `exactly one call labelled ${label}`).toHaveLength(1);
-  return found[0];
+  const [call] = found;
+  if (!call) throw new Error(`no call labelled ${label}`);
+  return call;
 };
 export const indexOf = (r: DryRunResult, label: string) => r.calls.findIndex((c) => c.label === label);
 
@@ -28,14 +31,14 @@ export function fenceIn(prompt: string): string[] {
   for (const line of after.split("\n").slice(1)) {
     const m = /^\s+· (\S+)$/.exec(line);
     if (!m) break;
-    out.push(m[1]);
+    out.push(m[1] ?? "");
   }
   return out;
 }
-export const fileIn = (fence: string) => (fence.endsWith("/**") ? `${fence.slice(0, -2)}index.tsx` : fence);
-export const laneDid = (c: AnswerInput, files = [fileIn(fenceIn(c.prompt)[0])]) => ({ files, report: `${c.label}: done`, cwd: ROOT });
+const fileIn = (fence: string) => (fence.endsWith("/**") ? `${fence.slice(0, -2)}index.tsx` : fence);
+export const laneDid = (c: AnswerInput, files = [fileIn(fenceIn(c.prompt)[0] ?? "")]) => ({ files, report: `${c.label}: done`, cwd: ROOT });
 
-export const idOf = (label: string) => Number(label.split(":")[1]);
+const idOf = (label: string) => Number(label.split(":")[1]);
 export const tokensFor = (id: number, stage: "drawn" | "tasted") => ({
   name: `Comp ${id} ${stage}`,
   light: { primary: `oklch(0.5 0.2 ${id * 90})` },
@@ -44,8 +47,8 @@ export const tokensFor = (id: number, stage: "drawn" | "tasted") => ({
 });
 
 export const CONFIG_OK = { ok: true, reason: "", config_json: configLine() };
-export const PREFLIGHT = { ok: true, reason: "", branch: "feat/brand-init", root: ROOT };
-export const QUESTIONS = [
+const PREFLIGHT = { ok: true, reason: "", branch: "feat/brand-init", root: ROOT };
+const QUESTIONS = [
   { id: "users", question: "Who uses it?", draft: "Small teams", confident: false },
   { id: "tone", question: "What tone?", draft: "Calm and exact", confident: true },
 ];

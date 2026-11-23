@@ -25,11 +25,11 @@ You build user-visible surfaces. The caller's prompt sets the task, the file fen
 
 - Semantic tokens only (`bg-card`, `text-muted-foreground`). No raw hex, no arbitrary Tailwind values. A new colour is a new token in `app/app.css`, in `:root`, `.dark` and `@theme inline`.
 - `cn()` for conditional classes. No template strings.
-- Forms: ShadCN `<Form>` + React Hook Form + Effect Schema through `effectResolver` (`app/lib/effect-form.ts`). `<FormField>`/`<FormMessage>` on every field.
-- Copy lives in `app/locales/en` and `app/locales/zh`, same keys in both. A new namespace goes in `app/i18n/i18n.ts` and `app/i18n/i18n.d.ts`. `<title>`/`<meta>` cannot call `useTranslation`; translate them in the loader.
+- Forms: ShadCN `<Form>` + React Hook Form + Effect Schema through `effectTsResolver` from `@hookform/resolvers/effect-ts`. `<FormField>`/`<FormMessage>` on every field.
+- Copy lives in `app/locales/en` and `app/locales/zh`, same keys in both. A new namespace goes in `app/i18n/i18n.d.ts`. `<title>`/`<meta>` cannot call `useTranslation`; translate them in the loader.
 - `data-testid` on interactive elements, kebab-case, prefixed by surface.
 - Both themes must work.
-- Icons from `@tabler/icons-react` or `lucide-react`. No emoji.
+- No emoji.
 - Reuse `FeatureCard` (`app/components/feature-card.tsx`), `getInitials` (`app/lib/utils.ts`), `formatDate` (`app/lib/date-utils.ts`).
 - Keep every export, prop and variant name, and every default prop value, unless the caller's direction demands a change. List each change you make.
 - Contrast 4.5:1 for all text, including text on an accent fill. Measure it.

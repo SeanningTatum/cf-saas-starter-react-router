@@ -18,8 +18,7 @@ const callingTest = () =>
   'import { expect, it } from "vitest";\nimport { appRouter } from "@/trpc/router";\n' +
   'it("lists", async () => { expect(await call(appRouter).notes.list()).toEqual([]); });\n';
 
-const repoWith = (files: Record<string, string>) =>
-  memoryRepo({ "app/trpc/routes/notes.ts": notesRouter(), [ROUTER_FILE]: appRouter(), ...files });
+const repoWith = (files: Record<string, string>) => memoryRepo({ "app/trpc/routes/notes.ts": notesRouter(), [ROUTER_FILE]: appRouter(), ...files });
 
 describe("procedureNames", () => {
   it("reads the keys of the router object, shorthand keys included, and no name from a plain helper", () => {
@@ -31,7 +30,7 @@ describe("procedureNames", () => {
   it("reads a procedure exported on its own by the builder its chain starts from, whatever the chain's length", () => {
     const source = sourceOf(
       'export const dbHealth = adminProcedure.input(Shape).query(() => 1);\nexport const label = "adminProcedure";\n',
-      "app/trpc/routes/health.ts"
+      "app/trpc/routes/health.ts",
     );
 
     expect(procedureNames(source).standalone).toEqual(["dbHealth"]);

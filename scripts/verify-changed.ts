@@ -62,8 +62,7 @@ if (import.meta.main) {
     env: process.env,
     git,
     pullRequestTarget: () =>
-      runCommand("gh", ["pr", "view", "--json", "baseRefName", "--jq", ".baseRefName"], { cwd: root, env: process.env, timeout: GH_TIMEOUT_MS }) ||
-      undefined,
+      runCommand("gh", ["pr", "view", "--json", "baseRefName", "--jq", ".baseRefName"], { cwd: root, env: process.env, timeout: GH_TIMEOUT_MS }) || undefined,
     out: (line) => console.log(line),
     err: (line) => console.error(line),
   });

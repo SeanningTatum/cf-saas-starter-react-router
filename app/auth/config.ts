@@ -55,8 +55,8 @@ const httpURL = (value: string, field: AuthConfigField): Effect.Effect<URL, Conf
   }).pipe(
     Effect.filterOrFail(
       (url) => url.protocol === "https:" || url.protocol === "http:",
-      () => configError(field)
-    )
+      () => configError(field),
+    ),
   );
 
 const isBareOrigin = (url: URL) => new URL(url.origin).href === url.href;
@@ -64,13 +64,14 @@ const isBareOrigin = (url: URL) => new URL(url.origin).href === url.href;
 const exactOrigin = (entry: string) =>
   httpURL(entry, "AUTH_TRUSTED_ORIGINS").pipe(
     Effect.filterOrFail(isBareOrigin, () => configError("AUTH_TRUSTED_ORIGINS")),
-    Effect.map((url) => url.origin)
+    Effect.map((url) => url.origin),
   );
 
 const wildcardOrigin = (entry: string, dev: boolean): Effect.Effect<string, ConfigurationError> => {
   const { origin, scheme, domain } = WILDCARD_ORIGIN_PATTERN.exec(entry)?.groups ?? {};
   const schemeAllowed = dev || scheme?.toLowerCase() === "https";
-  const ownsDomain = domain !== undefined && !SHARED_HOSTING_SUFFIXES.includes(domain.toLowerCase());
+  const ownsDomain =
+    domain !== undefined && !SHARED_HOSTING_SUFFIXES.includes(domain.toLowerCase());
   return origin !== undefined && schemeAllowed && ownsDomain
     ? Effect.succeed(origin.toLowerCase())
     : Effect.fail(configError("AUTH_TRUSTED_ORIGINS"));
@@ -78,14 +79,14 @@ const wildcardOrigin = (entry: string, dev: boolean): Effect.Effect<string, Conf
 
 const parseTrustedOrigins = (
   raw: string | undefined,
-  dev: boolean
+  dev: boolean,
 ): Effect.Effect<ReadonlyArray<string>, ConfigurationError> =>
   Effect.forEach(
     (raw ?? "")
       .split(TRUSTED_ORIGINS_SEPARATOR)
       .map((entry) => entry.trim())
       .filter((entry) => entry !== ""),
-    (entry) => (entry.includes("*") ? wildcardOrigin(entry, dev) : exactOrigin(entry))
+    (entry) => (entry.includes("*") ? wildcardOrigin(entry, dev) : exactOrigin(entry)),
   );
 
 const configuredBaseURL = (env: AuthConfigSource) => {
@@ -101,7 +102,7 @@ const keepsCookiesSecure = (url: URL) =>
 const deployedBaseURL = (env: AuthConfigSource) =>
   configuredBaseURL(env).pipe(
     Effect.filterOrFail(keepsCookiesSecure, () => configError("BETTER_AUTH_URL")),
-    Effect.map((url) => url.origin)
+    Effect.map((url) => url.origin),
   );
 
 const devBaseURL = (env: AuthConfigSource, options: AuthRuntimeOptions) => {
@@ -129,7 +130,7 @@ const devSecret = (env: AuthConfigSource) => Effect.succeed(setSecret(env) ?? DE
 const deployableKey = (
   value: string,
   field: "TURNSTILE_SITE_KEY" | "TURNSTILE_SECRET_KEY",
-  dev: boolean
+  dev: boolean,
 ): Effect.Effect<string, ConfigurationError> =>
   dev || !TURNSTILE_PUBLISHED_TEST_KEYS.includes(value)
     ? Effect.succeed(value)
@@ -137,7 +138,7 @@ const deployableKey = (
 
 const resolveTurnstile = (
   env: AuthConfigSource,
-  dev: boolean
+  dev: boolean,
 ): Effect.Effect<TurnstileKeys | null, ConfigurationError> => {
   const siteKey = nonBlank(env.TURNSTILE_SITE_KEY);
   const secretKey = nonBlank(env.TURNSTILE_SECRET_KEY);
@@ -154,7 +155,7 @@ const resolveTurnstile = (
 
 export const resolveAuthConfig = (
   env: AuthConfigSource,
-  options: AuthRuntimeOptions
+  options: AuthRuntimeOptions,
 ): Effect.Effect<AuthConfig, ConfigurationError> =>
   Effect.gen(function* () {
     const baseURL = yield* options.dev ? devBaseURL(env, options) : deployedBaseURL(env);

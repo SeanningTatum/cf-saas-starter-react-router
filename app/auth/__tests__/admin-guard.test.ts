@@ -21,7 +21,7 @@ describe("readAdminTarget", () => {
         _tag: "User",
         userId: "u1",
       });
-    }
+    },
   );
 
   it("reads a number id the way Better Auth coerces it, so a number cannot slip past the guard", () => {
@@ -48,14 +48,14 @@ describe("readAdminTarget", () => {
         sessionToken: "tok",
       });
       expect(readAdminTarget(path, {})).toEqual({ _tag: "Unreadable" });
-    }
+    },
   );
 
   it.each([...ADMIN_PATHS_REVIEWED_AS_OPEN, "/sign-in/email", "/get-session"].map((p) => [p]))(
     "%s: is left to Better Auth's own checks",
     (path) => {
       expect(readAdminTarget(path, { userId: "u1" })).toEqual({ _tag: "Open" });
-    }
+    },
   );
 });
 
@@ -65,7 +65,7 @@ describe("isAdminPath", () => {
       ...ADMIN_PATHS_TARGETING_USER_ID,
       ...ADMIN_PATHS_TARGETING_SESSION_TOKEN,
       ...ADMIN_PATHS_REVIEWED_AS_OPEN,
-    ].map((p) => [p])
+    ].map((p) => [p]),
   )("%s: counts as an admin path, so a banned admin is refused there too", (path) => {
     expect(isAdminPath(path)).toBe(true);
   });
@@ -74,7 +74,7 @@ describe("isAdminPath", () => {
     "%s: is not an admin path, so the guard skips the session read",
     (path) => {
       expect(isAdminPath(path)).toBe(false);
-    }
+    },
   );
 });
 
@@ -83,8 +83,8 @@ describe("withEmailVerificationReset", () => {
     expect(
       withEmailVerificationReset(
         { userId: "u1", data: { email: "new@example.test", emailVerified: true, name: "N" } },
-        "old@example.test"
-      )
+        "old@example.test",
+      ),
     ).toEqual({ data: { email: "new@example.test", emailVerified: false, name: "N" } });
   });
 
@@ -92,8 +92,8 @@ describe("withEmailVerificationReset", () => {
     expect(
       withEmailVerificationReset(
         { data: { email: "same@example.test", emailVerified: true } },
-        "same@example.test"
-      )
+        "same@example.test",
+      ),
     ).toBeNull();
   });
 
@@ -105,7 +105,7 @@ describe("withEmailVerificationReset", () => {
     "leaves a body it cannot read to the endpoint's own check: %s",
     (body) => {
       expect(withEmailVerificationReset(body, "a@example.test")).toBeNull();
-    }
+    },
   );
 });
 

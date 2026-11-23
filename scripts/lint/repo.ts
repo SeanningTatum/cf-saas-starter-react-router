@@ -17,8 +17,7 @@ function withSources(disk: Disk): Repo {
     source(path) {
       if (parsed.has(path)) return parsed.get(path);
       const text = disk.read(path);
-      const source =
-        text === undefined ? undefined : { path, text, ast: ts.createSourceFile(path, text, ts.ScriptTarget.Latest, true) };
+      const source = text === undefined ? undefined : { path, text, ast: ts.createSourceFile(path, text, ts.ScriptTarget.Latest, true) };
       parsed.set(path, source);
       return source;
     },

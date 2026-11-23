@@ -123,7 +123,11 @@ export interface Deps {
   log: (line: string) => void;
 }
 
-const firstLine = (text: string) => text.split("\n").find((l) => l.trim() !== "")?.trim();
+const firstLine = (text: string) =>
+  text
+    .split("\n")
+    .find((l) => l.trim() !== "")
+    ?.trim();
 
 function blockingLine(f: Finding, expired: AllowEntry[]): string {
   const lapsed = expired.find((e) => sameAdvisory(f, e));

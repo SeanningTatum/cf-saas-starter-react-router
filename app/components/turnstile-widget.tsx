@@ -1,17 +1,17 @@
-import { useCallback, useEffect, useId, useReducer, useRef, useState } from "react"
-import { useTheme } from "next-themes"
-import { useTranslation } from "react-i18next"
+import { useCallback, useEffect, useId, useReducer, useRef, useState } from "react";
+import { useTheme } from "next-themes";
+import { useTranslation } from "react-i18next";
 import {
   IconAlertCircle,
   IconClockExclamation,
   IconLoader2,
   IconRefresh,
   type TablerIcon,
-} from "@tabler/icons-react"
+} from "@tabler/icons-react";
 
-import { Button } from "@/components/ui/button"
-import { cn } from "@/lib/utils"
-import { TURNSTILE_SCRIPT_SELECTOR, TURNSTILE_SCRIPT_URL } from "@/lib/constants/turnstile"
+import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
+import { TURNSTILE_SCRIPT_SELECTOR, TURNSTILE_SCRIPT_URL } from "@/lib/constants/turnstile";
 import {
   initialTurnstileState,
   loadTurnstileScript,
@@ -23,14 +23,14 @@ import {
   type TurnstileHandle,
   type TurnstileScriptHost,
   type TurnstileState,
-} from "@/lib/turnstile-client"
+} from "@/lib/turnstile-client";
 
 export interface TurnstileController {
-  readonly enabled: boolean
-  readonly state: TurnstileState
-  readonly token: string | null
-  readonly containerRef: React.RefObject<HTMLDivElement | null>
-  readonly reset: () => void
+  readonly enabled: boolean;
+  readonly state: TurnstileState;
+  readonly token: string | null;
+  readonly containerRef: React.RefObject<HTMLDivElement | null>;
+  readonly reset: () => void;
 }
 
 function browserScriptHost(): TurnstileScriptHost {
@@ -38,40 +38,41 @@ function browserScriptHost(): TurnstileScriptHost {
     api: () => window.turnstile,
     findScript: () => document.querySelector<HTMLScriptElement>(TURNSTILE_SCRIPT_SELECTOR),
     addScript: () => {
-      const script = document.createElement("script")
-      script.src = TURNSTILE_SCRIPT_URL
-      script.async = true
-      script.defer = true
-      document.head.appendChild(script)
-      return script
+      const script = document.createElement("script");
+      script.src = TURNSTILE_SCRIPT_URL;
+      script.async = true;
+      script.defer = true;
+      document.head.appendChild(script);
+      return script;
     },
     setTimer: (run, ms) => {
-      const timer = window.setTimeout(run, ms)
-      return () => window.clearTimeout(timer)
+      const timer = window.setTimeout(run, ms);
+      return () => window.clearTimeout(timer);
     },
-  }
+  };
 }
 
 export function useTurnstile(siteKey: string | null): TurnstileController {
-  const [state, dispatch] = useReducer(turnstileReducer, undefined, initialTurnstileState)
-  const [attempt, setAttempt] = useState(0)
-  const containerRef = useRef<HTMLDivElement>(null)
-  const handleRef = useRef<TurnstileHandle | null>(null)
-  const { resolvedTheme } = useTheme()
-  const { i18n } = useTranslation()
-  const theme = turnstileTheme(resolvedTheme)
-  const language = turnstileLanguage(i18n.language)
+  const [state, dispatch] = useReducer(turnstileReducer, undefined, initialTurnstileState);
+  const [attempt, setAttempt] = useState(0);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const handleRef = useRef<TurnstileHandle | null>(null);
+  const { resolvedTheme } = useTheme();
+  const { i18n } = useTranslation();
+  const theme = turnstileTheme(resolvedTheme);
+  const language = turnstileLanguage(i18n.language);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: attempt is not read inside; bumping it is how reset() asks for a fresh widget
   useEffect(() => {
-    const container = containerRef.current
-    if (siteKey === null || theme === null || container === null) return
-    let active = true
-    dispatch({ type: "load" })
+    const container = containerRef.current;
+    if (siteKey === null || theme === null || container === null) return;
+    let active = true;
+    dispatch({ type: "load" });
     void loadTurnstileScript(browserScriptHost()).then((api) => {
-      if (!active) return
+      if (!active) return;
       if (api === null) {
-        dispatch({ type: "failed", failure: "script" })
-        return
+        dispatch({ type: "failed", failure: "script" });
+        return;
       }
       const handle = mountTurnstile(api, container, {
         sitekey: siteKey,
@@ -79,35 +80,35 @@ export function useTurnstile(siteKey: string | null): TurnstileController {
         language,
         size: widgetSizeFor(container.getBoundingClientRect().width),
         dispatch,
-      })
-      handleRef.current = handle
-      dispatch(handle === null ? { type: "failed", failure: "challenge" } : { type: "rendered" })
-    })
+      });
+      handleRef.current = handle;
+      dispatch(handle === null ? { type: "failed", failure: "challenge" } : { type: "rendered" });
+    });
     return () => {
-      active = false
-      handleRef.current?.remove()
-      handleRef.current = null
-    }
-  }, [siteKey, theme, language, attempt])
+      active = false;
+      handleRef.current?.remove();
+      handleRef.current = null;
+    };
+  }, [siteKey, theme, language, attempt]);
 
   const reset = useCallback(() => {
     if (handleRef.current?.reset()) {
-      dispatch({ type: "reset" })
-      return
+      dispatch({ type: "reset" });
+      return;
     }
-    dispatch({ type: "load" })
-    setAttempt((count) => count + 1)
-  }, [])
+    dispatch({ type: "load" });
+    setAttempt((count) => count + 1);
+  }, []);
 
-  return { enabled: siteKey !== null, state, token: state.token, containerRef, reset }
+  return { enabled: siteKey !== null, state, token: state.token, containerRef, reset };
 }
 
-type ProblemTone = "error" | "notice"
+type ProblemTone = "error" | "notice";
 
 interface ProblemBoxProps extends React.ComponentProps<"div"> {
-  tone?: ProblemTone
-  icon?: TablerIcon
-  action?: React.ReactNode
+  tone?: ProblemTone;
+  icon?: TablerIcon;
+  action?: React.ReactNode;
 }
 
 export function ProblemBox({
@@ -123,49 +124,53 @@ export function ProblemBox({
       className={cn(
         "flex flex-col items-start gap-2 rounded-md border px-3 py-2.5 text-sm text-foreground",
         tone === "error" ? "border-destructive/30 bg-destructive/10" : "border-border bg-muted/40",
-        className
+        className,
       )}
       {...props}
     >
       <div className="flex items-start gap-2">
         <Icon
           aria-hidden="true"
-          className={cn("mt-0.5 size-4 shrink-0", tone === "error" ? "text-destructive" : "text-muted-foreground")}
+          className={cn(
+            "mt-0.5 size-4 shrink-0",
+            tone === "error" ? "text-destructive" : "text-muted-foreground",
+          )}
         />
         {children}
       </div>
       {action}
     </div>
-  )
+  );
 }
 
 interface TurnstileWidgetProps {
-  turnstile: TurnstileController
-  className?: string
+  turnstile: TurnstileController;
+  className?: string;
 }
 
 export function TurnstileWidget({ turnstile, className }: TurnstileWidgetProps) {
-  const { t } = useTranslation("auth")
-  const statusId = useId()
-  const groupRef = useRef<HTMLDivElement>(null)
-  const { state, containerRef, reset } = turnstile
-  const scriptFailed = state.failure === "script"
-  const showProblem = state.status === "error" || state.status === "expired"
-  const showPlaceholder = state.status === "loading" && !state.rendered
+  const { t } = useTranslation("auth");
+  const statusId = useId();
+  const groupRef = useRef<HTMLDivElement>(null);
+  const { state, containerRef, reset } = turnstile;
+  const scriptFailed = state.failure === "script";
+  const showProblem = state.status === "error" || state.status === "expired";
+  const showPlaceholder = state.status === "loading" && !state.rendered;
 
   const announcement = {
     loading: state.rechecking ? t("turnstile.rechecking") : t("turnstile.loading"),
     ready: t("turnstile.passed"),
     expired: t("turnstile.expired"),
     error: scriptFailed ? t("turnstile.script_failed") : t("turnstile.challenge_failed"),
-  }[state.status]
+  }[state.status];
 
   const retry = () => {
-    reset()
-    groupRef.current?.focus()
-  }
+    reset();
+    groupRef.current?.focus();
+  };
 
   return (
+    // biome-ignore lint/a11y/useSemanticElements: a fieldset brings form styles to a widget that is not a form group; its own UI change
     <div
       ref={groupRef}
       tabIndex={-1}
@@ -176,7 +181,7 @@ export function TurnstileWidget({ turnstile, className }: TurnstileWidgetProps) 
       data-turnstile-state={state.status}
       className={cn(
         "@container rounded-md outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
-        className
+        className,
       )}
     >
       <div className="grid min-h-35 pointer-coarse:min-h-38 @min-[300px]:min-h-26 @min-[300px]:pointer-coarse:min-h-29">
@@ -184,7 +189,7 @@ export function TurnstileWidget({ turnstile, className }: TurnstileWidgetProps) 
           ref={containerRef}
           className={cn(
             "col-start-1 row-start-1 flex justify-center self-center leading-0 @min-[300px]:block",
-            showProblem && "invisible"
+            showProblem && "invisible",
           )}
         />
         {showPlaceholder && (
@@ -224,5 +229,5 @@ export function TurnstileWidget({ turnstile, className }: TurnstileWidgetProps) 
         {announcement}
       </p>
     </div>
-  )
+  );
 }

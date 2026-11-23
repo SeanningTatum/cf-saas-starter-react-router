@@ -2,15 +2,14 @@ import { Either, Schema } from "effect";
 import { BASELINE_PATH, LOWER_BASELINE_COMMAND } from "./constants";
 import type { Finding, RunResult } from "./types";
 
-const PerRule = <A>(value: Schema.Schema<A>) =>
-  Schema.Record({ key: Schema.String, value: Schema.Record({ key: Schema.String, value }) });
+const PerRule = <A>(value: Schema.Schema<A>) => Schema.Record({ key: Schema.String, value: Schema.Record({ key: Schema.String, value }) });
 
 const BaselineFile = Schema.parseJson(
   Schema.Struct({
     suppressions: Schema.Int.pipe(Schema.nonNegative()),
     boundaries: PerRule(Schema.NonEmptyTrimmedString),
     debt: PerRule(Schema.Int.pipe(Schema.positive())),
-  })
+  }),
 );
 
 export type Baseline = typeof BaselineFile.Type;
@@ -33,7 +32,8 @@ export const BASELINE_CHECKS = {
   },
   base: {
     id: "baseline-base",
-    matches: "The baseline to compare with cannot be read: in CI the base branch is missing, or the base holds the linter with no baseline, or its baseline does not parse.",
+    matches:
+      "The baseline to compare with cannot be read: in CI the base branch is missing, or the base holds the linter with no baseline, or its baseline does not parse.",
     fix: "set `fetch-depth: 0` on the checkout step of the job that runs this gate, so git has the base branch",
   },
 } as const;
@@ -50,14 +50,12 @@ export const baselineFinding = (check: Check, message: string, fix: string = che
 
 export function parseBaseline(text: string): Either.Either<Baseline, Finding> {
   return Either.mapLeft(Schema.decodeUnknownEither(BaselineFile, { onExcessProperty: "error" })(text), (error) =>
-    baselineFinding(BASELINE_CHECKS.shape, `the baseline does not parse: ${error.message.split("\n").join(" ")}`)
+    baselineFinding(BASELINE_CHECKS.shape, `the baseline does not parse: ${error.message.split("\n").join(" ")}`),
   );
 }
 
 const entries = <A>(perRule: Record<string, Record<string, A>>): Array<[rule: string, file: string, value: A]> =>
-  Object.entries(perRule).flatMap(([rule, files]) =>
-    Object.entries(files).map(([file, value]): [string, string, A] => [rule, file, value])
-  );
+  Object.entries(perRule).flatMap(([rule, files]) => Object.entries(files).map(([file, value]): [string, string, A] => [rule, file, value]));
 
 const key = (rule: string, file: string): string => `${rule}\n${file}`;
 
@@ -75,23 +73,14 @@ function ruleKeyFindings(baseline: Baseline, ruleIds: readonly string[]): Findin
   const listed = new Set([...Object.keys(baseline.debt), ...Object.keys(baseline.boundaries)]);
   const unknown = [...listed]
     .filter((rule) => !known.has(rule))
-    .map((rule) =>
-      baselineFinding(BASELINE_CHECKS.shape, `the baseline lists the rule "${rule}", and no rule has that id`, `delete the "${rule}" key`)
-    );
+    .map((rule) => baselineFinding(BASELINE_CHECKS.shape, `the baseline lists the rule "${rule}", and no rule has that id`, `delete the "${rule}" key`));
   const missing = ruleIds
     .filter((rule) => !(rule in baseline.debt))
-    .map((rule) =>
-      baselineFinding(BASELINE_CHECKS.shape, `the rule "${rule}" has no key under \`debt\``, `add \`"${rule}": {}\` under \`debt\``)
-    );
+    .map((rule) => baselineFinding(BASELINE_CHECKS.shape, `the rule "${rule}" has no key under \`debt\``, `add \`"${rule}": {}\` under \`debt\``));
   return [...unknown, ...missing];
 }
 
-export function applyBaseline(
-  baseline: Baseline,
-  run: RunResult,
-  ruleIds: readonly string[],
-  only?: ReadonlySet<string>
-): Finding[] {
+export function applyBaseline(baseline: Baseline, run: RunResult, ruleIds: readonly string[], only?: ReadonlySet<string>): Finding[] {
   const counts = weighByRuleAndFile(run);
   const inScope = (file: string): boolean => !only || only.has(file);
 
@@ -119,18 +108,12 @@ export function applyBaseline(
       baselineFinding(
         BASELINE_CHECKS.stale,
         `boundaries["${rule}"]["${file}"] excuses a file where the rule finds nothing`,
-        `run \`${LOWER_BASELINE_COMMAND}\`, or by hand delete "${file}" from \`boundaries["${rule}"]\``
-      )
+        `run \`${LOWER_BASELINE_COMMAND}\`, or by hand delete "${file}" from \`boundaries["${rule}"]\``,
+      ),
     );
 
   if (only) return [...kept, ...staleDebt, ...staleBoundaries];
-  return [
-    ...kept,
-    ...staleDebt,
-    ...staleBoundaries,
-    ...suppressionFindings(baseline.suppressions, run.suppressions),
-    ...ruleKeyFindings(baseline, ruleIds),
-  ];
+  return [...kept, ...staleDebt, ...staleBoundaries, ...suppressionFindings(baseline.suppressions, run.suppressions), ...ruleKeyFindings(baseline, ruleIds)];
 }
 
 function suppressionFindings(allowed: number, held: number): Finding[] {
@@ -139,7 +122,7 @@ function suppressionFindings(allowed: number, held: number): Finding[] {
       baselineFinding(
         BASELINE_CHECKS.grew,
         `the code holds ${held} suppression comment(s), and the baseline allows ${allowed}`,
-        "delete the new suppression comment and fix the code under it"
+        "delete the new suppression comment and fix the code under it",
       ),
     ];
   }
@@ -148,7 +131,7 @@ function suppressionFindings(allowed: number, held: number): Finding[] {
       baselineFinding(
         BASELINE_CHECKS.stale,
         `\`suppressions\` is ${allowed}, and the code holds ${held}`,
-        `run \`${LOWER_BASELINE_COMMAND}\`, or by hand set \`suppressions\` to ${held}`
+        `run \`${LOWER_BASELINE_COMMAND}\`, or by hand set \`suppressions\` to ${held}`,
       ),
     ];
   }
@@ -163,8 +146,8 @@ export function compareWithBase(base: Baseline, head: Baseline): Finding[] {
       baselineFinding(
         BASELINE_CHECKS.grew,
         `debt["${rule}"]["${file}"] is ${count}, and the branch this merges into has ${base.debt[rule]?.[file] ?? 0}`,
-        `fix the new "${rule}" finding in ${file} and put the count back; run \`bun run lint:house ${file}\` to see it`
-      )
+        `fix the new "${rule}" finding in ${file} and put the count back; run \`bun run lint:house ${file}\` to see it`,
+      ),
     );
   const grewBoundaries = entries(head.boundaries)
     .filter(([rule, file]) => !isNewRule(rule) && !base.boundaries[rule]?.[file])
@@ -172,8 +155,8 @@ export function compareWithBase(base: Baseline, head: Baseline): Finding[] {
       baselineFinding(
         BASELINE_CHECKS.grew,
         `boundaries["${rule}"]["${file}"] is new on this branch`,
-        `take the entry back out and make ${file} pass "${rule}"; a new boundary is the owner's call, in its own pull request`
-      )
+        `take the entry back out and make ${file} pass "${rule}"; a new boundary is the owner's call, in its own pull request`,
+      ),
     );
   const grewSuppressions =
     head.suppressions > base.suppressions
@@ -181,7 +164,7 @@ export function compareWithBase(base: Baseline, head: Baseline): Finding[] {
           baselineFinding(
             BASELINE_CHECKS.grew,
             `\`suppressions\` is ${head.suppressions}, and the branch this merges into has ${base.suppressions}`,
-            "delete the new suppression comment, fix the code under it, and put the total back"
+            "delete the new suppression comment, fix the code under it, and put the total back",
           ),
         ]
       : [];
@@ -197,15 +180,15 @@ export function lowerBaseline(baseline: Baseline, run: RunResult): Baseline {
         Object.entries(files).flatMap(([file, allowed]): Array<[string, number]> => {
           const count = Math.min(allowed, counts.get(key(rule, file)) ?? 0);
           return count > 0 ? [[file, count]] : [];
-        })
+        }),
       ),
-    ])
+    ]),
   );
   const boundaries = Object.fromEntries(
     Object.entries(baseline.boundaries).map(([rule, files]) => [
       rule,
       Object.fromEntries(Object.entries(files).filter(([file]) => counts.has(key(rule, file)))),
-    ])
+    ]),
   );
   return { suppressions: Math.min(baseline.suppressions, run.suppressions), boundaries, debt };
 }

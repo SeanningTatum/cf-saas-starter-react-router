@@ -13,7 +13,9 @@ function servedPaths(entries: readonly RouteConfigEntry[], base = "/"): string[]
 }
 
 const fixedPaths = (): string[] =>
-  [...new Set(servedPaths(routeTable).map((path) => path.replace(/\/\*$/, "")))].filter((path) => !path.includes(":")).sort();
+  [...new Set(servedPaths(routeTable).map((path) => path.replace(/\/\*$/, "")))]
+    .filter((path) => !path.includes(":"))
+    .sort();
 
 describe("route constants", () => {
   it("hold every fixed path app/routes.ts serves and no path it does not, so a renamed route cannot leave a dead link behind", () => {

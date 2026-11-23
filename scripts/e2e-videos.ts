@@ -27,11 +27,27 @@ export interface Video {
   source: string;
 }
 
-interface Attachment { name: string; path?: string }
-interface Result { status: string; attachments: Attachment[] }
-interface Spec { title: string; file: string; tags?: string[]; tests: { results: Result[] }[] }
-interface Suite { specs?: Spec[]; suites?: Suite[] }
-export interface Report { suites?: Suite[] }
+interface Attachment {
+  name: string;
+  path?: string;
+}
+interface Result {
+  status: string;
+  attachments: Attachment[];
+}
+interface Spec {
+  title: string;
+  file: string;
+  tags?: string[];
+  tests: { results: Result[] }[];
+}
+interface Suite {
+  specs?: Spec[];
+  suites?: Suite[];
+}
+export interface Report {
+  suites?: Suite[];
+}
 
 export interface Deps {
   playwright: (args: string[], env: Record<string, string>) => { code: number; stdout: string; stderr: string };
@@ -69,7 +85,12 @@ export function collectVideos(report: Report): { videos: Video[]; unrecorded: Un
 
 /** "signup → dashboard, signout → login" -> "golden-signup-dashboard-signout-login.webm" */
 export function videoName(v: Pick<Video, "kind" | "title">): string {
-  const slug = v.title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 60).replace(/-+$/, "");
+  const slug = v.title
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 60)
+    .replace(/-+$/, "");
   return `${v.kind}-${slug || "test"}.webm`;
 }
 
@@ -88,7 +109,7 @@ export function run(argv: string[], deps: Deps): { code: number; out?: unknown; 
   }
 
   const { videos: found, unrecorded } = collectVideos(report);
-  if (!found.length && !unrecorded.length) return { code: 2, err: "no @golden or @error test ran; tag them: test(title, { tag: \"@golden\" }, ...)" };
+  if (!found.length && !unrecorded.length) return { code: 2, err: 'no @golden or @error test ran; tag them: test(title, { tag: "@golden" }, ...)' };
   deps.mkdir(outDir);
   // Two tests can share a title (across spec files, or after the slug is cut): number the later ones,
   // or the second copy would overwrite the first.

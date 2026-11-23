@@ -4,16 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { withoutGitVariables } from "../../install-hooks";
 
-export const GIT_IDENTITY = [
-  "-c",
-  "user.name=Test",
-  "-c",
-  "user.email=test@example.invalid",
-  "-c",
-  "commit.gpgsign=false",
-  "-c",
-  "tag.gpgsign=false",
-];
+export const GIT_IDENTITY = ["-c", "user.name=Test", "-c", "user.email=test@example.invalid", "-c", "commit.gpgsign=false", "-c", "tag.gpgsign=false"];
 
 export const NO_GLOBAL_CONFIG = { GIT_CONFIG_GLOBAL: "/dev/null", GIT_CONFIG_NOSYSTEM: "1" };
 

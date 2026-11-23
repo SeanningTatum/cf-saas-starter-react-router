@@ -38,7 +38,7 @@ describe("WILDCARD_ORIGIN_PATTERN", () => {
 
   it("takes the fixed domain after a name suffix, not the suffix itself", () => {
     expect(groupsOf("https://*-my-app-preview.my-team.workers.dev")?.domain).toBe(
-      "my-team.workers.dev"
+      "my-team.workers.dev",
     );
   });
 

@@ -80,9 +80,7 @@ export interface Deps {
   tempDir: string;
 }
 
-const Bookmark = Schema.parseJson(
-  Schema.Struct({ bookmark: Schema.String.pipe(Schema.pattern(BOOKMARK_RULE)) }),
-);
+const Bookmark = Schema.parseJson(Schema.Struct({ bookmark: Schema.String.pipe(Schema.pattern(BOOKMARK_RULE)) }));
 const decodeBookmark = Schema.decodeUnknownEither(Bookmark);
 
 export function isMigrationPending(listOutput: string): boolean {
@@ -119,22 +117,23 @@ export function objectKey(date: Date, sha: string | undefined): string {
   return `${KEY_PREFIX}/${utcStamp(date)}-${shortSha(sha)}${KEY_SUFFIX}`;
 }
 
-export const listArgv = (): string[] => [
-  ...WRANGLER_COMMAND, "d1", "migrations", "list", DATABASE_BINDING, REMOTE_FLAG,
-];
+export const listArgv = (): string[] => [...WRANGLER_COMMAND, "d1", "migrations", "list", DATABASE_BINDING, REMOTE_FLAG];
 
-export const timeTravelInfoArgv = (): string[] => [
-  ...WRANGLER_COMMAND, "d1", "time-travel", "info", DATABASE_BINDING, JSON_FLAG,
-];
+export const timeTravelInfoArgv = (): string[] => [...WRANGLER_COMMAND, "d1", "time-travel", "info", DATABASE_BINDING, JSON_FLAG];
 
-export const exportArgv = (file: string): string[] => [
-  ...WRANGLER_COMMAND, "d1", "export", DATABASE_BINDING, REMOTE_FLAG, OUTPUT_FLAG, file,
-];
+export const exportArgv = (file: string): string[] => [...WRANGLER_COMMAND, "d1", "export", DATABASE_BINDING, REMOTE_FLAG, OUTPUT_FLAG, file];
 
 export const gzipArgv = (file: string): string[] => [GZIP_COMMAND, GZIP_FORCE_FLAG, file];
 
 export const putArgv = (bucket: string, key: string, file: string): string[] => [
-  ...WRANGLER_COMMAND, "r2", "object", "put", `${bucket}/${key}`, FILE_FLAG, file, REMOTE_FLAG,
+  ...WRANGLER_COMMAND,
+  "r2",
+  "object",
+  "put",
+  `${bucket}/${key}`,
+  FILE_FLAG,
+  file,
+  REMOTE_FLAG,
 ];
 
 export const restoreCommand = (bookmark: string): string =>
@@ -158,12 +157,7 @@ function recordRestorePoint(bookmark: string, deps: Deps): void {
   ]);
 }
 
-function runStep(
-  deps: Deps,
-  step: string,
-  argv: readonly string[],
-  timeoutMs: number,
-): CommandResult | undefined {
+function runStep(deps: Deps, step: string, argv: readonly string[], timeoutMs: number): CommandResult | undefined {
   const result = deps.runCommand(argv, timeoutMs);
   if (result.timedOut) {
     deps.log(stepTimedOut(step, timeoutMs));

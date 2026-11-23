@@ -5,7 +5,7 @@ import { sourceOf } from "./fixtures";
 
 const initializersOf = (code: string): ts.Expression[] =>
   sourceOf(`const value = ${code};\n`).ast.statements.flatMap((statement) =>
-    ts.isVariableStatement(statement) ? statement.declarationList.declarations.flatMap((declaration) => declaration.initializer ?? []) : []
+    ts.isVariableStatement(statement) ? statement.declarationList.declarations.flatMap((declaration) => declaration.initializer ?? []) : [],
   );
 
 const literal = (code: string): boolean[] => initializersOf(code).map(isLiteralValue);

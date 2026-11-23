@@ -1,14 +1,21 @@
 import { expect, test, type Locator, type Page, type Response } from "@playwright/test";
 
-const reactHasClaimedNode = (node: object) => Object.keys(node).some((key) => key.startsWith("__reactProps$"));
+const reactHasClaimedNode = (node: object) =>
+  Object.keys(node).some((key) => key.startsWith("__reactProps$"));
 
 export const hydrated = (ready: Locator, timeout: number): Promise<boolean> => {
   const oneLookTimeout = 1_000;
   return expect
-    .poll(() => ready.evaluate(reactHasClaimedNode, undefined, { timeout: oneLookTimeout }).catch(() => false), {
-      timeout,
-      message: "the page never hydrated",
-    })
+    .poll(
+      () =>
+        ready
+          .evaluate(reactHasClaimedNode, undefined, { timeout: oneLookTimeout })
+          .catch(() => false),
+      {
+        timeout,
+        message: "the page never hydrated",
+      },
+    )
     .toBe(true)
     .then(
       () => true,
@@ -16,12 +23,13 @@ export const hydrated = (ready: Locator, timeout: number): Promise<boolean> => {
     );
 };
 
-const extendTheTestTimeoutBy = (extra: number) => test.info().setTimeout(test.info().timeout + extra);
+const extendTheTestTimeoutBy = (extra: number) =>
+  test.info().setTimeout(test.info().timeout + extra);
 
-const expectDocumentResponse: (response: Response | null, url: string) => asserts response is Response = (
-  response,
-  url,
-) => {
+const expectDocumentResponse: (
+  response: Response | null,
+  url: string,
+) => asserts response is Response = (response, url) => {
   expect(response, `${url}: no document response`).not.toBeNull();
 };
 
@@ -30,7 +38,8 @@ const firstLoadWait = 15_000;
 const afterReloadWait = 30_000;
 const reloadsBeforeGivingUp = 2;
 
-export const allowForAColdFirstLoad = () => extendTheTestTimeoutBy(coldNavigationAllowance + firstLoadWait);
+export const allowForAColdFirstLoad = () =>
+  extendTheTestTimeoutBy(coldNavigationAllowance + firstLoadWait);
 
 export const reloadWhileViteReoptimizesDeps = async (
   page: Page,
@@ -39,7 +48,11 @@ export const reloadWhileViteReoptimizesDeps = async (
 ): Promise<Response> => {
   let response = firstResponse;
   let wait = firstLoadWait;
-  for (let reloadsLeft = reloadsBeforeGivingUp; !(await hydrated(ready(page), wait)); reloadsLeft -= 1) {
+  for (
+    let reloadsLeft = reloadsBeforeGivingUp;
+    !(await hydrated(ready(page), wait));
+    reloadsLeft -= 1
+  ) {
     expect(reloadsLeft, `${page.url()} never hydrated`).toBeGreaterThan(0);
     extendTheTestTimeoutBy(coldNavigationAllowance + afterReloadWait);
     response = await page.reload();

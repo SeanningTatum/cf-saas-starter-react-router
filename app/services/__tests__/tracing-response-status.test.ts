@@ -27,7 +27,7 @@ describe("TracingLayer with a response status on the span", () => {
   it("exports a span that answered 500 as an error and one that answered 200 as ok, so a caught 500 still shows in the trace", async () => {
     const { bodies, fetchFn } = recordingFetch();
     const runtime = ManagedRuntime.make(
-      TracingLayer({ OTEL_EXPORTER_OTLP_ENDPOINT: "http://localhost:4318" }, fetchFn)
+      TracingLayer({ OTEL_EXPORTER_OTLP_ENDPOINT: "http://localhost:4318" }, fetchFn),
     );
     const answered = (name: string, status: number) =>
       Effect.annotateCurrentSpan(HTTP_STATUS_ATTRIBUTE, status).pipe(Effect.withSpan(name));
@@ -36,7 +36,7 @@ describe("TracingLayer with a response status on the span", () => {
     await runtime.dispose();
 
     const spans: ReadonlyArray<{ name: string; status: { code: number } }> = JSON.parse(
-      bodies[0] ?? "{}"
+      bodies[0] ?? "{}",
     ).resourceSpans[0].scopeSpans[0].spans;
     expect(Object.fromEntries(spans.map((s) => [s.name, s.status.code]))).toEqual({
       failed: 2,

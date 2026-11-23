@@ -47,13 +47,13 @@ const EFFORTS = ["low", "medium", "high"];
 /** The flat `key: value` lines between the opening `---` and the next `---`. Null when the file has no frontmatter. */
 export function parseFrontmatter(text: string): Record<string, string> | null {
   const lines = text.split("\n");
-  if (lines[0].trim() !== "---") return null;
+  if (lines[0]?.trim() !== "---") return null;
   const end = lines.findIndex((l, i) => i > 0 && l.trim() === "---");
   if (end < 0) return null;
   const out: Record<string, string> = {};
   for (const l of lines.slice(1, end)) {
     const m = /^([A-Za-z][\w-]*):\s*(.*)$/.exec(l);
-    if (m) out[m[1]] = m[2].trim().replace(/^(["'])(.*)\1$/, "$2");
+    if (m?.[1] !== undefined) out[m[1]] = (m[2] ?? "").trim().replace(/^(["'])(.*)\1$/, "$2");
   }
   return out;
 }
@@ -70,7 +70,7 @@ export function validate(files: Record<string, string>): string[] {
   const problems: string[] = [];
   for (const file of Object.keys(files).sort()) {
     const where = `${file}.md`;
-    const fm = parseFrontmatter(files[file]);
+    const fm = parseFrontmatter(files[file] ?? "");
     if (!fm) {
       problems.push(`${where}: no frontmatter (the file must start with a --- block)`);
       continue;
@@ -79,8 +79,9 @@ export function validate(files: Record<string, string>): string[] {
     else if (fm.name !== file) problems.push(`${where}: \`name\` is "${fm.name}" but the file is ${where}; they must match`);
     if (!fm.description) problems.push(`${where}: no \`description\``);
     if (!fm.tools) problems.push(`${where}: no \`tools\``);
-    if (!MODELS.includes(fm.model)) problems.push(`${where}: \`model\` is ${fm.model ? `"${fm.model}"` : "missing"}; use one of ${MODELS.join(", ")}`);
-    if (!EFFORTS.includes(fm.effort)) problems.push(`${where}: \`effort\` is ${fm.effort ? `"${fm.effort}"` : "missing"}; use one of ${EFFORTS.join(", ")}`);
+    if (!MODELS.includes(fm.model ?? "")) problems.push(`${where}: \`model\` is ${fm.model ? `"${fm.model}"` : "missing"}; use one of ${MODELS.join(", ")}`);
+    if (!EFFORTS.includes(fm.effort ?? ""))
+      problems.push(`${where}: \`effort\` is ${fm.effort ? `"${fm.effort}"` : "missing"}; use one of ${EFFORTS.join(", ")}`);
   }
   return problems;
 }
@@ -90,8 +91,14 @@ export function toAgents(files: Record<string, string>): Agent[] {
   return Object.keys(files)
     .sort()
     .map((file) => {
-      const fm = parseFrontmatter(files[file])!;
-      return { name: fm.name, description: fm.description, tools: fm.tools, model: fm.model, effort: fm.effort };
+      const fm = parseFrontmatter(files[file] ?? "") ?? {};
+      return {
+        name: fm.name ?? "",
+        description: fm.description ?? "",
+        tools: fm.tools ?? "",
+        model: fm.model ?? "",
+        effort: fm.effort ?? "",
+      };
     });
 }
 
@@ -169,7 +176,8 @@ export function run(argv: string[], root: string, deps: Deps): Outcome {
     if (want !== readme) deps.writeFile(path, want);
     return { code: 0, stdout: [`roster: wrote ${n} agents to ${README}${want === readme ? " (no change)" : ""}`], stderr: [] };
   }
-  if (want !== readme) return fail(`roster: the table in ${README} is stale (it must match the agents' frontmatter)`, `fix: run \`${WRITE_CMD}\` and commit the result`);
+  if (want !== readme)
+    return fail(`roster: the table in ${README} is stale (it must match the agents' frontmatter)`, `fix: run \`${WRITE_CMD}\` and commit the result`);
   return { code: 0, stdout: [`roster: ${n} agents valid, table in ${README} is current`], stderr: [] };
 }
 

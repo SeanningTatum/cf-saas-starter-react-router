@@ -23,7 +23,10 @@ function fakeBrowser(fail: { newContext?: boolean; saveAs?: boolean } = {}) {
     close: async () => void calls.push("browser.close"),
   };
   let slowMo = -1;
-  const launch = async (ms: number) => ((slowMo = ms), browser as unknown as Browser);
+  const launch = async (ms: number) => {
+    slowMo = ms;
+    return browser as unknown as Browser;
+  };
   return { calls, launch, slowMo: () => slowMo };
 }
 const noMkdir = () => {};

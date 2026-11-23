@@ -2,8 +2,10 @@ export const RATE_LIMIT_PERIOD_SECONDS = 60;
 export const MS_PER_SECOND = 1000;
 export const RATE_LIMIT_PERIOD_MS = RATE_LIMIT_PERIOD_SECONDS * MS_PER_SECOND;
 
-export const msLeftInRateLimitWindow = (nowMs: number, periodMs: number = RATE_LIMIT_PERIOD_MS): number =>
-  periodMs - (nowMs % periodMs);
+export const msLeftInRateLimitWindow = (
+  nowMs: number,
+  periodMs: number = RATE_LIMIT_PERIOD_MS,
+): number => periodMs - (nowMs % periodMs);
 
 export const RATE_LIMIT_BINDINGS = {
   signIn: "AUTH_SIGN_IN_LIMITER",
@@ -12,14 +14,16 @@ export const RATE_LIMIT_BINDINGS = {
   upload: "UPLOAD_LIMITER",
 } as const;
 
-export const RATE_LIMIT_REQUESTS_PER_PERIOD: Readonly<Record<keyof typeof RATE_LIMIT_BINDINGS, number>> = {
+export const RATE_LIMIT_REQUESTS_PER_PERIOD: Readonly<
+  Record<keyof typeof RATE_LIMIT_BINDINGS, number>
+> = {
   signIn: 10,
   signUp: 5,
   authApi: 60,
   upload: 20,
 };
 
-export type RateLimitBindingName =(typeof RATE_LIMIT_BINDINGS)[keyof typeof RATE_LIMIT_BINDINGS];
+export type RateLimitBindingName = (typeof RATE_LIMIT_BINDINGS)[keyof typeof RATE_LIMIT_BINDINGS];
 
 export const AUTH_API_PATH_PREFIX = "/api/auth/";
 
@@ -28,7 +32,10 @@ export const AUTH_RULE_PATH_PREFIXES = [
   { prefix: "/api/auth/sign-up/", rule: "signUp" },
 ] as const;
 
-export const TURNSTILE_GUARDED_RULES: ReadonlyArray<keyof typeof RATE_LIMIT_BINDINGS> = ["signIn", "signUp"];
+export const TURNSTILE_GUARDED_RULES: ReadonlyArray<keyof typeof RATE_LIMIT_BINDINGS> = [
+  "signIn",
+  "signUp",
+];
 
 export const UNLIMITED_METHODS: ReadonlyArray<string> = ["GET", "HEAD", "OPTIONS"];
 

@@ -12,19 +12,18 @@
   "debt": {
     "constants-home": {},
     "file-size": {
-      "app/repositories/__tests__/user.test.ts": 521,
-      "app/routes/admin/components/data-table.tsx": 786,
-      "app/routes/admin/components/user-data-table.tsx": 621,
-      "app/routes/admin/kitchen-sink.tsx": 992,
-      "app/services/__tests__/tracing.test.ts": 448,
-      "scripts/__tests__/install-hooks.test.ts": 445,
+      "app/repositories/__tests__/user.test.ts": 505,
+      "app/routes/admin/components/user-data-table.tsx": 571,
+      "app/routes/admin/kitchen-sink.tsx": 960,
+      "app/services/__tests__/tracing.test.ts": 436,
+      "scripts/__tests__/install-hooks.test.ts": 413,
       "scripts/__tests__/repo-rules.test.ts": 872,
       "scripts/__tests__/workflows/brand-init.test.ts": 504,
       "scripts/__tests__/workflows/plan-feature.test.ts": 439,
       "scripts/__tests__/workflows/ship-feature.test.ts": 621,
-      "scripts/first-time-setup.ts": 929,
+      "scripts/first-time-setup.ts": 759,
       "scripts/memory.ts": 618,
-      "scripts/repo-rules.ts": 479
+      "scripts/repo-rules.ts": 475
     },
     "no-comments": {
       ".claude/workflow-src/brand-init.js": 123,
@@ -83,7 +82,6 @@
       "app/routes/authentication/components/signup-form.tsx": 1,
       "workers/app.ts": 1
     },
-    "no-zod": {},
     "route-paths": {},
     "procedure-span": {},
     "tagged-error-mapped": {},
@@ -157,12 +155,9 @@
       "app/lib/logger.ts": 1,
       "app/routes/admin/_index.tsx": 1,
       "app/routes/admin/_layout.tsx": 1,
-      "app/routes/admin/components/data-table.tsx": 1,
       "app/routes/admin/components/user-data-table.tsx": 1,
       "app/routes/admin/layout/app-sidebar.tsx": 1,
-      "app/routes/admin/layout/nav-documents.tsx": 1,
       "app/routes/admin/layout/nav-main.tsx": 1,
-      "app/routes/admin/layout/nav-secondary.tsx": 1,
       "app/routes/admin/layout/nav-user.tsx": 1,
       "app/routes/admin/layout/site-header.tsx": 1,
       "app/routes/admin/users.tsx": 1,

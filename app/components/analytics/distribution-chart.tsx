@@ -4,13 +4,7 @@ import * as React from "react";
 import { Pie, PieChart, Cell, Bar, BarChart, XAxis, YAxis } from "recharts";
 import { useTranslation } from "react-i18next";
 
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   ChartContainer,
   ChartTooltip,
@@ -21,7 +15,7 @@ import {
 } from "@/components/ui/chart";
 import { DEFAULT_DISTRIBUTION_COLORS } from "@/lib/constants/charts";
 
-export interface DistributionDataPoint {
+interface DistributionDataPoint {
   name: string;
   value: number;
   color?: string;
@@ -74,17 +68,11 @@ export function DistributionChart({
       return (
         <BarChart data={dataWithColors} layout="vertical">
           <XAxis type="number" hide />
-          <YAxis
-            type="category"
-            dataKey="name"
-            tickLine={false}
-            axisLine={false}
-            width={100}
-          />
+          <YAxis type="category" dataKey="name" tickLine={false} axisLine={false} width={100} />
           <ChartTooltip content={<ChartTooltipContent />} />
           <Bar dataKey="value" radius={[0, 4, 4, 0]}>
-            {dataWithColors.map((entry, index) => (
-              <Cell key={`cell-${index}`} fill={entry.fill} />
+            {dataWithColors.map((entry) => (
+              <Cell key={entry.name} fill={entry.fill} />
             ))}
           </Bar>
         </BarChart>
@@ -106,8 +94,8 @@ export function DistributionChart({
           outerRadius={80}
           strokeWidth={2}
         >
-          {dataWithColors.map((entry, index) => (
-            <Cell key={`cell-${index}`} fill={entry.fill} />
+          {dataWithColors.map((entry) => (
+            <Cell key={entry.name} fill={entry.fill} />
           ))}
         </Pie>
         {showLegend && <ChartLegend content={<ChartLegendContent nameKey="name" />} />}
@@ -122,11 +110,7 @@ export function DistributionChart({
         {description && <CardDescription>{description}</CardDescription>}
       </CardHeader>
       <CardContent className="flex flex-col items-center pb-6">
-        <ChartContainer
-          config={chartConfig}
-          className="w-full"
-          style={{ height }}
-        >
+        <ChartContainer config={chartConfig} className="w-full" style={{ height }}>
           {renderChart()}
         </ChartContainer>
         {type === "donut" && (

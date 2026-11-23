@@ -1,13 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  GIT_READ_LOCAL,
-  GIT_READ_WORKTREE,
-  GIT_WRITE_LOCAL,
-  GIT_WRITE_WORKTREE,
-  HOOKS_DIR,
-  HOOKS_PATH,
-  WRAPPER_DIR,
-} from "../install-hooks-constants";
+import { GIT_READ_LOCAL, GIT_READ_WORKTREE, GIT_WRITE_LOCAL, GIT_WRITE_WORKTREE, HOOKS_DIR, HOOKS_PATH, WRAPPER_DIR } from "../install-hooks-constants";
 
 describe("install-hooks-constants", () => {
   it("points core.hooksPath at the wrapper folder inside the hooks folder", () => {

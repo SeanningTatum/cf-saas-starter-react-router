@@ -40,7 +40,7 @@ const nextProtectedCall = (headers: Headers): Promise<string> =>
     .then((ctx) => createCallerFactory(probeRouter)(ctx).ping())
     .then(
       () => "ok",
-      (e: unknown) => (e instanceof TRPCError ? e.code : `not a TRPCError: ${String(e)}`)
+      (e: unknown) => (e instanceof TRPCError ? e.code : `not a TRPCError: ${String(e)}`),
     );
 
 const nextGuardedLoader = (headers: Headers): Promise<string> =>
@@ -49,7 +49,7 @@ const nextGuardedLoader = (headers: Headers): Promise<string> =>
     (e: unknown) =>
       e instanceof Response
         ? `${e.status} ${e.headers.get("Location")}`
-        : `not a Response: ${String(e)}`
+        : `not a Response: ${String(e)}`,
   );
 
 const stateOf = async (account: Pick<Account, "userId" | "headers">) => ({
@@ -64,7 +64,7 @@ const ENDED = { sessionRows: 0, protectedCall: "UNAUTHORIZED", loader: "302 /log
 const signInRefusal = (email: string): Promise<unknown> =>
   signIn(email).then(
     () => "signed in",
-    (e: unknown) => e
+    (e: unknown) => e,
   );
 
 beforeAll(async () => {
@@ -107,7 +107,9 @@ const ROADS: Road[] = [
   },
 ];
 
-describe("a ban ends the user's sessions at once, so a session live before the ban cannot keep working until its cookie expires (issue #69, see docs/features/ban-ends-sessions.md)", { timeout: 60_000 }, () => {
+describe("a ban ends the user's sessions at once, so a session live before the ban cannot keep working until its cookie expires (issue #69, see docs/features/ban-ends-sessions.md)", {
+  timeout: 60_000,
+}, () => {
   it.each(ROADS.map((road, i) => ({ ...road, email: `road${i + 1}@ban.test` })))(
     "$name: session rows gone, next protected call and next guarded loader refused, so no ban road leaves the live session working",
     async ({ ban, email }) => {
@@ -118,7 +120,7 @@ describe("a ban ends the user's sessions at once, so a session live before the b
 
       expect(await bannedFlag(victim.userId), "the ban itself landed").toBe(1);
       expect(await stateOf(victim)).toEqual(ENDED);
-    }
+    },
   );
 
   it("ends only the banned user's sessions: a bystander and the banning admin (who holds two sessions) stay signed in, so the session delete keeps its WHERE", async () => {
@@ -286,6 +288,6 @@ describe("a new ban with no expiry replaces an old expiry", { timeout: 60_000 },
         body: { code: "BANNED_USER" },
       });
       expect(await sessionRows(victim.userId)).toBe(0);
-    }
+    },
   );
 });

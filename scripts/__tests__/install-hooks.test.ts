@@ -2,17 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
-import {
-  chooseScope,
-  ciIsOn,
-  gitRunner,
-  realFileOps,
-  run,
-  withoutGitVariables,
-  type Deps,
-  type FileOps,
-  type GitResult,
-} from "../install-hooks";
+import { chooseScope, ciIsOn, gitRunner, realFileOps, run, withoutGitVariables, type Deps, type FileOps, type GitResult } from "../install-hooks";
 import { envOutsideAnyHook, GIT_IDENTITY, useGitSandbox } from "./helpers/git-sandbox";
 
 const REPO_ROOT = path.resolve(__dirname, "..", "..");
@@ -107,16 +97,8 @@ describe("installer skip cases", () => {
       { answers: { "rev-parse --is-inside-work-tree": { status: 128, stdout: "" } } },
       "not inside a git work tree",
     ],
-    [
-      "a bare repository, where git answers false",
-      { answers: { "rev-parse --is-inside-work-tree": ok("false\n") } },
-      "not inside a git work tree",
-    ],
-    [
-      "git missing from the machine",
-      { answers: { "rev-parse --is-inside-work-tree": { status: null, stdout: "" } } },
-      "git is not installed",
-    ],
+    ["a bare repository, where git answers false", { answers: { "rev-parse --is-inside-work-tree": ok("false\n") } }, "not inside a git work tree"],
+    ["git missing from the machine", { answers: { "rev-parse --is-inside-work-tree": { status: null, stdout: "" } } }, "git is not installed"],
     [
       "a folder inside another repository, where git resolves a different top",
       { answers: { "rev-parse --show-toplevel": ok("/fake\n") } },
@@ -192,9 +174,7 @@ describe("installer scope", () => {
   it("names the worktree scope and the config file in the printed line", () => {
     const f = fake({ answers: extensionOn });
     run(f.deps);
-    expect(f.lines).toEqual([
-      `hooks: on for this worktree (core.hooksPath=${HOOKS_PATH} in ${path.join(FAKE_ROOT, ".git/config.worktree")})`,
-    ]);
+    expect(f.lines).toEqual([`hooks: on for this worktree (core.hooksPath=${HOOKS_PATH} in ${path.join(FAKE_ROOT, ".git/config.worktree")})`]);
   });
 
   it("names the repository scope and the config file in the printed line", () => {
@@ -229,11 +209,7 @@ describe("installer files", () => {
     const f = fake({ hooks: ["commit-msg"] });
     run(f.deps);
     const dir = path.join(FAKE_ROOT, ".husky", "_");
-    expect(f.removed.sort()).toEqual([
-      path.join(dir, ".gitignore"),
-      path.join(dir, "commit-msg"),
-      path.join(dir, "h"),
-    ]);
+    expect(f.removed.sort()).toEqual([path.join(dir, ".gitignore"), path.join(dir, "commit-msg"), path.join(dir, "h")]);
   });
 
   it("withoutGitVariables drops every GIT_ key, so a hook's GIT_DIR never reaches the git child", () => {
@@ -263,14 +239,11 @@ beforeEach(() => {
 });
 
 const hookEnv = (extra: Record<string, string> = {}): NodeJS.ProcessEnv => {
-  const scrubbed = Object.fromEntries(
-    Object.entries(envOutsideAnyHook(process.env)).filter(([key]) => key !== "HUSKY" && key !== "CI"),
-  );
+  const scrubbed = Object.fromEntries(Object.entries(envOutsideAnyHook(process.env)).filter(([key]) => key !== "HUSKY" && key !== "CI"));
   return { ...scrubbed, HOME: initDir.dir, XDG_CONFIG_HOME: initDir.dir, ...extra };
 };
 
-const git = (cwd: string, args: string[], env: NodeJS.ProcessEnv = hookEnv()) =>
-  spawnSync("git", [...GIT_IDENTITY, ...args], { cwd, encoding: "utf-8", env });
+const git = (cwd: string, args: string[], env: NodeJS.ProcessEnv = hookEnv()) => spawnSync("git", [...GIT_IDENTITY, ...args], { cwd, encoding: "utf-8", env });
 
 const mustGit = (cwd: string, ...args: string[]): string => {
   const result = git(cwd, args);
@@ -306,8 +279,7 @@ const installIn = (dir: string): string => {
   return lines.join("\n");
 };
 
-const commitEmpty = (cwd: string, message: string, env: NodeJS.ProcessEnv = hookEnv()) =>
-  git(cwd, ["commit", "--quiet", "--allow-empty", "-m", message], env);
+const commitEmpty = (cwd: string, message: string, env: NodeJS.ProcessEnv = hookEnv()) => git(cwd, ["commit", "--quiet", "--allow-empty", "-m", message], env);
 
 const readText = (...parts: string[]): string => fs.readFileSync(path.join(...parts), "utf-8");
 
@@ -319,9 +291,7 @@ describe("installer against real git in a throwaway repository", () => {
       scaffold(repo, ["commit-msg"]);
       const line = installIn(repo);
 
-      expect(line).toBe(
-        `hooks: on for this repository (core.hooksPath=${HOOKS_PATH} in ${path.join(repo, ".git", "config")}, shared by all its worktrees)`,
-      );
+      expect(line).toBe(`hooks: on for this repository (core.hooksPath=${HOOKS_PATH} in ${path.join(repo, ".git", "config")}, shared by all its worktrees)`);
       const refused = commitEmpty(repo, BAD_MESSAGE);
       expect(refused.status).not.toBe(0);
       expect(refused.stderr).toContain("type may not be empty");
@@ -373,9 +343,7 @@ describe("installer against real git in a throwaway repository", () => {
       expect(commitEmpty(main, BAD_MESSAGE).status).toBe(0);
 
       const mainLine = installIn(main);
-      expect(mainLine).toBe(
-        `hooks: on for this worktree (core.hooksPath=${HOOKS_PATH} in ${path.join(main, ".git", "config.worktree")})`,
-      );
+      expect(mainLine).toBe(`hooks: on for this worktree (core.hooksPath=${HOOKS_PATH} in ${path.join(main, ".git", "config.worktree")})`);
       expect(readText(main, ".git", "config")).toBe(sharedBefore);
       expect(readText(main, ".git", "config.worktree")).toContain(`hooksPath = ${HOOKS_PATH}`);
     },

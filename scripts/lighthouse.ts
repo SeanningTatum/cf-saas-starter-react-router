@@ -143,7 +143,11 @@ export async function run(argv: string[], deps: Deps): Promise<number> {
   return EXIT_OK;
 }
 
-const cookieOf = (headers: Headers): string => headers.getSetCookie().map((line) => line.split(";")[0]).join("; ");
+const cookieOf = (headers: Headers): string =>
+  headers
+    .getSetCookie()
+    .map((line) => line.split(";")[0])
+    .join("; ");
 
 export function realDeps(): Deps {
   return {
@@ -160,15 +164,25 @@ export function realDeps(): Deps {
     },
     ready: async (url) => {
       for (let waited = 0; waited < SERVER_WAIT_MS; waited += SERVER_POLL_MS) {
-        const answered = await fetch(url).then((response) => response.ok, () => false);
+        const answered = await fetch(url).then(
+          (response) => response.ok,
+          () => false,
+        );
         if (answered) return true;
         await sleep(SERVER_POLL_MS);
       }
       return false;
     },
     signIn: (origin) =>
-      fetch(`${origin}${SIGN_IN_PATH}`, { method: "POST", headers: { Origin: origin, "Content-Type": "application/json" }, body: JSON.stringify(SEEDED_USER) }).then(
-        (response) => (response.ok && cookieOf(response.headers) ? Either.right(cookieOf(response.headers)) : Either.left(`signing in as the seeded user returned ${response.status}`)),
+      fetch(`${origin}${SIGN_IN_PATH}`, {
+        method: "POST",
+        headers: { Origin: origin, "Content-Type": "application/json" },
+        body: JSON.stringify(SEEDED_USER),
+      }).then(
+        (response) =>
+          response.ok && cookieOf(response.headers)
+            ? Either.right(cookieOf(response.headers))
+            : Either.left(`signing in as the seeded user returned ${response.status}`),
         (error: Error) => Either.left(`signing in as the seeded user failed: ${error.message}`),
       ),
     mkdir: (dir) => mkdirSync(dir, { recursive: true }),

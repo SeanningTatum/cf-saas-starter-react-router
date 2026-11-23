@@ -41,7 +41,7 @@ const protectedCall = (headers: Headers): Promise<string> =>
     .then((ctx) => createCallerFactory(probeRouter)(ctx).ping())
     .then(
       () => "ok",
-      (e: unknown) => (e instanceof TRPCError ? e.code : `not a TRPCError: ${String(e)}`)
+      (e: unknown) => (e instanceof TRPCError ? e.code : `not a TRPCError: ${String(e)}`),
     );
 
 const outcomeOf = (run: Promise<unknown>): Promise<string> =>
@@ -50,21 +50,28 @@ const outcomeOf = (run: Promise<unknown>): Promise<string> =>
     (e: unknown) =>
       e instanceof Response
         ? `${e.status} ${e.headers.get("Location")}`
-        : `not a Response: ${String(e)}`
+        : `not a Response: ${String(e)}`,
   );
 
 const guardedLoader = (headers: Headers) =>
   outcomeOf(requireSession(new Request(`${BASE_URL}/dashboard`, { headers }), app.loadContext));
 
 const publicLoader = (headers: Headers) =>
-  outcomeOf(redirectIfAuthenticated(new Request(`${BASE_URL}/login`, { headers }), app.loadContext));
+  outcomeOf(
+    redirectIfAuthenticated(new Request(`${BASE_URL}/login`, { headers }), app.loadContext),
+  );
 
 const uploadOutcome = async (headers: Headers) => {
   const { request, bodyRead } = await trackedUpload(`${BASE_URL}/api/upload-file`, { headers });
-  const result = await uploadAction({ request, context: app.loadContext, params: {} } as unknown as Parameters<
-    typeof uploadAction
-  >[0]);
-  return { status: (result as { init: ResponseInit | null }).init?.status ?? 200, bodyRead: bodyRead() };
+  const result = await uploadAction({
+    request,
+    context: app.loadContext,
+    params: {},
+  } as unknown as Parameters<typeof uploadAction>[0]);
+  return {
+    status: (result as { init: ResponseInit | null }).init?.status ?? 200,
+    bodyRead: bodyRead(),
+  };
 };
 
 const stateOf = async (account: Account) => ({

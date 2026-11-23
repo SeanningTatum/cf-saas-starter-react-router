@@ -13,15 +13,7 @@ import {
   VERB_GET,
   VERB_SHOW,
 } from "./lib/harness-config-constants";
-import {
-  configChecksum,
-  HARNESS_ROOT,
-  loadHarnessConfig,
-  readDiskFile,
-  shownConfig,
-  type HarnessConfig,
-  type LoadDeps,
-} from "./lib/harness-config";
+import { configChecksum, HARNESS_ROOT, loadHarnessConfig, readDiskFile, shownConfig, type HarnessConfig, type LoadDeps } from "./lib/harness-config";
 
 export type Deps = LoadDeps;
 
@@ -35,7 +27,7 @@ const done = (stdout: string[]): Outcome => ({ code: EXIT_OK, stdout, stderr: []
 const fail = (line: string): Outcome => ({ code: EXIT_BAD_CONFIG, stdout: [], stderr: [line] });
 const usage = (why: string): Outcome => ({ code: EXIT_USAGE, stdout: [], stderr: [`${MESSAGE_PREFIX} ${why}`, USAGE_TEXT] });
 
-const hasKey = (value: object, key: string): boolean => Object.prototype.hasOwnProperty.call(value, key);
+const hasKey = (value: object, key: string): boolean => Object.hasOwn(value, key);
 
 function lookup(config: HarnessConfig, dotted: string): { found: true; value: unknown } | { found: false } {
   let current: unknown = config;
@@ -46,8 +38,7 @@ function lookup(config: HarnessConfig, dotted: string): { found: true; value: un
   return { found: true, value: current };
 }
 
-const isTextList = (value: unknown): value is string[] =>
-  Array.isArray(value) && value.every((item) => typeof item === "string");
+const isTextList = (value: unknown): value is string[] => Array.isArray(value) && value.every((item) => typeof item === "string");
 
 function printValue(value: unknown): string[] {
   if (typeof value === "string" || typeof value === "number") return [String(value)];

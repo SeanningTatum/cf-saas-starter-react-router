@@ -44,13 +44,17 @@ describe("the request id is for finding logs, never for deciding access", () => 
   });
 
   it("is read only by the logging, tracing and error-reporting files, so no access check can depend on a chosen id", () => {
-    const readers = appSources.filter((file) => READS_REQUEST_ID.test(readFileSync(join(APP, file), "utf8")));
+    const readers = appSources.filter((file) =>
+      READS_REQUEST_ID.test(readFileSync(join(APP, file), "utf8")),
+    );
     expect(readers.filter((file) => !LOGGING_AND_TRACING_FILES.has(file))).toEqual([]);
   });
 
   it("is not read by the auth, session, rate-limit, tRPC context or upload code", () => {
     for (const file of LOGGING_AND_TRACING_FILES) {
-      expect(file).not.toMatch(/^(auth\/|lib\/session|services\/(session|rate-limit)|trpc\/|routes\/)/);
+      expect(file).not.toMatch(
+        /^(auth\/|lib\/session|services\/(session|rate-limit)|trpc\/|routes\/)/,
+      );
     }
   });
 });

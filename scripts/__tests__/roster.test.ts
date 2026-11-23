@@ -10,7 +10,9 @@ const agent = (over: Record<string, string | null> = {}, name = "alpha"): string
     effort: "medium",
     ...over,
   };
-  const body = Object.entries(fm).filter(([, v]) => v !== null).map(([k, v]) => `${k}: ${v}`);
+  const body = Object.entries(fm)
+    .filter(([, v]) => v !== null)
+    .map(([k, v]) => `${k}: ${v}`);
   return ["---", ...body, "---", "", "Body."].join("\n");
 };
 
@@ -30,8 +32,9 @@ function memDeps(files: Record<string, string>) {
   const writes: string[] = [];
   const deps: Deps = {
     readFile: (p) => {
-      if (!(p in disk)) throw new Error(`ENOENT ${p}`);
-      return disk[p];
+      const text = disk[p];
+      if (text === undefined) throw new Error(`ENOENT ${p}`);
+      return text;
     },
     writeFile: (p, t) => {
       disk[p] = t;
@@ -39,7 +42,9 @@ function memDeps(files: Record<string, string>) {
     },
     listDir: (p) => {
       const pre = `${p}/`;
-      return Object.keys(disk).filter((k) => k.startsWith(pre) && !k.slice(pre.length).includes("/")).map((k) => k.slice(pre.length));
+      return Object.keys(disk)
+        .filter((k) => k.startsWith(pre) && !k.slice(pre.length).includes("/"))
+        .map((k) => k.slice(pre.length));
     },
   };
   return { disk, writes, deps };
@@ -197,8 +202,8 @@ describe("run", () => {
     const { disk, deps } = memDeps(files());
     run(["write"], "/r", deps);
     const out = disk[`${A}/README.md`];
-    expect(out.startsWith("# Sub-agents\n\nIntro text.\n\n")).toBe(true);
-    expect(out.endsWith("\n\nOutro text.\n")).toBe(true);
+    expect(out?.startsWith("# Sub-agents\n\nIntro text.\n\n")).toBe(true);
+    expect(out?.endsWith("\n\nOutro text.\n")).toBe(true);
   });
   it("write twice changes nothing the second time", () => {
     const { writes, deps } = memDeps(files());

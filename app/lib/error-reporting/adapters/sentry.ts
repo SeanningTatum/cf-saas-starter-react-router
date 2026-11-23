@@ -38,7 +38,7 @@ const tags = (report: ErrorReport): Record<string, string> => ({
   ...(report.requestId === undefined ? {} : { request_id: report.requestId }),
 });
 
-export const toSentryEvent = (report: ErrorReport) => ({
+const toSentryEvent = (report: ErrorReport) => ({
   event_id: report.id,
   timestamp: report.timestamp,
   platform: "javascript",
@@ -66,9 +66,7 @@ export const toSentryEnvelope = (report: ErrorReport, dsn: string): string =>
     .map((part) => JSON.stringify(part))
     .join("\n");
 
-export const sentryAdapter = (config: {
-  readonly dsn: SentryDsn;
-}): ErrorReporterAdapter => {
+export const sentryAdapter = (config: { readonly dsn: SentryDsn }): ErrorReporterAdapter => {
   const sendOne = (report: ErrorReport) =>
     Effect.tryPromise({
       try: () =>
@@ -89,9 +87,9 @@ export const sentryAdapter = (config: {
           new ExternalServiceError({
             service: "sentry",
             cause: `status ${response.status}`,
-          })
+          }),
       ),
-      Effect.asVoid
+      Effect.asVoid,
     );
 
   return {

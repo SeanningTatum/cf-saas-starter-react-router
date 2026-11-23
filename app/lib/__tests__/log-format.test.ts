@@ -37,14 +37,13 @@ describe("isLevelEnabled", () => {
 describe("emitLog", () => {
   let infoSpy: ReturnType<typeof vi.spyOn>;
   let errorSpy: ReturnType<typeof vi.spyOn>;
-  let logSpy: ReturnType<typeof vi.spyOn>;
   let debugSpy: ReturnType<typeof vi.spyOn>;
   let warnSpy: ReturnType<typeof vi.spyOn>;
 
   beforeEach(() => {
     infoSpy = vi.spyOn(console, "info").mockImplementation(() => {});
     errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
-    logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    vi.spyOn(console, "log").mockImplementation(() => {});
     debugSpy = vi.spyOn(console, "debug").mockImplementation(() => {});
     warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
   });
@@ -57,8 +56,8 @@ describe("emitLog", () => {
   it("info level writes via console.info in dev", () => {
     emitLog("info", "hello", { layer: "test" });
     expect(infoSpy).toHaveBeenCalledTimes(1);
-    expect(String(infoSpy.mock.calls[0]![0])).toContain("hello");
-    expect(String(infoSpy.mock.calls[0]![0])).toContain("[test]");
+    expect(String(infoSpy.mock.calls[0]?.[0])).toContain("hello");
+    expect(String(infoSpy.mock.calls[0]?.[0])).toContain("[test]");
   });
 
   it("fatal level routes to console.error", () => {
@@ -78,18 +77,18 @@ describe("emitLog", () => {
 
   it("includes traceId in prefix when provided", () => {
     emitLog("info", "msg", { traceId: "abc123" });
-    expect(String(infoSpy.mock.calls[0]![0])).toContain("(abc123)");
+    expect(String(infoSpy.mock.calls[0]?.[0])).toContain("(abc123)");
   });
 
   it("appends extra annotations as JSON when present", () => {
     emitLog("info", "msg", { layer: "x", traceId: "t", userId: "u1" });
-    expect(String(infoSpy.mock.calls[0]![0])).toContain('"userId":"u1"');
+    expect(String(infoSpy.mock.calls[0]?.[0])).toContain('"userId":"u1"');
   });
 
   it("starts every line from the registered context provider, so plain logger calls inside a request keep their requestId and userId", () => {
     setLogContext(() => ({ requestId: "0123456789abcdef", userId: "u1", extra: 1 }));
     emitLog("info", "msg", { layer: "x" });
-    const line = String(infoSpy.mock.calls[0]![0]);
+    const line = String(infoSpy.mock.calls[0]?.[0]);
     expect(line).toContain('"userId":"u1"');
     expect(line).toContain('"extra":1');
   });
@@ -97,7 +96,7 @@ describe("emitLog", () => {
   it("lets explicit annotations win over provider fields, so a log naming its own userId (an admin acting on another user) is not overwritten", () => {
     setLogContext(() => ({ userId: "from-store", extra: 1 }));
     emitLog("info", "msg", { userId: "explicit" });
-    const line = String(infoSpy.mock.calls[0]![0]);
+    const line = String(infoSpy.mock.calls[0]?.[0]);
     expect(line).toContain('"userId":"explicit"');
     expect(line).not.toContain("from-store");
   });
@@ -105,7 +104,7 @@ describe("emitLog", () => {
   it("prefixes a dev line with the short request id and moves the trace id to the JSON, so dev lines stay short and the trace stays findable", () => {
     setLogContext(() => ({ requestId: "0123456789abcdef0123456789abcdef" }));
     emitLog("info", "msg", { layer: "x", traceId: "t-1" });
-    const line = String(infoSpy.mock.calls[0]![0]);
+    const line = String(infoSpy.mock.calls[0]?.[0]);
     expect(line).toContain("[x] (01234567) msg");
     expect(line).not.toContain("0123456789abcdef0123456789abcdef");
     expect(line).not.toContain('"requestId"');
@@ -115,8 +114,8 @@ describe("emitLog", () => {
   it("prints a five-letter level and a shorter one with a space between the colour reset and the prefix, so the line reads ERROR [trpc] and INFO  [trpc]", () => {
     emitLog("error", "boom", { layer: "trpc" });
     emitLog("info", "hi", { layer: "trpc" });
-    expect(errorSpy.mock.calls[0]![0]).toBe("\x1b[31mERROR\x1b[0m [trpc] boom");
-    expect(infoSpy.mock.calls[0]![0]).toBe("\x1b[32mINFO \x1b[0m [trpc] hi");
+    expect(errorSpy.mock.calls[0]?.[0]).toBe("\x1b[31mERROR\x1b[0m [trpc] boom");
+    expect(infoSpy.mock.calls[0]?.[0]).toBe("\x1b[32mINFO \x1b[0m [trpc] hi");
   });
 });
 
@@ -138,7 +137,7 @@ describe("emitLog outside dev (isDev is read from import.meta.env.DEV at module 
     fresh.emitLog("info", "msg", { layer: "x" });
 
     expect(fresh.isDev).toBe(false);
-    expect(JSON.parse(String(logSpy.mock.calls[0]![0]))).toMatchObject({
+    expect(JSON.parse(String(logSpy.mock.calls[0]?.[0]))).toMatchObject({
       requestId,
       userId: "u1",
       layer: "x",

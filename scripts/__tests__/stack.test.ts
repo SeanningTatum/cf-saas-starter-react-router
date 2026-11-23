@@ -1,9 +1,9 @@
 import { describe, it, expect } from "vitest";
 import { HARNESS_DEFAULTS } from "../lib/harness-config";
 import { lintTitle } from "./helpers/lint-title";
-import { run, assignPaths, normalizePath, type Deps, type GitResult, type Plan } from "../stack";
+import { run, assignPaths, normalizePath, type Assigned, type Deps, type GitResult, type Plan, type Pr } from "../stack";
 
-const plan: Plan = {
+const plan: Plan & { prs: [Pr, Pr, Pr] } = {
   base: "main",
   rest: 3,
   prs: [
@@ -32,20 +32,20 @@ const joined = (calls: string[][]) => calls.map((c) => c.join(" "));
 describe("assignPaths", () => {
   it("a fence ending in '/' is a prefix and one without is exact: 'app/db/schema.ts' must not claim 'app/db/schema.tsx'", () => {
     const r = assignPaths(noRest, ["app/repositories/user.ts", "app/db/schema.ts", "app/db/schema.tsx", "app/repositoriesX/a.ts"]);
-    expect(r.assignments[0].paths).toEqual(["app/repositories/user.ts", "app/db/schema.ts"]);
+    expect(r.assignments[0]?.paths).toEqual(["app/repositories/user.ts", "app/db/schema.ts"]);
     expect(r.unassigned).toEqual(["app/db/schema.tsx", "app/repositoriesX/a.ts"]);
   });
 
   it("normalises './' and doubled slashes on both fences and paths, or a hand-written fence silently matches nothing", () => {
     expect(normalizePath("./app//trpc/")).toBe("app/trpc/");
     const r = assignPaths(noRest, ["./app/trpc/routes/a.ts"]);
-    expect(r.assignments[1].paths).toEqual(["app/trpc/routes/a.ts"]);
+    expect(r.assignments[1]?.paths).toEqual(["app/trpc/routes/a.ts"]);
   });
 
   it("a fence without a trailing slash still owns its children: 'app/repositories' must claim 'app/repositories/user.ts'", () => {
     const p: Plan = { ...noRest, prs: [{ ...plan.prs[0], fence: ["app/repositories"] }] };
     const r = assignPaths(p, ["app/repositories/user.ts", "app/repositoriesX/a.ts"]);
-    expect(r.assignments[0].paths).toEqual(["app/repositories/user.ts"]);
+    expect(r.assignments[0]?.paths).toEqual(["app/repositories/user.ts"]);
     expect(r.unassigned).toEqual(["app/repositoriesX/a.ts"]);
   });
 
@@ -60,11 +60,11 @@ describe("assignPaths", () => {
     const p: Plan = { ...noRest, prs: [{ ...plan.prs[0], fence: ["app/", "app/a.ts"] }] };
     const r = assignPaths(p, ["app/a.ts"]);
     expect(r.overlaps).toEqual([]);
-    expect(r.assignments[0].paths).toEqual(["app/a.ts"]);
+    expect(r.assignments[0]?.paths).toEqual(["app/a.ts"]);
   });
 
   it("unmatched paths go to plan.rest when set, else to unassigned", () => {
-    expect(assignPaths(plan, ["README.md"]).assignments[2].paths).toEqual(["README.md"]);
+    expect(assignPaths(plan, ["README.md"]).assignments[2]?.paths).toEqual(["README.md"]);
     expect(assignPaths(noRest, ["README.md"]).unassigned).toEqual(["README.md"]);
   });
 });
@@ -74,13 +74,8 @@ describe("exclude", () => {
 
   it("an excluded untracked file is neither unassigned nor staged: split must not commit a prototype that predates the run", () => {
     const { deps, calls } = stub(
-      (a) =>
-        a[0] === "status"
-          ? { stdout: "?? plans/proto.html\0?? notes.md\0 M app/db/schema.ts\0" }
-          : a[0] === "rev-list"
-            ? { stdout: "0\n" }
-            : {},
-      { ...ex, prs: [ex.prs[0]] },
+      (a) => (a[0] === "status" ? { stdout: "?? plans/proto.html\0?? notes.md\0 M app/db/schema.ts\0" } : a[0] === "rev-list" ? { stdout: "0\n" } : {}),
+      { ...ex, prs: ex.prs.slice(0, 1) },
     );
     const o = run(["split", "--plan", "p.json"], deps);
     expect(o.code).toBe(0);
@@ -96,8 +91,7 @@ describe("exclude", () => {
 });
 
 describe("scratchDirs from the config", () => {
-  const status = (a: string[]) =>
-    a[0] === "status" ? { stdout: "?? scratch/a.txt\0?? app/repositories/x.ts\0" } : { stdout: "" };
+  const status = (a: string[]) => (a[0] === "status" ? { stdout: "?? scratch/a.txt\0?? app/repositories/x.ts\0" } : { stdout: "" });
   const excludedBy = (p: Plan, scratchDirs: string[]) => {
     const { deps } = stub(status, p);
     const o = run(["assign", "--plan", "p.json"], { ...deps, scratchDirs });
@@ -115,31 +109,33 @@ describe("scratchDirs from the config", () => {
 
 describe("stack assign", () => {
   it("a rename counts as the new path and carries the old path, so the deletion is staged with it", () => {
-    const { deps } = stub((a) => (a[0] === "status" ? { stdout: "R  app/repositories/new.ts\0app/old.ts\0" } : { stdout: "app/old.ts\0app/repositories/new.ts\0" }));
+    const { deps } = stub((a) =>
+      a[0] === "status" ? { stdout: "R  app/repositories/new.ts\0app/old.ts\0" } : { stdout: "app/old.ts\0app/repositories/new.ts\0" },
+    );
     const o = run(["assign", "--plan", "p.json"], deps);
-    expect((o.out as any).assignments[0].paths).toEqual(["app/repositories/new.ts", "app/old.ts"]);
-    expect((o.out as any).assignments[2].paths).toEqual([]);
-    expect((o.out as any).unassigned).toEqual([]);
+    expect((o.out as Assigned).assignments[0]?.paths).toEqual(["app/repositories/new.ts", "app/old.ts"]);
+    expect((o.out as Assigned).assignments[2]?.paths).toEqual([]);
+    expect((o.out as Assigned).unassigned).toEqual([]);
   });
 
   it("deleted files (only in 'git diff --name-only') and untracked files (only in porcelain) are both assigned", () => {
     const { deps, calls } = stub((a) => (a[0] === "status" ? { stdout: "?? app/routes/new.tsx\0" } : { stdout: "app/repositories/gone.ts\0" }));
     const o = run(["assign", "--plan", "p.json"], deps);
-    expect((o.out as any).assignments[0].paths).toEqual(["app/repositories/gone.ts"]);
-    expect((o.out as any).assignments[2].paths).toEqual(["app/routes/new.tsx"]);
+    expect((o.out as Assigned).assignments[0]?.paths).toEqual(["app/repositories/gone.ts"]);
+    expect((o.out as Assigned).assignments[2]?.paths).toEqual(["app/routes/new.tsx"]);
     expect(joined(calls)).toEqual(["status --porcelain=v1 -z -uall", "diff --name-only -z main"]);
   });
 
   it("reads filenames raw from -z output: an escaped name like caf\\303\\251.svg would make `git add` fail mid-split", () => {
     const { deps } = stub((a) => (a[0] === "status" ? { stdout: "?? public/café.svg\0" } : {}));
     const o = run(["assign", "--plan", "p.json"], deps);
-    expect((o.out as any).assignments[2].paths).toEqual(["public/café.svg"]);
+    expect((o.out as Assigned).assignments[2]?.paths).toEqual(["public/café.svg"]);
   });
 
   it("changes nothing: no git call that writes", () => {
     const { deps, calls } = stub();
     run(["assign", "--plan", "p.json"], deps);
-    expect(calls.every((c) => ["status", "diff"].includes(c[0]))).toBe(true);
+    expect(calls.every((c) => ["status", "diff"].includes(c[0] ?? ""))).toBe(true);
   });
 
   it("a missing --plan or unknown verb exits 1 USAGE", () => {
@@ -179,7 +175,11 @@ describe("stack split", () => {
       "commit -m feat: ui",
       "rev-parse HEAD",
     ]);
-    expect((o.out as any).branches.map((b: any) => [b.n, b.sha])).toEqual([[1, "abc123"], [2, "abc123"], [3, "abc123"]]);
+    expect((o.out as { branches: { n: number; sha: string }[] }).branches.map((b) => [b.n, b.sha])).toEqual([
+      [1, "abc123"],
+      [2, "abc123"],
+      [3, "abc123"],
+    ]);
   });
 
   it("commits each PR with the plan's message and invents no subject of its own: the subjects pass commitlint", async () => {
@@ -196,7 +196,7 @@ describe("stack split", () => {
     expect(o.code).toBe(3);
     expect(o.err?.code).toBe("DIRTY_UNASSIGNED");
     expect(o.err?.error).toContain("stray.txt");
-    expect(calls.some((c) => ["switch", "add", "commit"].includes(c[0]))).toBe(false);
+    expect(calls.some((c) => ["switch", "add", "commit"].includes(c[0] ?? ""))).toBe(false);
   });
 
   it("refuses on overlapping fences before any write", () => {
@@ -257,11 +257,7 @@ describe("stack restack", () => {
 
   it("on conflict lists the conflicting paths, aborts the rebase and exits 4: never leaves the tree mid-rebase", () => {
     const { deps, calls } = stub((a) =>
-      a[0] === "rebase" && a[1] === "--update-refs"
-        ? { code: 1, stderr: "CONFLICT" }
-        : a[0] === "diff"
-          ? { stdout: "app/db/schema.ts\napp/a.ts\n" }
-          : {},
+      a[0] === "rebase" && a[1] === "--update-refs" ? { code: 1, stderr: "CONFLICT" } : a[0] === "diff" ? { stdout: "app/db/schema.ts\napp/a.ts\n" } : {},
     );
     const o = run(["restack", "--plan", "p.json", "--from", "1"], deps);
     expect(o.code).toBe(4);

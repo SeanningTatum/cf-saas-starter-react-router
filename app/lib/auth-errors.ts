@@ -12,8 +12,12 @@ export interface AuthErrorShape {
   readonly code?: string | undefined;
 }
 
-export const authRefusalFor = (error: AuthErrorShape, captchaEnabled: boolean): AuthRefusal | null => {
-  if (error.status === HTTP_TOO_MANY_REQUESTS || error.code === RATE_LIMITED_CODE) return "rate_limited";
+export const authRefusalFor = (
+  error: AuthErrorShape,
+  captchaEnabled: boolean,
+): AuthRefusal | null => {
+  if (error.status === HTTP_TOO_MANY_REQUESTS || error.code === RATE_LIMITED_CODE)
+    return "rate_limited";
   if (!captchaEnabled || error.code === undefined) return null;
   if (TURNSTILE_FAILED_CODES.includes(error.code)) return "captcha_failed";
   if (error.status === TURNSTILE_UNAVAILABLE_STATUS && error.code === TURNSTILE_UNAVAILABLE_CODE) {

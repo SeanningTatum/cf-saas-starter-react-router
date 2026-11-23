@@ -95,7 +95,10 @@ describe("declaresOversizedUpload", () => {
     ["not a number", "lots"],
     ["negative", "-1"],
     ["fractional", "1.5e9"],
-  ])("leaves a request whose length is %s to the body read, which checks the file itself", (_label, value) => {
-    expect(declaresOversizedUpload(withLength(value))).toBe(false);
-  });
+  ])(
+    "leaves a request whose length is %s to the body read, which checks the file itself",
+    (_label, value) => {
+      expect(declaresOversizedUpload(withLength(value))).toBe(false);
+    },
+  );
 });

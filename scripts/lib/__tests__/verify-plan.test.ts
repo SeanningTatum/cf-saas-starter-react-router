@@ -49,6 +49,10 @@ describe("fullRunReasons", () => {
     ["harness.config.json", "the gate list"],
     ["scripts/lib/harness-config.ts", "the reader of the gate list"],
     ["scripts/check-non-negotiables.ts", "a gate script"],
+    ["scripts/lint-all.ts", "the lint runner"],
+    ["scripts/lib/lint-findings.ts", "the lint runner"],
+    ["biome.jsonc", "a config file"],
+    ["knip.json", "a config file"],
     ["scripts/lint/rules/no-throw.ts", "the house linter"],
     ["scripts/lint/baseline.json", "the house linter"],
     ["package.json", "a config file"],
@@ -77,7 +81,9 @@ describe("fullRunReasons", () => {
   it("every script verify.sh, the gate list and the harness gate run forces the full run (catches the trigger list drifting from the gates)", () => {
     const read = (file: string) => readFileSync(join(__dirname, "..", "..", "..", file), "utf-8");
     const named = (text: string) => text.match(/scripts\/[\w./-]+\.(?:ts|sh)/g) ?? [];
-    const looped = [...read("scripts/harness-check.sh").matchAll(/for t in ([\w -]+); do/g)].flatMap((m) => (m[1] ?? "").split(" ").map((t) => `scripts/${t}.sh`));
+    const looped = [...read("scripts/harness-check.sh").matchAll(/for t in ([\w -]+); do/g)].flatMap((m) =>
+      (m[1] ?? "").split(" ").map((t) => `scripts/${t}.sh`),
+    );
     const gateRuns = (JSON.parse(read("harness.config.json")) as { gates: { run: string }[] }).gates.map((gate) => gate.run).join("\n");
     const scannedNotRun = /N_CANDIDATES=\([^)]*\)/;
     const sources = [read("scripts/verify.sh"), gateRuns, read("scripts/harness-check.sh").replace(scannedNotRun, "")];
@@ -135,10 +141,34 @@ describe("planChanged", () => {
     expect(plan.skip.map((skip) => skip.reason)).toEqual([SKIP_REASON.noCode, SKIP_REASON.noModule, SKIP_REASON.noSpec]);
   });
 
-  it("a changed JSON file runs the unit tests that import it, but is not handed to the linter, which reads TypeScript only", () => {
+  it("a changed JSON file is linted and runs the unit tests that import it", () => {
     const plan = lean(planChanged(tree({ "app/locales/en/common.json": "{}\n" }), ["app/locales/en/common.json"]));
-    expect(plan.run.map((step) => step.command)).toEqual([COMMAND.typecheck, `${COMMAND.test} 'app/locales/en/common.json'`]);
-    expect(plan.skip.map((skip) => skip.gate)).toEqual([GATE.lint, GATE.e2e]);
+    expect(plan.run.map((step) => step.command)).toEqual([
+      COMMAND.typecheck,
+      `${COMMAND.lint} 'app/locales/en/common.json'`,
+      `${COMMAND.test} 'app/locales/en/common.json'`,
+    ]);
+    expect(plan.skip.map((skip) => skip.gate)).toEqual([GATE.e2e]);
+  });
+
+  it("a CSS-only change runs the lint gate on that file and no tests", () => {
+    const plan = lean(planChanged(tree({ "app/app.css": "body {\n  margin: 0;\n}\n" }), ["app/app.css"]));
+    expect(plan.run).toEqual([
+      { gate: GATE.typecheck, command: COMMAND.typecheck },
+      { gate: GATE.lint, command: `${COMMAND.lint} 'app/app.css'` },
+    ]);
+    expect(plan.skip.map((skip) => skip.gate)).toEqual([GATE.test, GATE.e2e]);
+  });
+
+  it("a mixed change lints every lintable file and runs the tests related to the modules only", () => {
+    const changed = ["app/lib/sum.ts", "app/app.css", "app/locales/en/common.json"];
+    const repo = tree({ "app/app.css": "body {\n  margin: 0;\n}\n", "app/locales/en/common.json": "{}\n" });
+    const plan = lean(planChanged(repo, changed));
+    const lint = plan.run.find((step) => step.gate === GATE.lint);
+    expect(lint?.command).toBe(`${COMMAND.lint} 'app/lib/sum.ts' 'app/app.css' 'app/locales/en/common.json'`);
+    const test = plan.run.find((step) => step.gate === GATE.test);
+    expect(test?.command).toBe(`${COMMAND.test} 'app/lib/sum.ts' 'app/locales/en/common.json'`);
+    expect(test?.command).not.toContain("app.css");
   });
 
   it("a deleted file is not handed to the linter or vitest: both fail on a path that does not exist", () => {

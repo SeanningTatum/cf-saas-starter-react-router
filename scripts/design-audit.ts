@@ -24,18 +24,8 @@
  * ignores prefers-reduced-motion). Everything else reports and lets the human decide — a low
  * shadow count is a fact, not automatically a defect.
  */
-import { chromium, type Page } from "playwright";
-import {
-  clamp,
-  channel,
-  alphaOf,
-  oklchToRgba,
-  parseColour,
-  composite,
-  resolveBackground,
-  luminance,
-  contrastRatio,
-} from "./lib/colour";
+import { chromium, type Page } from "@playwright/test";
+import { clamp, channel, alphaOf, oklchToRgba, parseColour, composite, resolveBackground, luminance, contrastRatio } from "./lib/colour";
 import { loadHarnessConfigFromDisk } from "./lib/harness-config";
 import { resolveLogin } from "./lib/audit-login";
 
@@ -57,9 +47,7 @@ function parseArgs(): Args {
   };
   const url = get("--url");
   if (!url) {
-    console.error(
-      "usage: bun run design:audit -- --url <url> [--scope <selector>] [--accent <#hex>] [--login <name | email:password>] [--json]"
-    );
+    console.error("usage: bun run design:audit -- --url <url> [--scope <selector>] [--accent <#hex>] [--login <name | email:password>] [--json]");
     process.exit(2);
   }
   const rawLogin = get("--login") ?? process.env.AUDIT_LOGIN;
@@ -189,13 +177,10 @@ const PROBE = `({ scopeSel, accent }) => {
 
 async function measure(page: Page, args: Args) {
   // Playwright's evaluate accepts a single argument, so the pair travels as one object.
-  return page.evaluate(
-    new Function("arg", `return (${PROBE})(arg)`) as (arg: {
-      scopeSel: string;
-      accent?: string;
-    }) => Promise<Record<string, unknown>>,
-    { scopeSel: args.scope, accent: args.accent }
-  );
+  return page.evaluate(new Function("arg", `return (${PROBE})(arg)`) as (arg: { scopeSel: string; accent?: string }) => Promise<Record<string, unknown>>, {
+    scopeSel: args.scope,
+    accent: args.accent,
+  });
 }
 
 const args = parseArgs();
@@ -218,7 +203,10 @@ if (args.login) {
   await page.getByTestId(loginForm.submitTestId).click();
   const left = await page
     .waitForURL((u) => !u.pathname.endsWith(loginForm.path), { timeout: 10_000 })
-    .then(() => true, () => false);
+    .then(
+      () => true,
+      () => false,
+    );
   if (!left) {
     console.error(`login as ${args.login.email} did not leave ${loginForm.path}: wrong credentials or unseeded DB?`);
     await browser.close();
@@ -230,7 +218,23 @@ if (args.login) {
 await page.goto(args.url, { waitUntil: "networkidle" });
 await page.waitForTimeout(600);
 
-const desktop = (await measure(page, args)) as Record<string, any>;
+type Probe = {
+  surfaceLevels: unknown[];
+  fontFamilies: { family: string; elements: number }[];
+  radiiUsed: string[];
+  shadowedElements: number;
+  borderedElements: number;
+  panelElements: number;
+  chromaticColours: number;
+  accent: { elements: number; shareOfPainted: number } | null;
+  displaySizes: number[];
+  bodyContrast: number;
+  actionContrast: { label: string; ratio: number }[];
+  tables: number;
+  dataRows: number;
+};
+
+const desktop = (await measure(page, args)) as Probe;
 
 const overflow = async () =>
   page.evaluate(() => ({
@@ -242,19 +246,15 @@ const overflowDesktop = await overflow();
 // Motion: does anything animate, and does it stop when asked?
 const animatedDefault = await page.evaluate(
   (sel) =>
-    Array.from((document.querySelector(sel) || document.body).querySelectorAll("*")).filter(
-      (el) => getComputedStyle(el).animationName !== "none"
-    ).length,
-  args.scope
+    Array.from((document.querySelector(sel) || document.body).querySelectorAll("*")).filter((el) => getComputedStyle(el).animationName !== "none").length,
+  args.scope,
 );
 await page.emulateMedia({ reducedMotion: "reduce" });
 await page.reload({ waitUntil: "networkidle" });
 const animatedReduced = await page.evaluate(
   (sel) =>
-    Array.from((document.querySelector(sel) || document.body).querySelectorAll("*")).filter(
-      (el) => getComputedStyle(el).animationName !== "none"
-    ).length,
-  args.scope
+    Array.from((document.querySelector(sel) || document.body).querySelectorAll("*")).filter((el) => getComputedStyle(el).animationName !== "none").length,
+  args.scope,
 );
 await page.emulateMedia({ reducedMotion: "no-preference" });
 
@@ -286,57 +286,41 @@ const line = (label: string, value: string) => `  ${label.padEnd(26)} ${value}`;
 
 console.log(`\n=== design audit — ${args.url} (${args.scope}) ===\n`);
 console.log(line("surface levels", String(desktop.surfaceLevels.length)));
-console.log(
-  line(
-    "type faces",
-    desktop.fontFamilies.map((f: any) => `${f.family}(${f.elements})`).join(" · ") || "none"
-  )
-);
+console.log(line("type faces", desktop.fontFamilies.map((f) => `${f.family}(${f.elements})`).join(" · ") || "none"));
 console.log(line("display sizes ≥28px", desktop.displaySizes.join(", ") || "none"));
 console.log(line("radii", desktop.radiiUsed.join(", ") || "0 (square)"));
 console.log(line("shadowed / bordered", `${desktop.shadowedElements} / ${desktop.borderedElements}`));
 console.log(line("panels (border+shadow)", String(desktop.panelElements)));
 console.log(line("chromatic colours", String(desktop.chromaticColours)));
-if (desktop.accent)
-  console.log(
-    line("accent economy", `${desktop.accent.elements} elements (${desktop.accent.shareOfPainted}% of painted)`)
-  );
+if (desktop.accent) console.log(line("accent economy", `${desktop.accent.elements} elements (${desktop.accent.shareOfPainted}% of painted)`));
 console.log(line("product data rows", `${desktop.dataRows} in ${desktop.tables} table(s)`));
 console.log(line("body contrast", `${desktop.bodyContrast}:1`));
+console.log(line("motion", `${animatedDefault} animated → ${animatedReduced} under reduced-motion`));
 console.log(
-  line("motion", `${animatedDefault} animated → ${animatedReduced} under reduced-motion`)
-);
-console.log(
-  line("overflow", `desktop ${overflowDesktop.scrollWidth}/${overflowDesktop.clientWidth} · mobile ${overflowMobile.scrollWidth}/${overflowMobile.clientWidth}`)
+  line(
+    "overflow",
+    `desktop ${overflowDesktop.scrollWidth}/${overflowDesktop.clientWidth} · mobile ${overflowMobile.scrollWidth}/${overflowMobile.clientWidth}`,
+  ),
 );
 
 // HARD checks — these are defects, not opinions.
 if (overflowMobile.scrollWidth > overflowMobile.clientWidth)
   hard.push(`horizontal page scroll at 390px (${overflowMobile.scrollWidth} > ${overflowMobile.clientWidth})`);
-if (overflowDesktop.scrollWidth > overflowDesktop.clientWidth)
-  hard.push("horizontal page scroll at 1440px");
+if (overflowDesktop.scrollWidth > overflowDesktop.clientWidth) hard.push("horizontal page scroll at 1440px");
 if (desktop.bodyContrast < 4.5) hard.push(`body copy contrast ${desktop.bodyContrast}:1 is below AA`);
-for (const a of desktop.actionContrast as any[])
-  if (a.ratio < 4.5) hard.push(`action "${a.label}" contrast ${a.ratio}:1 is below AA`);
-if (animatedDefault > 0 && animatedReduced === animatedDefault)
-  hard.push("animation ignores prefers-reduced-motion");
+for (const a of desktop.actionContrast) if (a.ratio < 4.5) hard.push(`action "${a.label}" contrast ${a.ratio}:1 is below AA`);
+if (animatedDefault > 0 && animatedReduced === animatedDefault) hard.push("animation ignores prefers-reduced-motion");
 if (jsErrors.length) hard.push(`${jsErrors.length} console/page error(s)`);
 
 // SOFT notes — the craft signals five rejected passes of /demo all failed on.
-if (desktop.fontFamilies.length < 2)
-  notes.push("one type face only — a display/data pairing is most of the distance from a framework default");
-if (desktop.displaySizes.length < 2)
-  notes.push("no second display size — the page has one typographic register and will flatten below the fold");
-if (desktop.panelElements === 0 && desktop.shadowedElements === 0)
-  notes.push("no raised surfaces — deliberate for a flat direction, absent craft otherwise");
-if (desktop.dataRows === 0)
-  notes.push("no product data on the page — for software marketing, show the product");
-if (animatedDefault === 0)
-  notes.push("nothing moves — if the subject changes over time, consider whether it should");
+if (desktop.fontFamilies.length < 2) notes.push("one type face only — a display/data pairing is most of the distance from a framework default");
+if (desktop.displaySizes.length < 2) notes.push("no second display size — the page has one typographic register and will flatten below the fold");
+if (desktop.panelElements === 0 && desktop.shadowedElements === 0) notes.push("no raised surfaces — deliberate for a flat direction, absent craft otherwise");
+if (desktop.dataRows === 0) notes.push("no product data on the page — for software marketing, show the product");
+if (animatedDefault === 0) notes.push("nothing moves — if the subject changes over time, consider whether it should");
 if (desktop.accent && desktop.accent.shareOfPainted > 4)
   notes.push(`accent paints ${desktop.accent.shareOfPainted}% of elements — an accent spent everywhere is decoration`);
-if (desktop.chromaticColours > 4)
-  notes.push(`${desktop.chromaticColours} chromatic colours — check each one earns its place`);
+if (desktop.chromaticColours > 4) notes.push(`${desktop.chromaticColours} chromatic colours — check each one earns its place`);
 
 console.log("");
 if (hard.length) {

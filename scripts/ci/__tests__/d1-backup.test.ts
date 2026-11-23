@@ -112,20 +112,12 @@ describe("isValidBucketName", () => {
     expect(isValidBucketName(name)).toBe(true);
   });
 
-  it.each([
-    "ab",
-    "a".repeat(64),
-    "Upper-case",
-    "-leading",
-    "trailing-",
-    "under_score",
-    "dot.name",
-    "has space",
-    "bucket/with/slash",
-    "",
-  ])("refuses %j: R2 would reject it or it could change the object path", (name) => {
-    expect(isValidBucketName(name)).toBe(false);
-  });
+  it.each(["ab", "a".repeat(64), "Upper-case", "-leading", "trailing-", "under_score", "dot.name", "has space", "bucket/with/slash", ""])(
+    "refuses %j: R2 would reject it or it could change the object path",
+    (name) => {
+      expect(isValidBucketName(name)).toBe(false);
+    },
+  );
 });
 
 describe("object key", () => {
@@ -155,11 +147,8 @@ describe("argv builders", () => {
   });
 
   it("passes --file and --remote to the upload: wrangler 4 writes to local storage without --remote", () => {
-    expect(putArgv("my-bucket", KEY, PACKED)).toEqual([
-      "bunx", "wrangler", "r2", "object", "put", `my-bucket/${KEY}`, "--file", PACKED, "--remote",
-    ]);
+    expect(putArgv("my-bucket", KEY, PACKED)).toEqual(["bunx", "wrangler", "r2", "object", "put", `my-bucket/${KEY}`, "--file", PACKED, "--remote"]);
   });
-
 });
 
 describe("spawnCommand", () => {
@@ -331,9 +320,7 @@ describe("run", () => {
     const h = harness({}, { D1_BACKUP_BUCKET: "my-bucket" });
     run(h.deps);
     const exportAt = h.events.indexOf("run:export");
-    expect(h.events.slice(0, exportAt)).toEqual(
-      expect.arrayContaining(["run:list", "run:info", `rm:${DUMP}`, `rm:${PACKED}`]),
-    );
+    expect(h.events.slice(0, exportAt)).toEqual(expect.arrayContaining(["run:list", "run:info", `rm:${DUMP}`, `rm:${PACKED}`]));
     expect(h.events.indexOf(`rm:${DUMP}`)).toBeLessThan(exportAt);
     expect(h.events.indexOf(`rm:${PACKED}`)).toBeLessThan(exportAt);
   });
@@ -361,15 +348,12 @@ describe("run", () => {
     expect(run(h.deps)).toBe(0);
   });
 
-  it.each(["abc def", "a;b", "$(x)", "a/b", "a\nb", "x`y`"])(
-    "fails closed on the odd bookmark %j: it must not reach the summary",
-    (bookmark) => {
-      const h = harness({ info: ok(JSON.stringify({ bookmark })) }, { D1_BACKUP_BUCKET: "my-bucket" });
-      expect(run(h.deps)).toBe(1);
-      expect(kinds(h.calls)).toEqual(["list", "info"]);
-      expect(h.summary()).toBe("");
-    },
-  );
+  it.each(["abc def", "a;b", "$(x)", "a/b", "a\nb", "x`y`"])("fails closed on the odd bookmark %j: it must not reach the summary", (bookmark) => {
+    const h = harness({ info: ok(JSON.stringify({ bookmark })) }, { D1_BACKUP_BUCKET: "my-bucket" });
+    expect(run(h.deps)).toBe(1);
+    expect(kinds(h.calls)).toEqual(["list", "info"]);
+    expect(h.summary()).toBe("");
+  });
 
   it("prints DEPLOY_SHA in the summary only when it is hex: an odd value must not reach the summary", () => {
     const odd = harness({}, { DEPLOY_SHA: "abc`rm -rf`" });

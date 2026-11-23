@@ -12,12 +12,17 @@ export interface RateLimitRule {
   readonly periodSeconds: number;
 }
 
-export const rateLimitFromWrangler = (rule: keyof typeof RATE_LIMIT_REQUESTS_PER_PERIOD): RateLimitRule => ({
+export const rateLimitFromWrangler = (
+  rule: keyof typeof RATE_LIMIT_REQUESTS_PER_PERIOD,
+): RateLimitRule => ({
   limit: RATE_LIMIT_REQUESTS_PER_PERIOD[rule],
   periodSeconds: RATE_LIMIT_PERIOD_SECONDS,
 });
 
-export const startEarlyInAFixedWindow = async ({ periodSeconds }: RateLimitRule, marginSeconds: number) => {
+export const startEarlyInAFixedWindow = async (
+  { periodSeconds }: RateLimitRule,
+  marginSeconds: number,
+) => {
   const periodMs = periodSeconds * MS_PER_SECOND;
   const leftAtStart = msLeftInRateLimitWindow(Date.now(), periodMs);
   if (leftAtStart >= marginSeconds * MS_PER_SECOND) return;

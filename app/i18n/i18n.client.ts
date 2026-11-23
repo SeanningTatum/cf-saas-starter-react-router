@@ -3,16 +3,15 @@ import { initReactI18next } from "react-i18next";
 import LanguageDetector from "i18next-browser-languagedetector";
 import resourcesToBackend from "i18next-resources-to-backend";
 import { getInitialNamespaces } from "remix-i18next/client";
-import { supportedLngs, fallbackLng, defaultNS } from "./i18n";
+import { supportedLngs, fallbackLng, defaultNS } from "@/lib/constants/i18n";
 
 await i18next
   .use(initReactI18next)
   .use(LanguageDetector)
   .use(
     resourcesToBackend(
-      (language: string, namespace: string) =>
-        import(`../locales/${language}/${namespace}.json`)
-    )
+      (language: string, namespace: string) => import(`../locales/${language}/${namespace}.json`),
+    ),
   )
   .init({
     supportedLngs: [...supportedLngs],
@@ -25,4 +24,4 @@ await i18next
     },
   });
 
-export default i18next;
+export { i18next };

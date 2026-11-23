@@ -15,10 +15,15 @@ export const appOrigin = (baseURL: string | undefined): string => {
   return new URL(baseURL ?? "").origin;
 };
 
-export const sendClientIpOnAppApiRequests = (context: BrowserContext, origin: string, clientIp: string) =>
+export const sendClientIpOnAppApiRequests = (
+  context: BrowserContext,
+  origin: string,
+  clientIp: string,
+) =>
   context.route(
     (url) => url.origin === origin && url.pathname.startsWith(API_PATHS.prefix),
-    (route) => route.fallback({ headers: { ...route.request().headers(), [CLIENT_IP_HEADER]: clientIp } }),
+    (route) =>
+      route.fallback({ headers: { ...route.request().headers(), [CLIENT_IP_HEADER]: clientIp } }),
   );
 
 export const useClientIpPerFile = (file: SpecFile) => {
@@ -31,6 +36,8 @@ export const useClientIpPerFile = (file: SpecFile) => {
 export const freshDocumentationIpv6 = (): string => {
   const prefix = IPV6_DOCUMENTATION_PREFIX.split(IPV6_SEPARATOR);
   const subnetGroups = new Uint16Array(IPV6_SUBNET_HEXTETS - prefix.length);
-  const groups = Array.from(crypto.getRandomValues(subnetGroups), (group) => group.toString(IPV6_GROUP_RADIX));
+  const groups = Array.from(crypto.getRandomValues(subnetGroups), (group) =>
+    group.toString(IPV6_GROUP_RADIX),
+  );
   return [...prefix, ...groups].join(IPV6_SEPARATOR) + IPV6_HOST_SUFFIX;
 };

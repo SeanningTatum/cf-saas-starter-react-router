@@ -25,10 +25,33 @@ const manifestObject = {
   entry: { module: "/assets/entry.js", imports: ["/assets/react.js"], css: [] },
   routes: {
     root: { id: "root", path: "", hasDefaultExport: true, module: "/assets/root.js", imports: ["/assets/react.js"], css: ["/assets/root.css"] },
-    "routes/api/trpc.$": { id: "routes/api/trpc.$", parentId: "root", path: "/api/trpc/*", hasDefaultExport: false, module: "/assets/trpc.js", imports: [], css: [] },
+    "routes/api/trpc.$": {
+      id: "routes/api/trpc.$",
+      parentId: "root",
+      path: "/api/trpc/*",
+      hasDefaultExport: false,
+      module: "/assets/trpc.js",
+      imports: [],
+      css: [],
+    },
     "routes/home": { id: "routes/home", parentId: "root", index: true, hasDefaultExport: true, module: "/assets/home.js", imports: ["/assets/ui.js"], css: [] },
-    "routes/dashboard/_layout": { id: "routes/dashboard/_layout", parentId: "root", hasDefaultExport: true, module: "/assets/layout.js", imports: ["/assets/ui.js"], css: [] },
-    "routes/dashboard/_index": { id: "routes/dashboard/_index", parentId: "routes/dashboard/_layout", path: "dashboard/", hasDefaultExport: true, module: "/assets/dash.js", imports: ["/assets/chart.js"], css: ["/assets/dash.css"] },
+    "routes/dashboard/_layout": {
+      id: "routes/dashboard/_layout",
+      parentId: "root",
+      hasDefaultExport: true,
+      module: "/assets/layout.js",
+      imports: ["/assets/ui.js"],
+      css: [],
+    },
+    "routes/dashboard/_index": {
+      id: "routes/dashboard/_index",
+      parentId: "routes/dashboard/_layout",
+      path: "dashboard/",
+      hasDefaultExport: true,
+      module: "/assets/dash.js",
+      imports: ["/assets/chart.js"],
+      css: ["/assets/dash.css"],
+    },
   },
 };
 const manifestText = `window.__reactRouterManifest=${JSON.stringify(manifestObject)};`;
@@ -57,7 +80,7 @@ describe("reading the build", () => {
   });
 
   it("refuses a manifest with no entry: a renamed build file must fail loudly, not print zeros", () => {
-    expect(Either.isLeft(parseManifest("window.__reactRouterManifest={\"routes\":{}};"))).toBe(true);
+    expect(Either.isLeft(parseManifest('window.__reactRouterManifest={"routes":{}};'))).toBe(true);
     expect(Either.isLeft(parseManifest("not a manifest"))).toBe(true);
   });
 
@@ -85,7 +108,15 @@ describe("first-load bytes per page", () => {
 
   it("counts the entry, every route from root down and their imports, each file once (react.js is shared by entry and root)", () => {
     const files = firstLoad(manifest, "routes/dashboard/_index");
-    expect(files.js).toEqual(["/assets/entry.js", "/assets/react.js", "/assets/root.js", "/assets/layout.js", "/assets/ui.js", "/assets/dash.js", "/assets/chart.js"]);
+    expect(files.js).toEqual([
+      "/assets/entry.js",
+      "/assets/react.js",
+      "/assets/root.js",
+      "/assets/layout.js",
+      "/assets/ui.js",
+      "/assets/dash.js",
+      "/assets/chart.js",
+    ]);
     expect(files.css).toEqual(["/assets/root.css", "/assets/dash.css"]);
   });
 
@@ -103,8 +134,16 @@ describe("first-load bytes per page", () => {
 });
 
 describe("the table", () => {
-  const base = report(["worker", "Worker upload, gzip", 1000], ["route:a:js", "`/a` first-load JS, gzip", 500], ["route:gone:js", "`/gone` first-load JS, gzip", 9]);
-  const head = report(["worker", "Worker upload, gzip", 1100], ["route:a:js", "`/a` first-load JS, gzip", 500], ["route:new:js", "`/new` first-load JS, gzip", 7]);
+  const base = report(
+    ["worker", "Worker upload, gzip", 1000],
+    ["route:a:js", "`/a` first-load JS, gzip", 500],
+    ["route:gone:js", "`/gone` first-load JS, gzip", 9],
+  );
+  const head = report(
+    ["worker", "Worker upload, gzip", 1100],
+    ["route:a:js", "`/a` first-load JS, gzip", 500],
+    ["route:new:js", "`/new` first-load JS, gzip", 7],
+  );
 
   it("prints one column of bytes when there is no base", () => {
     expect(renderTable(head)).toBe(
@@ -137,8 +176,18 @@ describe("the load-time line", () => {
   });
 
   it("names the page whose first load (JS plus CSS) changed most, with its bytes and milliseconds", () => {
-    const base = report(["worker", "Worker upload, gzip", 1], ["route:a:js", "`/a` first-load JS, gzip", 1000], ["route:a:css", "`/a` first-load CSS, gzip", 100], ["route:b:js", "`/b` first-load JS, gzip", 1000]);
-    const head = report(["worker", "Worker upload, gzip", 999999], ["route:a:js", "`/a` first-load JS, gzip", 2000], ["route:a:css", "`/a` first-load CSS, gzip", 148.8], ["route:b:js", "`/b` first-load JS, gzip", 0]);
+    const base = report(
+      ["worker", "Worker upload, gzip", 1],
+      ["route:a:js", "`/a` first-load JS, gzip", 1000],
+      ["route:a:css", "`/a` first-load CSS, gzip", 100],
+      ["route:b:js", "`/b` first-load JS, gzip", 1000],
+    );
+    const head = report(
+      ["worker", "Worker upload, gzip", 999999],
+      ["route:a:js", "`/a` first-load JS, gzip", 2000],
+      ["route:a:css", "`/a` first-load CSS, gzip", 148.8],
+      ["route:b:js", "`/b` first-load JS, gzip", 0],
+    );
     expect(loadTimeLine(compare(base, head))).toBe(
       "Load time: the largest first-load change is `/a`, +1,048.8 bytes gzip, about +5.1 ms on Lighthouse's slow 4G link (1,638.4 kbit/s); ms = bytes × 8 ÷ 1,638.4.",
     );
@@ -151,33 +200,44 @@ describe("the load-time line", () => {
 
   it("says nothing changed when no page's first load moved, even if the Worker did (the Worker is not sent to the browser)", () => {
     const rows = compare(report(["worker", "W", 1], ["route:a:js", "A", 5]), report(["worker", "W", 2], ["route:a:js", "A", 5]));
-    expect(loadTimeLine(rows)).toBe("Load time: no page on both sides changed its first-load JS or CSS, so no extra transfer time on Lighthouse's slow 4G link (1,638.4 kbit/s).");
+    expect(loadTimeLine(rows)).toBe(
+      "Load time: no page on both sides changed its first-load JS or CSS, so no extra transfer time on Lighthouse's slow 4G link (1,638.4 kbit/s).",
+    );
   });
 
   it("names a page that was added or removed instead of reading it as unchanged: it has no base to compare", () => {
-    const base = report(["route:a:js", "`/a` first-load JS, gzip", 5], ["route:gone:js", "`/gone` first-load JS, gzip", 9], ["route:gone:css", "`/gone` first-load CSS, gzip", 1]);
-    const head = report(["route:a:js", "`/a` first-load JS, gzip", 5], ["route:new:js", "`/new` first-load JS, gzip", 7], ["route:new:css", "`/new` first-load CSS, gzip", 1]);
+    const base = report(
+      ["route:a:js", "`/a` first-load JS, gzip", 5],
+      ["route:gone:js", "`/gone` first-load JS, gzip", 9],
+      ["route:gone:css", "`/gone` first-load CSS, gzip", 1],
+    );
+    const head = report(
+      ["route:a:js", "`/a` first-load JS, gzip", 5],
+      ["route:new:js", "`/new` first-load JS, gzip", 7],
+      ["route:new:css", "`/new` first-load CSS, gzip", 1],
+    );
     expect(loadTimeLine(compare(base, head))).toBe(
       "Load time: no page on both sides changed its first-load JS or CSS, so no extra transfer time on Lighthouse's slow 4G link (1,638.4 kbit/s). A page on one side only has no base to compare, so its load time is not counted: `/new` (new), `/gone` (removed).",
     );
     const grew = report(["route:a:js", "`/a` first-load JS, gzip", 1643.4], ["route:new:js", "`/new` first-load JS, gzip", 7]);
-    expect(loadTimeLine(compare(base, grew))).toMatch(/is `\/a`, \+1,638\.4 bytes gzip, about \+8\.0 ms .* not counted: `\/new` \(new\), `\/gone` \(removed\)\.$/);
+    expect(loadTimeLine(compare(base, grew))).toMatch(
+      /is `\/a`, \+1,638\.4 bytes gzip, about \+8\.0 ms .* not counted: `\/new` \(new\), `\/gone` \(removed\)\.$/,
+    );
   });
 });
 
 describe("which PRs need the table", () => {
   it("does not count tests inside app/ or workers/ as shipped code, so a tests-only PR needs no table", () => {
-    expect(touchesShippedCode(["app/lib/__tests__/a.test.ts", "app/components/b.test.tsx", "workers/__tests__/helpers.ts", "app/lib/c.ts"])).toEqual(["app/lib/c.ts"]);
+    expect(touchesShippedCode(["app/lib/__tests__/a.test.ts", "app/components/b.test.tsx", "workers/__tests__/helpers.ts", "app/lib/c.ts"])).toEqual([
+      "app/lib/c.ts",
+    ]);
     expect(prSection(["app/lib/__tests__/a.test.ts"], [])).toBe("## Size\n\nNo shipped code changed.");
   });
 
   it("counts app/, workers/, package.json and bun.lock as shipped code; docs, scripts and workflows are not", () => {
-    expect(touchesShippedCode(["app/root.tsx", "workers/app.ts", "package.json", "bun.lock", "docs/x.md", "scripts/size.ts", ".github/workflows/ci.yml", "apps/x"])).toEqual([
-      "app/root.tsx",
-      "workers/app.ts",
-      "package.json",
-      "bun.lock",
-    ]);
+    expect(
+      touchesShippedCode(["app/root.tsx", "workers/app.ts", "package.json", "bun.lock", "docs/x.md", "scripts/size.ts", ".github/workflows/ci.yml", "apps/x"]),
+    ).toEqual(["app/root.tsx", "workers/app.ts", "package.json", "bun.lock"]);
   });
 
   it("writes the sentence for a PR with no shipped code and the table plus the load line otherwise", () => {

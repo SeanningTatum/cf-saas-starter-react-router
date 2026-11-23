@@ -45,9 +45,7 @@ const TranscriptLine = Schema.Struct({
     Schema.Struct({
       id: Schema.optional(Schema.String),
       model: Schema.optional(Schema.String),
-      usage: Schema.optional(
-        Schema.Struct({ input_tokens: Count, output_tokens: Count, cache_creation_input_tokens: Count, cache_read_input_tokens: Count }),
-      ),
+      usage: Schema.optional(Schema.Struct({ input_tokens: Count, output_tokens: Count, cache_creation_input_tokens: Count, cache_read_input_tokens: Count })),
     }),
   ),
 });
@@ -61,7 +59,7 @@ interface Started {
   verdict: string;
 }
 
-export function readJournal(text: string): Started[] {
+function readJournal(text: string): Started[] {
   const started: Started[] = [];
   const results = new Map<string, unknown>();
   for (const line of text.split("\n")) {
@@ -93,7 +91,7 @@ interface Transcript {
 const atLeastZero = (value: number | undefined): number => Math.max(0, Math.round(value ?? 0));
 const roundToTenth = (value: number): number => Math.round(value * 10) / 10;
 
-export function readTranscript(text: string): Transcript {
+function readTranscript(text: string): Transcript {
   const byMessage = new Map<string, { tokens: Tokens; model: string }>();
   let earliest = Number.POSITIVE_INFINITY;
   let latest = Number.NEGATIVE_INFINITY;
@@ -159,11 +157,7 @@ function callFromEntry(entry: ReturnType<typeof readJournal>[number], n: number,
   };
 }
 
-export function ingestJournals(
-  existing: ReadonlyArray<Call> | null,
-  journals: Journal[],
-  read: Reader,
-): { calls: Call[]; withTokens: number; added: number } {
+export function ingestJournals(existing: ReadonlyArray<Call> | null, journals: Journal[], read: Reader): { calls: Call[]; withTokens: number; added: number } {
   const calls: Call[] = [...(existing ?? [])];
   const claimed = new Set<number>();
   let added = 0;

@@ -1,7 +1,7 @@
 import type { Deps, Outcome } from "../../../run-telemetry";
 import { ledgerChecksum, type LedgerCall } from "../../../lib/run-telemetry";
 
-export const ROOT = "/repo";
+const ROOT = "/repo";
 export const RUN_PATH = `${ROOT}/.verify/demo/run.json`;
 
 export function memory(files: Record<string, string> = {}, stdin = "") {

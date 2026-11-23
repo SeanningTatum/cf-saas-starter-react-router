@@ -32,7 +32,8 @@ const nextEmail = () => `rate-limit-${++emailCount}@limit.test`;
 
 const startEarlyInWindow = async () => {
   const left = msLeftInRateLimitWindow(Date.now());
-  if (left < WINDOW_MARGIN_MS) await new Promise((resolve) => setTimeout(resolve, left + ROLLOVER_SLACK_MS));
+  if (left < WINDOW_MARGIN_MS)
+    await new Promise((resolve) => setTimeout(resolve, left + ROLLOVER_SLACK_MS));
 };
 
 const postAuth = (path: string, ip: string, body: unknown) =>
@@ -48,7 +49,9 @@ const postAuth = (path: string, ip: string, body: unknown) =>
 
 const getSession = (ip: string) =>
   authLoader({
-    request: new Request(`${BASE_URL}/api/auth/get-session`, { headers: { [CLIENT_IP_HEADER]: ip } }),
+    request: new Request(`${BASE_URL}/api/auth/get-session`, {
+      headers: { [CLIENT_IP_HEADER]: ip },
+    }),
     context: app.loadContext,
     params: {},
   } as unknown as Parameters<typeof authLoader>[0]);
@@ -106,14 +109,21 @@ describe("rate limits on the real limiter binding", { timeout: 60_000 }, () => {
     const limit = RATE_LIMIT_REQUESTS_PER_PERIOD.signUp;
     expect(limit).toBeLessThan(RATE_LIMIT_REQUESTS_PER_PERIOD.signIn);
     const signUp = (ip: string) =>
-      postAuth("/sign-up/email", ip, { name: "Limit Test", email: nextEmail(), password: PASSWORD });
+      postAuth("/sign-up/email", ip, {
+        name: "Limit Test",
+        email: nextEmail(),
+        password: PASSWORD,
+      });
     const ip = nextIp();
     await startEarlyInWindow();
 
     const underLimit = await statuses(limit, () => signUp(ip));
     const overLimit = await signUp(ip);
     const otherClient = await signUp(nextIp());
-    const signInSameIp = await postAuth("/sign-in/email", ip, { email: "nobody@limit.test", password: PASSWORD });
+    const signInSameIp = await postAuth("/sign-in/email", ip, {
+      email: "nobody@limit.test",
+      password: PASSWORD,
+    });
 
     expect(underLimit).toEqual(Array(limit).fill(200));
     await expectOurRefusal(overLimit);
@@ -144,13 +154,17 @@ describe("rate limits on the real limiter binding", { timeout: 60_000 }, () => {
 
     const underLimit: number[] = [];
     for (let i = 0; i < limit; i++) underLimit.push(statusOf(await uploadAs(uploader.headers)));
-    const overLimitUpload = await trackedUpload(`${BASE_URL}/api/upload-file`, { headers: uploader.headers });
+    const overLimitUpload = await trackedUpload(`${BASE_URL}/api/upload-file`, {
+      headers: uploader.headers,
+    });
     const overLimit = await upload(overLimitUpload.request);
     const otherUser = await uploadAs(bystander.headers);
 
     expect(underLimit).not.toContain(HTTP_TOO_MANY_REQUESTS);
     expect(statusOf(overLimit)).toBe(HTTP_TOO_MANY_REQUESTS);
-    expect(new Headers(overLimit.init?.headers).get(RETRY_AFTER_HEADER)).toBe(String(RATE_LIMIT_PERIOD_SECONDS));
+    expect(new Headers(overLimit.init?.headers).get(RETRY_AFTER_HEADER)).toBe(
+      String(RATE_LIMIT_PERIOD_SECONDS),
+    );
     expect(overLimit.data).toEqual({ success: false, error: UPLOAD_RATE_LIMITED_MESSAGE });
     expect(overLimitUpload.bodyRead()).toBe(false);
     expect(statusOf(otherUser)).not.toBe(HTTP_TOO_MANY_REQUESTS);

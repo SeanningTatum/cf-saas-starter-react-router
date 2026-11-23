@@ -31,10 +31,7 @@ import {
   declaresOversizedUpload,
   matchesMagicBytes,
 } from "@/lib/constants/upload";
-import {
-  UPLOAD_READ_HEAD_SPAN,
-  UPLOAD_STORE_FILE_SPAN,
-} from "@/lib/constants/spans";
+import { UPLOAD_READ_HEAD_SPAN, UPLOAD_STORE_FILE_SPAN } from "@/lib/constants/spans";
 import { getSession } from "@/services/session";
 import { ErrorReporter } from "@/services/error-reporter";
 import type { Route } from "./+types/upload-file";
@@ -47,7 +44,8 @@ const UploadedFileMeta = Schema.Struct({
 const refusal = (error: string, status: number, headers?: HeadersInit) =>
   data({ success: false as const, error }, { status, headers });
 
-const fileField = (message: string) => new ValidationError({ entity: "file", field: "file", message });
+const fileField = (message: string) =>
+  new ValidationError({ entity: "file", field: "file", message });
 
 export async function action({ request, context }: Route.ActionArgs) {
   const program = Effect.gen(function* () {
@@ -75,11 +73,11 @@ export async function action({ request, context }: Route.ActionArgs) {
 
     const meta = yield* Schema.decodeUnknown(UploadedFileMeta)(
       { size: file.size, type: file.type },
-      { errors: "all" }
+      { errors: "all" },
     ).pipe(
       Effect.mapError(
-        () => new BucketValidationError({ message: UPLOAD_TYPE_AND_SIZE_MESSAGE, field: "file" })
-      )
+        () => new BucketValidationError({ message: UPLOAD_TYPE_AND_SIZE_MESSAGE, field: "file" }),
+      ),
     );
 
     const head = yield* Effect.tryPromise({
@@ -88,7 +86,7 @@ export async function action({ request, context }: Route.ActionArgs) {
     }).pipe(Effect.withSpan(UPLOAD_READ_HEAD_SPAN));
     if (!matchesMagicBytes(meta.type, new Uint8Array(head))) {
       return yield* Effect.fail(
-        new BucketValidationError({ message: UPLOAD_CONTENT_MISMATCH_MESSAGE, field: "file" })
+        new BucketValidationError({ message: UPLOAD_CONTENT_MISMATCH_MESSAGE, field: "file" }),
       );
     }
 
@@ -100,8 +98,8 @@ export async function action({ request, context }: Route.ActionArgs) {
       Effect.succeed(
         refusal(UPLOAD_RATE_LIMITED_MESSAGE, HTTP_TOO_MANY_REQUESTS, {
           [RETRY_AFTER_HEADER]: String(e.retryAfterSeconds),
-        })
-      )
+        }),
+      ),
     ),
     Effect.tapErrorCause((cause) => Effect.logError(UPLOAD_FAILED_LOG, cause)),
     Effect.withSpan(UPLOAD_STORE_FILE_SPAN),
@@ -110,10 +108,12 @@ export async function action({ request, context }: Route.ActionArgs) {
       BucketValidationError: (e) => Effect.succeed(refusal(e.message, HTTP_BAD_REQUEST)),
       ExternalServiceError: (error) =>
         Effect.as(
-          Effect.flatMap(ErrorReporter, (reporter) => reporter.capture({ error, source: "upload" })),
-          refusal(UPLOAD_UNAVAILABLE_MESSAGE, HTTP_SERVICE_UNAVAILABLE)
+          Effect.flatMap(ErrorReporter, (reporter) =>
+            reporter.capture({ error, source: "upload" }),
+          ),
+          refusal(UPLOAD_UNAVAILABLE_MESSAGE, HTTP_SERVICE_UNAVAILABLE),
         ),
-    })
+    }),
   );
 
   const exit = await context.runtime.runPromiseExit(program);
