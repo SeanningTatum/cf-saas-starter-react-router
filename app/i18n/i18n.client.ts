@@ -3,7 +3,7 @@ import { initReactI18next } from "react-i18next";
 import LanguageDetector from "i18next-browser-languagedetector";
 import resourcesToBackend from "i18next-resources-to-backend";
 import { getInitialNamespaces } from "remix-i18next/client";
-import { supportedLngs, fallbackLng, defaultNS } from "@/lib/constants/i18n";
+import { supportedLngs, fallbackLng, defaultNS, i18nInterpolation } from "@/lib/constants/i18n";
 
 await i18next
   .use(initReactI18next)
@@ -17,6 +17,7 @@ await i18next
     supportedLngs: [...supportedLngs],
     fallbackLng,
     defaultNS,
+    interpolation: i18nInterpolation,
     ns: getInitialNamespaces(),
     detection: {
       order: ["htmlTag"],
