@@ -126,6 +126,18 @@ const appErrorToTRPC = (e: AppError): TRPCError => {
         code: "TOO_MANY_REQUESTS",
         message: RATE_LIMITED_MESSAGE,
       });
+    case "FixtureValidationError":
+    case "SeedError":
+      return new TRPCError({
+        code: "INTERNAL_SERVER_ERROR",
+        message: "Internal Server Error",
+        cause: e,
+      });
+    case "DevServerRunningError":
+      return new TRPCError({
+        code: "CONFLICT",
+        message: "Stop the dev server first",
+      });
     default:
       return assertNever(e);
   }

@@ -29,6 +29,7 @@ import {
   BucketValidationError,
 } from "@/models/errors/bucket";
 import { RateLimitError } from "@/models/errors/rate-limit";
+import { DevServerRunningError, FixtureValidationError, SeedError } from "@/models/errors/fixture";
 import { RATE_LIMITED_MESSAGE } from "@/lib/constants/rate-limit";
 
 const failExit = <E>(e: E) => Effect.exit(tagToTRPC(Effect.fail(e)));
@@ -159,6 +160,43 @@ describe("tagToTRPC error mapping", () => {
         expectTRPC(exit, "TOO_MANY_REQUESTS");
         const failure = Exit.isFailure(exit) ? Cause.failureOption(exit.cause) : Option.none();
         expect(Option.map(failure, (e) => e.message)).toEqual(Option.some(RATE_LIMITED_MESSAGE));
+      }),
+  );
+
+  it.effect(
+    "FixtureValidationError → INTERNAL_SERVER_ERROR without the fixture detail in the message",
+    () =>
+      Effect.gen(function* () {
+        const exit = yield* failExit(
+          new FixtureValidationError({
+            scenario: "base",
+            fixture: "seed-admin",
+            message: "bad email",
+          }),
+        );
+        expectTRPC(exit, "INTERNAL_SERVER_ERROR");
+        const failure = Exit.isFailure(exit) ? Cause.failureOption(exit.cause) : Option.none();
+        expect(Option.map(failure, (e) => e.message)).toEqual(Option.some("Internal Server Error"));
+      }),
+  );
+
+  it.effect("SeedError → INTERNAL_SERVER_ERROR", () =>
+    Effect.gen(function* () {
+      const exit = yield* failExit(
+        new SeedError({ scenario: "base", target: "local", message: "wrangler failed" }),
+      );
+      expectTRPC(exit, "INTERNAL_SERVER_ERROR");
+    }),
+  );
+
+  it.effect(
+    "DevServerRunningError → CONFLICT, since the caller must stop the dev server and retry",
+    () =>
+      Effect.gen(function* () {
+        const exit = yield* failExit(
+          new DevServerRunningError({ pids: [42], stateDir: ".wrangler/state/v3" }),
+        );
+        expectTRPC(exit, "CONFLICT");
       }),
   );
 

@@ -169,7 +169,7 @@ After the first push no branch is rewritten: `.claude/settings.json` denies `git
 
 **Merge bar**
 
-1. `./scripts/verify.sh` green on the top branch with a freshly seeded DB (`bun run db:seed`); `./scripts/verify.sh --changed <branch below>` green on every branch alone.
+1. `./scripts/verify.sh` green on the top branch (the e2e gate restores the seeded DB itself); `./scripts/verify.sh --changed <branch below>` green on every branch alone.
 2. Local reviews (code-review, security, scale, maintainability, `effect-ts-enforcer`): no open P0/P1.
 3. Greptile 5/5 on the roll-up's current head, or each remaining comment declined with a reason. The 5/5 bar applies to the roll-up head only, never to the stacked PRs.
 4. You (or a coordinator you authorized) squash-merge the roll-up with `gh pr merge <n> --squash --match-head-commit <reviewed sha>`. `ship-feature` prints the command with the sha Greptile reviewed. The stacked PRs already show Merged (into `review/<slug>`), so nothing is left to close.
@@ -181,7 +181,7 @@ Commit subjects and PR titles follow Conventional Commits, checked by the `commi
 **When another feature merges first.** The stack is already in `review/<slug>`, so merge the default branch into it (`bun scripts/default-branch.ts` prints it; `staging` today); no rebase, no force push, and no re-review of the stacked PRs:
 
 - `git switch review/<slug>`, then `git merge "origin/$(bun scripts/default-branch.ts)"`. Migrations and ADRs: renumber yours to follow its latest. `scripts/seed-preview.ts` and `GLOSSARY.md`: keep both sides.
-- Re-run typecheck and unit tests, and e2e after `bun run db:seed`: the e2e server migrates but does not seed.
+- Re-run typecheck, unit tests and e2e. Every Playwright run restores the seeded DB in its global setup.
 - `git push origin review/<slug>` (a fast-forward), then post `@greptileai review` on the roll-up. The squash merge folds the merge commit away.
 
 **Fresh worktrees.** A `node_modules/node_modules` symlink to the main checkout breaks tests ("Invalid hook call", Playwright "No tests found"). `ship-feature`'s preflight moves it aside in a linked worktree; elsewhere, `mv node_modules/node_modules node_modules/.nested-modules-aside`.
@@ -247,7 +247,9 @@ bun run db:generate       # Generate Drizzle migration
 bun run db:migrate:local  # Apply migrations to local D1
 bun run db:migrate:remote # Apply migrations to remote D1
 bun run db:migrate:preview # Apply migrations to the preview-env D1
-bun run db:seed           # Seed local D1 with admin/user/banned fixtures
+bun run db:seed           # Restore the seed fixtures in local D1 (--scenario base|empty|many-users); `bun run dev` and every Playwright run do this
+bun run db:prepare        # Migrate and seed local D1 (what `bun run dev` runs first)
+bun run db:reset          # Wipe local D1 and R2, then migrate and seed (--scenario); refuses while the dev server runs
 bun run db:seed:preview   # Seed the preview-env D1 with the same fixtures
 bun run db:studio         # Drizzle Studio
 ```

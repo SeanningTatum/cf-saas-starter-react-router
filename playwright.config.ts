@@ -10,6 +10,7 @@ const VIDEO = !!process.env.E2E_VIDEO;
 
 export default defineConfig({
   testDir: "./e2e",
+  globalSetup: "./e2e/global-setup.ts",
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   // No retries, in CI or locally: a test that passes only on a second try is a bug, and a retry

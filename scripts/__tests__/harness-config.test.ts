@@ -19,6 +19,8 @@ import {
 import { CONFIG_FILE_NAME } from "../lib/harness-config-constants";
 import { ledgerChecksum } from "../lib/run-telemetry";
 import { readConfig } from "../../.claude/workflow-src/lib.js";
+import { FIXTURE_ROLE_EMAILS } from "../../app/lib/constants/fixtures";
+import { LOCAL_FIXTURE_PASSWORD } from "../lib/seed-constants";
 
 const ROOT = "/repo";
 
@@ -182,12 +184,11 @@ describe("the real harness.config.json", () => {
     expect(Object.keys(realConfig.paths).sort()).toEqual([...NESTED_KEYS.paths].sort());
   });
 
-  it("matches the seeded logins in seed-preview.ts: a stale password would fail every audit login", () => {
-    const seed = readFileSync(join(HARNESS_ROOT, "scripts/seed-preview.ts"), "utf8");
-    const password = /const PASSWORD = "([^"]+)"/.exec(seed)?.[1];
+  it("matches the seed fixtures' logins and local password: a stale login would fail every audit login", () => {
+    const emails: Record<string, string> = FIXTURE_ROLE_EMAILS;
     for (const [name, login] of Object.entries(realConfig.seedLogins)) {
-      expect(seed, name).toContain(`email: "${login.email}"`);
-      expect(login.password, name).toBe(password);
+      expect(login.email, name).toBe(emails[name]);
+      expect(login.password, name).toBe(LOCAL_FIXTURE_PASSWORD);
     }
   });
 });
