@@ -284,6 +284,7 @@ export async function run(argv: string[], deps: Deps): Promise<Outcome> {
   const parsed = parseFlags(rest);
   if (typeof parsed === "string") return usage(parsed);
   if (verb === VERB_PLAN) return plan(deps, slug, parsed.flags);
+  if (verb === VERB_NEXT && deps.readFile(statePath(deps, slug)) === null) return done(outLine({ step: { kind: "plan" } }));
   const handler = HANDLERS[verb];
   if (!handler) return usage(`unknown verb "${verb}"`);
   const loaded = load(deps, slug);

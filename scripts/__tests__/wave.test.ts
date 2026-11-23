@@ -318,13 +318,14 @@ describe("wave CLI", () => {
     expect((await w.plan()).stderr).toEqual(["wave: the plan is approved and cannot change; edit the state with retry or skip instead"]);
   });
 
-  it("bad arguments are usage errors and a missing state is a plain error, before any gh call", async () => {
+  it("bad arguments are usage errors, next on a new wave asks for the plan, and status on a missing state is a plain error, all before any gh call", async () => {
     const w = world();
     expect((await w.plan(TICKETS, ["--wave", WAVE, "--into", WAVE, "--tracks", "2", "--review-rounds", "1"])).code).toBe(1);
     expect((await w.plan(TICKETS, ["--wave", WAVE, "--into", INTO, "--tracks", "9", "--review-rounds", "1"])).code).toBe(2);
     expect((await w.cli(["next", "Wave Two"])).code).toBe(2);
     expect((await w.cli(["frobnicate", SLUG])).code).toBe(2);
-    expect((await w.cli(["next", SLUG])).stderr[0]).toBe(`wave: no wave state for ${SLUG}: the workflow writes it at its plan step`);
+    expect(JSON.parse((await w.cli(["next", SLUG])).stdout[0] ?? "{}").out).toEqual({ step: { kind: "plan" } });
+    expect((await w.cli(["status", SLUG])).stderr[0]).toBe(`wave: no wave state for ${SLUG}: the workflow writes it at its plan step`);
     await w.approved();
     expect((await w.cli(["gate", SLUG, "--head", "abc1234", "--code", "0"])).code).toBe(2);
     expect((await w.cli(["guard", SLUG])).code).toBe(2);

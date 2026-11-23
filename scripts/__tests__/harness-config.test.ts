@@ -68,6 +68,27 @@ describe("loadHarnessConfig defaults", () => {
     expect(HARNESS_DEFAULTS.coauthor).toBe("Co-Authored-By: Claude Fable 5.2 <noreply@anthropic.com>");
   });
 
+  it("the wave defaults run two tracks, one review round, design and planning on the stronger model and mechanical work on the cheaper one", () => {
+    expect(HARNESS_DEFAULTS.wave).toEqual({
+      tracksAtOnce: 2,
+      reviewRounds: 1,
+      models: { plan: "opus", design: "opus", build: "sonnet", review: "sonnet", mechanical: "haiku" },
+    });
+  });
+
+  it("a wave section with one model set keeps the other models and the counts: a partial wave must not blank the planner's model", () => {
+    const config = loadedOrThrow(JSON.stringify({ wave: { models: { mechanical: "sonnet" } } }));
+    expect(config.wave).toEqual({ ...HARNESS_DEFAULTS.wave, models: { ...HARNESS_DEFAULTS.wave.models, mechanical: "sonnet" } });
+  });
+
+  it("refuses a wave that runs no track, more tracks than the cap, or a model name a shell could misread", () => {
+    expect(faultOf(JSON.stringify({ wave: { tracksAtOnce: 0 } }))).toMatch(/wave\.tracksAtOnce/);
+    expect(faultOf(JSON.stringify({ wave: { tracksAtOnce: 9 } }))).toMatch(/wave\.tracksAtOnce/);
+    expect(faultOf(JSON.stringify({ wave: { reviewRounds: 4 } }))).toMatch(/wave\.reviewRounds/);
+    expect(faultOf(JSON.stringify({ wave: { models: { build: "son net; rm" } } }))).toMatch(/wave\.models\.build/);
+    expect(faultOf(JSON.stringify({ wave: { modls: {} } }))).toMatch(/modls/);
+  });
+
   it("a section with one key set keeps the default for its other keys: a partial reviewBot must not blank the marker", () => {
     const config = loadedOrThrow(JSON.stringify({ reviewBot: { login: "acme" } }));
     expect(config.reviewBot).toEqual({ ...HARNESS_DEFAULTS.reviewBot, login: "acme" });
