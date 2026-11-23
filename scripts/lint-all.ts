@@ -90,7 +90,7 @@ function biomeOutcome(tool: string, result: RunResult): ToolOutcome {
 }
 
 function runBiome(deps: Deps, request: Request, files: readonly string[]): ToolOutcome {
-  const targets = request.staged ? ["--staged"] : files.length > 0 ? files : ["."];
+  const targets = request.staged ? [] : files.length > 0 ? files : ["."];
   return biomeOutcome(
     TOOL.biome,
     deps.run(BIOME_BIN, [
@@ -100,6 +100,7 @@ function runBiome(deps: Deps, request: Request, files: readonly string[]): ToolO
       "--error-on-warnings",
       "--no-errors-on-unmatched",
       ...(request.fix ? ["--write"] : []),
+      ...(request.staged ? ["--staged"] : []),
       "--",
       ...targets,
     ]),

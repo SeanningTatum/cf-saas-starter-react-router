@@ -239,12 +239,15 @@ describe("lint with file arguments", () => {
 });
 
 describe("lint --staged", () => {
-  it("asks git for the staged files, passes --staged to Biome, the existing lintable files to the house linter, and skips knip", () => {
+  it("asks git for the staged files, passes --staged to Biome as an option and never as a path, the existing lintable files to the house linter, and skips knip", () => {
     const f = fake({ git: ok("app/a.ts\ndocs/notes.md\napp/gone.ts\n\n"), existing: ["app/a.ts", "docs/notes.md"] });
     expect(lint(["--staged"], f.deps)).toBe(EXIT.clean);
     expect(commands(f)).toEqual(["git", BIOME_BIN, "bun"]);
     expect(argsOf(f, "git")).toEqual(expect.arrayContaining(["diff", "--cached", "--name-only"]));
-    expect(argsOf(f, BIOME_BIN)?.at(-1)).toBe("--staged");
+    const biomeArgs = argsOf(f, BIOME_BIN) ?? [];
+    expect(biomeArgs).toContain("--staged");
+    expect(biomeArgs.indexOf("--staged")).toBeLessThan(biomeArgs.indexOf("--"));
+    expect(biomeArgs.at(-1)).toBe("--");
     expect(argsOf(f, BIOME_BIN)).not.toContain(".");
     expect(argsOf(f, "bun")).toEqual(["run", "lint:house", "app/a.ts"]);
   });
