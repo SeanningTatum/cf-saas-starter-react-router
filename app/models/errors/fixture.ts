@@ -8,7 +8,7 @@ export class FixtureValidationError extends Data.TaggedError("FixtureValidationE
 
 export class SeedError extends Data.TaggedError("SeedError")<{
   readonly scenario: string;
-  readonly target: "local" | "preview" | "remote";
+  readonly target: "local" | "preview" | "remote" | "memory";
   readonly message: string;
   readonly cause?: unknown;
 }> {}
