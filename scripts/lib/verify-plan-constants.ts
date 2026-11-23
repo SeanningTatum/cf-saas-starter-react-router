@@ -60,7 +60,7 @@ export const COMMAND = {
 export const MODULE_FILE = /\.(tsx?|jsx?|json)$/;
 
 export const SKIP_REASON = {
-  noCode: "no .ts or .tsx file changed",
+  noCode: "no .ts, .tsx, .js, .json or .css file changed, so Biome has nothing to check",
   noModule: "no .ts, .tsx, .js or .json file changed, so no test imports one",
   noSpec: "no changed file maps to an e2e spec (scripts/lint/test-map.json, the route table, or a spec that imports it)",
 } as const;
