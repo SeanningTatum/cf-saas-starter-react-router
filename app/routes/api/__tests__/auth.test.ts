@@ -181,12 +181,7 @@ const reportingContext = (request: Request, status: number) => {
   const reportError = vi.fn((capture: Parameters<AppLoadContext["reportError"]>[0]) =>
     deliverReport(reporter, capture),
   );
-  const context = {
-    runtime,
-    auth: { handler },
-    reportError,
-    requestId: requestContext.requestId,
-  } as unknown as AppLoadContext;
+  const context = { runtime, auth: { handler }, reportError } as unknown as AppLoadContext;
   return {
     context,
     answer,
@@ -201,7 +196,7 @@ const reportingContext = (request: Request, status: number) => {
 
 describe("/api/auth/* server errors that Better Auth returns as a response", () => {
   it.each([500, 503])(
-    "reports a returned %i once, as a defect, with only the status, the path without its query, and the request id",
+    "reports a returned %i once, as a defect, with only the status, the path without its query, and the request id the reporter stamps",
     async (status) => {
       const request = credentialedRequest("POST");
       const { context, answer, reportError, requestId, reports } = reportingContext(
@@ -218,7 +213,6 @@ describe("/api/auth/* server errors that Better Auth returns as a response", () 
       expect(reportError).toHaveBeenCalledWith({
         error: { status, statusText: "" },
         source: "action",
-        requestId,
       });
       const sent = await reports();
       expect(sent).toHaveLength(1);
@@ -243,7 +237,7 @@ describe("/api/auth/* server errors that Better Auth returns as a response", () 
 
   it("reports a returned 500 from the loader as a loader defect", async () => {
     const request = credentialedRequest("GET");
-    const { context, answer, reportError, requestId } = reportingContext(request, 500);
+    const { context, answer, reportError } = reportingContext(request, 500);
 
     const response = await loader({ request, context, params: {} } as unknown as LoaderArgs);
 
@@ -252,7 +246,6 @@ describe("/api/auth/* server errors that Better Auth returns as a response", () 
     expect(reportError).toHaveBeenCalledWith({
       error: { status: 500, statusText: "" },
       source: "loader",
-      requestId,
     });
   });
 

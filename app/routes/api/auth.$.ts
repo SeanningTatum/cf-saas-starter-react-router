@@ -17,7 +17,6 @@ const reportServerFailure = (
     context.reportError({
       error: { status: response.status, statusText: "" },
       source,
-      requestId: context.requestId,
     });
   }
   return response;
