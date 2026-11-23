@@ -134,6 +134,32 @@ Worked example: the release PR is titled `feat!: v3.0, the new starter`. It land
 
 The harness writes its own titles to the same rule. The architect gives each stacked PR a conventional title; `ship-feature` commits with that title and prefixes `feat: ` on one that has no type. The roll-up title takes `feat` when any stacked PR is a `feat`, else the last PR's type, and carries `!` when any stacked PR is breaking. `ship-feature` checks only the shape of a title, not the scope list: a title with an unlisted scope is caught by the `commit-msg` hook and the PR title job.
 
+## Health route
+
+`GET /healthz` (`app/routes/api/healthz.ts`) is public and answers one of two bodies:
+
+| Database | Status | Body |
+|----------|--------|------|
+| answers `select 1` | 200 | `{"status":"up","release":"<RELEASE_VERSION>"}` |
+| fails, or the binding is missing | 503 | `{"status":"down","release":"<RELEASE_VERSION>"}` |
+
+The release is the `RELEASE_VERSION` var the deploy sets, or `unversioned`. The body never holds the error, the latency, the schema or anything about a user. Every answer carries `cache-control: no-store`. Any method but `GET` or `HEAD` gets an empty 405.
+
+**Why no rate limit.** The route runs one `select 1`, and each isolate keeps the database answer for 5 seconds (`HEALTHZ_CHECK_TTL_MS`), so a flood of requests costs at most one D1 query per isolate every 5 seconds whatever its rate. A Workers Rate Limiting binding keyed by IP would add a binding to every environment and could answer 429 to the deploy's own smoke check, which runs from GitHub's shared runner addresses. The Worker invocations themselves are what Cloudflare's own DDoS protection covers. The 5-second window means a database that just went down can read as up for up to 5 seconds on an isolate that checked it a moment before.
+
+## Smoke check
+
+`scripts/ci/smoke-check.ts` reads `/healthz` on a deployed origin:
+
+```bash
+bun scripts/ci/smoke-check.ts --url https://app.example.com [--release v3.1.0] [--worker <name> --version-id <uuid>]
+```
+
+- It passes on a 200 with `status: "up"`, and, when `--release` is given, that release. A redirect, a 5xx, a body of another shape or a timeout (10 seconds) is a failed attempt.
+- It tries up to 6 times, 10 seconds apart, so a deployment still spreading across Cloudflare's network is not called broken. It exits 0 on a pass, 1 on a fail, 2 on bad arguments, and writes one line to the job summary.
+- `--worker` and `--version-id` send `Cloudflare-Workers-Version-Overrides: <name>="<id>"`, which sends the request to that version while traffic is split between two. Cloudflare ignores the header when the version is not in the current deployment and serves the request by the split, so the check compares the release in the body as well: an answer from the old version fails it.
+- The URL must be an `https` origin with no path (or `http` on localhost), and the Worker name and version id are checked, so no other header can be written through them.
+
 ## Readiness and skips
 
 Each of the three Cloudflare workflows starts with a `readiness` job that holds no secret value. It runs `scripts/ci/deploy-gate.ts`, which decides whether the repo is set up. When it is not, the later jobs are skipped and the notice says why (`::notice::<Workflow> skipped: <reason>`). The reasons live in that script. The deploy job adds one more skip: no `CLOUDFLARE_API_TOKEN` in the `production` environment.

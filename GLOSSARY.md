@@ -1,6 +1,8 @@
 # Glossary
 
 - `HealthRepository`: Effect service in `app/repositories/health.ts`; `pingDatabase()` runs `select 1` on D1 and reports `{ ok, latencyMs, error? }`, with a failure as data.
+- **Health route**: public `GET /healthz` (`app/routes/api/healthz.ts`). It answers `{ status: "up" | "down", release }`, 200 or 503, with `cache-control: no-store`, and nothing about the schema, the user or the error. The database answer is kept for 5 seconds per isolate. A deploy's smoke check reads it.
+- **Smoke check**: `scripts/ci/smoke-check.ts`. It asks a deployed origin's `/healthz` up to 6 times, 10 seconds apart, and passes on a 200 `up` with the expected release. It can pin one Worker version with the `Cloudflare-Workers-Version-Overrides` header ([pipelines](docs/ci/pipelines.md#smoke-check)).
 - `dbHealth`: admin-only tRPC query `admin.dbHealth`; returns `{ ok, latencyMs, checkedAt, error? }`.
 - **Shared harness**: the agents, workflows, skills, commands, hook and scripts kept in one shared repo and committed into each project as a copy that `sync` writes and nobody edits by hand ([ADR 0001](docs/adr/0001-harness-delivery.md)). Not a plugin.
 - **Pack**: a folder in the shared repo that holds the agents and checks for one stack or one area (the stack pack, the design pack). `sync` copies it beside the core. Not a plugin.
