@@ -416,6 +416,8 @@ bunx wrangler versions deploy     # Promote an uploaded version to production
 
 Observability is enabled in [`wrangler.jsonc`](wrangler.jsonc) (logs, 100% head sampling). Smart placement is on.
 
+Every merge into `staging` deploys to a staging Worker with its own D1 and R2, then checks `GET /healthz` and runs the `@deployed` e2e specs against it ([`docs/ci/pipelines.md`](docs/ci/pipelines.md#staging)).
+
 ### Preview deployments (per-PR)
 
 Every pull request can get its own live preview, isolated from production.

@@ -7,10 +7,15 @@ const PORT = process.env.E2E_PORT ?? "5173";
 // E2E_VIDEO=1 records every test at a size a PR reviewer can read, slowed so a viewer can follow.
 // scripts/e2e-videos.ts sets it and collects the @golden and @error videos.
 const VIDEO = !!process.env.E2E_VIDEO;
+// E2E_BASE_URL points the run at a deployed origin (the staging deploy runs `--grep @deployed`
+// against it), so no local server starts. See docs/ci/pipelines.md#staging.
+const BASE_URL = process.env.E2E_BASE_URL || `http://localhost:${PORT}`;
+const DEPLOYED = !!process.env.E2E_BASE_URL;
 
 export default defineConfig({
   testDir: "./e2e",
-  globalSetup: "./e2e/global-setup.ts",
+  // The local seed restore has no place in a run against a deployed origin.
+  globalSetup: DEPLOYED ? undefined : "./e2e/global-setup.ts",
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   // No retries, in CI or locally: a test that passes only on a second try is a bug, and a retry
@@ -19,8 +24,9 @@ export default defineConfig({
   workers: process.env.CI ? 1 : undefined,
   reporter: "html",
   use: {
-    baseURL: `http://localhost:${PORT}`,
-    trace: "retain-on-failure",
+    baseURL: BASE_URL,
+    // No trace against a deployed origin: the report is a public artifact.
+    trace: DEPLOYED ? "off" : "retain-on-failure",
     screenshot: "only-on-failure",
     video: VIDEO ? { mode: "on", size: { width: 1280, height: 720 } } : "off",
     launchOptions: { slowMo: VIDEO ? 250 : 0 },
@@ -31,10 +37,12 @@ export default defineConfig({
       use: { ...devices["Desktop Chrome"] },
     },
   ],
-  webServer: {
-    command: `bun run db:migrate:local && react-router dev --port ${PORT} --strictPort`,
-    url: `http://localhost:${PORT}`,
-    reuseExistingServer: !process.env.CI,
-    timeout: 120 * 1000,
-  },
+  webServer: DEPLOYED
+    ? undefined
+    : {
+        command: `bun run db:migrate:local && react-router dev --port ${PORT} --strictPort`,
+        url: `http://localhost:${PORT}`,
+        reuseExistingServer: !process.env.CI,
+        timeout: 120 * 1000,
+      },
 });

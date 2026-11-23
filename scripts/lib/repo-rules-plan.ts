@@ -90,3 +90,10 @@ export function planRepository(decl: DeclaredRepositoryT, liveTitle: string | un
   d.cmp(SQUASH_TITLE_KEY, declared, liveTitle);
   return { findings: d.lines.map((text) => ({ level: "drift", text, softWhenFresh: true })), actions: [write], applied: false };
 }
+
+export function withEnvPending(plan: Plan, name: string, pending: string | undefined): Plan {
+  const subject = `environment "${name}"`;
+  if (pending === undefined) return plan;
+  if (!plan.applied) return { ...plan, findings: [notYetApplied(subject, pending)], actions: plan.actions.map((a) => ({ ...a, pending: true })) };
+  return plan.findings.every((f) => f.level === "ok") ? { ...plan, findings: [...plan.findings, markCanGo(subject)] } : plan;
+}

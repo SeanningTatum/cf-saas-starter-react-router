@@ -12,7 +12,7 @@ interface RateLimitEntry {
 
 interface WranglerShape {
   ratelimits?: RateLimitEntry[];
-  env: { preview: { ratelimits?: RateLimitEntry[] } };
+  env: Record<"preview" | "staging", { ratelimits?: RateLimitEntry[]; d1_databases?: { database_name: string }[]; r2_buckets?: { bucket_name: string }[] }>;
 }
 
 const committed = JSON.parse(stripJsonc(fs.readFileSync(path.join(__dirname, "..", "..", "wrangler.jsonc"), "utf-8"))) as WranglerShape;
@@ -43,12 +43,28 @@ describe("buildWranglerConfig", () => {
     expect(new Set(periods)).toEqual(new Set([RATE_LIMIT_PERIOD_SECONDS]));
   });
 
+  it("builds the same env blocks and staging rate limits the committed wrangler.jsonc holds, whatever ids, names or vars setup and the owner wrote into it, so that setup never drops a block the repo deploys", () => {
+    expect(Object.keys(committed.env).sort()).toEqual(Object.keys(built.env).sort());
+    expect(built.env.staging.ratelimits).toEqual(committed.env.staging.ratelimits);
+  });
+
+  it("gives staging its own database, bucket and rate-limit counters, so that a staging deploy or test never touches production or preview data", () => {
+    const staging = built.env.staging;
+    expect(staging.d1_databases?.[0]?.database_name).toBe("cf-saas-starter-react-router-db-staging");
+    expect(staging.r2_buckets?.[0]?.bucket_name).toBe("cf-saas-starter-react-router-bucket-staging");
+    const others = new Set([...(built.ratelimits ?? []), ...(built.env.preview.ratelimits ?? [])].map((entry) => entry.namespace_id));
+    const ids = staging.ratelimits?.map((entry) => entry.namespace_id) ?? [];
+    expect(ids).toHaveLength(RATE_LIMITS.length);
+    expect(ids.filter((id) => others.has(id))).toEqual([]);
+  });
+
   it("drops the R2 bucket from both blocks when setup runs without R2", () => {
     const withoutR2 = buildWranglerConfig({ ...DUMMY_INPUT, enableR2: false }) as Record<string, unknown> & {
-      env: { preview: Record<string, unknown> };
+      env: { preview: Record<string, unknown>; staging: Record<string, unknown> };
     };
     expect(withoutR2).not.toHaveProperty("r2_buckets");
     expect(withoutR2.env.preview).not.toHaveProperty("r2_buckets");
+    expect(withoutR2.env.staging).not.toHaveProperty("r2_buckets");
     expect(withoutR2).toHaveProperty("ratelimits");
   });
 });
