@@ -25,3 +25,5 @@
 - **Track**: the tickets of a wave that touch the same files, built one after another. Tickets in different tracks may be built at the same time.
 - **Batch**: the tickets a wave builds at the same time, at most `wave.tracksAtOnce`, no two from one track and none needing another. Its green PRs merge together, then the full checks run once on the wave branch before the next batch starts.
 - **Merge guard**: the check `scripts/wave.ts` runs before it merges a ticket PR: every check on the head is success or skipped, no review thread is unanswered (unresolved, with no reply after the reviewer's last comment), and the base is the wave branch.
+- **Readiness item**: one setting a production deploy needs after the database exists (a deploy token, `BETTER_AUTH_URL`, a Turnstile key, a Sentry DSN, a PostHog key). Each has an id, a flag `--<id>`, a variable `SETUP_<ID>` and one store; the list is `scripts/lib/setup-items.ts`.
+- **Readiness pass**: the part of `bun run setup` that sets readiness items from prompts, flags and variables, changing only the items it is asked to, and prints the table `bun run setup --check` prints ([`docs/setup.md`](docs/setup.md)).

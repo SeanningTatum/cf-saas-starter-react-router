@@ -73,7 +73,7 @@ wrangler login
 bun run scripts/first-time-setup.ts
 ```
 
-The wizard creates your D1 database, R2 bucket, optional KV namespace, generates a `BETTER_AUTH_SECRET`, writes `wrangler.jsonc` + `.env`, runs migrations, and deploys. ~3 min end-to-end. It sets no `BETTER_AUTH_URL`, so the deployed Worker answers 500 until you add it ([`docs/auth.md`](docs/auth.md)). Its last step offers to apply the [repo rules](#repo-rules-githubrepo-rulesjson).
+The wizard creates your D1 database, R2 bucket, optional KV namespace, generates a `BETTER_AUTH_SECRET`, writes `wrangler.jsonc` + `.env`, runs migrations, and deploys. ~3 min end-to-end. It then runs a production-readiness pass: the auth URL, deploy tokens, Turnstile, the error reporter and analytics, each answered at a prompt, passed as a flag or skipped. Without `BETTER_AUTH_URL` the deployed Worker answers 500. `bun run setup --check` lists what is still missing, and `bun run setup --<item> <value>` adds one later without touching the rest ([`docs/setup.md`](docs/setup.md)). The security pass applies the [repo rules](#repo-rules-githubrepo-rulesjson) and the GitHub security settings.
 
 ### Option B — Manual
 
@@ -267,7 +267,8 @@ bun run db:studio             # Drizzle Studio (visual DB editor)
 
 bun run cf-typegen            # Regenerate worker-configuration.d.ts
 bun scripts/install-hooks.ts  # Re-install the commit hooks (`prepare` runs it)
-bun run setup                 # First-time wizard
+bun run setup                 # First-time wizard and production-readiness pass
+bun run setup --check         # What is set, missing or skipped (names only)
 bun run teardown              # Tear down Cloudflare resources
 ```
 
