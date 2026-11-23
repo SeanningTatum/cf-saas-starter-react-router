@@ -16,6 +16,7 @@ export const PAGE_PATHS = {
   signUp: "/sign-up",
   dashboard: "/dashboard",
   admin: "/admin",
+  adminKitchenSink: "/admin/kitchen-sink",
 } as const;
 
 export const API_PATHS = {
@@ -63,6 +64,7 @@ export const HTTP_STATUS = {
   ok: 200,
   badRequest: 400,
   unauthorized: 401,
+  gatewayTimeout: 504,
 } as const;
 
 export const TALL_DESKTOP_VIEWPORT = { width: 1280, height: 1000 } as const;
