@@ -159,6 +159,16 @@ export const testMapCases: Case[] = [
     expect: "finding",
   },
   {
+    name: "unit: a factory that names importOriginal but discards the real module still mocks the file away",
+    files: unit('import { expect, it, vi } from "vitest";\nvi.mock("../helper", (importOriginal) => ({ helper: vi.fn() }));\nimport { helper } from "../helper";\nit("x", () => { expect(helper(1)).toBeUndefined(); });\n'),
+    expect: "finding",
+  },
+  {
+    name: "unit: a computed export compared with assert.deepEqual counts",
+    files: unit('import { assert, it } from "vitest";\nimport { helper } from "../helper";\nit("x", () => { assert.deepEqual(helper, helper); });\n'),
+    expect: "clean",
+  },
+  {
     name: "unit: a namespace import that is called counts",
     files: unit('import { expect, it } from "vitest";\nimport * as subject from "../helper";\nit("adds", () => { expect(subject.helper(1)).toBe(2); });\n'),
     expect: "clean",

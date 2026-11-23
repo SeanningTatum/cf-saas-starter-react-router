@@ -6,6 +6,19 @@ import { moduleNames, resolveSpecifier } from "./imports";
 const EXPECT_CALLEE = "expect";
 const ASSERT_CALLEE = "assert";
 const PRESENCE_MATCHERS = new Set(["toBeDefined", "toBeUndefined", "toBeTruthy", "toBeFalsy", "toBeNull", "toBeTypeOf", "toBeInstanceOf"]);
+const ASSERT_PRESENCE_METHODS = new Set([
+  "ok",
+  "isOk",
+  "exists",
+  "notExists",
+  "isDefined",
+  "isUndefined",
+  "isNull",
+  "isNotNull",
+  "isFunction",
+  "typeOf",
+  "instanceOf",
+]);
 const MOCK_CALLS = new Set(["mock", "doMock"]);
 const MOCK_OWNER = "vi";
 const REAL_MODULE_READERS = new Set(["importOriginal", "importActual"]);
@@ -86,7 +99,8 @@ function invokes(parent: ts.Node, top: ts.Expression): boolean {
 function passedOn(call: ts.CallExpression, read: boolean): boolean {
   const callee = calleeName(call);
   if (read || (callee !== EXPECT_CALLEE && callee !== ASSERT_CALLEE)) return true;
-  return callee === EXPECT_CALLEE && !PRESENCE_MATCHERS.has(matcherOf(call) ?? "");
+  if (callee === EXPECT_CALLEE) return !PRESENCE_MATCHERS.has(matcherOf(call) ?? "");
+  return ts.isPropertyAccessExpression(call.expression) && !ASSERT_PRESENCE_METHODS.has(call.expression.name.text);
 }
 
 const isHandedOver = (parent: ts.Node, top: ts.Expression): boolean =>
@@ -104,6 +118,35 @@ function exercises(node: ts.Identifier): boolean {
   return isHandedOver(parent, top) || read;
 }
 
+function isRealModuleRead(node: ts.Node): boolean {
+  if (!ts.isCallExpression(node)) return false;
+  const callee = node.expression;
+  const name = ts.isIdentifier(callee) ? callee.text : ts.isPropertyAccessExpression(callee) ? callee.name.text : undefined;
+  return name !== undefined && REAL_MODULE_READERS.has(name);
+}
+
+const unwrapAwait = (node: ts.Expression): ts.Expression => {
+  let current = node;
+  while (ts.isAwaitExpression(current) || ts.isParenthesizedExpression(current)) current = current.expression;
+  return current;
+};
+
+function keepsRealModule(factory: ts.Node): boolean {
+  const holders = new Set<string>();
+  walkNodes(factory, (node) => {
+    if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) && node.initializer && isRealModuleRead(unwrapAwait(node.initializer))) {
+      holders.add(node.name.text);
+    }
+  });
+  let kept = false;
+  walkNodes(factory, (node) => {
+    if (!ts.isSpreadAssignment(node)) return;
+    const spread = unwrapAwait(node.expression);
+    kept ||= isRealModuleRead(spread) || (ts.isIdentifier(spread) && holders.has(spread.text));
+  });
+  return kept;
+}
+
 function isMocked(source: Source, names: string[]): boolean {
   let mocked = false;
   walkNodes(source.ast, (node) => {
@@ -111,13 +154,7 @@ function isMocked(source: Source, names: string[]): boolean {
     const { expression: owner, name } = node.expression;
     if (!ts.isIdentifier(owner) || owner.text !== MOCK_OWNER || !MOCK_CALLS.has(name.text) || !resolvesTo(node.arguments[0], source, names)) return;
     const factory = node.arguments[1];
-    let keepsReal = false;
-    if (factory) {
-      walkNodes(factory, (inner) => {
-        keepsReal ||= ts.isIdentifier(inner) && REAL_MODULE_READERS.has(inner.text);
-      });
-    }
-    mocked ||= !keepsReal;
+    mocked ||= factory === undefined || !keepsRealModule(factory);
   });
   return mocked;
 }
