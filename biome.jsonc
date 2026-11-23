@@ -62,6 +62,7 @@
           "level": "error",
           "options": { "filenameCases": ["kebab-case"], "requireAscii": true }
         },
+        // Each override below repeats the whole list: Biome replaces a rule's options per override, it does not merge them.
         "noRestrictedImports": {
           "level": "error",
           "options": {
@@ -94,7 +95,7 @@
       "formatter": { "lineWidth": 160 }
     },
     {
-      "includes": ["app/**", "workers/**", "workflows/**"],
+      "includes": ["app/**", "workers/**"],
       "linter": {
         "domains": { "react": "recommended" },
         "rules": {

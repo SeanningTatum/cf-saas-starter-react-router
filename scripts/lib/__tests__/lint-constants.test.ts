@@ -1,11 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { DEAD_CODE_FIX, EXIT, FORMAT_FIX, LINTABLE_FILE, SPAWN_FAILED_STATUS } from "../lint-constants";
+import { DEAD_CODE_FIX, EXIT, FORMAT_FIX, LINTABLE_FILE } from "../lint-constants";
 
 describe("lint constants", () => {
   it("keeps clean at 0 and the three exit codes distinct, so findings and a broken tool never read as a pass or as each other", () => {
     expect(EXIT.clean).toBe(0);
     expect(new Set([EXIT.clean, EXIT.findings, EXIT.toolFailed]).size).toBe(3);
-    expect(SPAWN_FAILED_STATUS).not.toBe(0);
   });
 
   it.each(Object.entries(DEAD_CODE_FIX))("gives the %s dead-code kind a fix that says what to do", (_kind, fix) => {

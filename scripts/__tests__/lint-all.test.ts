@@ -4,9 +4,9 @@ import {
   EXIT,
   IMPORT_CYCLE_RULE,
   KNIP_BIN,
-  SPAWN_FAILED_STATUS,
 } from "../lib/lint-constants";
-import { type Deps, lint, parseArgs, type RunResult, realDeps } from "../lint-all";
+import { type Deps, lint, parseArgs, realDeps } from "../lint-all";
+import type { RunResult } from "../lib/shell";
 
 interface Call {
   command: string;
@@ -29,8 +29,8 @@ interface Fake {
   err: string[];
 }
 
-const ok = (stdout: string): RunResult => ({ status: 0, stdout, stderr: "" });
-const failed = (stdout: string, stderr = "boom"): RunResult => ({ status: 1, stdout, stderr });
+const ok = (stdout: string): RunResult => ({ code: 0, stdout, stderr: "" });
+const failed = (stdout: string, stderr = "boom"): RunResult => ({ code: 1, stdout, stderr });
 
 const CLEAN_BIOME = '{"summary":{"errors":0},"diagnostics":[],"command":"check"}';
 const CLEAN_KNIP = "Using latest D1 database: miniflare-D1DatabaseObject/abc.sqlite\n{\"issues\":[]}\n";
@@ -60,7 +60,7 @@ function fake(setup: Setup = {}): Fake {
     run: (command, args) => {
       calls.push({ command, args });
       if (command === BIOME_BIN) return (args.includes(CYCLES_FLAG) ? setup.cycles : setup.biome) ?? ok(CLEAN_BIOME);
-      return answers[command] ?? { status: SPAWN_FAILED_STATUS, stdout: "", stderr: `unexpected command ${command}` };
+      return answers[command] ?? { code: 127, stdout: "", stderr: `unexpected command ${command}` };
     },
     exists: (file) => setup.existing === undefined || setup.existing.includes(file),
     print: (line) => out.push(line),
@@ -132,8 +132,8 @@ describe("lint on the whole repo", () => {
     ["Biome prints no JSON", { biome: failed("Biome crashed") }],
     ["Biome exits non-zero with no finding", { biome: failed(CLEAN_BIOME) }],
     ["the house linter exits non-zero with no finding", { house: failed("") }],
-    ["the house binary cannot start", { house: { status: SPAWN_FAILED_STATUS, stdout: "", stderr: "cannot run bun" } }],
-    ["the house linter exits 2 for a bad option or a missing file", { house: { status: 2, stdout: "", stderr: "no such file: app/x.ts" } }],
+    ["the house binary cannot start", { house: { code: 1, stdout: "", stderr: "spawn bun ENOENT" } }],
+    ["the house linter exits 2 for a bad option or a missing file", { house: { code: 2, stdout: "", stderr: "no such file: app/x.ts" } }],
     ["the import-cycle run prints no JSON", { cycles: failed("Biome crashed") }],
     ["knip prints no JSON", { knip: ok("ERROR: config invalid") }],
     ["knip exits non-zero with no finding", { knip: failed('{"issues":[]}') }],
@@ -228,7 +228,7 @@ describe("lint --staged", () => {
   });
 
   it("returns 2 and runs no linter when git cannot list the staged files", () => {
-    const f = fake({ git: { status: 128, stdout: "", stderr: "fatal: not a git repository" } });
+    const f = fake({ git: { code: 128, stdout: "", stderr: "fatal: not a git repository" } });
     expect(lint(["--staged"], f.deps)).toBe(EXIT.toolFailed);
     expect(commands(f)).toEqual(["git"]);
     expect(f.err.join("\n")).toContain("fatal: not a git repository");
@@ -238,7 +238,7 @@ describe("lint --staged", () => {
 describe("realDeps", () => {
   it("reports a binary that cannot start as a non-zero status, so a missing tool is never a clean run", () => {
     const result = realDeps().run("lint-all-test-no-such-binary", []);
-    expect(result.status).toBe(SPAWN_FAILED_STATUS);
+    expect(result.code).not.toBe(0);
     expect(result.stdout).toBe("");
     expect(result.stderr).toContain("lint-all-test-no-such-binary");
   });

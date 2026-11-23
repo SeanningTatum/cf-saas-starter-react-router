@@ -33,8 +33,8 @@ done
 
 relative=${file#"$root"/}
 
-# Git sets GIT_DIR and friends when a hook runs inside a git command; the linters do not need them.
-findings=$(cd "$root" && env -u GIT_DIR -u GIT_WORK_TREE -u GIT_INDEX_FILE bun scripts/lint-all.ts --fix "$relative" 2>&1)
+# The runner strips GIT_* from each tool it starts (scripts/lib/shell.ts), so a git hook's GIT_DIR never reaches them.
+findings=$(cd "$root" && bun scripts/lint-all.ts --fix "$relative" 2>&1)
 status=$?
 
 [ "$status" -eq 0 ] && exit 0

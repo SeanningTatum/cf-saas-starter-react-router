@@ -1,6 +1,4 @@
 export const EXIT = { clean: 0, findings: 1, toolFailed: 2 } as const;
-export const SPAWN_FAILED_STATUS = 127;
-export const MAX_OUTPUT_BYTES = 256 * 1024 * 1024;
 
 export const TOOL = { biome: "biome", house: "house", importCycles: "import-cycles", deadCode: "dead-code" } as const;
 

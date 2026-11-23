@@ -1,5 +1,4 @@
 #!/usr/bin/env bun
-import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -11,8 +10,6 @@ import {
   IMPORT_CYCLE_RULE,
   KNIP_BIN,
   LINTABLE_FILE,
-  MAX_OUTPUT_BYTES,
-  SPAWN_FAILED_STATUS,
   STAGED_FILES_ARGS,
   TOOL,
 } from "./lib/lint-constants";
@@ -24,12 +21,7 @@ import {
   parseKnip,
   sortFindings,
 } from "./lib/lint-findings";
-
-export interface RunResult {
-  status: number;
-  stdout: string;
-  stderr: string;
-}
+import { type RunResult, realShell } from "./lib/shell";
 
 export interface Deps {
   run: (command: string, args: readonly string[]) => RunResult;
@@ -44,7 +36,7 @@ interface ToolOutcome {
   error?: string;
 }
 
-export interface Request {
+interface Request {
   staged: boolean;
   fix: boolean;
   files: string[];
@@ -60,7 +52,7 @@ export function parseArgs(argv: readonly string[]): Request {
 
 function stagedFiles(deps: Deps): Either.Either<string[], string> {
   const listed = deps.run("git", STAGED_FILES_ARGS);
-  if (listed.status !== 0) return Either.left(`git could not list the staged files: ${listed.stderr.trim()}`);
+  if (listed.code !== 0) return Either.left(`git could not list the staged files: ${listed.stderr.trim()}`);
   return Either.right(listed.stdout.split("\n").filter((file) => file !== "" && deps.exists(file)));
 }
 
@@ -69,7 +61,7 @@ function biomeOutcome(tool: string, result: RunResult): ToolOutcome {
   if (Either.isLeft(parsed)) {
     return { tool, findings: [], error: `${parsed.left}. ${result.stderr.trim()}` };
   }
-  if (result.status !== 0 && parsed.right.length === 0) {
+  if (result.code !== 0 && parsed.right.length === 0) {
     return { tool, findings: [], error: `biome failed with no finding. ${result.stderr.trim()}` };
   }
   return { tool, findings: parsed.right };
@@ -110,7 +102,7 @@ function runImportCycles(deps: Deps): ToolOutcome {
 function runHouse(deps: Deps, scoped: boolean, files: readonly string[]): ToolOutcome {
   const result = deps.run("bun", ["run", HOUSE_SCRIPT, ...(scoped ? files : [])]);
   const findings = parseHouse(`${result.stdout}\n${result.stderr}`);
-  if (result.status !== 0 && findings.length === 0) {
+  if (result.code !== 0 && findings.length === 0) {
     return { tool: TOOL.house, findings, error: `the house linter failed with no finding. ${result.stderr.trim()}` };
   }
   return { tool: TOOL.house, findings };
@@ -123,7 +115,7 @@ function runDeadCode(deps: Deps): ToolOutcome {
   if (Either.isLeft(parsed)) {
     return { tool: TOOL.deadCode, findings: [], error: `${parsed.left}. ${result.stderr.trim()}` };
   }
-  if (result.status !== 0 && parsed.right.length === 0) {
+  if (result.code !== 0 && parsed.right.length === 0) {
     return { tool: TOOL.deadCode, findings: [], error: `knip failed with no finding. ${result.stderr.trim()}` };
   }
   return { tool: TOOL.deadCode, findings: parsed.right };
@@ -168,14 +160,9 @@ export function lint(argv: readonly string[], deps: Deps): number {
 
 export function realDeps(): Deps {
   const root = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
+  const shell = realShell();
   return {
-    run: (command, args) => {
-      const result = spawnSync(command, [...args], { cwd: root, encoding: "utf8", maxBuffer: MAX_OUTPUT_BYTES });
-      if (result.error) {
-        return { status: SPAWN_FAILED_STATUS, stdout: "", stderr: `cannot run ${command}: ${result.error.message}` };
-      }
-      return { status: result.status ?? EXIT.findings, stdout: result.stdout ?? "", stderr: result.stderr ?? "" };
-    },
+    run: (command, args) => shell.run(command, [...args], root),
     exists: (file) => fs.existsSync(path.join(root, file)),
     print: (line) => console.log(line),
     printError: (line) => console.error(line),

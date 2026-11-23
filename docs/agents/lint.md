@@ -49,8 +49,8 @@ On top of its recommended set (which includes the accessibility rules for JSX):
 | No bare number inline | `app/`, `workers/`; not in tests, `e2e/`, `app/lib/constants/` (where numbers are named) or the ShadCN primitives; 21 files listed in `biome.jsonc` held one when the rule came in, and that list only shrinks | `style/noMagicNumbers` |
 | A provider SDK stays in its adapter | `posthog-js` and `posthog-node` outside `app/lib/analytics/adapters/` | `style/noRestrictedImports` |
 | A primitive never reads the data layer | `app/components/ui/` may not import `@/db`, `@/repositories`, `@/services`, `@/trpc`, `@/auth` or `drizzle-orm` | `style/noRestrictedImports` |
-| No `console` | `app/`, `workers/`, `workflows/`; the two lines of the logger's sink in `app/lib/log-format.ts` carry a `biome-ignore` with the reason | `suspicious/noConsole` |
-| Hooks rules | `app/`, `workers/`, `workflows/` | `correctness/useExhaustiveDependencies`, `correctness/useHookAtTopLevel`, the `react` domain |
+| No `console` | `app/`, `workers/`; the two lines of the logger's sink in `app/lib/log-format.ts` carry a `biome-ignore` with the reason | `suspicious/noConsole` |
+| Hooks rules | `app/`, `workers/` | `correctness/useExhaustiveDependencies`, `correctness/useHookAtTopLevel`, the `react` domain |
 | No skipped or focused test | test files and `e2e/` | `suspicious/noSkippedTests`, `suspicious/noFocusedTests`, the `test` domain |
 | Playwright rules (no `waitForTimeout`, no `networkidle`, no `page.pause`, no forced clicks, awaited calls) | `e2e/` | the `playwright` domain |
 
@@ -88,7 +88,7 @@ Two choices keep the formatter and the house linter's 400-line cap (`file-size`,
 
 ## The edit hook
 
-[`.claude/hooks/lint-edit.sh`](../../.claude/hooks/lint-edit.sh) runs after every `Edit` and `Write` (a `PostToolUse` hook in `.claude/settings.json`). It runs `bun run lint --fix` on the one file, which is Biome and the house linter in its per-file mode: the file is formatted, safe fixes are applied, and what is left goes back to the agent on stderr with exit 2. A clean file is silent. With no `jq`, no `bun` or no installed tools it does nothing. It finds the checkout from the edited file, so it works in a git worktree.
+[`.claude/hooks/lint-edit.sh`](../../.claude/hooks/lint-edit.sh) runs after every `Edit` and `Write` (a `PostToolUse` hook in `.claude/settings.json`). It runs `bun scripts/lint-all.ts --fix` (what `bun run lint --fix` runs) on the one file, which is Biome and the house linter in its per-file mode: the file is formatted, safe fixes are applied, and what is left goes back to the agent on stderr with exit 2. A clean file is silent. With no `jq`, no `bun` or no installed tools it does nothing. It finds the checkout from the edited file, so it works in a git worktree.
 
 ## Dead code
 
@@ -96,7 +96,7 @@ Two choices keep the formatter and the house linter's 400-line cap (`file-size`,
 
 ## Types
 
-`bun run typecheck` builds three projects:
+`bun run typecheck` builds four projects:
 
 | Project | Covers |
 |---------|--------|
@@ -105,7 +105,7 @@ Two choices keep the formatter and the house linter's 400-line cap (`file-size`,
 | `scripts/tsconfig.json` | `scripts/` (its own project, not a reference, because two scripts import app files; listing those files in a referenced project breaks the Effect language service below) |
 | `e2e/tsconfig.json` | `e2e/` (its own project because the specs import app and worker code) |
 
-All three have `strict`, `noUncheckedIndexedAccess`, `noUnusedLocals`, `noUnusedParameters`, `noImplicitOverride` and `noFallthroughCasesInSwitch`.
+All four have `strict`, `noUncheckedIndexedAccess`, `noUnusedLocals`, `noUnusedParameters`, `noImplicitOverride` and `noFallthroughCasesInSwitch`.
 
 ## Effect diagnostics
 

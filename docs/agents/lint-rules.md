@@ -121,7 +121,7 @@ Four rules keep the code readable by an agent that sees one file at a time. Each
 - **`route-paths`.** A path is written once, in `app/lib/constants/routes.ts`. The unit test of that file fails when the constants and `app/routes.ts` disagree; the rule itself only finds paths written elsewhere.
 - **`file-size`.** 400 lines is about what fits in one read. A longer file is split by responsibility.
 
-Two more caps belong to Biome, because a built-in rule states them: a function's cognitive complexity (at most 15) and bare numbers inline (`noMagicNumbers`, on for `app/` and `workers/`, off for tests). So does the Zod ban (`noRestrictedImports`, subpaths included); [`lint.md`](lint.md#where-a-rule-lives) says why it moved and why `no-process-env` stayed here.
+Three rules a built-in Biome rule states exactly live there, not here: the cognitive-complexity cap (15), bare numbers inline (`noMagicNumbers`) and the Zod ban. [`lint.md`](lint.md#where-a-rule-lives) has their scope and why `no-process-env` stayed here.
 
 Counts in the baseline are exact and per file. Delete a comment or move a constant, and the same change lowers that file's number in `scripts/lint/baseline.json`: run `bun run lint:house --lower-baseline`, which lowers and removes entries to match the code and cannot raise or add one.
 
