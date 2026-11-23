@@ -29,9 +29,8 @@ export const posthogAdapter = (config: {
     }).pipe(
       Effect.filterOrFail(
         (res) => res.ok,
-        (res) =>
-          new AnalyticsDeliveryError({ provider: "posthog", status: res.status })
+        (res) => new AnalyticsDeliveryError({ provider: "posthog", status: res.status }),
       ),
-      Effect.asVoid
+      Effect.asVoid,
     ),
 });

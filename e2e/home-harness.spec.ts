@@ -1,14 +1,6 @@
 import { test, expect } from "@playwright/test";
 
-/**
- * Landing-page harness section.
- *
- * Pins the current copy: three pillars (Specs & tickets / Skills / Verification
- * gates) with their path labels, a commands block that names the planning
- * skills and `./scripts/verify.sh` and no `brain` commands, and no raw i18n keys in either
- * locale — a renamed key renders as `harness.pillars.…` text.
- */
-test.describe("Home — harness section", () => {
+test.describe("Home — harness section (pins the current copy: three pillars with their path labels, a commands block that names the planning skills and ./scripts/verify.sh and no brain commands, and no raw i18n keys in either locale, since a renamed key renders as harness.pillars.… text)", () => {
   test("en: pillars and commands reflect specs, skills and gates", async ({ page }) => {
     await page.goto("/");
     const section = page
@@ -36,13 +28,25 @@ test.describe("Home — harness section", () => {
 
   test("zh: pillar copy is translated, unsupported locale is rejected", async ({ page }) => {
     await page.goto("/");
-    const ok = await page.evaluate(async () =>
-      (await fetch("/api/set-locale", { method: "POST", body: new URLSearchParams({ lng: "zh" }) })).status
+    const ok = await page.evaluate(
+      async () =>
+        (
+          await fetch("/api/set-locale", {
+            method: "POST",
+            body: new URLSearchParams({ lng: "zh" }),
+          })
+        ).status,
     );
     expect(ok).toBe(200);
 
-    const rejected = await page.evaluate(async () =>
-      (await fetch("/api/set-locale", { method: "POST", body: new URLSearchParams({ lng: "xx" }) })).status
+    const rejected = await page.evaluate(
+      async () =>
+        (
+          await fetch("/api/set-locale", {
+            method: "POST",
+            body: new URLSearchParams({ lng: "xx" }),
+          })
+        ).status,
     );
     expect(rejected).toBe(400);
 

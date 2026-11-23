@@ -7,7 +7,52 @@
 #
 #   cp .dev.vars.example .dev.vars
 
-BETTER_AUTH_SECRET=change-me-openssl-rand-hex-16
+# Session signing secret, at least 32 characters. Make one with
+# `openssl rand -hex 32` (64 characters) and paste it over the placeholder,
+# which is too short on purpose so a build outside dev refuses it.
+BETTER_AUTH_SECRET=paste-openssl-rand-hex-32
+
+# Better Auth base URL: the origin the app is served from. Auth links, the
+# origin check and Secure cookies all hang off it.
+# - A dev build (`bun run dev`) follows each request's own origin, so you can
+#   leave this unset. It also falls back to a dev-only secret when
+#   BETTER_AUTH_SECRET is unset.
+# - Any other build (preview, staging, production, or `bun run preview`
+#   locally) never trusts the request's Host: every request fails with a 500
+#   unless BETTER_AUTH_URL is set and BETTER_AUTH_SECRET is at least 32
+#   characters (and not the dev-only fallback). BETTER_AUTH_URL must be
+#   https://, or http://localhost / http://127.0.0.1 with any port.
+#   Deployed environments set both per env in wrangler (a var for the URL,
+#   `wrangler secret put` for the secret).
+# An https:// URL turns on Secure, __Secure- prefixed session cookies.
+# Running a production build locally (`bun run preview` serves on 4173):
+# BETTER_AUTH_URL=http://localhost:4173
+
+# Optional — extra origins allowed to send cookie-carrying requests to the
+# auth API (the base URL's own origin is always trusted). Comma-separated.
+# - An exact entry is a bare origin: https://admin.example.com
+# - A wildcard entry is https:// (http:// only in a dev build), then a host
+#   that starts with `*.` or `*-` followed by a domain you own of at least
+#   two labels. The `*` is the only one and matches any run of characters.
+#   A bare shared suffix (`*.workers.dev`, `*.pages.dev`) is refused. Workers
+#   per-PR previews: https://*-<worker>-preview.<subdomain>.workers.dev
+# AUTH_TRUSTED_ORIGINS=https://admin.example.com,https://*-my-app-preview.my-team.workers.dev
+
+# Optional — Cloudflare Turnstile on sign-in and sign-up. Set both keys or
+# neither; one without the other refuses to start.
+# - Unset in a dev build (`bun run dev`): Cloudflare's published test keys,
+#   which always pass. The widget shows a test badge and the server accepts
+#   its dummy token, so sign-in works without a Cloudflare account.
+# - Unset in any other build (preview, staging, production): Turnstile is off
+#   until you add real keys (Cloudflare dashboard → Turnstile → Add widget).
+# - A build outside dev refuses any of Cloudflare's published test keys.
+# The site key is public (it ships to the browser); keep the secret key a
+# secret: `wrangler secret put TURNSTILE_SECRET_KEY`.
+# TURNSTILE_SITE_KEY=0x4AAAAAAA...
+# TURNSTILE_SECRET_KEY=0x4AAAAAAA...
+# To see the refusal locally, set Cloudflare's always-fail test pair:
+# TURNSTILE_SITE_KEY=2x00000000000000000000AB
+# TURNSTILE_SECRET_KEY=2x0000000000000000000000000000000AA
 
 # Optional — OTLP trace export.
 # Unset = tracing export off (logs still carry traceId). Local viewer:
@@ -20,3 +65,17 @@ BETTER_AUTH_SECRET=change-me-openssl-rand-hex-16
 # ANALYTICS_PROVIDER=posthog
 # POSTHOG_API_KEY=phc_...
 # POSTHOG_HOST=https://us.i.posthog.com
+
+# Optional — error reporting (docs/agents/error-reporting.md).
+# ERROR_REPORTER: console (default) | none | sentry. With sentry and no usable
+# SENTRY_DSN the reporter falls back to console.
+# ERROR_REPORTER=sentry
+# SENTRY_DSN=https://abc123@o0.ingest.example.com/1
+# RELEASE_VERSION=unversioned
+# ENVIRONMENT=development
+
+# Optional — sampling. The preset for ENVIRONMENT sets the rates
+# (docs/agents/logging.md); these override it. A number from 0 to 1.
+# Warnings, errors and the spans of a failed request are always kept.
+# LOG_SAMPLE_RATE=1
+# TRACE_SAMPLE_RATE=0.1

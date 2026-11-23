@@ -18,7 +18,7 @@ Before each test, answer in one sentence: what plausible future edit does it cat
 - "It proves the code is the code": skip it.
 - It only asserts on a mock you set up: skip it.
 
-Put that sentence in the test name or a comment. `app/trpc/__tests__/index.test.ts` is the model: a header explains the production bug, and an inline comment explains why a runtime test backs a type-level guarantee.
+Put that sentence in the test's title: `it("refuses a banned user, so a ban cannot be undone by signing in again", …)`. Comments are not allowed in test files (the `no-comments` rule), so the title is the only place for it.
 
 ## What to test, in order
 
@@ -39,14 +39,14 @@ Put that sentence in the test name or a comment. `app/trpc/__tests__/index.test.
 
 ## Conventions
 
-- Co-locate: `app/lib/foo.ts` -> `app/lib/__tests__/foo.test.ts`; import source as `"../foo"`, the rest via `@/`. `vitest.config.ts` only runs `app/**`, `workers/**`, `scripts/**` tests.
+- Where a test goes and what counts as one: `scripts/lint/test-map.json` gives each folder a kind, and `bun run lint:house <file>` says what proof that file still lacks ([kinds](../../docs/agents/lint-rules.md#the-test-map)). Clear a finding by writing the test, never by adding a map entry or a baseline count. Import the source as `"../foo"`, the rest via `@/`. `vitest.config.ts` only runs `app/**`, `workers/**`, `scripts/**` tests.
 - `globals: false`: import `describe`, `expect`, `it`. For Effect code use `it` from `@effect/vitest`. In a mixed file, alias the plain one: `import { it as itVitest } from "vitest"` (see `app/repositories/__tests__/user.test.ts`).
 - Effect assertions: `yield* Effect.exit(...)`, then `Exit.isFailure`, `Cause.failureOption`, `toBeInstanceOf(TheTaggedError)`.
 - Repository stubs: `makeTestDatabase(stub)` from `@/services/database.test-layer`, via `Repo.Default.pipe(Layer.provide(makeTestDatabase(stub)))`. `chainable(value)` for a passive chain, `chainableSpy(value)` to assert calls.
 
 ## Steps
 
-1. Scope: the path or diff given, or `git diff --name-only $(git merge-base HEAD main)..HEAD`.
+1. Scope: the path or diff given, or `git diff --name-only $(git merge-base HEAD "origin/$(bun scripts/default-branch.ts)")..HEAD`.
 2. Read the source and its sibling tests in full.
 3. List branches, apply the bar to each, note what you skip.
 4. Write tests; extend an existing file over a new one.
@@ -71,6 +71,6 @@ Source defects: none | <path:line + description>
 ## Rules
 
 - Edit only `**/__tests__/**`. Report needed source changes; do not make them.
-- Bash is limited to `git diff --name-only $(git merge-base HEAD main)..HEAD` and `bun run test` (optionally with a path). The tool grant cannot say so, so this rule is the limit: no `rm`, no `git checkout/restore/stash`, no network, no shell writes.
+- Bash is limited to `git diff --name-only $(git merge-base HEAD "origin/$(bun scripts/default-branch.ts)")..HEAD` and `bun run test` (optionally with a path). The tool grant cannot say so, so this rule is the limit: no `rm`, no `git checkout/restore/stash`, no network, no shell writes.
 - Paste failing output verbatim. Never report green on a red run.
 - Pure UI or a browser flow has no unit test: point the main thread at `feature-verifier`.

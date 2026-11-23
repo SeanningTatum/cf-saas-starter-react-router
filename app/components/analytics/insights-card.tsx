@@ -1,35 +1,20 @@
 import { Lightbulb } from "lucide-react";
 
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 
 export interface Insight {
-  /** The insight text */
   text: string;
-  /** Type affects styling: positive (green), negative (red), neutral (default) */
   type?: "positive" | "negative" | "neutral";
 }
 
 export interface InsightsCardProps {
-  /** Card title */
   title?: string;
-  /** Card description */
   description?: string;
-  /** Array of insights to display */
   insights: Insight[];
 }
 
-export function InsightsCard({
-  title = "Insights",
-  description,
-  insights,
-}: InsightsCardProps) {
+export function InsightsCard({ title = "Insights", description, insights }: InsightsCardProps) {
   const getInsightStyle = (type: Insight["type"]) => {
     switch (type) {
       case "positive":
@@ -52,9 +37,9 @@ export function InsightsCard({
       </CardHeader>
       <CardContent>
         <ul className="space-y-3 text-sm">
-          {insights.map((insight, index) => (
+          {insights.map((insight) => (
             <li
-              key={index}
+              key={insight.text}
               className={cn("flex items-center gap-3", getInsightStyle(insight.type))}
             >
               <span className="size-1.5 shrink-0 rounded-full bg-current" />

@@ -1,23 +1,49 @@
 import { betterAuth, type BetterAuthOptions } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import type { D1Database } from "@cloudflare/workers-types";
-import { admin } from "better-auth/plugins";
-import { eq } from "drizzle-orm";
+import { admin, captcha } from "better-auth/plugins";
 import { getDb } from "@/db";
 import * as schema from "@/db/schema";
+import {
+  CLIENT_IP_HEADER,
+  PASSWORD_MAX_LENGTH,
+  PASSWORD_MIN_LENGTH,
+  SESSION_COOKIE_SAME_SITE,
+  SESSION_EXPIRES_IN_SECONDS,
+  SESSION_UPDATE_AGE_SECONDS,
+} from "@/lib/constants/auth";
+import { TURNSTILE_PROTECTED_ENDPOINTS, TURNSTILE_PROVIDER } from "@/lib/constants/turnstile";
+import type { AuthConfig, TurnstileKeys } from "./config";
+import { adminGuard } from "./admin-guard";
+import { clearExpiryOnOpenBan, endSessionsOnBan } from "./ban-hooks";
 
-export const drizzleConfig = {
+const authOptions = {
   emailAndPassword: {
     enabled: true,
+    minPasswordLength: PASSWORD_MIN_LENGTH,
+    maxPasswordLength: PASSWORD_MAX_LENGTH,
   },
+  session: {
+    expiresIn: SESSION_EXPIRES_IN_SECONDS,
+    updateAge: SESSION_UPDATE_AGE_SECONDS,
+    cookieCache: { enabled: false },
+  },
+  rateLimit: { enabled: false },
   plugins: [admin()],
 } satisfies BetterAuthOptions;
 
-export function createAuth(
-  database: D1Database,
-  secret: string,
-  baseURL?: string
-) {
+const turnstilePlugins = (keys: TurnstileKeys | null) =>
+  keys === null
+    ? []
+    : [
+        captcha({
+          provider: TURNSTILE_PROVIDER,
+          secretKey: keys.secretKey,
+          endpoints: [...TURNSTILE_PROTECTED_ENDPOINTS],
+        }),
+      ];
+
+export function createAuth(database: D1Database, config: AuthConfig) {
   const db = getDb(database);
 
   return betterAuth({
@@ -25,20 +51,27 @@ export function createAuth(
       provider: "sqlite",
       schema,
     }),
-    secret,
-    baseURL,
-    ...drizzleConfig,
-    // `/admin/update-user` can set `banned: true` without deleting sessions,
-    // and getSession never reads `banned`; end them here so the ban bites.
-    // This runs after the write, not with it: the repository's batch is atomic,
-    // this is not.
+    secret: config.secret,
+    baseURL: config.baseURL,
+    trustedOrigins: [...config.trustedOrigins],
+    ...authOptions,
+    plugins: [...authOptions.plugins, ...turnstilePlugins(config.turnstile)],
+    advanced: {
+      disableOriginCheck: false,
+      useSecureCookies: config.secureCookies,
+      defaultCookieAttributes: {
+        httpOnly: true,
+        sameSite: SESSION_COOKIE_SAME_SITE,
+        secure: config.secureCookies,
+      },
+      ipAddress: { ipAddressHeaders: [CLIENT_IP_HEADER] },
+    },
+    hooks: { before: adminGuard },
     databaseHooks: {
       user: {
         update: {
-          after: async (user) => {
-            if (user?.banned !== true) return;
-            await db.delete(schema.session).where(eq(schema.session.userId, user.id));
-          },
+          before: clearExpiryOnOpenBan,
+          after: endSessionsOnBan(db),
         },
       },
     },

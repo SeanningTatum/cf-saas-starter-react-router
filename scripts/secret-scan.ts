@@ -35,8 +35,7 @@ const PLACEHOLDER = /xxx|your|example|placeholder|changeme|replace/i;
 const HASH_NAME = /hash|sha|checksum|integrity/i;
 const HEX_LENGTHS = new Set([32, 40, 64]);
 
-const CLOUDFLARE_ASSIGNMENT =
-  /\b[A-Z0-9_]{0,40}(?:CLOUDFLARE|CF)[A-Z0-9_]{0,40}TOKEN[A-Z0-9_]{0,40}["']?\s*[:=]\s*["']?([A-Za-z0-9_-]{40,})/;
+const CLOUDFLARE_ASSIGNMENT = /\b[A-Z0-9_]{0,40}(?:CLOUDFLARE|CF)[A-Z0-9_]{0,40}TOKEN[A-Z0-9_]{0,40}["']?\s*[:=]\s*["']?([A-Za-z0-9_-]{40,})/;
 
 /** A literal of 40 or more characters assigned to a Cloudflare token name. */
 function cloudflareAssignment(line: string): boolean {
@@ -44,8 +43,7 @@ function cloudflareAssignment(line: string): boolean {
   return value !== undefined && !PLACEHOLDER.test(value);
 }
 
-const ENV_ASSIGNMENT =
-  /^\s*(?:export\s+)?([A-Z][A-Z0-9_]*(?:SECRET|TOKEN|API_KEY|PASSWORD)[A-Z0-9_]*)\s*=\s*["']?([A-Za-z0-9+/_=-]{32,})["']?\s*(?:#.*)?$/;
+const ENV_ASSIGNMENT = /^\s*(?:export\s+)?([A-Z][A-Z0-9_]*(?:SECRET|TOKEN|API_KEY|PASSWORD)[A-Z0-9_]*)\s*=\s*["']?([A-Za-z0-9+/_=-]{32,})["']?\s*(?:#.*)?$/;
 
 /** An env-style `NAME=value` line with a long literal, any case mix (64 hex from openssl counts). */
 function envSecretAssignment(line: string): boolean {
@@ -60,7 +58,7 @@ const SECRET_ASSIGNMENT =
 function secretAssignment(line: string): boolean {
   const found = SECRET_ASSIGNMENT.exec(line);
   if (!found) return false;
-  const [, before, after, value] = found;
+  const [, before = "", after = "", value = ""] = found;
   const mixed = /\d/.test(value) && /[a-z]/.test(value) && /[A-Z]/.test(value);
   if (!mixed) return false;
   const isHash = /^[0-9a-f]+$/i.test(value) && HEX_LENGTHS.has(value.length);
@@ -97,7 +95,7 @@ const MARKER_RULE = new RegExp(`${ALLOW_MARKER} ([a-z-]+)`, "g");
 /** Rules this line allows by name. A bare marker allows nothing. */
 function allowedRules(line: string): Set<string> {
   if (!line.includes(ALLOW_MARKER)) return new Set();
-  const named = [...line.matchAll(MARKER_RULE)].map((m) => m[1]);
+  const named = [...line.matchAll(MARKER_RULE)].map((m) => m[1] ?? "");
   return new Set(named.filter((rule) => rule !== NEVER_ALLOWED));
 }
 

@@ -2,13 +2,7 @@ import type { ReactNode } from "react";
 import { Link } from "react-router";
 import { IconArrowRight } from "@tabler/icons-react";
 
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { StackBadge } from "@/components/stack-badge";
 import { cn } from "@/lib/utils";
 
@@ -20,16 +14,10 @@ export interface FeatureCardProps {
   to: string;
   cta: string;
   testId: string;
-  /** Renders a non-interactive card showing `disabledHint` instead of the CTA/link. */
   disabled?: boolean;
   disabledHint?: string;
 }
 
-/**
- * Shared "feature/explore" card used on the marketing home page and the
- * dashboard's educational grid. Wraps a `Card` in a `Link` unless `disabled`,
- * in which case it renders inert with `disabledHint` in place of the CTA.
- */
 export function FeatureCard({
   icon,
   title,
@@ -44,10 +32,7 @@ export function FeatureCard({
   const inner = (
     <Card
       data-testid={testId}
-      className={cn(
-        "h-full gap-4",
-        disabled ? "opacity-70" : "transition-shadow hover:shadow-md"
-      )}
+      className={cn("h-full gap-4", disabled ? "opacity-70" : "transition-shadow hover:shadow-md")}
     >
       <CardHeader className="gap-3">
         <div className="flex items-center justify-between">
@@ -62,9 +47,7 @@ export function FeatureCard({
         </div>
         <div className="space-y-1.5">
           <CardTitle className="text-base">{title}</CardTitle>
-          <CardDescription className="leading-relaxed">
-            {description}
-          </CardDescription>
+          <CardDescription className="leading-relaxed">{description}</CardDescription>
         </div>
       </CardHeader>
       <CardContent>

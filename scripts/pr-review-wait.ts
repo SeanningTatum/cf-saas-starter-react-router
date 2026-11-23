@@ -23,21 +23,17 @@
  * `gh`, `sleep` and the clock are injected (`Deps`), so the tests run with no network and no waiting.
  * Lists use `gh api --paginate`; the parser takes a JSON array, concatenated arrays or one object per line.
  */
-import { spawnSync } from "node:child_process";
+import { ghSpawn, type GhResult, type GhRunner } from "./lib/gh";
+import { loadHarnessConfigFromDisk, type ReviewBot } from "./lib/harness-config";
 
-export interface GhResult {
-  code: number;
-  stdout: string;
-  stderr: string;
-}
-/** Runs `gh <args>` and reports what happened. Never throws. */
-export type GhRunner = (args: string[]) => GhResult;
+export type { GhResult };
 
 export interface Deps {
   gh: GhRunner;
   sleep: (ms: number) => Promise<void>;
   /** Milliseconds; any monotonic origin. */
   now: () => number;
+  reviewBot: ReviewBot;
 }
 
 export interface Outcome {
@@ -51,8 +47,7 @@ const bad = (code: number, kind: string, error: string, help: string): Outcome =
   code,
   err: { error, code: kind, help },
 });
-const usage = (error: string): Outcome =>
-  bad(1, "USAGE", error, "usage: pr-review-wait <pr> [--timeout 900] [--interval 30] [--retrigger-after 300]");
+const usage = (error: string): Outcome => bad(1, "USAGE", error, "usage: pr-review-wait <pr> [--timeout 900] [--interval 30] [--retrigger-after 300]");
 const ghFailure = (r: GhResult, what: string): Outcome =>
   bad(
     2,
@@ -62,17 +57,30 @@ const ghFailure = (r: GhResult, what: string): Outcome =>
   );
 
 export const defaultDeps: Deps = {
-  gh: (args) => {
-    const r = spawnSync("gh", args, { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
-    if (r.error) return { code: 127, stdout: "", stderr: `cannot run gh: ${r.error.message}` };
-    return { code: r.status ?? 1, stdout: r.stdout ?? "", stderr: r.stderr ?? "" };
-  },
+  gh: ghSpawn,
   sleep: (ms) => new Promise((res) => setTimeout(res, ms)),
   now: () => Date.now(),
+  reviewBot: loadHarnessConfigFromDisk().reviewBot,
 };
 
+export interface GhItem {
+  id?: unknown;
+  user?: { login?: unknown };
+  app?: { slug?: unknown };
+  body?: unknown;
+  status?: unknown;
+  state?: unknown;
+  commit_id?: unknown;
+  submitted_at?: unknown;
+  pull_request_review_id?: unknown;
+  path?: unknown;
+  line?: unknown;
+  original_line?: unknown;
+  html_url?: unknown;
+}
+
 /** Items from `gh api --paginate`: one array, several arrays back to back, or one object per line. */
-export function parseItems(text: string): any[] {
+export function parseItems(text: string): GhItem[] {
   const t = text.trim();
   if (!t) return [];
   try {
@@ -81,7 +89,7 @@ export function parseItems(text: string): any[] {
   } catch {
     // fall through
   }
-  const items: any[] = [];
+  const items: GhItem[] = [];
   for (const line of t.split("\n")) {
     const l = line.trim().replace(/^\]\[/, "");
     if (!l) continue;
@@ -101,9 +109,6 @@ export function parseConfidence(summary: string): number | null {
   return m ? Number(m[1]) : null;
 }
 
-const BOT = "greptile-apps";
-const MARKER = "<!-- greptile_summary -->";
-
 function num(flags: Map<string, string>, name: string, dflt: number): number | Outcome {
   const raw = flags.get(name);
   if (raw === undefined) return dflt;
@@ -116,7 +121,7 @@ export async function run(argv: string[], deps: Deps = defaultDeps): Promise<Out
   const flags = new Map<string, string>();
   const positional: string[] = [];
   for (let i = 0; i < argv.length; i++) {
-    const a = argv[i];
+    const a = argv[i] ?? "";
     if (a.startsWith("--")) {
       const v = argv[i + 1];
       if (v === undefined || v.startsWith("--")) return usage(`${a} needs a value`);
@@ -144,17 +149,21 @@ export async function run(argv: string[], deps: Deps = defaultDeps): Promise<Out
   const sha = h.stdout.trim();
   if (h.code !== 0 || !sha) return ghFailure(h.code !== 0 ? h : { ...h, stderr: "no head sha" }, `gh pr view ${pr}`);
 
-  const isBot = (login: unknown) => typeof login === "string" && login.toLowerCase().startsWith(BOT);
+  const isBot = (login: unknown) => typeof login === "string" && login.toLowerCase().startsWith(deps.reviewBot.login.toLowerCase());
   const readSummary = (): string | Outcome => {
     const ir = deps.gh(["api", "--paginate", `repos/${repo}/issues/${pr}/comments`]);
     if (ir.code !== 0) return ghFailure(ir, "gh api issue comments");
-    return parseItems(ir.stdout)
-      .filter((c) => isBot(c?.user?.login) && typeof c?.body === "string" && c.body.includes(MARKER) && c.body.includes(sha))
-      .pop()?.body ?? "";
+    return (
+      parseItems(ir.stdout)
+        .flatMap((c) =>
+          isBot(c?.user?.login) && typeof c?.body === "string" && c.body.includes(deps.reviewBot.summaryMarker) && c.body.includes(sha) ? [c.body] : [],
+        )
+        .pop() ?? ""
+    );
   };
   const start = deps.now();
   let retriggered = false;
-  let review: any = null;
+  let review: GhItem | null = null;
   let summary: string | null = null;
 
   for (;;) {
@@ -182,7 +191,7 @@ export async function run(argv: string[], deps: Deps = defaultDeps): Promise<Out
     const elapsed = (deps.now() - start) / 1000;
     if (elapsed >= timeout) break;
     if (!retriggered && !checkPending && elapsed >= retriggerAfter) {
-      const c = deps.gh(["pr", "comment", String(pr), "--body", "@greptileai review"]);
+      const c = deps.gh(["pr", "comment", String(pr), "--body", deps.reviewBot.trigger]);
       if (c.code !== 0) return ghFailure(c, "gh pr comment");
       retriggered = true;
     }
@@ -192,16 +201,21 @@ export async function run(argv: string[], deps: Deps = defaultDeps): Promise<Out
   if (!review && summary === null) {
     return {
       ...ok({ status: "timeout", pr, sha, review: null, confidence: null, summary: "", comments: [], retriggered }, 5),
-      err: { error: `no ${BOT} review of ${sha} within ${timeout}s`, code: "TIMEOUT", help: "check the PR on GitHub, or run again with a longer --timeout" },
+      err: {
+        error: `no ${deps.reviewBot.login} review of ${sha} within ${timeout}s`,
+        code: "TIMEOUT",
+        help: "check the PR on GitHub, or run again with a longer --timeout",
+      },
     };
   }
 
   let comments: { id: unknown; path: unknown; line: unknown; body: unknown; url: unknown }[] = [];
   if (review) {
+    const reviewId = review.id;
     const pc = deps.gh(["api", "--paginate", `repos/${repo}/pulls/${pr}/comments`]);
     if (pc.code !== 0) return ghFailure(pc, "gh api pull comments");
     comments = parseItems(pc.stdout)
-      .filter((c) => c?.pull_request_review_id === review.id)
+      .filter((c) => c?.pull_request_review_id === reviewId)
       .map((c) => ({ id: c.id, path: c.path, line: c.line ?? c.original_line ?? null, body: c.body, url: c.html_url }));
   }
   if (summary === null) {

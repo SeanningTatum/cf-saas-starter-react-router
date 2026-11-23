@@ -1,19 +1,146 @@
 # CI and deploy pipelines
 
-Four workflows live in `.github/workflows/`. Deploy and preview stay off until you set up your Cloudflare account. A repo that is not set up ends those runs as skipped with a one-line notice, and the run stays green.
+Eight workflows live in `.github/workflows/`. Deploy and preview stay off until you set up your Cloudflare account. A repo that is not set up ends those runs as skipped with a one-line notice, and the run stays green.
 
 ## What each workflow does
 
 | Workflow | Runs on | What it does |
 |----------|---------|--------------|
-| `ci.yml` | every push to `main`, every pull request | typecheck, tests, build, e2e smoke |
-| `deploy.yml` (Deploy Production) | CI finished green on a push to `main` | migrates the production D1 database, builds, runs `wrangler deploy` |
-| `preview.yml` (Preview Deploy) | a pull request opened, updated or reopened | gives the PR its own D1 database, seeds it, uploads a Worker version, comments the URL |
+| `ci.yml` | every push to `staging` or `production`, every pull request | typecheck, lint, tests, build, e2e smoke; on a PR into `staging` or `production` also the Effect diagnostics, and the size table and Lighthouse in one comment ([reading it](#reading-the-size-table)); on a stacked PR only the lean job ([which checks run where](#which-checks-run-where)) |
+| `pr-body.yml` (PR body) | every pull request, opened, edited, updated or reopened | fails a PR that changes shipped code and whose body has no size table ([reading it](#reading-the-size-table)) |
+| `codeql.yml` (CodeQL) | every push to `staging` or `production`, every pull request into the default branch or `production`, and Mondays | reads the source for injection and workflow mistakes |
+| `production-guard.yml` (Production Guard) | a pull request into `production` | fails unless the pull request comes from this repo's `staging` |
+| `release.yml` (Release) | every push to `production` | picks the next version, tags the commit, creates the GitHub release |
+| `deploy.yml` (Deploy Production) | CI finished green on a push to `production` | migrates the production D1 database (first saving a [restore point](rollback.md)), builds, runs `wrangler deploy` with a [release version and environment](../agents/error-reporting.md#environment) |
+| `preview.yml` (Preview Deploy) | a pull request into the default branch or `production`, opened, updated or reopened | gives the PR its own D1 database, seeds it, uploads a Worker version (with its [release version and environment](../agents/error-reporting.md#environment)), comments the URL |
 | `preview-cleanup.yml` (Preview Cleanup) | a pull request closed | deletes the PR's D1 database |
+
+## Which checks run where
+
+A stacked PR is one whose base is neither the default branch nor `production`: a ticket PR into a wave branch, or a PR into the branch of the PR below it. It gates nothing, so it gets one lean job. The full suite runs where it gates a merge.
+
+| Check | Stacked PR | PR into the default branch | PR into `production` | Push to either |
+|-------|------------|----------------------------|----------------------|----------------|
+| Lean (stacked PR, typecheck + lint + unit) | yes | — | — | — |
+| Baseline (typecheck + test + harness-check) | — | yes, required | yes, required | yes |
+| Build (Cloudflare Workers) | — | yes, required | yes, required | yes |
+| E2E smoke (Playwright) | — | yes, required | yes, required | yes |
+| Effect diagnostics (`bun run lint:effect`) | — | yes | yes | — |
+| CodeQL | — | yes | yes | yes (and Mondays) |
+| Preview Deploy | — | yes | yes | — |
+| Size (against the base branch) | — | yes | yes | — |
+| Lighthouse (mobile, against the base branch) | — | yes | yes | — |
+| Size and Lighthouse comment | — | yes, unless the PR comes from a fork | yes | — |
+| PR body (size table) | yes | yes | yes | — |
+| PR title (Conventional Commits) | yes | yes | yes | — |
+| Source branch is staging | — | — | yes, required | — |
+| Greptile (`greptile.json`) | — | yes | yes | — |
+
+- The lean job runs `./scripts/verify.sh --lean`: typecheck, `bun run lint` (Biome, the house linter, import cycles and dead code), the house linter over the whole tree with its shrink-only baseline (and its self-test), and every unit test. It leaves out the migration check, the harness gate, the secret scan, the package audit (it reads the network), the build, e2e, the code scan and the preview. All of those run on the roll-up.
+- The jobs choose with a job-level `if:` that compares `github.base_ref` with `github.event.repository.default_branch` and `production`, so a fork with another default branch name needs no edit. `scripts/__tests__/github-workflows.test.ts` reads the workflow files and proves which jobs run for each base.
+- GitHub counts a skipped job as passed. A stacked PR that is later retargeted to the default branch keeps the skipped results of its last push, and retargeting starts no new run. After a retarget, push a commit (or close and reopen the PR) so the full suite runs before the merge. `ship-feature` never retargets a stacked PR onto the default branch: the roll-up is a new PR.
+- `greptile.json` names `staging` and `production` in `includeBranches`, since Greptile has no word for "the default branch". A fork with another default branch name edits that list.
+- Locally, `./scripts/verify.sh --changed [base]` is the stacked counterpart: see [Gates](../agents/harness.md#gates).
+
+## Reading the size table
+
+Every PR that changes shipped code (`app/` or `workers/` outside `__tests__/` and `*.test.ts(x)` files, `package.json` or `bun.lock`) carries a size table in its body; one that changes none says "No shipped code changed." `ship-feature` writes it when it opens a PR. By hand:
+
+```bash
+bun run size                                  # this checkout: one build, one column
+bun run size --base origin/staging            # base, this change and the difference
+bun run size --base origin/staging --pr-body  # the PR body section, table or sentence
+bun run size --json size.json                 # save a report; pass it later as --base size.json
+```
+
+`--base` builds the base commit in a temporary worktree and caches the result by commit in `node_modules/.cache/size/`, so a stack measures each base once. Every number is in bytes, gzip:
+
+- **Worker upload**: what `wrangler deploy --dry-run` reports. It is not sent to the browser; a big jump slows cold starts and nears Cloudflare's script size limit.
+- **entry.client and root chunks**: the JavaScript every page loads.
+- **`/path` first-load JS and CSS**: everything the browser fetches before that page can run: the entry, each route from the root down, and their imports, each file counted once. Read from the React Router manifest in `build/client/assets/manifest-*.js`.
+
+The line under the table turns the largest first-load change into time: the extra bytes over Lighthouse's slow 4G link (1,638.4 kbit/s), `ms = bytes × 8 ÷ 1,638.4`. 10 KB is about 49 ms. It is transfer time alone, before the browser parses and runs the code. A page that exists on one side only has nothing to compare with, so the line names it as new or removed instead of counting it. `bun run size` builds with `CI=1`, so it opens no remote-bindings session and needs no Cloudflare login.
+
+`PR body (size table)` fails a PR that changes shipped code with no filled comparison table (the header row and a Worker row with numbers; a table inside a code fence does not count), and one whose body claims "No shipped code changed." when it does. It reads the body and the list of changed files, so it re-runs in seconds when you edit the body.
+
+On a PR into `staging` or `production`, CI measures the size itself against the base branch and runs Lighthouse (`bun run lighthouse --base <ref>`): each ref is built in its own worktree with a seeded local D1 and a `.dev.vars` holding `BETTER_AUTH_URL=http://localhost:4173` and a throwaway secret, served with `vite preview`, and measured with mobile settings on `/`, `/login`, `/sign-up` and `/dashboard` (signed in as the seeded user), three runs each, the median of each number. One comment on the PR holds both tables and is edited on each push. The limits in `.github/lighthouse-limits.json` only warn for now. The HTML and JSON reports are in the run's `lighthouse` artifact for 14 days; nothing is uploaded anywhere else.
+
+## How a change reaches production
+
+Two long-lived branches: `staging` (the default branch) and `production`.
+
+1. A feature pull request is squashed into `staging`. The pull request title becomes the commit subject, so write it as a Conventional Commit (`feat: ...`, `fix: ...`).
+2. To release, open a pull request from `staging` into `production` and merge it with a **merge commit**. Nothing else may merge into `production`: the Production Guard check fails any other source, and the `production` ruleset allows the merge method only.
+3. The push to `production` starts CI, Release and CodeQL.
+4. `release.yml` runs `.github/scripts/next-version.sh`. It reads every commit since the last `vX.Y.Z` tag and chooses the bump:
+   - `type!:` in a subject, or a `BREAKING CHANGE:` footer: major.
+   - `feat:`: minor.
+   - anything else: patch.
+
+   It then tags the commit and creates the release with GitHub's generated notes. A re-run on a commit that already has a tag does nothing.
+5. After CI passes on `production`, `deploy.yml` deploys that commit.
+
+`release.yml` tags on the push to `production` and does not wait for CI or the deploy, so a failed deploy still has a tag. Fix forward with a new release.
+
+Cut a release:
+
+```bash
+gh pr create --base production --head staging --title "chore: release" --body "Release."
+gh pr merge --merge <number>
+```
+
+The title of a merge-commit pull request does not pick the version: the squashed subjects inside it do.
+
+### Why the environment says "default branch"
+
+The deploy job starts from a `workflow_run` trigger, and a `workflow_run` run always has the default branch (`staging`) as its ref, whatever branch CI ran on. The `production` environment therefore takes deploys from runs on the default branch, even though the code it ships is `production`'s. The job checks out the tested commit by its sha, so it deploys what CI passed. Set the environment rule to the default branch, not to `production`, or the deploy never gets the token. For the same reason the deploy workflow that runs is the copy on the default branch (`staging`), not the one on `production`: a change to `deploy.yml` takes effect for the next production deploy as soon as it is on `staging`.
+
+### How v3.0 lands
+
+`staging` has linear history, so the long-lived `release/v3.0` branch lands as one squash commit with the title `feat!: v3.0`. A merge-commit pull request from `staging` into `production` follows. `release.yml` reads the `!` and tags `v3.0.0` (the last tag is `v2.4.0`).
+
+### A fresh fork
+
+A new fork has one branch (`staging`) and no rules. CI and CodeQL run on pull requests and on pushes to `staging`. Nothing deploys or releases, and every gate in `./scripts/verify.sh` passes without a `production` branch. To adopt the two-branch flow:
+
+1. Create the branch: `git push origin staging:production`.
+2. Apply the rules: `bun run scripts/repo-rules.ts --apply`.
+3. Set up the `production` environment ([Turn on production deploys](#turn-on-production-deploys)).
+
+If your default branch has another name, the simplest way is to rename it to `staging`. To keep your name instead, change it in four places: the `branches:` lines under `push:` in `ci.yml` and in `codeql.yml`, the source check in `production-guard.yml` (`"$HEAD_REF" != "staging"`), and `includeBranches` in `greptile.json`. The workflow tests read the two names from `ci.yml` and hold the other workflows to them, so a missed place fails `bun run test`.
+
+## Commit subjects and PR titles
+
+Every commit subject and every PR title is a Conventional Commits line: `type(scope)?!?: subject`, 100 characters at most. Release versions are computed from subjects, so a title that breaks the rule ships as a patch or breaks the version script.
+
+Three checks read the same rule:
+
+- the `commit-msg` hook runs commitlint on each commit you make;
+- the `PR title (Conventional Commits)` job in `pr-title.yml` lints the PR title on open, edit, push and reopen, on every base branch;
+- once the repo ruleset lists that job as required, a PR with a bad title cannot merge.
+
+The types and the scopes live in `.commitlintrc.json` and nowhere else; read that file for the lists. Merge commits (`Merge pull request ...`, `Merge branch ...`) pass the hook. A PR title shaped like one does not pass the title job (`.commitlintrc.title.json` takes every rule from the first file and turns that one exception off): squashed, such a title would be a subject with no type. Body and footer lines may be as long as you like.
+
+Four PRs carry a title the version script reads, so word each one on purpose:
+
+| PR | Title | Why |
+|----|-------|-----|
+| A feature PR into `staging` or into a stacked branch | `feat(scope): ...`, `fix(scope): ...` | It is squashed, so this line is the commit the version script reads. |
+| A wave roll-up into `release/v3.0` | `feat: v3.0 wave <n>, <what it brings>` (`feat!:` if it breaks something) | It is squashed into the release branch. |
+| The release PR squashing `release/v3.0` into `staging` | `feat!: v3.0, <summary>` | The `!` makes a major bump. |
+| `staging` into `production` | any title that passes the check, for example `chore(release): staging to production` | It is merged with a merge commit, so its own title is not read. |
+
+Worked example: the release PR is titled `feat!: v3.0, the new starter`. It lands on `staging` as one commit with that subject. The merge-commit PR into `production` carries it, `release.yml` reads the `!`, and the tag comes out as `v3.0.0` (the last tag is `v2.4.0`). Titled `v3.0 wave 0: guardrails, trim and foundations` instead, the same commit would have read as a patch: `v2.4.1`.
+
+The harness writes its own titles to the same rule. The architect gives each stacked PR a conventional title; `ship-feature` commits with that title and prefixes `feat: ` on one that has no type. The roll-up title takes `feat` when any stacked PR is a `feat`, else the last PR's type, and carries `!` when any stacked PR is breaking. `ship-feature` checks only the shape of a title, not the scope list: a title with an unlisted scope is caught by the `commit-msg` hook and the PR title job.
+
+## Readiness and skips
 
 Each of the three Cloudflare workflows starts with a `readiness` job that holds no secret value. It runs `scripts/ci/deploy-gate.ts`, which decides whether the repo is set up. When it is not, the later jobs are skipped and the notice says why (`::notice::<Workflow> skipped: <reason>`). The reasons live in that script. The deploy job adds one more skip: no `CLOUDFLARE_API_TOKEN` in the `production` environment.
 
 The gate also warns (the run still passes) when a repo-level `CLOUDFLARE_API_TOKEN` secret exists: pull-request jobs can read repo-level secrets. Move it to the `production` environment and delete the repo-level one.
+
+The `migrations` gate in `./scripts/verify.sh` checks new migrations; see [Rolling back](rollback.md#what-the-gate-checks).
 
 A run that is set up but fails is a real failure. The usual cause is a token without D1 rights: the log says `Authentication error`, and the workflow adds a line naming the fix.
 
@@ -24,6 +151,7 @@ A run that is set up but fails is a real failure. The usual cause is a token wit
 | `CLOUDFLARE_ACCOUNT_ID` | repo variable | deploy; also preview and cleanup when `CLOUDFLARE_PREVIEW_ACCOUNT_ID` is unset |
 | `CLOUDFLARE_PREVIEW_ACCOUNT_ID` | repo variable, optional | preview and cleanup; use it for a separate preview account |
 | `CLOUDFLARE_D1_DATABASE_ID` | repo variable, optional | deploy only; patched into the CI checkout's `wrangler.jsonc` |
+| `D1_BACKUP_BUCKET` | repo variable, optional | deploy only; names a private R2 bucket for the pre-migration export ([rollback](rollback.md#owner-steps-to-turn-the-export-on)) |
 | `CLOUDFLARE_API_TOKEN` | `production` environment secret | the deploy job only |
 | `CLOUDFLARE_PREVIEW_API_TOKEN` | repo secret | the preview and cleanup jobs, on the single steps that call Cloudflare |
 | `PREVIEW_SEED_SECRET` | repo secret (and your local `.env`) | the seed step of the preview job; `--print-password` on your machine |
@@ -34,7 +162,7 @@ The preview jobs never read `CLOUDFLARE_API_TOKEN`. The preview `readiness` job 
 ## Who can read what
 
 - **Preview token and `PREVIEW_SEED_SECRET`:** anyone who can push a branch to this repo can read them, because a pull request can edit the workflow that uses them. That is why they are separate from the production token, and why a second Cloudflare account is the strong setup (below).
-- **Production token:** a `production` environment secret is out of reach of pull-request code only once that environment is protected: a required reviewer, and deploys only from the default branch. Until then, a branch in this repo can add `environment: production` to a workflow of its own and read the token. The owner applies the protection with `bun run scripts/repo-rules.ts --apply` (from another pull request, #67; see `docs/ci/repo-rules.md`, added by #67). Protect the environment first, then add the token.
+- **Production token:** a `production` environment secret is out of reach of pull-request code only once that environment is protected: a required reviewer, and deploys only from the default branch ([why](#why-the-environment-says-default-branch)). Until then, a branch in this repo can add `environment: production` to a workflow of its own and read the token. The owner applies the protection with `bun run scripts/repo-rules.ts --apply` (see [repo rules](repo-rules.md)). Protect the environment first, then add the token.
 
 ## Turn on production deploys
 
@@ -45,7 +173,8 @@ The preview jobs never read `CLOUDFLARE_API_TOKEN`. The preview `readiness` job 
 5. Add it as the secret `CLOUDFLARE_API_TOKEN` in the `production` environment (Settings, Environments, production). `bun run setup` can do steps 2 and 5 when the GitHub CLI is available; it asks you to protect the environment first. It never replaces an environment that already exists.
 6. Optional, for a repo that keeps placeholder ids committed: set the repo variable `CLOUDFLARE_D1_DATABASE_ID` to your production database id. The deploy job writes it into the checkout; the file in git does not change.
 7. Delete any old repo-level `CLOUDFLARE_API_TOKEN` secret.
-8. Push to `main`. After CI passes, Deploy Production runs.
+8. Optional: turn on the pre-migration export ([owner steps](rollback.md#owner-steps-to-turn-the-export-on)).
+9. Create `production` if you have not (`git push origin staging:production`), then merge a pull request from `staging` into `production` ([How a change reaches production](#how-a-change-reaches-production)). After CI passes on `production`, Deploy Production runs.
 
 ## Turn on previews
 

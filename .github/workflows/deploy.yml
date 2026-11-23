@@ -1,15 +1,16 @@
-# Production deploy after CI passes on a push to main. Skipped, not failed, until set up.
-# The token is a `production` environment secret. Pull-request code cannot read it only
-# once that environment has a required reviewer and default-branch-only deploys
-# (bun run scripts/repo-rules.ts --apply, from #67); before that, a branch in this repo
-# can add `environment: production` to a workflow of its own. See docs/ci/pipelines.md
+# Production deploy after CI passes on a push to production. Skipped, not failed, until set up.
+# The token is a `production` environment secret. Pull-request code cannot read it once
+# that environment has a required reviewer and takes deploys only from the default branch
+# (bun run scripts/repo-rules.ts --apply; see docs/ci/repo-rules.md). Before that, a branch
+# in this repo can add `environment: production` to a workflow of its own.
+# See docs/ci/pipelines.md
 name: Deploy Production
 
 on:
   workflow_run:
     workflows: [CI]
     types: [completed]
-    branches: [main]
+    branches: [production]
 
 concurrency:
   group: deploy-production
@@ -23,7 +24,7 @@ jobs:
   readiness:
     name: Check production setup
     runs-on: ubuntu-latest
-    # Only on a green CI run for a push to main (CI also runs on PRs).
+    # Only on a green CI run for a push to production (CI also runs on PRs).
     if: >-
       ${{ github.event.workflow_run.conclusion == 'success'
           && github.event.workflow_run.event == 'push' }}
@@ -58,7 +59,8 @@ jobs:
     needs: readiness
     runs-on: ubuntu-latest
     if: needs.readiness.outputs.ready == 'true'
-    timeout-minutes: 15
+    # The restore-point step may use up to 14 minutes of this (scripts/lib/d1-backup-constants.ts).
+    timeout-minutes: 30
     environment: production
     env:
       CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
@@ -97,6 +99,15 @@ jobs:
         if: steps.token.outputs.ready == 'true' && vars.CLOUDFLARE_D1_DATABASE_ID != ''
         run: bun scripts/ci/deploy-gate.ts use-d1
 
+      # A way back before the schema changes: a Time Travel bookmark, and an
+      # export to a private R2 bucket when D1_BACKUP_BUCKET is set. docs/ci/rollback.md
+      - name: Record a restore point before the migration
+        if: steps.token.outputs.ready == 'true'
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          D1_BACKUP_BUCKET: ${{ vars.D1_BACKUP_BUCKET }}
+        run: bun scripts/ci/d1-backup.ts
+
       - name: Apply production D1 migrations
         if: steps.token.outputs.ready == 'true'
         env:
@@ -111,17 +122,35 @@ jobs:
         if: steps.token.outputs.ready == 'true'
         run: bun run build
 
+      # The error reporter stamps each report with these two vars (docs/agents/error-reporting.md).
+      # The version is the vX.Y.Z tag on this commit when release.yml has made one, else the commit sha.
+      # release.yml makes lightweight tags; an annotated tag is not matched here and reads as the sha.
+      - name: Name the release
+        id: release
+        if: steps.token.outputs.ready == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAGS=$(gh api --paginate "repos/$GITHUB_REPOSITORY/git/matching-refs/tags/v" --jq '.[] | "\(.object.sha) \(.ref)"') || {
+            echo "::warning::Could not list the version tags, so the release is named by its commit sha."
+            TAGS=""
+          }
+          printf '%s\n' "$TAGS" | bun scripts/ci/release-version.ts "$DEPLOY_SHA" >> "$GITHUB_OUTPUT"
+
       - name: Deploy to Cloudflare Workers
         if: steps.token.outputs.ready == 'true'
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-        run: bunx wrangler deploy
+          RELEASE_VERSION: ${{ steps.release.outputs.version }}
+        run: bunx wrangler deploy --var "RELEASE_VERSION:$RELEASE_VERSION" --var ENVIRONMENT:production
 
       - name: Deploy summary
         if: steps.token.outputs.ready == 'true'
+        env:
+          RELEASE_VERSION: ${{ steps.release.outputs.version }}
         run: |
           {
             echo "### Production deploy"
             echo
-            echo "Deployed commit \`$DEPLOY_SHA\` to Cloudflare Workers (production)."
+            echo "Deployed commit \`$DEPLOY_SHA\` to Cloudflare Workers (production), release \`$RELEASE_VERSION\`."
           } >> "$GITHUB_STEP_SUMMARY"

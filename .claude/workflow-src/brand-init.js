@@ -3,14 +3,14 @@ export const meta = {
   description:
     "Give a fork its own brand in one run — preflight, brief, three comps drawn and critiqued in parallel, your pick on a lavish review page, tokens and every primitive rebuilt on disjoint fences, checks, fix rounds, DESIGN.md, one commit and one PR",
   whenToUse:
-    "A fresh fork that still wears the starter's look. Not for one colour or one component, not on a repo with live users whose brand is not changing (it rewrites 48 primitives), not as a throwaway exploration on a branch you care about.",
+    "A fresh fork that still wears the starter's look. Not for one colour or one component, not on a repo with live users whose brand is not changing (it rewrites every primitive), not as a throwaway exploration on a branch you care about.",
   phases: [
-    { title: "Preflight", detail: "clean tree, green baseline, no brand yet, branch off main" },
+    { title: "Preflight", detail: "clean tree, green baseline, no brand yet, branch off the default branch" },
     { title: "Brief", detail: "the impeccable init interview; asks you in chat, then writes PRODUCT.md" },
     { title: "Draw", detail: "taste draws the directions, then one comp lane per direction in parallel" },
     { title: "Critique", detail: "taste loop, impeccable critique, motion review per comp; sameness check; one redraw" },
     { title: "Pick", detail: "the run stops and returns the comps; you pick one (and answer the home question) on a lavish review page" },
-    { title: "Contract", detail: "one lane writes tokens into app/app.css and the font link into app/root.tsx" },
+    { title: "Contract", detail: "one lane writes tokens into the tokens file and the font link into the root layout" },
     { title: "Build", detail: "primitive and shared lanes own disjoint files and run concurrently; fence check; one polish pass so the first check wave covers it" },
     { title: "Check", detail: "design critiques, motion review, gates and a browser walk at once" },
     { title: "Fix", detail: "up to two rounds: owning lane per open finding, re-run every check the changes could affect; escalate the rest" },
@@ -24,7 +24,7 @@ export const meta = {
  *   A brand is chosen by looking at it, then applied everywhere at once. This is ONE self-contained
  *   workflow: there is no slash command in front of it. It draws three rival comps in parallel, lets
  *   critics judge them on pixels, asks the user to pick, then turns the winner into the real design
- *   system. The token layer is the one sequential step; after it, 48 primitives and a few shared
+ *   system. The token layer is the one sequential step; after it, the primitives and a few shared
  *   components share no file, so they build in parallel. It ends by writing a verdict file
  *   and opening a PR with the verdict in its body, so everything lives in one place.
  *
@@ -77,7 +77,7 @@ export const meta = {
  *     accept?: object }      { <tag>: true|false } from a needs-accept stop
  */
 // @lib
-const { twice, checkArgs, asker, preflightFault } = workflowLib({ agent, log });
+const { twice, atAttempt, checkArgs, asker, preflightFault, loadConfig, tracked } = workflowLib({ agent, log, name: "brand-init" });
 
 const input = args && typeof args === "object" ? args : {};
 const badArg = checkArgs("brand-init", [["brief", "string"], ["sector", "string"], ["root", "string"], ["redo", "boolean"], ["rebuildHome", "boolean"], ["answers", "object"], ["why", "object"], ["accept", "object"]], input, true);
@@ -92,18 +92,17 @@ const redo = input.redo === true;
 const slug = "brand-init";
 let ROOT = ""; // absolute repo root, resolved by Preflight; every later agent is fenced to it
 let outDir = ""; // <ROOT>/.verify/brand-init, set after Preflight
-const product = "PRODUCT.md";
 
 const SKILL_RULE = "Load skills by plain name (`impeccable`, `design-taste-frontend`, `animate`, `emil-design-eng`); only on \"Unknown skill\" use `impeccable:impeccable` or `taste-skill:design-taste-frontend`. Load each once.";
-const REPO_RULES = `Repo rules: the tokens in app/app.css beat every skill. Use semantic tokens only: no raw
+const repoRules = () => `Repo rules: the tokens in ${cfg.paths.tokens} beat every skill. Use semantic tokens only: no raw
 hex and no arbitrary Tailwind values in app code. Do not run git commit
 unless your task says so. Dev servers: \`CI=1 bun run dev --port <port>\` on the port you were given.
 Skills: ${SKILL_RULE}${
   redo
     ? `
-This is a redo: DESIGN.md at the repo root describes the OLD brand, the one this run replaces. It is
+This is a redo: ${cfg.docs.design} at the repo root describes the OLD brand, the one this run replaces. It is
 not binding. The chosen direction replaces all of it, shapes, density, voice and component conventions
-included; never follow a DESIGN.md rule that disagrees with the direction.`
+included; never follow a ${cfg.docs.design} rule that disagrees with the direction.`
     : ""
 }`;
 
@@ -114,25 +113,36 @@ const FINDINGS = arr(
 // =============================================================================================
 phase("Preflight");
 
-const pre = await agent(
+// The config comes first, in a step of its own: Preflight below names the configured design doc, and no file name from the tree shares the step.
+const conf = await loadConfig("brand-init", rootClause(input.root), [
+  "paths.appRoot", "paths.tokens", "paths.rootLayout", "paths.components", "paths.primitives", "paths.routes", "paths.home", "paths.locales",
+  "brandInit.contractFence", "brandInit.primitiveLanes", "brandInit.sharedLanes", "brandInit.homeLane",
+  ]);
+if (conf.error) return { error: conf.error };
+const cfg = conf.config;
+// The loader gives folders with no trailing slash; prompts and prefix tests add it.
+const APP_DIR = `${cfg.paths.appRoot}/`;
+if (!cfg.brandInit.contractFence.length) return { error: "harness-config: brandInit.contractFence must name at least one file in harness.config.json" };
+
+const pre = await tracked(
   `Pre-flight for /brand-init. Run these numbered steps in order and stop at the first failure. Fix nothing
 except where a step says to.
 
   0. Root. ${rootClause(input.root)} ROOT must be an absolute path. Then \`cd\` to ROOT: items 1 to 5 run there, and so does every later step of
      this run. Return ROOT in \`root\`.
-  1. Brand check. If DESIGN.md exists at ROOT and redo is ${redo}: when redo is false, fail with
+  1. Brand check. If ${cfg.docs.design} exists at ROOT and redo is ${redo}: when redo is false, fail with
      exactly: A brand exists. Run Workflow({ name: "brand-init", args: { redo: true } }) to replace it.
-     (When redo is true, leave DESIGN.md in place; it is the brand to move away from.)
+     (When redo is true, leave ${cfg.docs.design} in place; it is the brand to move away from.)
   2. Plugins. This run needs two plugin installs that a fresh fork may lack. Run
      \`find ~/.claude/plugins -path '*impeccable*' -name impeccable-documenter.md | head -1\` (the agent
-     that writes DESIGN.md at Close) and \`find ~/.claude/plugins -path '*taste-skill*' -name draw.mjs | head -1\`
+     that writes ${cfg.docs.design} at Close) and \`find ~/.claude/plugins -path '*taste-skill*' -name draw.mjs | head -1\`
      (the comp renderer). If either prints nothing, fail with exactly: Missing plugin. Run
      claude plugin install impeccable@impeccable and claude plugin install taste-skill@taste-skill, then restart.
   3. Clean tree. \`git status --short\`. Ignore anything under .verify/. If
      anything else is dirty, fail and name the files: parallel lanes writing over uncommitted work make
      the diff unreadable.
   4. Baseline. \`./scripts/verify.sh --baseline\`. If red, fail and name the failing gate.
-  5. Branch. If on main, \`git switch -c feat/brand-init\`. Otherwise stay.
+  5. Branch. If the current branch is the repo's default branch (\`bun scripts/default-branch.ts\` prints it), \`git switch -c feat/brand-init\`. Otherwise stay.
 Return ok=false with a one-line reason for the first failure, else ok=true. Always return root when you found it.`,
   {
     label: "preflight",
@@ -144,13 +154,14 @@ Return ok=false with a one-line reason for the first failure, else ok=true. Alwa
 );
 const fault = preflightFault(pre, input.root);
 if (fault) return { error: fault };
+const REPO_RULES = repoRules();
 ROOT = pre.root.replace(/\/+$/, "");
 outDir = `${ROOT}/.verify/brand-init`;
 
 // Every agent after Preflight gets this preamble first (see asker in the library).
 const ROOT_PREAMBLE = `ROOT = ${ROOT}
 Work only inside ${ROOT}. cd there first. Every path in this task is relative to ${ROOT}. Never read or write another checkout.
-That covers the comp and screenshot dirs (${ROOT}/.verify/...), PRODUCT.md, DESIGN.md, git commands and dev servers.`;
+That covers the comp and screenshot dirs (${ROOT}/.verify/...), ${cfg.docs.product}, ${cfg.docs.design}, git commands and dev servers.`;
 const { ask, remember, recall } = asker(ROOT_PREAMBLE);
 log(`Pre-flight green on ${pre.branch}, root ${ROOT}`);
 
@@ -173,16 +184,16 @@ cannot reach them. Draft the answers instead.
 
 ${SKILL_RULE}
 Load \`impeccable\` and read its \`init\` instructions to get the questions it asks about the
-product, the users and the tone. ${redo ? "This is a redo: also include a question on what the old brand (DESIGN.md) got wrong." : ""}
+product, the users and the tone. ${redo ? `This is a redo: also include a question on what the old brand (${cfg.docs.design}) got wrong.` : ""}
 Draft an answer to each one from:
   · args.brief: ${JSON.stringify(input.brief ?? null)}
   · args.sector: ${JSON.stringify(input.sector ?? null)}
-  · the repo (${ROOT}): README.md, AGENTS.md, package.json, app/routes/home.tsx, the i18n locale files.
+  · the repo (${ROOT}): README.md, AGENTS.md, package.json, ${cfg.paths.home}, the i18n locale files.
 
 ${
-  "PRODUCT.md exists at " + ROOT + "/PRODUCT.md? Check. If it does and redo is " + redo + ": when redo is false, use its content as the drafts and mark them confident; when redo is true, prefill from it."
+  `${cfg.docs.product} exists at ${ROOT}/${cfg.docs.product}? Check. If it does and redo is ${redo}: when redo is false, use its content as the drafts and mark them confident; when redo is true, prefill from it.`
 }
-One exception: a PRODUCT.md that says it describes the starter itself is the starter's file, not this
+One exception: a ${cfg.docs.product} that says it describes the starter itself is the starter's file, not this
 product's. A fork that still has it has not said what it is building. Do not draft from it or from the
 repo's own description of the starter; draft from args.brief, and mark every answer that args.brief does
 not state confident=false.
@@ -199,7 +210,7 @@ will be asked about those.`,
   }
 );
 if (!interview || !interview.questions.length) {
-  log("Brief agent returned no questions — no PRODUCT.md to design from.");
+  log(`Brief agent returned no questions — no ${cfg.docs.product} to design from.`);
   return { error: "brief agent returned nothing" };
 }
 const resumed = input.answers && typeof input.answers === "object";
@@ -212,7 +223,7 @@ if (unanswered.length) {
     slug,
     {
       status: "in-progress",
-      log: `Brief phase stopped for input; PRODUCT.md is not written yet. redo=${redo}; args.brief=${JSON.stringify(input.brief ?? null)}; args.sector=${JSON.stringify(input.sector ?? null)}; checkout ${ROOT}.`,
+      log: `Brief phase stopped for input; ${cfg.docs.product} is not written yet. redo=${redo}; args.brief=${JSON.stringify(input.brief ?? null)}; args.sector=${JSON.stringify(input.sector ?? null)}; checkout ${ROOT}.`,
       stopped: "Brief phase, status needs-input",
       waiting: `the user's answers to ${unanswered.length} interview question(s), ids ${unanswered.map((q) => q.id).join(", ")}`,
       next: "re-run Workflow brand-init with resumeFromRunId set to this run and args.answers = { <id>: \"<answer>\" }",
@@ -231,7 +242,7 @@ if (unanswered.length) {
 const finalAnswers = interview.questions.map((q) => ({ id: q.id, question: q.question, answer: typeof given[q.id] === "string" ? given[q.id] : q.draft }));
 
 const brief = await ask(
-  `Write ${ROOT}/PRODUCT.md from these interview answers, in the format impeccable \`init\` writes. The user
+  `Write ${ROOT}/${cfg.docs.product} from these interview answers, in the format impeccable \`init\` writes. The user
 has settled them; do not change an answer. Write nothing else.
 
 ${JSON.stringify(finalAnswers, null, 1)}
@@ -247,7 +258,7 @@ Return a one-line "oneLine" describing the product for a taste brief, and the cl
   }
 );
 if (!brief) {
-  log("Brief writer returned nothing — no PRODUCT.md to design from.");
+  log(`Brief writer returned nothing — no ${cfg.docs.product} to design from.`);
   return { error: "brief agent returned nothing" };
 }
 
@@ -255,7 +266,7 @@ if (!brief) {
 // Draw / critique / pick, up to two rounds. A second "None of these" ends the run.
 
 const antiText = redo
-  ? `\nANTI-REFERENCE: the current brand is described in DESIGN.md. Read it. Your comp must move AWAY from it
+  ? `\nANTI-REFERENCE: the current brand is described in ${cfg.docs.design}. Read it. Your comp must move AWAY from it
 in palette, type, shape and voice. A comp that echoes it fails.\n`
   : "";
 
@@ -267,7 +278,7 @@ const DRAW_SCHEMA = {
 const drawPrompt = (d, extra) => `Draw brand comp ${d.id} for this product. You are one of up to three parallel lanes, each drawing a
 different direction.
 
-Read ${ROOT}/${product} (the product) and your direction sheet ${d.sheet}. The sheet is your art direction:
+Read ${ROOT}/${cfg.docs.product} (the product) and your direction sheet ${d.sheet}. The sheet is your art direction:
 follow it, do not blend in the other lanes' directions.
 ${antiText}${extra ?? ""}
 FILE FENCE — write only under ${outDir}/${d.dirName ?? d.id}/ and nowhere else. If you think you need a file outside
@@ -283,7 +294,7 @@ Write:
     dialog, toast), with real motion and a light/dark toggle.
   · tokens.json — the TOKENS shape, exactly: { name, light, dark, fonts, radius, density, motion,
     voice, wordmark }. light and dark each hold the same keys as the custom properties in
-    app/app.css (:root and .dark): read that file and match the key list, every colour an oklch()
+    ${cfg.paths.tokens} (:root and .dark): read that file and match the key list, every colour an oklch()
     string. fonts is { sans: {family, href}, display: {family, href}|null, mono: {family, href}|null };
     density is compact|regular|airy; motion has ease-out, ease-in-out, duration-fast, duration-base,
     duration-slow; voice is 3 lines; wordmark is { text, family, weight, tracking, case: lower|upper|title }.
@@ -297,6 +308,7 @@ Return the ABSOLUTE comp.html path, the tokens object you wrote, and the ABSOLUT
 
 async function critique(comp) {
   const dir = comp.dir;
+  const pass = comp.redrawn ? ":redraw" : "";
   // The taste loop edits comp.html (look, fix, look), so it runs alone first. The two critics
   // after it only read the finished pixels, so they run together.
   const taste = await ask(
@@ -312,7 +324,7 @@ At 1920 the content must sit in a max-width page container; edge to edge is a de
 Return the final score (a number), short notes on what changed and what still bites, and \`tokens\`: the exact
 contents of ${dir}/tokens.json after your last edit (read the file back).`,
     {
-      label: `critique:${comp.id}:taste`,
+      label: `critique:${comp.id}:taste${pass}`,
       phase: "Critique",
       agentType: "ui-builder",
       schema: obj({ score: NUM, notes: STR, tokens: { type: "object" } }),
@@ -332,7 +344,7 @@ Also check WCAG AA contrast for body text, muted text, primary-on-primary-foregr
 against ${dir}/tokens.json, in the light theme and the dark theme separately. Report contrastAA.light
 and contrastAA.dark as booleans (true only if every pair passes AA).`,
         {
-          label: `critique:${comp.id}:impeccable`,
+          label: `critique:${comp.id}:impeccable${pass}`,
           phase: "Critique",
           // general-purpose: read-only critique that loads `impeccable` (Skill) and computes contrast; proto-critic
           // retakes its own shots and returns a fixed shape.
@@ -349,7 +361,7 @@ Load the \`emil-design-eng\` skill and judge the motion by its rules (\`review-a
 user-only: the Skill tool refuses it). Check easing, duration, purpose, and that
 prefers-reduced-motion collapses the motion. Return verdict PASS or FAIL with notes.`,
         {
-          label: `critique:${comp.id}:motion`,
+          label: `critique:${comp.id}:motion${pass}`,
           phase: "Critique",
           // general-purpose: read-only motion review that loads `emil-design-eng` (Skill); no project agent reviews motion.
           agentType: "general-purpose",
@@ -424,7 +436,7 @@ Write only under ${outDir}/directions/. Return the printed draw ids and the thre
   );
   const directions = deal ? deal.directions.slice(0, 3) : [];
   if (!directions.length) return { error: "draw.mjs produced no directions" };
-  log(`Propose: ${directions.length} comp lane(s) in parallel${redo ? ", moving away from DESIGN.md" : ""}`);
+  log(`Propose: ${directions.length} comp lane(s) in parallel${redo ? `, moving away from ${cfg.docs.design}` : ""}`);
 
   const outcomes = await pipeline(directions, (d) => drawAndCritique(d, "", false));
   let comps = outcomes.filter((o) => o && !o.failed);
@@ -513,7 +525,7 @@ for (let round = 1; round <= 2; round++) {
       slug,
       {
         status: "in-progress",
-        log: `Pick phase, round ${round}: PRODUCT.md is written; ${r.comps.length} comp(s) drawn and critiqued. Comps (id, name, html, taste score): ${r.comps.map((c) => `${c.id}, ${(c.tokens && c.tokens.name) || "unnamed"}, ${c.html}, taste ${c.critique.taste.score}`).join("; ")}. Comps that failed to draw: ${r.failed.length ? r.failed.map((f) => f.id).join(", ") : "none"}. Flagged as look-alikes: ${r.similar.length ? JSON.stringify(r.similar) : "none"}. Comp files live under ${outDir}/ (local, not committed). Checkout ${ROOT}.`,
+        log: `Pick phase, round ${round}: ${cfg.docs.product} is written; ${r.comps.length} comp(s) drawn and critiqued. Comps (id, name, html, taste score): ${r.comps.map((c) => `${c.id}, ${(c.tokens && c.tokens.name) || "unnamed"}, ${c.html}, taste ${c.critique.taste.score}`).join("; ")}. Comps that failed to draw: ${r.failed.length ? r.failed.map((f) => f.id).join(", ") : "none"}. Flagged as look-alikes: ${r.similar.length ? JSON.stringify(r.similar) : "none"}. Comp files live under ${outDir}/ (local, not committed). Checkout ${ROOT}.`,
         stopped: `Pick phase, round ${round}, status needs-pick`,
         waiting: `the user's choice (${needs.join(" and ")}): a comp id or "none", ${needs.includes("rebuildHome") ? "and whether to rebuild the home page" : "rebuildHome already answered"}`,
         next: `re-run Workflow brand-init with resumeFromRunId set to this run and args.${needs.includes("rebuildHome") && needs.length === 1 ? "rebuildHome" : needs.join(" and args.")}`,
@@ -541,9 +553,9 @@ for (let round = 1; round <= 2; round++) {
       })),
       failed: r.failed,
       similar: r.similar,
-      question: `Which comp should be the brand? Look at each comp and its screenshots. Pick a comp id, or "none" to draw three more.${typeof input.rebuildHome === "boolean" ? "" : " Also: rebuild the home page too (one more lane; app/routes/home.tsx changes)? Yes is recommended."}`,
+      question: `Which comp should be the brand? Look at each comp and its screenshots. Pick a comp id, or "none" to draw three more.${typeof input.rebuildHome === "boolean" ? "" : ` Also: rebuild the home page too (one more lane; ${cfg.paths.home} changes)? Yes is recommended.`}`,
       review: `${outDir}/pick-${round}.html`,
-      next: `Write the review page at ${outDir}/pick-${round}.html (run \`npx -y lavish-axi playbook comparison\` and \`playbook input\` first; style it with the app's tokens from app/app.css). One card per comp: the comp itself in an iframe (src = its comp.html path relative to the page, e.g. "a/comp.html", never a leading /), its desktop and mobile shots (relative paths), name, pitch, taste score, motion verdict, contrast and open P0/P1 count; mark look-alikes from \`similar\`. Below the cards ONE form: a radio per comp id plus "None of these — draw three more"${typeof input.rebuildHome === "boolean" ? "" : ", a yes/no for rebuilding the home page (yes preselected)"}, an optional "why not" note per comp, and one submit that calls window.lavish.queuePrompt once with data { ${pickKey}, ${typeof input.rebuildHome === "boolean" ? "" : "rebuildHome, "}why }. Open it with \`npx -y lavish-axi <page>\`, tell the user it is open, then run \`npx -y lavish-axi poll <page>\` in the foreground and re-run it if it times out. Read the answer, post \`npx -y lavish-axi reply <page> --agent-reply "<what happens next>"\`, then re-run with resumeFromRunId set to this run and args.${pickKey} = <comp id as a number> or "none"${typeof input.rebuildHome === "boolean" ? "" : ", and args.rebuildHome = true|false"}. Keep every other arg. Optional: args.why = { <comp id>: "<why they passed>" }. If lavish will not start, ask in chat instead.`,
+      next: `Write the review page at ${outDir}/pick-${round}.html (run \`npx -y lavish-axi playbook comparison\` and \`playbook input\` first; style it with the app's tokens from ${cfg.paths.tokens}). One card per comp: the comp itself in an iframe (src = its comp.html path relative to the page, e.g. "a/comp.html", never a leading /), its desktop and mobile shots (relative paths), name, pitch, taste score, motion verdict, contrast and open P0/P1 count; mark look-alikes from \`similar\`. ${runSummaryNote(slug, "brand-init")} Below the cards ONE form: a radio per comp id plus "None of these — draw three more"${typeof input.rebuildHome === "boolean" ? "" : ", a yes/no for rebuilding the home page (yes preselected)"}, an optional "why not" note per comp, and one submit that calls window.lavish.queuePrompt once with data { ${pickKey}, ${typeof input.rebuildHome === "boolean" ? "" : "rebuildHome, "}why }. Open it with \`npx -y lavish-axi <page>\`, tell the user it is open, then run \`npx -y lavish-axi poll <page>\` in the foreground and re-run it if it times out. Read the answer, post \`npx -y lavish-axi reply <page> --agent-reply "<what happens next>"\`, then re-run with resumeFromRunId set to this run and args.${pickKey} = <comp id as a number> or "none"${typeof input.rebuildHome === "boolean" ? "" : ", and args.rebuildHome = true|false"}. Keep every other arg. Optional: args.why = { <comp id>: "<why they passed>" }. If lavish will not start, ask in chat instead.`,
     };
   }
   const p = {
@@ -582,111 +594,45 @@ const tokens = winner.tokens;
 const compDir = winner.dir;
 const rejected = rejectedAll;
 
-const ui = (names) => names.map((n) => `app/components/ui/${n}.tsx`);
+const ui = (names) => names.map((n) => `${cfg.paths.primitives}/${n}.tsx`);
 
-// Hardcoded fences. The nine primitive lanes cover all 48 files in app/components/ui once.
-const CONTRACT_FENCE = ["app/app.css", "app/root.tsx"];
+// The fences come from harness.config.json (brandInit). The nine primitive lanes cover every file in the primitives folder once.
+const CONTRACT_FENCE = [...cfg.brandInit.contractFence];
+// A lane's role says what it does; its name is only a label. The sequential shared lane (sequential: true in the config) runs alone after
+// the parallel ones; the first other shared lane writes the wordmark it imports; with no sequential lane that step is skipped.
+const laneOf = (role) => (l) => ({ name: l.name, motion: l.motion, owns: [...l.owns], role });
+const firstShared = cfg.brandInit.sharedLanes.find((l) => !l.sequential);
 const BUILD_LANES = [
-  // harness:primitive-fences:start
-  // Each primitive lane owns at most 10 files, grouped by kind. `motion` = the lane owns something that
-  // moves, so it alone loads the two motion skills.
-  {
-    name: "primitives:buttons-toggles",
-    motion: true,
-    owns: ui(["button", "button-group", "toggle", "toggle-group", "switch"]),
-  },
-  {
-    name: "primitives:text-fields",
-    motion: false,
-    owns: ui(["input", "input-group", "input-otp", "textarea", "label", "form"]),
-  },
-  {
-    name: "primitives:choice-pickers",
-    motion: true,
-    owns: ui(["checkbox", "radio-group", "slider", "select", "native-select", "calendar"]),
-  },
-  {
-    name: "primitives:dialogs-sheets",
-    motion: true,
-    owns: ui(["dialog", "alert-dialog", "sheet", "drawer"]),
-  },
-  {
-    name: "primitives:menus-popovers",
-    motion: true,
-    owns: ui(["popover", "hover-card", "tooltip", "dropdown-menu", "context-menu", "menubar", "command"]),
-  },
-  {
-    name: "primitives:feedback",
-    motion: true,
-    owns: ui(["alert", "progress", "skeleton", "spinner", "empty"]),
-  },
-  {
-    name: "primitives:disclosure-nav",
-    motion: true,
-    owns: ui(["accordion", "collapsible", "tabs", "breadcrumb", "pagination"]),
-  },
-  {
-    name: "primitives:layout",
-    motion: true, // the sidebar collapses
-    owns: ui(["sidebar", "separator", "scroll-area", "aspect-ratio", "card"]),
-  },
-  {
-    name: "primitives:data-display",
-    motion: false,
-    owns: ui(["table", "chart", "avatar", "badge", "carousel"]),
-  },
-  // harness:primitive-fences:end
-  {
-    name: "shared",
-    motion: true, // theme-toggle and file-upload animate
-    owns: [
-      "app/components/feature-card.tsx",
-      "app/components/file-upload.tsx",
-      "app/components/language-switcher.tsx",
-      "app/components/stack-badge.tsx",
-      "app/components/theme-toggle.tsx",
-      "app/components/brand/**",
-    ],
-  },
-  {
-    // App shells and brand copy. Runs after the parallel wave (it imports the wordmark that `shared` writes).
-    name: "shell",
-    motion: false,
-    owns: [
-      "app/routes/admin/layout/**",
-      "app/routes/authentication/components/auth-shell.tsx",
-      "app/locales/en/**",
-      "app/locales/zh/**",
-    ],
-  },
-  ...(rebuildHome ? [{ name: "home", motion: true, owns: ["app/routes/home.tsx"] }] : []),
+  ...cfg.brandInit.primitiveLanes.map((l) => ({ name: l.name, motion: l.motion, owns: ui(l.files), role: "primitive" })),
+  ...cfg.brandInit.sharedLanes.map((l) => laneOf(l.sequential ? "sequential" : l === firstShared ? "wordmark" : "shared")(l)),
+  ...(rebuildHome ? [laneOf("home")(cfg.brandInit.homeLane)] : []),
 ];
 const ALL_FENCES = [...CONTRACT_FENCE, ...BUILD_LANES.flatMap((l) => l.owns)];
 
 // Paths no lane owns but that may legitimately change while the run is live.
 const IGNORED_PREFIXES = [".verify/", "plans/", ".react-router/", "node_modules/", ".wrangler/", "test-results/", "playwright-report/"];
 
-// Paths the sequential fix:orphans lane may edit: app/ code that no lane owns. Never tests or config.
+// Paths the sequential fix:orphans lane may edit: app code that no lane owns. Never tests or config.
 const orphanMayEdit = (path) =>
-  path.startsWith("app/") && !inFence(path, ALL_FENCES) && !/(^|\/)__tests__\/|\.(test|spec)\.[jt]sx?$|\.config\.[jt]s$/.test(path);
+  path.startsWith(APP_DIR) && !inFence(path, ALL_FENCES) && !/(^|\/)__tests__\/|\.(test|spec)\.[jt]sx?$|\.config\.[jt]s$/.test(path);
 const orphanTouched = new Set(); // paths fix:orphans edited legitimately; the fence diff must not flag them
 const inFence = (path, fence) =>
   fence.some((f) => (f.endsWith("/**") ? path.startsWith(f.slice(0, -2)) : path === f));
 const ignored = (path) => IGNORED_PREFIXES.some((p) => path.startsWith(p));
-// The contract lane owns app/app.css and app/root.tsx, so contrast and font-link findings have an owner.
+// The contract lane owns the tokens file and the root layout, so contrast and font-link findings have an owner.
 const CONTRACT_LANE = { name: "contract:tokens", owns: CONTRACT_FENCE };
 const laneByName = (n) => (n === CONTRACT_LANE.name ? CONTRACT_LANE : BUILD_LANES.find((l) => l.name === n) || null);
 const ownerOf = (path) => BUILD_LANES.find((l) => inFence(path, l.owns)) || (inFence(path, CONTRACT_FENCE) ? CONTRACT_LANE : null);
 
 // Files the run itself writes outside every fence: the brief and the brand docs.
-const allowed = (path) => path === "PRODUCT.md" || path === "DESIGN.md" || path.startsWith("DESIGN.");
+const allowed = (path) => path === cfg.docs.product || path === cfg.docs.design || path.startsWith(cfg.docs.design.replace(/\.md$/, "."));
 // Paths that were already dirty before the contract lane ran; filled by the snapshot below.
 const preDirty = new Set();
 const exempt = (path) => ignored(path) || allowed(path) || preDirty.has(path) || orphanTouched.has(path);
 
 const tokensJson = JSON.stringify(tokens, null, 1);
 const DESIGN_BRIEF = `BRAND: the winner is comp ${winner.id} ("${tokens.name ?? "unnamed"}"), at ${compDir} — comp.html shows it
-drawn, tokens.json holds the values. Product context is in ${ROOT}/${product}.
+drawn, tokens.json holds the values. Product context is in ${ROOT}/${cfg.docs.product}.
 TOKENS:
 ${tokensJson}
 The comps that lost, so you do not drift toward them:
@@ -740,17 +686,17 @@ FILE FENCE — you own ${CONTRACT_FENCE.join(" and ")} and nothing else. If you 
 file, STOP and report it.
 
 Do:
-  1. app/app.css — set every custom property in :root and .dark from the tokens (same key list; read
+  1. ${cfg.paths.tokens} — set every custom property in :root and .dark from the tokens (same key list; read
      the file and match it, adding none and dropping none unless the tokens differ). Add the motion
      tokens as --ease-out, --ease-in-out, --duration-fast, --duration-base, --duration-slow, and a
      @media (prefers-reduced-motion: reduce) block that collapses the durations to 0ms. Set --radius,
      and the font families (--font-sans and, if present, display and mono).
-  2. app/root.tsx — add the font <link> tags for tokens.fonts hrefs (preconnect plus stylesheet).
+  2. ${cfg.paths.rootLayout} — add the font <link> tags for tokens.fonts hrefs (preconnect plus stylesheet).
   3. AA check: for each foreground/background pair (foreground/background, card, popover, primary,
      secondary, muted, accent, sidebar variants, destructive) in light AND dark, compute WCAG contrast.
      A pair under 4.5:1 for text gets its lightness adjusted, keeping hue and chroma. List every
      change you made.
-Load \`impeccable\` for the colour work. The tokens in app/app.css beat every skill.
+Load \`impeccable\` for the colour work. The tokens in ${cfg.paths.tokens} beat every skill.
 
 ${REPO_RULES}
 Return the files you changed, your cwd (\`git rev-parse --show-toplevel\`), and a report that lists each contrast adjustment (token, before, after).`,
@@ -773,7 +719,9 @@ if (!contract) {
 // ---------------------------------------------------------------------------------------------
 phase("Build");
 
-log(`Build: ${BUILD_LANES.length} lanes — ${BUILD_LANES.filter((l) => l.name !== "shell").length} in parallel, then shell`);
+const sequentialLanes = BUILD_LANES.filter((l) => l.role === "sequential");
+const parallelLanes = BUILD_LANES.filter((l) => l.role !== "sequential");
+log(`Build: ${BUILD_LANES.length} lanes — ${parallelLanes.length} in parallel${sequentialLanes.length ? `, then ${sequentialLanes.map((l) => l.name).join(", ")}` : ""}`);
 
 const PRIMITIVE_RULE = `PRIMITIVE RULE: edit the files in place through their cva variants and the semantic tokens. Keep every
 export, prop and variant name, so no call site changes. No raw hex, no arbitrary Tailwind values.
@@ -783,19 +731,21 @@ demands the change. List each default or behaviour change you do make in \`chang
 ('file: prop or behaviour, old -> new, why'). If you changed none, return an empty list.`;
 
 const laneTask = (lane) =>
-  lane.name.startsWith("primitives")
+  lane.role === "primitive"
     ? PRIMITIVE_RULE
-    : lane.name === "shell"
-      ? `You own the app shells and the brand copy, and nothing else. Do: (1) the wordmark on EVERY shell: the admin sidebar header (app-sidebar.tsx still shows "Acme Inc."), the auth shell, and any other header or footer that carries the product name, using the wordmark component under app/components/brand/ (the shared lane has written it; read it, do not edit it); (2) the brand name, page titles (meta.title) and voice lines in BOTH app/locales/en and app/locales/zh, from tokens.voice and ${ROOT}/PRODUCT.md, keeping every key. Keep every export and prop. Do NOT touch page layouts (dashboard, admin pages, login and sign-up forms, home); if one needs a change, list it in \`needs\`.`
-    : lane.name === "shared"
-      ? "Also add a typeset wordmark under app/components/brand/ from tokens.wordmark (text, family, weight, tracking, case). Keep every export and prop of the existing components."
-      : "Rebuild the home page in the chosen brand, using tokens.voice for copy tone. Keep its i18n keys and routes working.";
+    : lane.role === "sequential"
+      ? `You own the app shells and the brand copy, and nothing else. Do: (1) the wordmark on EVERY shell: the admin sidebar header (app-sidebar.tsx still shows "Acme Inc."), the auth shell, and any other header or footer that carries the product name, using the wordmark component under ${cfg.paths.components}/brand/ (the shared lane has written it; read it, do not edit it); (2) the brand name, page titles (meta.title) and voice lines in BOTH ${cfg.paths.locales}/en and ${cfg.paths.locales}/zh, from tokens.voice and ${ROOT}/${cfg.docs.product}, keeping every key. Keep every export and prop. Do NOT touch page layouts (dashboard, admin pages, login and sign-up forms, home); if one needs a change, list it in \`needs\`.`
+    : lane.role === "wordmark"
+      ? `Also add a typeset wordmark under ${cfg.paths.components}/brand/ from tokens.wordmark (text, family, weight, tracking, case). Keep every export and prop of the existing components.`
+      : lane.role === "shared"
+        ? "Rebuild the files you own in the chosen brand, using tokens.voice for any copy. Keep every export, prop, i18n key and route working."
+        : "Rebuild the home page in the chosen brand, using tokens.voice for copy tone. Keep its i18n keys and routes working.";
 
 const lanePrompt = (lane, extra) => `Lane: ${lane.name}. You are one of ${BUILD_LANES.length} lanes building the chosen brand in parallel.
 
 ${DESIGN_BRIEF}
 
-The token layer is already in app/app.css (and the font link in app/root.tsx). Read them; do not edit them.
+The token layer is already in ${cfg.paths.tokens} (and the font link in ${cfg.paths.rootLayout}). Read them; do not edit them.
 
 FILE FENCE — you own these paths and only these paths:
 ${lane.owns.map((p) => `  · ${p}`).join("\n")}
@@ -808,7 +758,7 @@ No dev server and no browser in this lane: the Check phase drives the browser, a
 share one Vite cache and corrupt each other. Verify with \`bun run typecheck\` only. If you need a file
 you do not own, do not edit it: return it in \`needs\`. Return your cwd (\`git rev-parse --show-toplevel\`).
 
-Skills: load ${lane.name === "home" ? "`design-taste-frontend` as lead (public page)" : "`impeccable` as lead"}.${
+Skills: load ${lane.role === "home" ? "`design-taste-frontend` as lead (public page)" : "`impeccable` as lead"}.${
   lane.motion
     ? " This lane owns something that moves: also load `animate` and `emil-design-eng`. Motion uses the --ease-* and --duration-* tokens."
     : " This lane owns nothing that moves: do NOT load `animate` or `emil-design-eng`."
@@ -819,18 +769,18 @@ Return the files you changed and a one-line-per-file report.`;
 
 const buildLane = (lane) =>
   ask(lanePrompt(lane), { label: `build:${lane.name}`, phase: "Build", agentType: "ui-builder", schema: FILES_SCHEMA });
-const parallelLanes = BUILD_LANES.filter((l) => l.name !== "shell");
 const builtParallel = await parallel(parallelLanes.map((lane) => () => buildLane(lane)));
-// The shell lane imports the wordmark `shared` writes, so it runs once the wave is done.
-const builtShell = await buildLane(BUILD_LANES.find((l) => l.name === "shell"));
-const builtByName = new Map([...parallelLanes.map((l, i) => [l.name, builtParallel[i]]), ["shell", builtShell]]);
+// The sequential lane imports the wordmark a parallel lane writes, so it runs once the wave is done. Each runs alone, in config order.
+const builtSequential = [];
+for (const lane of sequentialLanes) builtSequential.push(await buildLane(lane));
+const builtByName = new Map([...parallelLanes.map((l, i) => [l.name, builtParallel[i]]), ...sequentialLanes.map((l, i) => [l.name, builtSequential[i]])]);
 // A lane that returns nothing gets one retry, alone. If it is still empty its work is missing, and
 // that blocks Ship until the user accepts it (see `missingBuild` in openBlocking).
 const missingBuild = [];
 for (const lane of BUILD_LANES) {
   if (builtByName.get(lane.name)) continue;
   log(`WARNING: build:${lane.name} returned nothing; retrying once`);
-  const retry = await buildLane(lane);
+  const retry = await atAttempt(2, () => buildLane(lane));
   if (retry) builtByName.set(lane.name, retry);
   else missingBuild.push({ severity: "P1", source: `build:${lane.name}`, issue: `build lane returned nothing twice; its fence (${lane.owns.join(", ")}) was not rebuilt` });
 }
@@ -957,12 +907,12 @@ phase("Check");
 // and each stops its server before it returns.
 const VIEWPORTS = `at desktop (1440), WIDE desktop (1920) and mobile (390) widths, in light and dark`;
 const SURFACES = `the kitchen-sink route, the dashboard, and the admin users page — ${VIEWPORTS}. Find the kitchen-sink
-route under app/routes/ (read only for its URL).`;
+route under ${cfg.paths.routes}/ (read only for its URL).`;
 const WIDE_CHECK = `WIDE CHECK at 1920: the page content must sit in a max-width page container, centred, not edge to edge. A
 full-bleed content column at 1920 is a P1 finding; name the file that owns that page layout in \`file\`.`;
 const CHECK_INPUTS = `INPUTS — judge against these, not against memory:
-  · ${compDir}/comp.html  · ${compDir}/tokens.json  · the comp screenshots in ${compDir}/shots/  · ${ROOT}/PRODUCT.md
-DESIGN.md is written at Close and may not exist yet: never require it and never fail for it.
+  · ${compDir}/comp.html  · ${compDir}/tokens.json  · the comp screenshots in ${compDir}/shots/  · ${ROOT}/${cfg.docs.product}
+${cfg.docs.design} is written at Close and may not exist yet: never require it and never fail for it.
 First \`ls\` each input. If any is missing, return verdict FAIL with ONE P0 finding "inputs missing at <path>"
 and stop; never critique from memory.`;
 const browserRules = (lane, port) => `BROWSER RULES: you are the only browser agent running now. Dev server: \`CI=1 bun run dev --port ${port}\` (yours alone). Save every
@@ -1057,7 +1007,7 @@ that prefers-reduced-motion collapses them. ${FIND_NOTE}`,
      Anything that needs a dev server: \`CI=1\` and a free port of your own; stop it before you return.
   2. For each gate, note pass or fail and keep the last 20 lines of its output.
   3. Return verdict PASS only if every gate passed, else FAIL. For each failing gate return one P1 finding: the gate name
-     and the first error lines as \`issue\`. If a typecheck error sits in a file outside app/components/, put that file in \`file\`
+     and the first error lines as \`issue\`. If a typecheck error sits in a file outside ${cfg.paths.components}/, put that file in \`file\`
      and name the export that changed. ${FIND_NOTE}
   4. Put the output tails in \`evidence\`.`,
         { label: "check:gates", phase: "Check", agentType: "runner", effort: "low", schema: VERDICT_SCHEMA }
@@ -1103,7 +1053,7 @@ const openFindings = () =>
     }
     return blocking;
   });
-const extraBlocking = [...missingBuild]; // findings the code itself raises (a missing build lane, a missing DESIGN.md)
+const extraBlocking = [...missingBuild]; // findings the code itself raises (a missing build lane, a missing ${cfg.docs.design})
 const openBlocking = () => [
   ...fenceViolations.map((v) => ({ severity: "P0", source: `fence:${v.lane}`, issue: `edited ${v.path}, outside its fence`, file: v.path })),
   ...openFindings(),
@@ -1140,7 +1090,7 @@ async function escalate(items, why, tag) {
         items,
         evidence: `${outDir}/check/ (screenshots, one folder per check)`,
         review: `${outDir}/accept-${tag}.html`,
-        next: `Write the review page at ${outDir}/accept-${tag}.html (run \`npx -y lavish-axi playbook table\` and \`playbook input\` first; style it with the app's tokens from app/app.css). One row per item as scored, with its severity, source, issue and file; do not round up. Beside each row, the screenshots from ${outDir}/check/ that show it (relative paths, never a leading /). Leave annotation on so the user can point at a screenshot. End with ONE form: "Ship with these open (accept the risk)" or "Stop", and one submit that calls window.lavish.queuePrompt once with data { accept: true|false }. Open it with \`npx -y lavish-axi <page>\`, tell the user it is open, then run \`npx -y lavish-axi poll <page>\` in the foreground and re-run it if it times out. Read the answer and any notes, post \`npx -y lavish-axi reply <page> --agent-reply "<what happens next>"\`, then re-run with resumeFromRunId set to this run and args.accept = { ...args.accept, "${tag}": true|false }. Keep every other arg. If lavish will not start, show the items in chat and ask there.`,
+        next: `Write the review page at ${outDir}/accept-${tag}.html (run \`npx -y lavish-axi playbook table\` and \`playbook input\` first; style it with the app's tokens from ${cfg.paths.tokens}). One row per item as scored, with its severity, source, issue and file; do not round up. Beside each row, the screenshots from ${outDir}/check/ that show it (relative paths, never a leading /). Leave annotation on so the user can point at a screenshot. ${runSummaryNote(slug, "brand-init")} End with ONE form: "Ship with these open (accept the risk)" or "Stop", and one submit that calls window.lavish.queuePrompt once with data { accept: true|false }. Open it with \`npx -y lavish-axi <page>\`, tell the user it is open, then run \`npx -y lavish-axi poll <page>\` in the foreground and re-run it if it times out. Read the answer and any notes, post \`npx -y lavish-axi reply <page> --agent-reply "<what happens next>"\`, then re-run with resumeFromRunId set to this run and args.accept = { ...args.accept, "${tag}": true|false }. Keep every other arg. If lavish will not start, show the items in chat and ask there.`,
       },
     };
   }
@@ -1161,7 +1111,7 @@ const acceptedGateFailures = () => (accepted() ? escalations.flatMap((e) => e.ga
 // ---------------------------------------------------------------------------------------------
 phase("Fix");
 
-const unresolved = []; // { file, why, from } things no lane could do: outside app/, or owned by another lane
+const unresolved = []; // { file, why, from } things no lane could do: outside the app root, or owned by another lane
 const noteUnresolved = (u) => { if (!unresolved.some((x) => x.file === u.file && x.from === u.from)) unresolved.push(u); };
 // A fix lane that returned nothing: everything it was handed is still owed.
 // Items that came from a check finding carry `findingKey`, so a later round that fixes the finding
@@ -1176,7 +1126,7 @@ const failedLane = (name, items) =>
       findingKey: f.source.startsWith("needs:") ? undefined : findingKey(f),
     })
   );
-const outsideApp = (f) => !!f.file && !f.file.startsWith("app/") && !f.source.startsWith("fence:");
+const outsideApp = (f) => !!f.file && !f.file.startsWith(APP_DIR) && !f.source.startsWith("fence:");
 const offenderOf = laneByName;
 
 const contractFixPrompt = (fs, tag) => `Lane: contract:tokens, FIX PASS ${tag}. You are the CONTRACT lane; it already built. You own ${CONTRACT_FENCE.join(" and ")} and nothing else.
@@ -1187,9 +1137,9 @@ Fix ONLY these open findings, inside your fence, and change nothing else:
 ${fs.map((f) => `  · [${f.severity}] ${f.source}: ${f.issue}${f.file ? ` (${f.file})` : ""}`).join("\n")}
 
 AA rule: a text pair under 4.5:1 gets its lightness adjusted, keeping hue and chroma, in light AND dark; list each change
-(token, before, after). A font-link finding means fixing the <link> tags for tokens.fonts hrefs in app/root.tsx (preconnect plus
+(token, before, after). A font-link finding means fixing the <link> tags for tokens.fonts hrefs in ${cfg.paths.rootLayout} (preconnect plus
 stylesheet). A file you need but do not own: do not edit it, return it in \`needs\`. No dev server and no browser in this lane.
-Load \`impeccable\` for the colour work. The tokens in app/app.css beat every skill.
+Load \`impeccable\` for the colour work. The tokens in ${cfg.paths.tokens} beat every skill.
 
 ${REPO_RULES}
 Return the files you changed, your cwd (\`git rev-parse --show-toplevel\`), and a report.`;
@@ -1201,7 +1151,7 @@ ${owns.map((p) => `  · ${p}`).join("\n")}
 Undo ONLY your own edit to each path. If the path sits outside every lane's fence, restore it with
 \`git checkout HEAD -- <path>\`. If it sits inside another lane's fence, reverse just the lines you
 changed by hand: never git checkout a file another lane owns, it holds their work. Never delete an
-untracked file outside app/. Never touch these paths, which were dirty before the build:
+untracked file outside ${APP_DIR}. Never touch these paths, which were dirty before the build:
 ${[...preDirty].join(", ") || "(none)"}.
 Change nothing else. Return the files you changed, the paths you actually reverted in \`reverted\`, your cwd, and a report.`;
 
@@ -1220,7 +1170,7 @@ const toReport = (name, lane, r, none) => ({
 // ({ severity, source, issue, file }). Step 1: each owning lane (the contract lane included) fixes its own, in
 // parallel. Step 2: a `needs` entry that another lane owns goes to that lane in one more parallel wave. Step 3: items
 // no lane owns, plus unowned `needs`, go to ONE fix:orphans lane that runs alone after everything else. Anything outside
-// app/, or still owned by a lane after step 2, lands in `unresolved` and is escalated.
+// the app root, or still owned by a lane after step 2, lands in `unresolved` and is escalated.
 async function fixLanes(items, tag) {
   const reports = [];
   const orphanQ = [];
@@ -1229,7 +1179,7 @@ async function fixLanes(items, tag) {
     for (const f of list) {
       const owner = f.file ? ownerOf(f.file) : null;
       if (owner) by.set(owner.name, [...(by.get(owner.name) || []), f]);
-      else if (outsideApp(f)) log(`Finding outside app/, no lane may fix it, escalating: ${f.file}`); // tagged at escalation
+      else if (outsideApp(f)) log(`Finding outside ${APP_DIR}, no lane may fix it, escalating: ${f.file}`); // tagged at escalation
       else orphanQ.push(f);
     }
     return by;
@@ -1250,7 +1200,7 @@ ${fs.map((f) => `  · [${f.severity}] ${f.source}: ${f.issue}${f.file ? ` (${f.f
         // A lane that returns nothing gets one retry. If it is still empty, the work it was handed
         // must not vanish with it: every assigned item goes to `unresolved`, which blocks Ship.
         return ask(prompt, opts)
-          .then((r) => r || ask(prompt, { ...opts, label: `${opts.label}:retry` }))
+          .then((r) => r || atAttempt(2, () => ask(prompt, { ...opts, label: `${opts.label}:retry` })))
           .then((r) => {
             if (!r) failedLane(name, fs);
             return toReport(name, lane, r, "fix lane returned nothing twice");
@@ -1262,8 +1212,8 @@ ${fs.map((f) => `  · [${f.severity}] ${f.source}: ${f.issue}${f.file ? ` (${f.f
     const next = [];
     for (const r of rs.filter(Boolean)) {
       for (const n of r.needs || []) {
-        const owner = n.file.startsWith("app/") ? ownerOf(n.file) : null;
-        if (!n.file.startsWith("app/")) noteUnresolved({ file: n.file, why: n.why, from: r.name });
+        const owner = n.file.startsWith(APP_DIR) ? ownerOf(n.file) : null;
+        if (!n.file.startsWith(APP_DIR)) noteUnresolved({ file: n.file, why: n.why, from: r.name });
         else if (owner && owner.name === r.name) continue;
         else {
           const item = { severity: "P1", source: `needs:${r.name}`, issue: n.why, file: n.file };
@@ -1291,7 +1241,7 @@ ${orphanQ.map((f) => `  · [${f.severity}] ${f.source}: ${f.issue}${f.file ? ` (
 
 ${DESIGN_BRIEF}
 
-FILE FENCE — you may edit any file under app/ EXCEPT these, which other lanes own:
+FILE FENCE — you may edit any file under ${APP_DIR} EXCEPT these, which other lanes own:
 ${ALL_FENCES.map((p) => `  · ${p}`).join("\n")}
 You may NEVER edit anything under scripts/, any test (__tests__, *.test.*, *.spec.*), or any config file. A finding that
 needs anything outside that fence: do not edit; return it in \`needs\`. Keep every export, prop and variant name, and every
@@ -1312,11 +1262,11 @@ const affectedChecks = (files) => {
   if (!files.length) return names;
   names.add("verify gates");
   for (const f of files) {
-    if (f === "app/app.css" || f === "app/root.tsx" || f.startsWith("app/components/")) {
+    if (f === cfg.paths.tokens || f === cfg.paths.rootLayout || f.startsWith(`${cfg.paths.components}/`)) {
       ["impeccable critique", "taste critique (home)", "feature-verifier walk", "review-animations"].forEach((n) => names.add(n));
-    } else if (f === "app/routes/home.tsx") names.add("taste critique (home)");
-    else if (f.startsWith("app/locales/")) ["impeccable critique", "feature-verifier walk", "taste critique (home)"].forEach((n) => names.add(n));
-    else if (f.startsWith("app/")) ["impeccable critique", "feature-verifier walk"].forEach((n) => names.add(n)); // shells, auth shell, other routes
+    } else if (f === cfg.paths.home) names.add("taste critique (home)");
+    else if (f.startsWith(`${cfg.paths.locales}/`)) ["impeccable critique", "feature-verifier walk", "taste critique (home)"].forEach((n) => names.add(n));
+    else if (f.startsWith(APP_DIR)) ["impeccable critique", "feature-verifier walk"].forEach((n) => names.add(n)); // shells, auth shell, other routes
   }
   return names;
 };
@@ -1336,7 +1286,7 @@ const rerunAfter = async (reports) => {
   const allNeeds = [...lanes, { name: CONTRACT_LANE.name, needs: contract.needs || [] }].flatMap((l) =>
     (l.needs || []).filter((n) => ownerOf(n.file)?.name !== l.name).map((n) => ({ severity: "P1", source: `needs:${l.name}`, issue: n.why, file: n.file }))
   );
-  // No lane may edit outside app/, so those needs go straight to `unresolved` (escalated, blocks Ship)
+  // No lane may edit outside the app root, so those needs go straight to `unresolved` (escalated, blocks Ship)
   // rather than into fixLanes, where they would only be logged.
   allNeeds.filter(outsideApp).forEach((f) => noteUnresolved({ file: f.file, why: f.issue, from: f.source }));
   const buildNeeds = allNeeds.filter((f) => !outsideApp(f));
@@ -1389,7 +1339,7 @@ ${strays.map((v) => `  · ${v.path} (touched by ${v.lane})`).join("\n")}
   1. If the path is in this list, skip it (dirty before the build): ${[...preDirty].join(", ") || "(none)"}.
   2. If the path sits inside a lane's fence, skip it and say so: it holds that lane's work.
   3. If it is tracked: \`git checkout HEAD -- <path>\`.
-  4. If it is untracked: delete it ONLY if it is under app/; anywhere else leave it and say so.
+  4. If it is untracked: delete it ONLY if it is under ${APP_DIR}; anywhere else leave it and say so.
   5. Touch nothing else.
 Return \`files\` and \`reverted\` (the paths you restored or deleted), \`cwd\` (\`git rev-parse --show-toplevel\`), and a one-line \`report\`.`,
       { label: `fix:${round}:revert-strays`, phase: "Fix", agentType: "runner", effort: "low", schema: FILES_SCHEMA }
@@ -1417,7 +1367,7 @@ Return \`files\` and \`reverted\` (the paths you restored or deleted), \`cwd\` (
   }
 }
 const stillOpen = openBlocking().map((f) =>
-  outsideApp(f) ? { ...f, issue: `needs a human or a separate task (outside app/): ${f.issue}` } : f
+  outsideApp(f) ? { ...f, issue: `needs a human or a separate task (outside ${APP_DIR}): ${f.issue}` } : f
 );
 for (const u of unresolved) {
   stillOpen.push({ severity: "P1", source: `unresolved:${u.from}`, issue: `needs a human or a separate task: ${u.why}`, file: u.file });
@@ -1436,8 +1386,8 @@ phase("Close");
 if (mayShip) {
   // DESIGN.md comes from the shipped artifact, so it follows the checked, polished tree.
   const doc = await ask(
-    `Write ${ROOT}/DESIGN.md from the SHIPPED app, not from intentions. Read app/app.css,
-app/root.tsx, app/components/ui/ and app/components/brand/, and the chosen comp at ${compDir}.
+    `Write ${ROOT}/${cfg.docs.design} from the SHIPPED app, not from intentions. Read ${cfg.paths.tokens},
+${cfg.paths.rootLayout}, ${cfg.paths.primitives}/ and ${cfg.paths.components}/brand/, and the chosen comp at ${compDir}.
 
 ${DESIGN_BRIEF}
 
@@ -1445,8 +1395,8 @@ Record: colour tokens (light and dark) with their roles, type scale and pairings
 motion tokens and the reduced-motion rule, the wordmark, the voice lines, component conventions, and
 this contrast log from the contract lane:
 ${contract.report}
-${redo ? "This is a redo: replace the old DESIGN.md outright. Carry nothing over from it that the shipped app does not show.\n" : ""}Write only DESIGN.md (and its sidecar if your instructions call for one). When done, confirm with
-\`ls -l DESIGN.md\`, then return written=true and every file you wrote.`,
+${redo ? `This is a redo: replace the old ${cfg.docs.design} outright. Carry nothing over from it that the shipped app does not show.\n` : ""}Write only ${cfg.docs.design} (and its sidecar if your instructions call for one). When done, confirm with
+\`ls -l ${cfg.docs.design}\`, then return written=true and every file you wrote.`,
     {
       label: "close:design-md",
       phase: "Close",
@@ -1454,8 +1404,8 @@ ${redo ? "This is a redo: replace the old DESIGN.md outright. Carry nothing over
       schema: obj({ written: BOOL, files: STRS }),
     }
   );
-  if (!doc || !doc.written || !doc.files.includes("DESIGN.md")) {
-    extraBlocking.push({ severity: "P1", source: "close:design-md", issue: "the documenter did not confirm DESIGN.md was written", file: "DESIGN.md" });
+  if (!doc || !doc.written || !doc.files.includes(cfg.docs.design)) {
+    extraBlocking.push({ severity: "P1", source: "close:design-md", issue: `the documenter did not confirm ${cfg.docs.design} was written`, file: cfg.docs.design });
     mayShip = false;
   }
 
@@ -1467,7 +1417,7 @@ ${redo ? "This is a redo: replace the old DESIGN.md outright. Carry nothing over
   if (fresh.length) {
     const e = await escalate(
       fresh.map((v) => ({ severity: "P0", source: `fence:${v.lane}`, issue: `edited ${v.path}, outside its fence`, file: v.path })),
-      "appeared after the DESIGN.md pass",
+      `appeared after the ${cfg.docs.design} pass`,
       "post-close-fence"
     );
     if (e.pending) return e.pending;
@@ -1524,14 +1474,14 @@ Be blunt about what is unfinished.`,
 phase("Ship");
 
 // One shape on every path: { shipped, reason?, gatesGreen?, verdictWritten?, commit?, pr? }.
-let ship = { shipped: false, reason: "open P0/P1 or a missing DESIGN.md, and the user did not accept them" };
+let ship = { shipped: false, reason: `open P0/P1 or a missing ${cfg.docs.design}, and the user did not accept them` };
 if (mayShip) {
   const lastCritique = results["impeccable critique"] ? JSON.stringify(results["impeccable critique"], null, 1) : "(the impeccable critique returned nothing)";
   const walk = results["feature-verifier walk"];
   const motionRes = results["review-animations"];
   // Everything any lane reported changing (fix:orphans edits land outside ALL_FENCES) is staged too.
   const reportedFiles = [...new Set([...lanes.flatMap((l) => l.files || []), ...contract.files, ...polishFiles, ...orphanTouched])].filter((f) => !ignored(f));
-  const STAGE = [...new Set([...ALL_FENCES, ...reportedFiles])].concat(["PRODUCT.md", "DESIGN.md", "DESIGN.* (its sidecar, if the documenter wrote one)"]);
+  const STAGE = [...new Set([...ALL_FENCES, ...reportedFiles])].concat([cfg.docs.product, cfg.docs.design, `${cfg.docs.design.replace(/\.md$/, ".*")} (its sidecar, if the documenter wrote one)`]);
   const shipped = await ask(
     `Ship the brand. You own the verdict file, the commit and the PR for this run.
 
@@ -1541,7 +1491,7 @@ Open findings the user explicitly accepted in an escalation review: ${accepted()
 
 Steps, in order:
   1. \`./scripts/verify.sh\` (every gate, including build and e2e). Also \`bun run typecheck\` and confirm no
-     call site outside app/components/ changed.
+     call site outside ${cfg.paths.components}/ changed.
   2. IF ANY GATE IS RED: ${
       acceptedGateFailures().length
         ? `continue ONLY if every red gate was already failing in this evidence the user saw and accepted:
@@ -1562,11 +1512,11 @@ ${lastCritique}
        review-animations: ${motionRes ? JSON.stringify(motionRes) : "returned nothing"}
        walk: ${walk ? JSON.stringify(walk) : "returned nothing"}
        Escalation answers: ${escalations.length ? JSON.stringify(escalations) : "none"}
-     · The design-system decision lives in DESIGN.md (already written). Do not edit it. Keep this for the PR body: the winner and why (cite its taste score and
+     · The design-system decision lives in ${cfg.docs.design} (already written). Do not edit it. Keep this for the PR body: the winner and why (cite its taste score and
        critique), then the comps that lost and why:
 ${rejected.length ? rejected.map((r) => `       · comp ${r.id}: ${r.why}`).join("\n") : "       · (none)"}
   4. Extend scripts/seed-preview.ts only if the run changed seeded data (it should not); stage it only then.
-  5. ONE commit, one PR. Stage EXPLICIT paths with \`git add -- <paths>\`, never a wholesale \`git add app/\` or \`-A\`:
+  5. ONE commit, one PR. Stage EXPLICIT paths with \`git add -- <paths>\`, never a wholesale \`git add ${APP_DIR}\` or \`-A\`:
 ${STAGE.map((p) => `       · ${p}`).join("\n")}
      After \`git add\`, run \`git status --porcelain\`. These files were reported changed by a lane:
 ${reportedFiles.map((p) => `       · ${p}`).join("\n") || "       · (none)"}
@@ -1575,12 +1525,12 @@ ${reportedFiles.map((p) => `       · ${p}`).join("\n") || "       · (none)"}
      Do NOT stage anything under .verify/ (the comps, screenshots and verdict.md stay local), or draw
      files. Check \`git status --short\` afterwards: anything modified and unstaged that is not one of
      those is a surprise, so name it in your note. Commit message:
-     \`feat(brand): ${tokens.name ?? "new"} brand — tokens, primitives, DESIGN.md\`, ending with the
+     \`feat(design): ${tokens.name ?? "new"} brand, tokens, primitives, ${cfg.docs.design}\` (Conventional Commits per .commitlintrc.json; the PR title is the same line), ending with the
      Co-Authored-By line for the model you run as (\`Co-Authored-By: <your model name> <noreply@anthropic.com>\`).
      Push the branch and open the PR with the \`engineering-toolkit:pr-format\` skill's layout: the pick
      screenshots (desktop and mobile, light and dark) and the final critique summary in the body, the
      contents of ${outDir}/verdict.md, the winning comp and why it won (its taste score), the list of
-     screenshot paths, the rejected comps and why, and any open finding named plainly. End the PR body with:
+     screenshot paths, the rejected comps and why, and any open finding named plainly. Before the closing line, add a \`## Run\` heading and the output of \`bun scripts/run-telemetry.ts summary brand-init --markdown\` (run from ROOT; if it fails, leave the section out). End the PR body with:
      🤖 Generated with [Claude Code](https://claude.com/claude-code)
   6. DO NOT MERGE.
 
@@ -1605,7 +1555,7 @@ const memFinal = await remember(
   slug,
   {
     status: ship.shipped ? "done" : "blocked",
-    log: `${ship.shipped ? "PR open, not merged: the user merges." : "Not shipped."} Winner: comp ${winner.id} ("${tokens.name ?? "unnamed"}"), taste score ${winner.critique.taste.score} (scored, not rounded). Rebuilt home: ${rebuildHome ? "yes" : "no"}. Redo of an existing brand: ${redo}. Ship: shipped=${ship.shipped}${ship.reason ? `; reason: ${ship.reason}` : ""}. Verdict ${ship.verdictWritten ? outDir + "/verdict.md (local, not committed)" : "not written"}; DESIGN.md ${mayShip ? "written" : "not written"}.${finalBlocking.length ? "" : " No open blocking findings."}`,
+    log: `${ship.shipped ? "PR open, not merged: the user merges." : "Not shipped."} Winner: comp ${winner.id} ("${tokens.name ?? "unnamed"}"), taste score ${winner.critique.taste.score} (scored, not rounded). Rebuilt home: ${rebuildHome ? "yes" : "no"}. Redo of an existing brand: ${redo}. Ship: shipped=${ship.shipped}${ship.reason ? `; reason: ${ship.reason}` : ""}. Verdict ${ship.verdictWritten ? outDir + "/verdict.md (local, not committed)" : "not written"}; ${cfg.docs.design} ${mayShip ? "written" : "not written"}.${finalBlocking.length ? "" : " No open blocking findings."}`,
     next: ship.shipped ? "user reviews and merges the PR" : "resolve the blockers in the todo list and re-run, or fix by hand",
     decision: [
       `comp ${winner.id} ("${tokens.name ?? "unnamed"}") is the brand — the user picked it on the review page after the critiques; taste ${winner.critique.taste.score}; taste notes: ${JSON.stringify(winner.critique.taste.notes ?? "")} — brand-init run`,
@@ -1641,7 +1591,7 @@ return {
   })),
   escalations,
   unresolved,
-  designMd: mayShip ? "DESIGN.md" : null,
+  designMd: mayShip ? cfg.docs.design : null,
   synthesis,
   ship,
   memory: { recalled: recalled ?? null, recorded: memFinal ?? null },

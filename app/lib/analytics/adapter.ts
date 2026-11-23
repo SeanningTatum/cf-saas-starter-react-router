@@ -8,10 +8,9 @@ export interface CapturedEvent {
   readonly timestamp: string;
 }
 
-/** A provider. `send` takes one batch; `Analytics` logs a failure and drops it. */
 export interface AnalyticsAdapter {
   readonly name: string;
   readonly send: (
-    batch: ReadonlyArray<CapturedEvent>
+    batch: ReadonlyArray<CapturedEvent>,
   ) => Effect.Effect<void, AnalyticsDeliveryError>;
 }

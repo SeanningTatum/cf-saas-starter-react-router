@@ -13,11 +13,13 @@ import { ThemeProvider } from "next-themes";
 import type { Route } from "./+types/root";
 import "./app.css";
 import { TRPCProvider } from "./trpc/client";
+import { Toaster } from "./components/ui/sonner";
 import { useTranslation } from "react-i18next";
 import { useChangeLanguage } from "remix-i18next/react";
 import { i18nServer } from "./i18n/i18n.server";
 import { useNonce } from "./lib/csp-nonce";
 import { useDocumentRequestId } from "./lib/request-id";
+import { useReportBoundaryError } from "./lib/error-reporting/browser";
 
 export const handle = { i18n: ["common"] };
 
@@ -39,12 +41,6 @@ export async function loader({ request, context }: Route.LoaderArgs) {
   return { locale, requestId: context.requestId };
 }
 
-/**
- * The id to show a user who reports a problem. Loader data is the freshest
- * source (the root loader runs again on each navigation), but React Router
- * skips the root loader on a 404 or 405, so fall back to the id of the
- * request that rendered the document.
- */
 const useRequestId = () => {
   const fromLoader = useRouteLoaderData<typeof loader>("root")?.requestId;
   const fromDocument = useDocumentRequestId();
@@ -79,15 +75,11 @@ export default function App({ loaderData }: Route.ComponentProps) {
   const nonce = useNonce();
 
   return (
-    <ThemeProvider
-      attribute="class"
-      defaultTheme="system"
-      enableSystem
-      nonce={nonce}
-    >
+    <ThemeProvider attribute="class" defaultTheme="system" enableSystem nonce={nonce}>
       <TRPCProvider>
         <Outlet />
       </TRPCProvider>
+      <Toaster />
     </ThemeProvider>
   );
 }
@@ -95,6 +87,7 @@ export default function App({ loaderData }: Route.ComponentProps) {
 export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {
   const { t } = useTranslation("common");
   const requestId = useRequestId();
+  useReportBoundaryError(error);
 
   let message = t("errors.oops");
   let details = t("errors.unexpected");
@@ -102,10 +95,7 @@ export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {
 
   if (isRouteErrorResponse(error)) {
     message = error.status === 404 ? t("errors.404") : t("errors.error");
-    details =
-      error.status === 404
-        ? t("errors.not_found")
-        : error.statusText || details;
+    details = error.status === 404 ? t("errors.not_found") : error.statusText || details;
   } else if (import.meta.env.DEV && error && error instanceof Error) {
     details = error.message;
     stack = error.stack;
@@ -116,10 +106,7 @@ export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {
       <h1>{message}</h1>
       <p>{details}</p>
       {requestId && (
-        <p
-          className="text-sm text-muted-foreground"
-          data-testid="error-request-id"
-        >
+        <p className="text-sm text-muted-foreground" data-testid="error-request-id">
           {t("errors.request_id", { id: requestId })}
         </p>
       )}

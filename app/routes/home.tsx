@@ -17,29 +17,16 @@ import {
 } from "@tabler/icons-react";
 
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { StackBadge } from "@/components/stack-badge";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { LanguageSwitcher } from "@/components/language-switcher";
 import { FeatureCard } from "@/components/feature-card";
 import { redirectIfAuthenticated } from "@/lib/session";
+import { ROUTES } from "@/lib/constants/routes";
+import { HOME_STACK } from "@/lib/constants/marketing";
 
 export const handle = { i18n: ["home"] };
-
-const STACK = [
-  "Workers",
-  "React Router",
-  "tRPC",
-  "Better Auth",
-  "Drizzle",
-  "Effect TS",
-] as const;
 
 export function meta(_: Route.MetaArgs) {
   return [
@@ -65,7 +52,6 @@ export default function Home() {
       <TopBar />
 
       <main className="mx-auto max-w-6xl px-6 pb-24">
-        {/* Hero */}
         <section className="flex flex-col items-start gap-8 pt-20 pb-16 md:items-center md:text-center">
           <span className="inline-flex items-center gap-2 rounded-full border border-border bg-card px-3 py-1 font-mono text-[11px] uppercase tracking-wider text-muted-foreground">
             <span className="size-1.5 rounded-full bg-primary" />
@@ -73,8 +59,7 @@ export default function Home() {
           </span>
 
           <h1 className="text-balance text-4xl font-semibold tracking-tight sm:text-5xl md:text-6xl">
-            {t("hero.title_lead")}{" "}
-            <span className="text-primary">{t("hero.title_accent")}</span>
+            {t("hero.title_lead")} <span className="text-primary">{t("hero.title_accent")}</span>
             {t("hero.title_trail")}
           </h1>
 
@@ -84,32 +69,27 @@ export default function Home() {
 
           <div className="flex flex-wrap items-center gap-3">
             <Button asChild size="lg" data-testid="hero-sign-up">
-              <Link to="/sign-up">
+              <Link to={ROUTES.signUp}>
                 {t("hero.cta_primary")}
                 <IconArrowRight className="ml-1 size-4" />
               </Link>
             </Button>
             <Button asChild size="lg" variant="outline" data-testid="hero-sign-in">
-              <Link to="/login">{t("hero.cta_secondary")}</Link>
+              <Link to={ROUTES.login}>{t("hero.cta_secondary")}</Link>
             </Button>
           </div>
 
           <div className="mt-2 flex flex-wrap items-center gap-2 md:justify-center">
-            {STACK.map((label) => (
+            {HOME_STACK.map((label) => (
               <StackBadge key={label}>{label}</StackBadge>
             ))}
           </div>
         </section>
 
-        {/* What's wired */}
         <section className="border-t border-border pt-16">
           <div className="mb-8 flex flex-col gap-2">
-            <h2 className="text-xl font-semibold tracking-tight sm:text-2xl">
-              {t("wired.title")}
-            </h2>
-            <p className="max-w-2xl text-sm text-muted-foreground">
-              {t("wired.subtitle")}
-            </p>
+            <h2 className="text-xl font-semibold tracking-tight sm:text-2xl">{t("wired.title")}</h2>
+            <p className="max-w-2xl text-sm text-muted-foreground">{t("wired.subtitle")}</p>
           </div>
 
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
@@ -118,7 +98,7 @@ export default function Home() {
               title={t("wired.cards.auth.title")}
               description={t("wired.cards.auth.description")}
               badges={["Better Auth", "D1"]}
-              to="/login"
+              to={ROUTES.login}
               cta={t("wired.cards.auth.cta")}
               testId="card-auth"
             />
@@ -127,7 +107,7 @@ export default function Home() {
               title={t("wired.cards.admin.title")}
               description={t("wired.cards.admin.description")}
               badges={["tRPC", "Drizzle"]}
-              to="/admin"
+              to={ROUTES.admin}
               cta={t("wired.cards.admin.cta")}
               testId="card-admin"
             />
@@ -136,7 +116,7 @@ export default function Home() {
               title={t("wired.cards.upload.title")}
               description={t("wired.cards.upload.description")}
               badges={["R2", "Workers"]}
-              to="/dashboard"
+              to={ROUTES.dashboard}
               cta={t("wired.cards.upload.cta")}
               testId="card-upload"
             />
@@ -145,7 +125,7 @@ export default function Home() {
               title={t("wired.cards.analytics.title")}
               description={t("wired.cards.analytics.description")}
               badges={["tRPC", "Drizzle"]}
-              to="/admin"
+              to={ROUTES.admin}
               cta={t("wired.cards.analytics.cta")}
               testId="card-analytics"
             />
@@ -154,7 +134,7 @@ export default function Home() {
               title={t("wired.cards.effect.title")}
               description={t("wired.cards.effect.description")}
               badges={["Effect TS", "Schema"]}
-              to="/admin/kitchen-sink"
+              to={ROUTES.adminKitchenSink}
               cta={t("wired.cards.effect.cta")}
               testId="card-effect"
             />
@@ -163,14 +143,13 @@ export default function Home() {
               title={t("wired.cards.i18n.title")}
               description={t("wired.cards.i18n.description")}
               badges={["remix-i18next"]}
-              to="/dashboard"
+              to={ROUTES.dashboard}
               cta={t("wired.cards.i18n.cta")}
               testId="card-i18n"
             />
           </div>
         </section>
 
-        {/* Harness */}
         <section className="mt-20 border-t border-border pt-16">
           <div className="mb-8 flex flex-col gap-3">
             <span className="inline-flex w-fit items-center gap-2 rounded-full border border-border bg-card px-2.5 py-1 font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
@@ -180,9 +159,7 @@ export default function Home() {
             <h2 className="text-xl font-semibold tracking-tight sm:text-2xl">
               {t("harness.title")}
             </h2>
-            <p className="max-w-2xl text-sm text-muted-foreground">
-              {t("harness.subtitle")}
-            </p>
+            <p className="max-w-2xl text-sm text-muted-foreground">{t("harness.subtitle")}</p>
           </div>
 
           <div className="grid gap-4 md:grid-cols-3">
@@ -228,30 +205,23 @@ export default function Home() {
           </div>
         </section>
 
-        {/* Quickstart */}
         <section className="mt-20 border-t border-border pt-16">
           <div className="grid gap-10 lg:grid-cols-[1fr_auto] lg:items-end">
             <div className="flex flex-col gap-3">
               <h2 className="text-xl font-semibold tracking-tight sm:text-2xl">
                 {t("quickstart.title")}
               </h2>
-              <p className="max-w-xl text-sm text-muted-foreground">
-                {t("quickstart.subtitle")}
-              </p>
+              <p className="max-w-xl text-sm text-muted-foreground">{t("quickstart.subtitle")}</p>
             </div>
             <div className="flex flex-wrap gap-2">
               <Button asChild variant="outline" data-testid="quickstart-github">
-                <a
-                  href="https://github.com/"
-                  target="_blank"
-                  rel="noreferrer"
-                >
+                <a href="https://github.com/" target="_blank" rel="noreferrer">
                   <IconBrandGithub className="size-4" />
                   {t("quickstart.repo")}
                 </a>
               </Button>
               <Button asChild variant="outline" data-testid="quickstart-docs">
-                <a href="/admin/kitchen-sink">
+                <a href={ROUTES.adminKitchenSink}>
                   <IconBook className="size-4" />
                   {t("quickstart.docs")}
                 </a>
@@ -290,23 +260,14 @@ function TopBar() {
   return (
     <header className="border-b border-border">
       <div className="mx-auto flex h-14 max-w-6xl items-center justify-between px-6">
-        <Link
-          to="/"
-          className="flex items-center gap-2 font-medium"
-          data-testid="brand-link"
-        >
+        <Link to="/" className="flex items-center gap-2 font-medium" data-testid="brand-link">
           <span className="flex size-6 items-center justify-center rounded-md bg-primary text-primary-foreground font-mono text-[10px] font-bold">
             CF
           </span>
           <span className="text-sm">{t("brand")}</span>
         </Link>
         <div className="flex items-center gap-1">
-          <Button
-            asChild
-            variant="ghost"
-            size="sm"
-            className="hidden sm:inline-flex"
-          >
+          <Button asChild variant="ghost" size="sm" className="hidden sm:inline-flex">
             <a
               href="https://github.com/"
               target="_blank"
@@ -318,10 +279,10 @@ function TopBar() {
             </a>
           </Button>
           <Button asChild variant="ghost" size="sm" data-testid="topbar-sign-in">
-            <Link to="/login">{t("topbar.sign_in")}</Link>
+            <Link to={ROUTES.login}>{t("topbar.sign_in")}</Link>
           </Button>
           <Button asChild size="sm" data-testid="topbar-sign-up">
-            <Link to="/sign-up">{t("topbar.sign_up")}</Link>
+            <Link to={ROUTES.signUp}>{t("topbar.sign_up")}</Link>
           </Button>
           <LanguageSwitcher compact />
           <ThemeToggle />
@@ -347,9 +308,7 @@ function HarnessPillar({ icon, title, description, path }: HarnessPillarProps) {
         </span>
         <div className="space-y-1.5">
           <CardTitle className="text-base">{title}</CardTitle>
-          <CardDescription className="leading-relaxed">
-            {description}
-          </CardDescription>
+          <CardDescription className="leading-relaxed">{description}</CardDescription>
         </div>
       </CardHeader>
       <CardContent>
@@ -368,9 +327,7 @@ function Footer() {
     <footer className="border-t border-border">
       <div className="mx-auto flex max-w-6xl flex-col gap-2 px-6 py-8 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
         <p>{t("footer.tagline")}</p>
-        <p className="font-mono text-xs uppercase tracking-wider">
-          {STACK.join(" · ")}
-        </p>
+        <p className="font-mono text-xs uppercase tracking-wider">{HOME_STACK.join(" · ")}</p>
       </div>
     </footer>
   );

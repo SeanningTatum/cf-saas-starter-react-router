@@ -4,13 +4,7 @@ import * as React from "react";
 import { Pie, PieChart, Cell, Bar, BarChart, XAxis, YAxis } from "recharts";
 import { useTranslation } from "react-i18next";
 
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   ChartContainer,
   ChartTooltip,
@@ -19,37 +13,23 @@ import {
   ChartLegendContent,
   type ChartConfig,
 } from "@/components/ui/chart";
+import { DEFAULT_DISTRIBUTION_COLORS } from "@/lib/constants/charts";
 
-export interface DistributionDataPoint {
+interface DistributionDataPoint {
   name: string;
   value: number;
   color?: string;
 }
 
 export interface DistributionChartProps {
-  /** Chart title */
   title: string;
-  /** Chart description */
   description?: string;
-  /** Data points with name and value */
   data: DistributionDataPoint[];
-  /** Chart type: pie, donut, or bar */
   type?: "pie" | "donut" | "bar";
-  /** Show legend */
   showLegend?: boolean;
-  /** Height of the chart */
   height?: number;
-  /** Default colors if not provided in data */
   colors?: string[];
 }
-
-const defaultColors = [
-  "var(--primary)",
-  "var(--chart-2)",
-  "var(--chart-3)",
-  "var(--chart-4)",
-  "var(--chart-5)",
-];
 
 export function DistributionChart({
   title,
@@ -58,7 +38,7 @@ export function DistributionChart({
   type = "donut",
   showLegend = true,
   height = 300,
-  colors = defaultColors,
+  colors = DEFAULT_DISTRIBUTION_COLORS,
 }: DistributionChartProps) {
   const { t } = useTranslation("common");
   const chartConfig = React.useMemo(() => {
@@ -88,24 +68,17 @@ export function DistributionChart({
       return (
         <BarChart data={dataWithColors} layout="vertical">
           <XAxis type="number" hide />
-          <YAxis
-            type="category"
-            dataKey="name"
-            tickLine={false}
-            axisLine={false}
-            width={100}
-          />
+          <YAxis type="category" dataKey="name" tickLine={false} axisLine={false} width={100} />
           <ChartTooltip content={<ChartTooltipContent />} />
           <Bar dataKey="value" radius={[0, 4, 4, 0]}>
-            {dataWithColors.map((entry, index) => (
-              <Cell key={`cell-${index}`} fill={entry.fill} />
+            {dataWithColors.map((entry) => (
+              <Cell key={entry.name} fill={entry.fill} />
             ))}
           </Bar>
         </BarChart>
       );
     }
 
-    // Pie or donut chart
     const innerRadius = type === "donut" ? 60 : 0;
 
     return (
@@ -121,8 +94,8 @@ export function DistributionChart({
           outerRadius={80}
           strokeWidth={2}
         >
-          {dataWithColors.map((entry, index) => (
-            <Cell key={`cell-${index}`} fill={entry.fill} />
+          {dataWithColors.map((entry) => (
+            <Cell key={entry.name} fill={entry.fill} />
           ))}
         </Pie>
         {showLegend && <ChartLegend content={<ChartLegendContent nameKey="name" />} />}
@@ -137,11 +110,7 @@ export function DistributionChart({
         {description && <CardDescription>{description}</CardDescription>}
       </CardHeader>
       <CardContent className="flex flex-col items-center pb-6">
-        <ChartContainer
-          config={chartConfig}
-          className="w-full"
-          style={{ height }}
-        >
+        <ChartContainer config={chartConfig} className="w-full" style={{ height }}>
           {renderChart()}
         </ChartContainer>
         {type === "donut" && (

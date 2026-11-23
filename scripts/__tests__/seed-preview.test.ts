@@ -1,13 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { Either } from "effect";
-import {
-  buildSql,
-  derivePreviewPassword,
-  deriveProductionPassword,
-  describeMarkdown,
-  parseArgs,
-  type Target,
-} from "../seed-preview";
+import { buildSql, derivePreviewPassword, deriveProductionPassword, describeMarkdown, parseArgs, type Target } from "../seed-preview";
 
 const SECRET = "a-secret-of-at-least-16-chars";
 const LOCAL_PASSWORD = "Password123!";

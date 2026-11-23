@@ -6,18 +6,7 @@ import { checkFeatureDoc } from "../check-feature-doc";
 const dir = join(__dirname, "fixtures", "feature-doc");
 const load = (name: string) => readFileSync(join(dir, `${name}.md`), "utf8");
 
-const RULES = [
-  "frontmatter",
-  "sections",
-  "empty-section",
-  "context-source",
-  "decisions",
-  "mermaid",
-  "ux-states",
-  "stack",
-  "fence-overlap",
-  "prototypes",
-];
+const RULES = ["frontmatter", "sections", "empty-section", "context-source", "decisions", "mermaid", "ux-states", "stack", "fence-overlap", "prototypes"];
 
 describe("checkFeatureDoc fixtures", () => {
   it("a complete record passes: a checker that rejects good input blocks every plan", () => {
@@ -95,7 +84,7 @@ describe("checkFeatureDoc edge cases", () => {
     expect(checkFeatureDoc(good.replace("`app/trpc/routes/invites.ts`", "`/etc/x`")).map((f) => f.rule)).toEqual(["stack"]);
   });
 
-  const withFlow = (diagram: string) => good.replace(/```mermaid\nflowchart TD\n  P1[\s\S]*?```/, "```mermaid\n" + diagram + "\n```");
+  const withFlow = (diagram: string) => good.replace(/```mermaid\nflowchart TD\n {2}P1[\s\S]*?```/, `\`\`\`mermaid\n${diagram}\n\`\`\``);
 
   it("an erDiagram cardinality like ||--o{ passes: its { is not an open bracket", () => {
     expect(checkFeatureDoc(withFlow("erDiagram\n  TEAM ||--o{ MEMBER : has\n  A }|..|{ B : uses"))).toEqual([]);
@@ -120,7 +109,10 @@ describe("checkFeatureDoc edge cases", () => {
   });
 
   it("a PR stack table without the Greptile focus column fails 'stack'", () => {
-    const doc = good.replace("| Size | Greptile focus |", "| Size |").replace(/\| (S|M|L) \| [^|\n]+ \|\n/g, "| $1 |\n").replace("|------|----------------|", "|------|");
+    const doc = good
+      .replace("| Size | Greptile focus |", "| Size |")
+      .replace(/\| (S|M|L) \| [^|\n]+ \|\n/g, "| $1 |\n")
+      .replace("|------|----------------|", "|------|");
     expect(checkFeatureDoc(doc).map((f) => f.rule)).toContain("stack");
   });
 
@@ -141,7 +133,7 @@ describe("checkFeatureDoc edge cases", () => {
   });
 
   it("a hyphen before 'source:' is accepted for Context bullets: editors turn em dashes into hyphens", () => {
-    const doc = good.replace("schema.ts", "schema.ts").replace(" — source: app/db/schema.ts", " - source: app/db/schema.ts");
+    const doc = good.replace(" — source: app/db/schema.ts", " - source: app/db/schema.ts");
     expect(checkFeatureDoc(doc)).toEqual([]);
   });
 
@@ -160,13 +152,24 @@ describe("checkFeatureDoc edge cases", () => {
     expect(checkFeatureDoc(doc).map((f) => f.rule)).toEqual(["stack"]);
   });
 
+  it("a record with no base takes the repo's default branch, not a literal: PR 1 must target it", () => {
+    const noBase = good.replace("base: main\n", "").replaceAll("| main |", "| staging |");
+    expect(checkFeatureDoc(noBase, () => "staging")).toEqual([]);
+    expect(checkFeatureDoc(noBase, () => "develop").map((f) => f.rule)).toEqual(["stack"]);
+  });
+
+  it("a record with no base and no known default branch skips the PR 1 base check instead of guessing", () => {
+    const noBase = good.replace("base: main\n", "").replaceAll("| main |", "| staging |");
+    expect(checkFeatureDoc(noBase, () => undefined)).toEqual([]);
+  });
+
   it("a mermaid block with an unknown diagram type fails: the page would render as raw text", () => {
     const doc = good.replace("flowchart TD\n  P1", "flowchar TD\n  P1");
     expect(checkFeatureDoc(doc).map((f) => f.rule)).toEqual(["mermaid"]);
   });
 
   it("an empty mermaid block fails: an empty fence passes a presence-only check", () => {
-    const doc = good.replace(/```mermaid\nflowchart TD\n  P1[\s\S]*?```/, "```mermaid\n```");
+    const doc = good.replace(/```mermaid\nflowchart TD\n {2}P1[\s\S]*?```/, "```mermaid\n```");
     expect(checkFeatureDoc(doc).map((f) => f.rule)).toEqual(["mermaid"]);
   });
 

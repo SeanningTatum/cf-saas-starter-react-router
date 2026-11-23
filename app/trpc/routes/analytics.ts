@@ -2,10 +2,7 @@ import { Effect, Schema } from "effect";
 import { adminProcedure, createTRPCRouter } from "..";
 import { runProcedure } from "@/lib/effect-trpc";
 import { AnalyticsRepository } from "@/repositories/analytics";
-import {
-  DateRangeInput,
-  GetRecentSignupsCountInput,
-} from "@/lib/schemas/analytics";
+import { DateRangeInput, GetRecentSignupsCountInput } from "@/lib/schemas/analytics";
 
 export const analyticsRouter = createTRPCRouter({
   getUserGrowth: adminProcedure
@@ -17,8 +14,8 @@ export const analyticsRouter = createTRPCRouter({
           const repo = yield* AnalyticsRepository;
           return yield* repo.getUserGrowth(input);
         }),
-        { span: "trpc.analytics.getUserGrowth" }
-      )
+        { span: "trpc.analytics.getUserGrowth" },
+      ),
     ),
 
   getUserStats: adminProcedure.query(({ ctx }) =>
@@ -28,8 +25,8 @@ export const analyticsRouter = createTRPCRouter({
         const repo = yield* AnalyticsRepository;
         return yield* repo.getUserStats;
       }),
-      { span: "trpc.analytics.getUserStats" }
-    )
+      { span: "trpc.analytics.getUserStats" },
+    ),
   ),
 
   getRoleDistribution: adminProcedure.query(({ ctx }) =>
@@ -39,8 +36,8 @@ export const analyticsRouter = createTRPCRouter({
         const repo = yield* AnalyticsRepository;
         return yield* repo.getRoleDistribution;
       }),
-      { span: "trpc.analytics.getRoleDistribution" }
-    )
+      { span: "trpc.analytics.getRoleDistribution" },
+    ),
   ),
 
   getVerificationDistribution: adminProcedure.query(({ ctx }) =>
@@ -50,8 +47,8 @@ export const analyticsRouter = createTRPCRouter({
         const repo = yield* AnalyticsRepository;
         return yield* repo.getVerificationDistribution;
       }),
-      { span: "trpc.analytics.getVerificationDistribution" }
-    )
+      { span: "trpc.analytics.getVerificationDistribution" },
+    ),
   ),
 
   getRecentSignupsCount: adminProcedure
@@ -63,7 +60,7 @@ export const analyticsRouter = createTRPCRouter({
           const repo = yield* AnalyticsRepository;
           return yield* repo.getRecentSignupsCount(input);
         }),
-        { span: "trpc.analytics.getRecentSignupsCount" }
-      )
+        { span: "trpc.analytics.getRecentSignupsCount" },
+      ),
     ),
 });

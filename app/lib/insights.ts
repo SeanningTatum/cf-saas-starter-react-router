@@ -1,29 +1,24 @@
-import type { Insight } from "@/components/analytics";
+import type { Insight } from "@/components/analytics/insights-card";
 import type { UserStats, UserGrowthPoint } from "@/lib/schemas/analytics";
+import {
+  BANNED_PERCENT_HIGH_THRESHOLD,
+  RECENT_SIGNUPS_WINDOW_DAYS,
+  VERIFICATION_RATE_EXCELLENT_THRESHOLD,
+  VERIFICATION_RATE_MODERATE_THRESHOLD,
+} from "@/lib/constants/insights";
 
-/** Translator shape needed to build insight copy — matches `useTranslation("admin").t`. */
-export type InsightsTranslator = (
-  key: string,
-  options?: Record<string, unknown>
-) => string;
+export {
+  BANNED_PERCENT_HIGH_THRESHOLD,
+  VERIFICATION_RATE_EXCELLENT_THRESHOLD,
+  VERIFICATION_RATE_MODERATE_THRESHOLD,
+};
 
-/** Verification rate (%) at or above which the verification insight reads as "positive". */
-export const VERIFICATION_RATE_EXCELLENT_THRESHOLD = 80;
-/** Verification rate (%) at or above which the verification insight reads as "neutral" (below this, "negative"). */
-export const VERIFICATION_RATE_MODERATE_THRESHOLD = 50;
-/** Banned-user share (%) above which the banned-users insight reads as "negative" instead of "neutral". */
-export const BANNED_PERCENT_HIGH_THRESHOLD = 5;
-/** Trailing window (days) used to sum "recent signups" from the growth series. */
-export const RECENT_SIGNUPS_WINDOW_DAYS = 7;
+export type InsightsTranslator = (key: string, options?: Record<string, unknown>) => string;
 
-/**
- * Derives the admin dashboard's insight list from user stats + growth series.
- * Pure function — no i18n/formatting side effects beyond calling `t`.
- */
 export function buildUserInsights(
   stats: UserStats,
   growthData: readonly UserGrowthPoint[],
-  t: InsightsTranslator
+  t: InsightsTranslator,
 ): Insight[] {
   const insights: Insight[] = [];
 
@@ -49,9 +44,7 @@ export function buildUserInsights(
   }
 
   if (stats.bannedUsers > 0) {
-    const bannedPercent = Math.round(
-      (stats.bannedUsers / stats.totalUsers) * 100
-    );
+    const bannedPercent = Math.round((stats.bannedUsers / stats.totalUsers) * 100);
     insights.push({
       text: t("insights.banned_users", {
         count: stats.bannedUsers,

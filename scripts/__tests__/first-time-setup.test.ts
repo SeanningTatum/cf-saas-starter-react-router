@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 // Hermetic + offline: node:child_process is fully mocked, so nothing ever
@@ -32,13 +33,7 @@ vi.mock("@clack/prompts", () => ({
 
 import { execSync, spawnSync } from "node:child_process";
 import { confirm } from "@clack/prompts";
-import {
-  buildAccountIdVariableArgs,
-  executeArgv,
-  offerRepoRules,
-  setupGitHubCiCredentials,
-  upsertEnvLine,
-} from "../first-time-setup";
+import { buildAccountIdVariableArgs, executeArgv, offerRepoRules, setupGitHubCiCredentials, upsertEnvLine } from "../first-time-setup";
 import { password } from "@clack/prompts";
 
 // A grab-bag of classic shell-injection payloads. If any of these were ever
@@ -61,53 +56,39 @@ beforeEach(() => {
 describe("buildAccountIdVariableArgs", () => {
   it("carries the account ID as a single, unmodified argv element", () => {
     const args = buildAccountIdVariableArgs("abc123");
-    expect(args).toEqual([
-      "variable",
-      "set",
-      "CLOUDFLARE_ACCOUNT_ID",
-      "--body",
-      "abc123",
-    ]);
+    expect(args).toEqual(["variable", "set", "CLOUDFLARE_ACCOUNT_ID", "--body", "abc123"]);
   });
 
-  it.each(INJECTION_PAYLOADS)(
-    "passes malicious value %j through literally (no shell metacharacter stripping/interpolation)",
-    (payload) => {
-      const args = buildAccountIdVariableArgs(payload);
-      // The payload is exactly one argv element at index 4, unchanged.
-      expect(args[4]).toBe(payload);
-      // It must not be split, escaped, or merged into other elements.
-      expect(args).toHaveLength(5);
-      expect(args.filter((a) => a === payload)).toHaveLength(1);
-    }
-  );
+  it.each(INJECTION_PAYLOADS)("passes malicious value %j through literally (no shell metacharacter stripping/interpolation)", (payload) => {
+    const args = buildAccountIdVariableArgs(payload);
+    // The payload is exactly one argv element at index 4, unchanged.
+    expect(args[4]).toBe(payload);
+    // It must not be split, escaped, or merged into other elements.
+    expect(args).toHaveLength(5);
+    expect(args.filter((a) => a === payload)).toHaveLength(1);
+  });
 });
 
 describe("executeArgv (shell-injection safety)", () => {
-  it.each(INJECTION_PAYLOADS)(
-    "spawns gh with the payload %j as a discrete argv element and never through a shell",
-    (payload) => {
-      executeArgv("gh", buildAccountIdVariableArgs(payload), true);
+  it.each(INJECTION_PAYLOADS)("spawns gh with the payload %j as a discrete argv element and never through a shell", (payload) => {
+    executeArgv("gh", buildAccountIdVariableArgs(payload), true);
 
-      expect(spawnSync).toHaveBeenCalledTimes(1);
-      const [file, argv, options] = (spawnSync as unknown as ReturnType<
-        typeof vi.fn
-      >).mock.calls[0];
+    expect(spawnSync).toHaveBeenCalledTimes(1);
+    const [file, argv, options] = (spawnSync as unknown as ReturnType<typeof vi.fn>).mock.calls[0] ?? [];
 
-      // Correct executable, argv array (not a shell string).
-      expect(file).toBe("gh");
-      expect(Array.isArray(argv)).toBe(true);
-      // The account ID reaches gh verbatim as its own argument.
-      expect(argv[4]).toBe(payload);
-      // spawnSync must run WITHOUT a shell — this is what makes the payload inert.
-      expect(options?.shell).toBeFalsy();
-      // The vulnerable shell path (execSync with an interpolated string) is unused.
-      expect(execSync).not.toHaveBeenCalled();
-      // Sanity: the payload never appears interpolated into any single string arg
-      // that a shell could re-parse (i.e. no `... --body "<payload>"` blob).
-      expect(argv).not.toContain(`--body "${payload}"`);
-    }
-  );
+    // Correct executable, argv array (not a shell string).
+    expect(file).toBe("gh");
+    expect(Array.isArray(argv)).toBe(true);
+    // The account ID reaches gh verbatim as its own argument.
+    expect(argv[4]).toBe(payload);
+    // spawnSync must run WITHOUT a shell — this is what makes the payload inert.
+    expect(options?.shell).toBeFalsy();
+    // The vulnerable shell path (execSync with an interpolated string) is unused.
+    expect(execSync).not.toHaveBeenCalled();
+    // Sanity: the payload never appears interpolated into any single string arg
+    // that a shell could re-parse (i.e. no `... --body "<payload>"` blob).
+    expect(argv).not.toContain(`--body "${payload}"`);
+  });
 
   it("returns stdout on success (status 0) so the success branch still fires", () => {
     (spawnSync as unknown as ReturnType<typeof vi.fn>).mockReturnValueOnce({
@@ -169,19 +150,18 @@ describe("setupGitHubCiCredentials secrets (pipelines)", () => {
   /** `envGet` is gh's answer to the GET of the production environment. */
   async function wizard(answers: string[], envGet: typeof OK = OK) {
     (execSync as unknown as Mock).mockReturnValue("");
-    (spawnSync as unknown as Mock).mockImplementation((_file: string, args: string[]) =>
-      args[0] === "api" && args.length === 2 ? envGet : OK,
-    );
+    (spawnSync as unknown as Mock).mockImplementation((_file: string, args: string[]) => (args[0] === "api" && args.length === 2 ? envGet : OK));
     for (const a of answers) (password as unknown as Mock).mockResolvedValueOnce(a);
     const saved: [string, string][] = [];
     const logged: string[] = [];
     const log = vi.spyOn(console, "log").mockImplementation((...a) => void logged.push(a.join(" ")));
     await setupGitHubCiCredentials("acct", (k, v) => void saved.push([k, v]));
     log.mockRestore();
-    const secretCalls = (execSync as unknown as Mock).mock.calls
-      .filter(([cmd]: [string]) => String(cmd).startsWith("gh secret set"))
-      .map(([cmd, opts]: [string, { input?: string }]) => ({ cmd: String(cmd), input: opts?.input }));
-    const argvs = (spawnSync as unknown as Mock).mock.calls.map(([, args]: [string, string[]]) => args);
+    const secretCalls = vi
+      .mocked(execSync)
+      .mock.calls.filter(([cmd]) => String(cmd).startsWith("gh secret set"))
+      .map(([cmd, opts]) => ({ cmd: String(cmd), input: opts?.input }));
+    const argvs = vi.mocked(spawnSync).mock.calls.map(([, args]) => args ?? []);
     return { saved, logged, secretCalls, argvs };
   }
 
@@ -190,6 +170,13 @@ describe("setupGitHubCiCredentials secrets (pipelines)", () => {
     const prod = secretCalls.filter((c) => c.input === PROD);
     expect(prod.map((c) => c.cmd)).toEqual(["gh secret set CLOUDFLARE_API_TOKEN --env production"]);
     expect(secretCalls.map((c) => c.cmd)).not.toContain("gh secret set CLOUDFLARE_API_TOKEN");
+  });
+
+  it("the success line says a merge into production deploys, not a push to main: the flow deploys from production", async () => {
+    const { logged } = await wizard([PROD, ""]);
+    const said = logged.join("\n");
+    expect(said).toContain("A merge into production will now auto-deploy it.");
+    expect(said).not.toMatch(/push(es)? to main/i);
   });
 
   const ENDPOINT = "repos/{owner}/{repo}/environments/production";
@@ -221,8 +208,11 @@ describe("setupGitHubCiCredentials secrets (pipelines)", () => {
 
   it("puts no secret value in any argv or command string: argv shows in the process list", async () => {
     const { saved, argvs } = await wizard([PROD, PREVIEW]);
-    const seed = saved[0][1];
-    const commandStrings = (execSync as unknown as Mock).mock.calls.map(([cmd]: [string]) => String(cmd));
+    const [first] = saved;
+    expect(first).toBeDefined();
+    if (!first) return;
+    const seed = first[1];
+    const commandStrings = vi.mocked(execSync).mock.calls.map(([cmd]) => String(cmd));
     for (const secret of [PROD, PREVIEW, seed]) {
       expect(commandStrings.some((c) => c.includes(secret))).toBe(false);
       expect(argvs.flat().some((a) => a.includes(secret))).toBe(false);
@@ -247,7 +237,10 @@ describe("setupGitHubCiCredentials secrets (pipelines)", () => {
 
   it("never prints the seed secret or either token", async () => {
     const { saved, logged } = await wizard([PROD, PREVIEW]);
-    for (const secret of [PROD, PREVIEW, saved[0][1]]) {
+    const [first] = saved;
+    expect(first).toBeDefined();
+    if (!first) return;
+    for (const secret of [PROD, PREVIEW, first[1]]) {
       expect(logged.some((l) => l.includes(secret))).toBe(false);
     }
   });
@@ -277,50 +270,37 @@ describe("upsertEnvLine", () => {
 });
 
 describe("setupGitHubCiCredentials (call-site shell-injection regression)", () => {
-  it.each(INJECTION_PAYLOADS)(
-    "routes a malicious account id %j to gh via spawnSync argv and never through a shell string",
-    async (payload) => {
-      // gh-availability gate calls execSync; a string return means "gh present".
-      (execSync as unknown as ReturnType<typeof vi.fn>).mockReturnValue("");
-      (spawnSync as unknown as ReturnType<typeof vi.fn>).mockReturnValue({
-        status: 0,
-        stdout: "",
-        stderr: "",
-        error: undefined,
-      });
+  it.each(INJECTION_PAYLOADS)("routes a malicious account id %j to gh via spawnSync argv and never through a shell string", async (payload) => {
+    // gh-availability gate calls execSync; a string return means "gh present".
+    (execSync as unknown as ReturnType<typeof vi.fn>).mockReturnValue("");
+    (spawnSync as unknown as ReturnType<typeof vi.fn>).mockReturnValue({
+      status: 0,
+      stdout: "",
+      stderr: "",
+      error: undefined,
+    });
 
-      // Pass the payload as the accountId arg so the account-id text prompt is skipped.
-      await setupGitHubCiCredentials(payload, () => {});
+    // Pass the payload as the accountId arg so the account-id text prompt is skipped.
+    await setupGitHubCiCredentials(payload, () => {});
 
-      // The account ID reached `gh` as a discrete argv element via spawnSync (no shell).
-      const ghVarCall = (
-        spawnSync as unknown as ReturnType<typeof vi.fn>
-      ).mock.calls.find(
-        ([file, args]: [string, string[]]) =>
-          file === "gh" &&
-          Array.isArray(args) &&
-          args[2] === "CLOUDFLARE_ACCOUNT_ID"
-      );
-      expect(ghVarCall).toBeDefined();
-      expect((ghVarCall![1] as string[])[4]).toBe(payload);
+    // The account ID reached `gh` as a discrete argv element via spawnSync (no shell).
+    const ghVarCall = vi.mocked(spawnSync).mock.calls.find(([file, args]) => file === "gh" && Array.isArray(args) && args[2] === "CLOUDFLARE_ACCOUNT_ID");
+    expect(ghVarCall).toBeDefined();
+    expect(ghVarCall?.[1]?.[4]).toBe(payload);
 
-      // The payload must NEVER be interpolated into a shell command string handed to
-      // execSync. This is what fails if someone reverts to `gh variable set ... --body
-      // "${accountId}"` (the original P1 bug).
-      for (const [cmd] of (
-        execSync as unknown as ReturnType<typeof vi.fn>
-      ).mock.calls) {
-        expect(String(cmd)).not.toContain(`--body "${payload}"`);
-        expect(String(cmd)).not.toContain(payload);
-      }
+    // The payload must NEVER be interpolated into a shell command string handed to
+    // execSync. This is what fails if someone reverts to `gh variable set ... --body
+    // "${accountId}"` (the original P1 bug).
+    for (const [cmd] of (execSync as unknown as ReturnType<typeof vi.fn>).mock.calls) {
+      expect(String(cmd)).not.toContain(`--body "${payload}"`);
+      expect(String(cmd)).not.toContain(payload);
     }
-  );
+  });
 });
 
 describe("offerRepoRules", () => {
   const applied = { code: 0, stdout: ["did: POST repos/acme/saas/rulesets"], stderr: [] };
-  const answer = (yes: boolean) =>
-    (confirm as unknown as ReturnType<typeof vi.fn>).mockResolvedValueOnce(yes);
+  const answer = (yes: boolean) => (confirm as unknown as ReturnType<typeof vi.fn>).mockResolvedValueOnce(yes);
 
   it("writes nothing to GitHub when the user declines: the rules stop direct pushes, so they are opt-in", async () => {
     answer(false);
@@ -345,5 +325,12 @@ describe("offerRepoRules", () => {
     log.mockRestore();
     expect(printed).toContain("error: POST failed");
     expect(printed).not.toContain("✓ Repo rules applied");
+  });
+});
+
+describe("runDatabaseMigrations", () => {
+  it("never runs drizzle-kit generate: the wizard once wrote a migration no one reviewed and applied it to production", () => {
+    const source = readFileSync(new URL("../first-time-setup.ts", import.meta.url), "utf-8");
+    expect(source).not.toMatch(/drizzle-kit\s+generate/);
   });
 });

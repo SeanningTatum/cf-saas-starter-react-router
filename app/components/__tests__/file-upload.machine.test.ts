@@ -19,7 +19,7 @@ const start = (result: UploadResult = Either.right({ key: "k1" })) => {
   const upload = vi.fn(async () => result);
   const actor = createActor(
     fileUploadMachine.provide({ actors: { upload: fromPromise(upload) } }),
-    { input: { maxSize: MAX } }
+    { input: { maxSize: MAX } },
   ).start();
   const emitted: FileUploadEmitted[] = [];
   actor.on("*", (e) => emitted.push(e));
@@ -30,9 +30,7 @@ const settled = (actor: ReturnType<typeof start>["actor"]) =>
   waitFor(actor, (s) => !s.matches("uploading"));
 
 describe("fileUploadMachine", () => {
-  // Catches the bug in the old component: "Upload another" cleared the file
-  // but not the fetcher's data, so the success panel never went away.
-  it("RESET after a success returns to idle and clears the key and file", async () => {
+  it("RESET after a success returns to idle and clears the key and file, so Upload another does not leave the success panel on screen", async () => {
     const { actor } = start();
     actor.send({ type: "PICK", file: small });
     await settled(actor);
@@ -44,8 +42,7 @@ describe("fileUploadMachine", () => {
     expect(actor.getSnapshot().context).toMatchObject({ key: null, file: null, error: null });
   });
 
-  // Catches: an oversize file reaching the network.
-  it("fails an oversize file without uploading it", () => {
+  it("fails an oversize file without uploading it, so an oversize file never reaches the network", () => {
     const { actor, upload, emitted } = start();
     actor.send({ type: "PICK", file: big });
     expect(actor.getSnapshot().value).toBe("failed");
@@ -54,22 +51,23 @@ describe("fileUploadMachine", () => {
     expect(emitted).toEqual([{ type: "failed", error: { reason: "too_big" } }]);
   });
 
-  // Catches: the route's reason being swapped for a generic message.
-  it("fails with the route's message when the route refuses the file", async () => {
+  it("fails with the route's message when the route refuses the file, not a generic message", async () => {
     const { actor, emitted } = start(
-      Either.left(new BucketValidationError({ message: "Wrong type", field: "file" }))
+      Either.left(new BucketValidationError({ message: "Wrong type", field: "file" })),
     );
     actor.send({ type: "PICK", file: small });
     await settled(actor);
     expect(actor.getSnapshot().value).toBe("failed");
-    expect(actor.getSnapshot().context.error).toEqual({ reason: "rejected", message: "Wrong type" });
+    expect(actor.getSnapshot().context.error).toEqual({
+      reason: "rejected",
+      message: "Wrong type",
+    });
     expect(emitted).toEqual([
       { type: "failed", error: { reason: "rejected", message: "Wrong type" } },
     ]);
   });
 
-  // Catches: a transport failure leaving the component stuck in uploading.
-  it("fails as unreachable when the server cannot be reached", async () => {
+  it("fails as unreachable when the server cannot be reached, so a transport failure never leaves the component stuck in uploading", async () => {
     const { actor } = start(Either.left(new ExternalServiceError({ service: "upload-file" })));
     actor.send({ type: "PICK", file: small });
     await settled(actor);
@@ -77,17 +75,14 @@ describe("fileUploadMachine", () => {
     expect(actor.getSnapshot().context.error).toEqual({ reason: "unreachable" });
   });
 
-  // Catches: onUploadSuccess firing with a stale or missing key.
-  it("emits uploaded with the new key once, on success", async () => {
+  it("emits uploaded with the new key once, on success, so onUploadSuccess never fires with a stale or missing key", async () => {
     const { actor, emitted } = start(Either.right({ key: "uploads/a.png" }));
     actor.send({ type: "PICK", file: small });
     await settled(actor);
     expect(emitted).toEqual([{ type: "uploaded", key: "uploads/a.png" }]);
   });
 
-  // Catches: a second pick or a reset during an upload starting a second
-  // request or dropping the first one's result.
-  it("ignores PICK and RESET while uploading", async () => {
+  it("ignores PICK and RESET while uploading, so a second pick or a reset cannot start a second request or drop the first result", async () => {
     const { actor, upload } = start();
     actor.send({ type: "PICK", file: small });
     actor.send({ type: "PICK", file: small });
@@ -98,8 +93,7 @@ describe("fileUploadMachine", () => {
     expect(actor.getSnapshot().value).toBe("success");
   });
 
-  // Catches: the highlighted drop zone sticking after the pointer leaves.
-  it("goes back to idle when a drag leaves", () => {
+  it("goes back to idle when a drag leaves, so the highlighted drop zone cannot stick", () => {
     const { actor } = start();
     actor.send({ type: "DRAG_ENTER" });
     expect(actor.getSnapshot().value).toBe("dragging");
@@ -107,8 +101,7 @@ describe("fileUploadMachine", () => {
     expect(actor.getSnapshot().value).toBe("idle");
   });
 
-  // Catches: an old error staying on screen while the user drags a new file in.
-  it("clears the error when a new drag starts after a failure", () => {
+  it("clears the error when a new drag starts after a failure, so an old error does not stay on screen", () => {
     const { actor } = start();
     actor.send({ type: "PICK", file: big });
     actor.send({ type: "DRAG_ENTER" });
@@ -116,8 +109,7 @@ describe("fileUploadMachine", () => {
     expect(actor.getSnapshot().context.error).toBeNull();
   });
 
-  // Catches: "Try again" by picking a new file not working after a failure.
-  it("uploads a new pick straight from failed", async () => {
+  it("uploads a new pick straight from failed, so Try again by picking a new file works after a failure", async () => {
     const { actor } = start();
     actor.send({ type: "PICK", file: big });
     actor.send({ type: "PICK", file: small });
@@ -126,9 +118,7 @@ describe("fileUploadMachine", () => {
     expect(actor.getSnapshot().value).toBe("success");
   });
 
-  // Catches: a state that no sequence of events can reach, or a dead end with
-  // no way back to idle. The e2e spec replays these same paths in the browser.
-  it("reaches every state, and every state can get back to idle", () => {
+  it("reaches every state, and every state can get back to idle, so no state is unreachable and none is a dead end (the e2e spec replays these paths in the browser)", () => {
     const paths = fileUploadPaths({ maxSize: MAX, small, big });
     const reached = new Set(paths.map((p) => String(p.state.value)));
     const all: FileUploadState[] = ["idle", "dragging", "uploading", "success", "failed"];
@@ -137,25 +127,26 @@ describe("fileUploadMachine", () => {
     for (const path of paths) {
       const back = fileUploadPaths(
         { maxSize: MAX, small, big },
-        { fromState: path.state, toState: (s) => s.matches("idle") }
+        { fromState: path.state, toState: (s) => s.matches("idle") },
       );
-      expect(back.length, `no way back to idle from ${describePath(path.steps, String(path.state.value))}`).toBeGreaterThan(0);
+      expect(
+        back.length,
+        `no way back to idle from ${describePath(path.steps, String(path.state.value))}`,
+      ).toBeGreaterThan(0);
     }
   });
 
   it("labels a path by its events", () => {
     const toSuccess = fileUploadPaths({ maxSize: MAX, small, big }).find((p) =>
-      p.state.matches("success")
+      p.state.matches("success"),
     );
     expect(toSuccess && describePath(toSuccess.steps, "success")).toBe(
-      "PICK small.txt → upload ok → success"
+      "PICK small.txt → upload ok → success",
     );
   });
-  // Catches: the e2e spec skipping a transition because its target state was
-  // already reached another way. The reset edge is the one the old bug broke.
-  it("gives the e2e spec one path per transition, the reset edges included", () => {
+  it("gives the e2e spec one path per transition, the reset edges included, so none is skipped because its target state was reached another way", () => {
     const names = fileUploadEdgePaths({ maxSize: MAX, small, big }).map((p) =>
-      describePath(p.steps, String(p.state.value))
+      describePath(p.steps, String(p.state.value)),
     );
     expect(new Set(names).size).toBe(names.length);
     expect(names).toContain("PICK small.txt → upload ok → RESET → idle");

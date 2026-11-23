@@ -10,13 +10,26 @@
 #        G. Every hook script referenced by .claude/settings.json exists and is executable
 #        H. The SessionStart skill restore and the context-memory store resolver pass their own tests
 #        I. Workflows: every command that launches one has its script, every script
-#           parses and names itself by filename, brand-init fences cover app/components/ui once
+#           parses and names itself by filename, brand-init's primitive lanes (harness.config.json) cover the primitives folder once
 #        J. The workflow scripts are what their sources build (.claude/workflow-src + the shared library)
 #        K. The repo's ruleset and production environment match .github/repo-rules.json
+#        L. The rule table in docs/agents/lint-rules.md is what scripts/lint/rules generates
+#        M. harness.config.json is valid (bun scripts/harness-config.ts check)
+#        N. Harness code holds no literal path under the app folder (the grep gate)
 
 set -uo pipefail
 
 cd "$(dirname "$0")/.."
+
+# The gate reads the checkout it sits in, never a repo its caller's environment names. Inside
+# a git hook, GIT_DIR and GIT_INDEX_FILE point at the repo being committed to, and the script
+# tests under H run `git init`, `git commit` and `git worktree add` in throwaway repos: with
+# those variables set, git would do all three to the real repo (an inherited GIT_DIR once set
+# core.bare in the shared config and broke every worktree). So drop git's repo variables.
+unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_COMMON_DIR GIT_OBJECT_DIRECTORY \
+  GIT_ALTERNATE_OBJECT_DIRECTORIES GIT_NAMESPACE GIT_PREFIX GIT_CEILING_DIRECTORIES \
+  GIT_CONFIG GIT_CONFIG_PARAMETERS GIT_CONFIG_COUNT GIT_GRAFT_FILE GIT_SHALLOW_FILE \
+  GIT_IMPLICIT_WORK_TREE GIT_REPLACE_REF_BASE GIT_NO_REPLACE_OBJECTS
 
 FAIL=0
 PASS_COUNT=0
@@ -155,37 +168,36 @@ else
   fail "broken workflows:$WF_BAD"
 fi
 
-# I2. brand-init hardcodes the primitive fences. Every file in app/components/ui must
-#     appear exactly once as "<name>" inside the fence arrays, which the workflow marks with
-#     `// harness:primitive-fences:start` and `// harness:primitive-fences:end` (0 = a
-#     primitive escapes the redesign, 2+ = two lanes fight over it), and every name in a
-#     `ui([...])` fence must be a file there. Names elsewhere don't count.
-if [ -f .claude/workflows/brand-init.js ]; then
-  FENCE_FILE=.claude/workflows/brand-init.js
-  FENCE_TEXT=$(awk '/harness:primitive-fences:start/{f=1;next} /harness:primitive-fences:end/{f=0} f' "$FENCE_FILE")
-  S_N=$(grep -c 'harness:primitive-fences:start' "$FENCE_FILE" || true)
-  E_N=$(grep -c 'harness:primitive-fences:end' "$FENCE_FILE" || true)
-  if [ "$S_N" != "1" ] || [ "$E_N" != "1" ] || [ -z "$FENCE_TEXT" ]; then
-    fail "brand-init fence sentinels missing or malformed in $FENCE_FILE (need exactly one '// harness:primitive-fences:start' and one ':end' with the fence arrays between them)"
+# I2. brand-init's primitive lanes live in harness.config.json (brandInit.primitiveLanes). Every
+#     file in the primitives folder (paths.primitives) must appear exactly once in a lane (0 = a
+#     primitive escapes the redesign, 2+ = two lanes fight over it), and every lane file must exist.
+#     A project whose config has no primitive lanes has nothing to check; a project that has lanes
+#     and no such folder fails.
+if LANES_JSON=$(bun scripts/harness-config.ts get brandInit.primitiveLanes 2>/dev/null) && [ -n "$LANES_JSON" ]; then
+  PRIM_DIR=$(bun scripts/harness-config.ts get paths.primitives 2>/dev/null)
+  if [ -z "$PRIM_DIR" ] || [ ! -d "$PRIM_DIR" ]; then
+    fail "brand-init has primitive lanes, but paths.primitives (${PRIM_DIR:-not set}) is not a folder"
   else
+    LANE_FILES=$(printf '%s\n' "$LANES_JSON" | grep -oE '"files":\[[^]]*\]' | grep -oE '"[A-Za-z0-9._-]+"' | grep -vx '"files"' | tr -d '"')
     FENCE_BAD=""
-    for u in app/components/ui/*.tsx; do
+    for u in "$PRIM_DIR"/*.tsx; do
       n=$(basename "$u" .tsx)
-      c=$(printf '%s\n' "$FENCE_TEXT" | grep -o "\"${n}\"" | wc -l | tr -d ' ')
+      c=$(printf '%s\n' "$LANE_FILES" | grep -cx "$n")
       [ "$c" = "1" ] || FENCE_BAD="$FENCE_BAD ${n}(x${c})"
     done
-    # The reverse: a fence must not name a primitive that is gone, or a lane is told to edit a missing file.
+    # The reverse: a lane must not name a primitive that is gone, or it is told to edit a missing file.
     while IFS= read -r n; do
       [ -z "$n" ] && continue
-      [ -f "app/components/ui/${n}.tsx" ] || FENCE_BAD="$FENCE_BAD ${n}(no-file)"
-    done < <(printf '%s\n' "$FENCE_TEXT" | grep 'ui(\[' | grep -oE '"[a-z0-9-]+"' | tr -d '"' | sort -u)
+      [ -f "$PRIM_DIR/${n}.tsx" ] || FENCE_BAD="$FENCE_BAD ${n}(no-file)"
+    done < <(printf '%s\n' "$LANE_FILES" | sort -u)
     if [ -z "$FENCE_BAD" ]; then
-      ok "brand-init fences cover every app/components/ui primitive exactly once and name no missing one"
+      ok "brand-init fences cover every $PRIM_DIR primitive exactly once and name no missing one"
     else
       fail "brand-init fence mismatch:$FENCE_BAD"
     fi
   fi
 fi
+# end I2
 
 # J. .claude/workflows/*.js are built: each is its source in .claude/workflow-src/ with the shared
 #    library pasted in. A script edited by hand, or a source edited without a rebuild, drifts.
@@ -196,7 +208,7 @@ else
   printf '%s\n' "$WF_OUT" | sed 's/^/      /'
 fi
 
-# K. Repo rules. The ruleset on the default branch and the production environment must
+# K. Repo rules. The rulesets on the default branch and on production, and the production environment, must
 #    match .github/repo-rules.json (docs/ci/repo-rules.md says when a notice stays green).
 RR_OUT=$(bun run scripts/repo-rules.ts --check 2>&1)
 RR_CODE=$?
@@ -211,6 +223,51 @@ elif grep -q '^notice:' <<<"$RR_OUT"; then
 else
   ok "repo rules match .github/repo-rules.json"
 fi
+
+# L. The house lint rules page. Its table is generated from scripts/lint/rules; a rule added
+#    or reworded without a rewrite leaves the page stale. The script prints the fix.
+if LINT_DOCS_OUT=$(bun scripts/lint/cli.ts --check-docs 2>&1); then
+  ok "$LINT_DOCS_OUT"
+else
+  fail "lint rules page is stale:"
+  printf '%s\n' "$LINT_DOCS_OUT" | sed 's/^/      /'
+fi
+
+# M. harness.config.json. The one file of project values the harness reads (docs/agents/harness-config.md):
+#    a typo in a key or a wrong type fails here, not in the middle of a workflow.
+HC_OUT=$(bun scripts/harness-config.ts check 2>&1)
+HC_CODE=$?
+if [ "$HC_CODE" -ne 0 ]; then
+  fail "harness.config.json is invalid:"
+  printf '%s\n' "$HC_OUT" | sed 's/^/      /'
+else
+  ok "$HC_OUT"
+fi
+
+# N. The grep gate. Harness code holds no literal path under the app folder: project paths live in
+#    harness.config.json. Scope: the workflow sources and built scripts, the harness scripts and their
+#    libraries. Not in scope: harness.config.json itself, tests and fixtures, the agent briefs in
+#    .claude/agents/ (prose), and the app's own scripts (seeding, first-time setup, teardown, CI
+#    helpers, the linters), which the ADR leaves in the project. The pattern is the folder name not
+#    preceded by a letter, digit, _, -, . or /, so a webapp folder and node_modules/<name> do not match;
+#    it is written as a repeat so this file does not hold the literal either.
+N_PATTERN='(^|[^A-Za-z0-9_./-])ap{2}/'
+N_CANDIDATES=(.claude/workflow-src/*.js .claude/workflows/*.js scripts/verify.sh scripts/harness-check.sh scripts/tracker.ts scripts/stack.ts
+  scripts/pr-review-wait.ts scripts/design-audit.ts scripts/default-branch.ts scripts/workflows.ts scripts/memory.ts scripts/run-telemetry.ts scripts/harness-config.ts
+  scripts/lib/gh.ts scripts/lib/default-branch*.ts scripts/lib/workflow-dry-run.ts scripts/lib/run-telemetry*.ts scripts/lib/harness-config*.ts scripts/lib/audit-login.ts)
+N_FILES=()
+for f in "${N_CANDIDATES[@]}"; do [ -f "$f" ] && N_FILES+=("$f"); done
+N_HITS=$(grep -HnE "$N_PATTERN" "${N_FILES[@]}" 2>/dev/null)
+N_CODE=$?
+if [ "$N_CODE" -gt 1 ]; then
+  fail "the grep gate could not read its files (grep exited $N_CODE), so it checked nothing"
+elif [ -n "$N_HITS" ]; then
+  fail "harness code holds a literal path under the app folder; read it from harness.config.json:"
+  printf '%s\n' "$N_HITS" | cut -c1-160 | sed 's/^/      /'
+else
+  ok "harness code holds no literal path under the app folder (${#N_FILES[@]} files checked)"
+fi
+# end N
 
 echo ""
 echo "=== Summary ==="

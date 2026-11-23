@@ -1,0 +1,47 @@
+name: PR title
+
+# A feature PR is squashed, so its title becomes the commit subject, and release versions are
+# computed from commit subjects: feat bumps the minor, fix the patch, a "!" the major. A title
+# that is not a Conventional Commits subject would ship as a patch or break the version script.
+# This job lints the title with the same rules the commit-msg hook uses (.commitlintrc.title.json takes them
+# from .commitlintrc.json). One difference: a commit may be a merge commit, a title may not. A title such as
+# "Merge branch 'staging' into x" would become a plain subject once squashed and be read as a patch.
+on:
+  # Never pull_request_target: this job checks out and runs the PR's own config with no secrets.
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr-title-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  title:
+    name: PR title (Conventional Commits)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version-file: .bun-version  # one pinned version for every workflow
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile --ignore-scripts
+
+      - name: Lint the PR title
+        # The title is untrusted text. It reaches the shell only through env, and commitlint reads it on stdin.
+        run: |
+          printf '%s\n' "$PR_TITLE" | bunx --no-install commitlint --config .commitlintrc.title.json --verbose || {
+            echo "::error::PR title must look like 'type(scope): subject' (for example 'feat(auth): add passkeys'), 100 characters at most. Types and scopes are in .commitlintrc.json; the rules are in docs/ci/pipelines.md under 'Commit subjects and PR titles'."
+            exit 1
+          }
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}

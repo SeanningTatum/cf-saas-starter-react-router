@@ -60,7 +60,7 @@ Then run `bun run cf-typegen` (`bun run typecheck` runs it too). It puts `DIGEST
 
 `app/models/errors/workflow.ts`: a `WorkflowTriggerError` with a `name` and a `cause`, shaped like `BucketUploadError` in [`app/models/errors/bucket.ts`](../app/models/errors/bucket.ts). Export the file from `app/models/errors/index.ts` and add the class to `AppError`.
 
-Then add the tag to `APP_ERROR_TAGS` and a `case` to the switch in [`app/lib/effect-trpc.ts`](../app/lib/effect-trpc.ts), as `BucketUploadError` has. The `non-negotiables` gate fails without the mapping. The client reads the `message`, so write a fixed one and keep the `cause` text out of it.
+Then add the tag to `APP_ERROR_TAGS` in [`app/lib/constants/errors.ts`](../app/lib/constants/errors.ts) and a `case` to the switch in [`app/lib/effect-trpc.ts`](../app/lib/effect-trpc.ts), as `BucketUploadError` has. The `non-negotiables` gate fails without the mapping. The client reads the `message`, so write a fixed one and keep the `cause` text out of it.
 
 ## 5. A service
 

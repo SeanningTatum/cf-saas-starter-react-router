@@ -3,11 +3,6 @@ import { adminProcedure } from "..";
 import { runProcedure } from "@/lib/effect-trpc";
 import { HealthRepository } from "@/repositories/health";
 
-/**
- * What `admin.dbHealth` returns. A failed D1 query comes back as
- * `ok: false` with the error's tag in `error`, never as a thrown error, so
- * a caller can show a red status instead of an error toast.
- */
 export interface DbHealth {
   ok: boolean;
   latencyMs: number;
@@ -15,11 +10,6 @@ export interface DbHealth {
   error?: string;
 }
 
-/**
- * `admin.dbHealth` — admin-only query, no input. Runs `select 1` against D1
- * through `HealthRepository.pingDatabase()` and stamps the result with the
- * time of the check. Merged into the admin router in `./admin.ts`.
- */
 export const dbHealth = adminProcedure.query(({ ctx }) =>
   runProcedure(
     ctx.runtime,
@@ -35,6 +25,6 @@ export const dbHealth = adminProcedure.query(({ ctx }) =>
       };
       return health;
     }),
-    { span: "trpc.admin.dbHealth" }
-  )
+    { span: "trpc.admin.dbHealth" },
+  ),
 );

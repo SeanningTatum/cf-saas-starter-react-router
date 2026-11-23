@@ -1,26 +1,21 @@
-import * as React from "react"
+import type * as React from "react";
 import {
   IconCamera,
-  IconChartBar,
   IconDashboard,
   IconDatabase,
   IconFileAi,
   IconFileDescription,
   IconFileWord,
-  IconFolder,
   IconHelp,
   IconInnerShadowTop,
-  IconListDetails,
   IconReport,
   IconSearch,
   IconSettings,
   IconUsers,
-} from "@tabler/icons-react"
+} from "@tabler/icons-react";
 
-import { NavDocuments } from "./nav-documents"
-import { NavMain } from "./nav-main"
-import { NavSecondary } from "./nav-secondary"
-import { NavUser } from "./nav-user"
+import { NavMain } from "./nav-main";
+import { NavUser } from "./nav-user";
 import {
   Sidebar,
   SidebarContent,
@@ -29,37 +24,38 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
-} from "@/components/ui/sidebar"
-import { Link } from "react-router"
-import { useTranslation } from "react-i18next"
+} from "@/components/ui/sidebar";
+import { Link } from "react-router";
+import { useTranslation } from "react-i18next";
+import { ROUTES } from "@/lib/constants/routes";
 
 interface AppSidebarProps extends React.ComponentProps<typeof Sidebar> {
   user: {
-    name: string
-    email: string
-    image?: string | null
-  }
+    name: string;
+    email: string;
+    image?: string | null;
+  };
 }
 
 export function AppSidebar({ user, ...props }: AppSidebarProps) {
-  const { t } = useTranslation("common")
-  const { t: ta } = useTranslation("admin")
+  const { t } = useTranslation("common");
+  const { t: ta } = useTranslation("admin");
 
   const data = {
     navMain: [
       {
         title: t("nav.home"),
-        url: "/admin/",
+        url: `${ROUTES.admin}/`,
         icon: IconDashboard,
       },
       {
         title: t("nav.users"),
-        url: "/admin/users",
+        url: ROUTES.adminUsers,
         icon: IconUsers,
       },
       {
         title: t("nav.kitchen_sink"),
-        url: "/admin/kitchen-sink",
+        url: ROUTES.adminKitchenSink,
         icon: IconSettings,
       },
     ],
@@ -145,18 +141,15 @@ export function AppSidebar({ user, ...props }: AppSidebarProps) {
         icon: IconFileWord,
       },
     ],
-  }
+  };
 
   return (
     <Sidebar collapsible="offcanvas" {...props}>
       <SidebarHeader>
         <SidebarMenu>
           <SidebarMenuItem>
-            <SidebarMenuButton
-              asChild
-              className="data-[slot=sidebar-menu-button]:p-1.5!"
-            >
-              <Link to="/admin/">
+            <SidebarMenuButton asChild className="data-[slot=sidebar-menu-button]:p-1.5!">
+              <Link to={`${ROUTES.admin}/`}>
                 <IconInnerShadowTop className="size-5!" />
                 <span className="text-base font-semibold">{t("company_name")}</span>
               </Link>
@@ -166,12 +159,10 @@ export function AppSidebar({ user, ...props }: AppSidebarProps) {
       </SidebarHeader>
       <SidebarContent>
         <NavMain items={data.navMain} />
-        {/* <NavDocuments items={data.documents} /> */}
-        {/* <NavSecondary items={data.navSecondary} className="mt-auto" /> */}
       </SidebarContent>
       <SidebarFooter>
         <NavUser user={user} />
       </SidebarFooter>
     </Sidebar>
-  )
+  );
 }

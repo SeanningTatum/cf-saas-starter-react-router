@@ -1,0 +1,26 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  "entry": [
+    "drizzle.config.ts",
+    "scripts/*.ts",
+    "scripts/ci/*.ts",
+    "scripts/lint/rules/*.ts",
+    "scripts/__tests__/fixtures/migration-check/*.ts",
+    "e2e/**/*.spec.ts"
+  ],
+  "project": [
+    "app/**/*.{ts,tsx}",
+    "workers/**/*.ts",
+    "scripts/**/*.ts",
+    "e2e/**/*.ts",
+    "*.config.ts"
+  ],
+  "ignore": ["app/components/ui/**"],
+  "ignoreDependencies": ["tailwindcss", "tw-animate-css", "husky", "lighthouse"],
+  "drizzle": false,
+  "ignoreExportsUsedInFile": {
+    "interface": true,
+    "type": true
+  },
+  "ignoreUnresolved": ["./scripts/verify.sh"]
+}

@@ -42,9 +42,7 @@
       "Bash(git clean -fd:*)",
       "Bash(git clean -fdx:*)"
     ],
-    "allow": [
-      "mcp__codegraph__*"
-    ]
+    "allow": ["mcp__codegraph__*"]
   },
   "skillOverrides": {
     "embedded-captions": "off",
@@ -78,6 +76,18 @@
             "type": "command",
             "timeout": 5,
             "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/session-start.sh\" 2>&1 || true"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "timeout": 20,
+            "command": "[ -x \"$CLAUDE_PROJECT_DIR/.claude/hooks/lint-edit.sh\" ] || exit 0; \"$CLAUDE_PROJECT_DIR/.claude/hooks/lint-edit.sh\""
           }
         ]
       }

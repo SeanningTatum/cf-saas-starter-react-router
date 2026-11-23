@@ -36,7 +36,7 @@ If you're a human, scroll to [Quick Start](#quick-start). If you're an agent, sc
 **Agent harness**
 - GitHub issues and PRs — specs, tickets and verdicts; the project state
 - `scripts/verify.sh` — runs the gates; CI runs the same ones
-- `.githooks/pre-commit` — typecheck + tests block broken commits (no-dep, auto-installs)
+- `.husky/commit-msg`, `.husky/pre-commit` — commitlint checks the message; lint and typecheck block broken code (installed by `prepare`)
 - `CLAUDE.md` → `AGENTS.md` — one file (symlink), the agent entry point
 
 ---
@@ -73,7 +73,7 @@ wrangler login
 bun run scripts/first-time-setup.ts
 ```
 
-The wizard creates your D1 database, R2 bucket, optional KV namespace, generates a `BETTER_AUTH_SECRET`, writes `wrangler.jsonc` + `.env`, runs migrations, and deploys. ~3 min end-to-end. Its last step offers to apply the [repo rules](#repo-rules-githubrepo-rulesjson).
+The wizard creates your D1 database, R2 bucket, optional KV namespace, generates a `BETTER_AUTH_SECRET`, writes `wrangler.jsonc` + `.env`, runs migrations, and deploys. ~3 min end-to-end. It sets no `BETTER_AUTH_URL`, so the deployed Worker answers 500 until you add it ([`docs/auth.md`](docs/auth.md)). Its last step offers to apply the [repo rules](#repo-rules-githubrepo-rulesjson).
 
 ### Option B — Manual
 
@@ -102,7 +102,7 @@ You're working in a codebase with strict conventions. Skipping the plan will cos
 4. **Verify.** The `feature-verifier` sub-agent walks the flow in a browser, saves screenshots to `.verify/<slug>/`, and writes a PASS / FAIL / BLOCKED verdict you paste into the PR.
 5. **Done.** `./scripts/verify.sh` is green and the verdict is PASS. Merge the PR that closes the issue.
 
-**The five non-negotiables** (enforced by the `non-negotiables` gate, [`scripts/check-non-negotiables.ts`](scripts/check-non-negotiables.ts)):
+**The five non-negotiables** (enforced by the `lint` gate: Biome refuses Zod, the house linter in [`scripts/lint/`](scripts/lint) checks the rest):
 
 1. **Effect TS by default.** No `throw`. No `try/catch` outside `Effect.tryPromise`.
 2. **Effect Schema for validation.** No Zod.
@@ -130,17 +130,19 @@ State lives in GitHub: the spec is an issue, each ticket is an issue, and a merg
 
 | Gate | Command | Runs in |
 |------|---------|--------|
-| typecheck | `bun run typecheck` | baseline, full |
-| test | `bun run test` | baseline, full |
-| non-negotiables-selftest | `bun run scripts/check-non-negotiables.ts --selftest` | baseline, full |
-| non-negotiables | `bun run scripts/check-non-negotiables.ts` | baseline, full |
+| typecheck | `bun run typecheck` | lean, baseline, full |
+| lint | `bun run lint` (Biome, the house linter, dead code; [`docs/agents/lint.md`](docs/agents/lint.md)) | lean, baseline, full |
+| test | `bun run test` | lean, baseline, full |
+| non-negotiables-selftest | `bun run scripts/check-non-negotiables.ts --selftest` | lean, baseline, full |
+| non-negotiables | `bun run scripts/check-non-negotiables.ts` | lean, baseline, full |
+| migrations | `bun run scripts/migration-check.ts` | baseline, full |
 | harness | `./scripts/harness-check.sh` | baseline, full |
 | secrets | `bun run scripts/secret-scan.ts` | baseline, full |
 | audit | `bun run scripts/package-audit.ts` | baseline, full |
 | build | `bun run build` | full |
 | e2e | `bun run test:e2e` | full |
 
-`./scripts/verify.sh --baseline` runs the quick set; bare `./scripts/verify.sh` runs them all. CI runs the same script, so adding a gate is a one-line change there.
+`./scripts/verify.sh --baseline` runs the quick set; bare `./scripts/verify.sh` runs them all. CI runs the same script, so to add a gate, add an object with its `tier` to `gates` in `harness.config.json` ([gates](docs/agents/harness.md#gates)). A stacked PR (one whose base is not the default branch or `production`) gets only the lean tier in CI, and `./scripts/verify.sh --changed [base]` runs just what its diff needs locally; see [which checks run where](docs/ci/pipelines.md#which-checks-run-where).
 
 ### Slash commands
 
@@ -167,24 +169,26 @@ See [`.claude/agents/README.md`](.claude/agents/README.md) for invocation flow +
 
 These run automatically — you do not need to remember them.
 
-### Pre-commit gate ([`.githooks/pre-commit`](.githooks/pre-commit))
+### Commit hooks ([`.husky/`](.husky))
 
-Triggered on `git commit`. Skips entirely if no `.ts/.tsx/.js/.jsx` files are staged. Otherwise:
+`commit-msg` runs commitlint on the message (types and scopes in [`.commitlintrc.json`](.commitlintrc.json)). `pre-commit` skips entirely if no `.ts/.tsx/.js/.jsx` files are staged. Otherwise:
 
 ```bash
-bun run typecheck     # cf-typegen + react-router typegen + tsc -b
-bun run test          # vitest run (123+ unit tests)
+bun run lint:staged                          # Biome and the house linter on the staged files
+./scripts/verify.sh --only typecheck         # cf-typegen + react-router typegen + tsc -b
 ```
 
-Auto-installed via `postinstall` (sets `core.hooksPath = .githooks`). Re-install manually with `bun run hooks:install`. Bypass for an emergency commit:
+The full test run stays in `./scripts/verify.sh` and in CI.
+
+`bun install` runs `prepare`, which runs `scripts/install-hooks.ts`. It sets `core.hooksPath = .husky/_` for the current worktree only when `extensions.worktreeConfig` is on, so one worktree's install never changes another's hooks. With the extension off it writes `.git/config`, which every linked worktree shares, so the hooks turn on in all of them (the printed line says so). It skips when the folder is not the top of its own git work tree, and it ignores any `GIT_*` variable it inherits. It does nothing in CI, with `HUSKY=0`, outside a git work tree, or without husky installed. Re-run it with `bun scripts/install-hooks.ts`. Bypass for an emergency commit:
 
 ```bash
-SKIP_HOOKS=1 git commit -m "..."
+HUSKY=0 git commit -m "..."
 ```
 
 ### Repo rules ([`.github/repo-rules.json`](.github/repo-rules.json))
 
-The rules GitHub enforces are a file: pull requests only on the default branch, the three CI jobs required, linear history, no force push, and a required reviewer on the `production` environment. The repo owner applies them with one command (it needs admin rights, and is safe to run twice):
+The rules GitHub enforces are a file: pull requests only on the default branch, the three CI jobs required, linear history, no force push, `production` taking merge commits from `staging` only ([details](docs/ci/repo-rules.md)), and a required reviewer on the `production` environment. The repo owner applies them with one command (it needs admin rights, and is safe to run twice):
 
 ```bash
 bun run scripts/repo-rules.ts --apply            # add --dry-run to see the writes first
@@ -218,7 +222,7 @@ app/
 ├── runtime.ts        ManagedRuntime composition (services + repos)
 ├── root.tsx          Root layout
 └── entry.{client,server}.tsx
-.githooks/            Git hooks (pre-commit gate)
+.husky/               Git hooks (commit-msg, pre-commit)
 .claude/              Claude Code config — settings, hooks, agents/, commands/
 drizzle/              SQL migrations
 e2e/                  Playwright tests
@@ -243,7 +247,9 @@ bun run build                 # Production build
 bun run deploy                # Build + deploy to Cloudflare Workers
 bun run preview               # Build + serve locally via the Cloudflare Vite plugin (vite preview)
 
-bun run typecheck             # cf-typegen + react-router typegen + tsc -b
+bun run typecheck             # cf-typegen + react-router typegen + tsc -b (app, workers, scripts, e2e, configs)
+bun run lint                  # Biome + house linter + dead code, one finding per line
+bun run format                # Format every file Biome covers
 bun run test                  # Vitest (one-shot)
 bun run test:watch            # Vitest watch
 bun run test:e2e              # Playwright
@@ -259,7 +265,7 @@ bun run db:seed:preview       # Seed the preview-env D1 with the same fixtures
 bun run db:studio             # Drizzle Studio (visual DB editor)
 
 bun run cf-typegen            # Regenerate worker-configuration.d.ts
-bun run hooks:install         # Re-install pre-commit gate
+bun scripts/install-hooks.ts  # Re-install the commit hooks (`prepare` runs it)
 bun run setup                 # First-time wizard
 bun run teardown              # Tear down Cloudflare resources
 ```
@@ -268,7 +274,7 @@ bun run teardown              # Tear down Cloudflare resources
 
 ## Authentication
 
-[Better Auth](https://better-auth.com/) 1.4 with the Drizzle adapter and `admin()` plugin for RBAC.
+[Better Auth](https://better-auth.com/) 1.7 (config, sessions, bans and admin rules: [`docs/auth.md`](docs/auth.md)) with the Drizzle adapter and `admin()` plugin for RBAC.
 
 - Auth handler: `/api/auth/*` ([`app/routes/api/auth.$.ts`](app/routes/api/auth.$.ts))
 - Server config: [`app/auth/server.ts`](app/auth/server.ts)
@@ -283,12 +289,17 @@ bun run teardown              # Tear down Cloudflare resources
 
 Never trust the page guard alone — UI hiding doesn't equal authorization.
 
-**Set the production secret:**
+**Set the production secret and base URL.** A build other than `bun run dev` refuses to start auth without them: every request gets a 500 until you set both. The secret needs 32 or more characters. The URL is a var in `wrangler.jsonc` (and under `env.preview`):
 
 ```bash
 openssl rand -base64 32
 wrangler secret put BETTER_AUTH_SECRET
+# wrangler.jsonc: "vars": { "BETTER_AUTH_URL": "https://app.example.com" }
 ```
+
+`AUTH_TRUSTED_ORIGINS` (optional, extra origins) and the accepted forms are in [`docs/auth.md`](docs/auth.md). Setup rewrites `wrangler.jsonc`, so re-add the `vars` after a re-run.
+
+**Turnstile and rate limits.** Sign-in and sign-up check a Cloudflare Turnstile token. A dev build uses Cloudflare's test keys; a deploy with no `TURNSTILE_SITE_KEY` and `TURNSTILE_SECRET_KEY` runs with Turnstile **off**, so create a widget and set both keys ([`docs/auth.md`](docs/auth.md#turnstile)). Four rate-limit bindings (`AUTH_SIGN_IN_LIMITER` and three more) ship in `wrangler.jsonc`; nothing to create in Cloudflare ([`docs/auth.md`](docs/auth.md#rate-limits)).
 
 **Promote a user to admin** — Drizzle Studio:
 
@@ -371,14 +382,14 @@ npx skills add <owner/repo> --skill <name> -y   # adds it to skills-lock.json
 ./scripts/restore-skills.sh                     # installs and links it; commit the lock only
 ```
 
-**Forms — always Effect Schema + `effectResolver`** (no Zod resolver):
+**Forms — always Effect Schema + `effectTsResolver`** (no Zod resolver):
 
 ```ts
-import { effectResolver } from "@hookform/resolvers/effect-ts";
+import { effectTsResolver } from "@hookform/resolvers/effect-ts";
 import { LoginSchema, type LoginInput } from "@/lib/schemas/auth";
 
 const form = useForm<LoginInput>({
-  resolver: effectResolver(LoginSchema),
+  resolver: effectTsResolver(LoginSchema),
 });
 ```
 
@@ -457,7 +468,7 @@ CLOUDFLARE_ENV=preview bun run build \
 
 ## Contributing
 
-1. Branch off `main`
+1. Branch off the repo's default branch (`bun scripts/default-branch.ts`)
 2. Read [`AGENTS.md`](AGENTS.md) before starting
 3. Pre-commit gate runs typecheck + tests automatically
 4. Run `./scripts/verify.sh` — every gate green

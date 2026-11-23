@@ -17,8 +17,7 @@ import path from "node:path";
 import { stripJsonc } from "../lib/wrangler-config";
 
 const WRANGLER_PATH = path.join(__dirname, "..", "..", "wrangler.jsonc");
-const UUID_REGEX =
-  /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
+const UUID_REGEX = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
 
 interface WranglerConfig {
   name: string;
@@ -43,8 +42,9 @@ function fail(message: string): never {
 function executeCommand(command: string): string | { error: true; message: string } {
   try {
     return execSync(command, { encoding: "utf-8", stdio: "pipe" });
-  } catch (error: any) {
-    return { error: true, message: error.stdout || error.stderr || String(error) };
+  } catch (error) {
+    const failure = error as { stdout?: string; stderr?: string };
+    return { error: true, message: failure.stdout || failure.stderr || String(error) };
   }
 }
 
@@ -66,12 +66,8 @@ function readWranglerConfig(): WranglerConfig {
 
 function writeWranglerConfig(config: WranglerConfig): void {
   // Keep a generated-file header comment line, 2-space indent, trailing newline.
-  const header =
-    "// Patched by scripts/ci/setup-preview-db.ts — per-PR preview D1 (CI checkout only, never committed).";
-  fs.writeFileSync(
-    WRANGLER_PATH,
-    `${header}\n` + JSON.stringify(config, null, 2) + "\n"
-  );
+  const header = "// Patched by scripts/ci/setup-preview-db.ts — per-PR preview D1 (CI checkout only, never committed).";
+  fs.writeFileSync(WRANGLER_PATH, `${header}\n${JSON.stringify(config, null, 2)}\n`);
 }
 
 function provisionDatabase(dbName: string): string {
@@ -103,11 +99,7 @@ function provisionDatabase(dbName: string): string {
     fail(`Could not extract database_id from d1 info output:\n${infoOutput}`);
   }
 
-  fail(
-    `Failed to create or find database ${dbName}.\n` +
-      `Create error: ${createOutput.message}\n` +
-      `Info error: ${infoOutput.message}`
-  );
+  fail(`Failed to create or find database ${dbName}.\n` + `Create error: ${createOutput.message}\n` + `Info error: ${infoOutput.message}`);
 }
 
 function main(): void {
@@ -122,9 +114,7 @@ function main(): void {
   const config = readWranglerConfig();
   const dbName = `${config.name}-db-pr-${slug}`;
 
-  const previewDb = config.env?.preview?.d1_databases?.find(
-    (db) => db.binding === "DATABASE"
-  );
+  const previewDb = config.env?.preview?.d1_databases?.find((db) => db.binding === "DATABASE");
   if (!previewDb) {
     fail('wrangler.jsonc has no env.preview d1_databases entry with binding "DATABASE" to patch');
   }

@@ -5,7 +5,11 @@
  *   bun run scripts/repo-rules.ts --check
  *   bun run scripts/repo-rules.ts --apply [--dry-run]
  *
- * --check reads only. It exits 1 on drift or error. When nothing is applied (no ruleset by that
+ * The file declares two rulesets (`default-branch`, `production`), the `production` environment and
+ * an optional `repository` section (the squash commit title).
+ * A required check or the `repository` section may carry `"pending": "<reason>"`: declared, not
+ * applied yet. --check turns a pending item the repo lacks into a notice; --apply writes it anyway.
+ * --check reads only. It exits 1 on drift or error. When nothing is applied (no ruleset by either
  * name and every environment bare) that is a notice, so a fresh fork passes. Once any part is
  * applied, every missing part is drift. When GitHub cannot be read (no gh, not logged in, no
  * access) it prints a notice and exits 0, so a fork's CI never fails for lack of admin rights.
@@ -17,9 +21,29 @@
  *
  * The `gh` process and the file reader are injected (`Deps`), so the tests run with no network.
  */
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { Effect, Either, Schema } from "effect";
 import { ghSpawn, type GhResult, type GhRunner } from "./lib/gh";
+import { PENDING_APPLIED_NOTICE, PENDING_DRY_RUN_NOTICE, CONFIG_PATH } from "./lib/repo-rules-constants";
+import { differ, sorted, stable } from "./lib/repo-rules-diff";
+import { planRepository, planRuleset, type Action, type Plan } from "./lib/repo-rules-plan";
+import { jobNames, requiredContexts } from "./lib/repo-rules-workflow-checks";
+import {
+  BranchPolicies,
+  checkProblems,
+  Config,
+  hasOldShape,
+  IdOnly,
+  LiveEnv,
+  LiveRuleset,
+  RepoInfo,
+  RulesetList,
+  type ConfigT,
+  type DeclaredEnvironment,
+  type LiveEnvT,
+  type LiveRulesetT,
+  type Ruleset,
+} from "./lib/repo-rules-schemas";
 
 export type { GhResult };
 
@@ -27,6 +51,8 @@ export interface Deps {
   gh: GhRunner;
   /** Right is the file text, left is why it could not be read. Never throws. */
   readFile: (path: string) => Either.Either<string, string>;
+  /** Right is the file names in a folder, left is why it could not be read. Never throws. */
+  listDir: (path: string) => Either.Either<string[], string>;
   env: Record<string, string | undefined>;
 }
 
@@ -47,107 +73,22 @@ export const defaultDeps: Deps = {
         }),
       ),
     ),
+  listDir: (path) =>
+    Effect.runSync(
+      Effect.either(
+        Effect.try({
+          try: () => readdirSync(path),
+          catch: (e) => (e instanceof Error ? e.message : String(e)),
+        }),
+      ),
+    ),
   env: process.env,
 };
 
-const CONFIG_PATH = ".github/repo-rules.json";
-const CI_PATH = ".github/workflows/ci.yml";
+const WORKFLOWS_DIR = ".github/workflows";
 const APPLY_CMD = "bun run scripts/repo-rules.ts --apply";
 const USAGE = "usage: bun run scripts/repo-rules.ts --check | --apply [--dry-run]";
 
-// ---------------------------------------------------------------- schemas
-
-const Params = Schema.Record({ key: Schema.String, value: Schema.Unknown });
-const Rule = Schema.Struct({ type: Schema.String, parameters: Schema.optional(Params) });
-
-const DeclaredRuleset = Schema.Struct({
-  name: Schema.String,
-  target: Schema.String,
-  enforcement: Schema.String,
-  bypass_actors: Schema.Array(Schema.Unknown),
-  conditions: Schema.Struct({
-    ref_name: Schema.Struct({ include: Schema.Array(Schema.String), exclude: Schema.Array(Schema.String) }),
-  }),
-  rules: Schema.Array(Rule),
-});
-// Names go into URL paths, so keep out anything that could change the path or query.
-const PathSafe = Schema.String.pipe(
-  Schema.filter((s) => s.length > 0 && !/\.\.|[?#{\s]/.test(s), {
-    message: () => "must not be empty or contain '..', '?', '#', '{' or whitespace",
-  }),
-);
-const Reviewer = Schema.String.pipe(
-  Schema.filter((s) => s === "@owner" || /^[A-Za-z0-9-]+$/.test(s) || (/^[A-Za-z0-9-]+\/[\w-][\w.-]*$/.test(s) && !s.includes("..")), {
-    message: () => "a reviewer is @owner, a GitHub login, or org/team-slug",
-  }),
-);
-const DeclaredEnv = Schema.Struct({
-  name: PathSafe,
-  reviewers: Schema.Array(Reviewer),
-  prevent_self_review: Schema.Boolean,
-  deployment_branches: Schema.Array(PathSafe),
-});
-const Config = Schema.Struct({ ruleset: DeclaredRuleset, environments: Schema.Array(DeclaredEnv) });
-type Ruleset = typeof DeclaredRuleset.Type;
-type DeclaredEnvironment = typeof DeclaredEnv.Type;
-
-// GitHub adds fields we do not declare. These schemas name only the fields we compare.
-const RepoInfo = Schema.Struct({
-  default_branch: Schema.String,
-  owner: Schema.Struct({ login: Schema.String, id: Schema.Number, type: Schema.String }),
-  permissions: Schema.optional(Schema.Struct({ admin: Schema.optional(Schema.Boolean) })),
-});
-const RulesetList = Schema.Array(Schema.Struct({ id: Schema.Number, name: Schema.String }));
-const LiveRuleset = Schema.Struct({
-  target: Schema.String,
-  enforcement: Schema.String,
-  bypass_actors: Schema.optional(Schema.Array(Schema.Unknown)),
-  conditions: Schema.optional(
-    Schema.NullOr(
-      Schema.Struct({
-        ref_name: Schema.optional(
-          Schema.Struct({
-            include: Schema.optional(Schema.Array(Schema.String)),
-            exclude: Schema.optional(Schema.Array(Schema.String)),
-          }),
-        ),
-      }),
-    ),
-  ),
-  rules: Schema.Array(Rule),
-});
-const LiveEnv = Schema.Struct({
-  protection_rules: Schema.optional(
-    Schema.Array(
-      Schema.Struct({
-        type: Schema.String,
-        prevent_self_review: Schema.optional(Schema.Boolean),
-        reviewers: Schema.optional(
-          Schema.Array(
-            Schema.Struct({
-              type: Schema.String,
-              reviewer: Schema.Struct({
-                id: Schema.Number,
-                login: Schema.optional(Schema.String),
-                slug: Schema.optional(Schema.String),
-              }),
-            }),
-          ),
-        ),
-      }),
-    ),
-  ),
-  deployment_branch_policy: Schema.optional(
-    Schema.NullOr(Schema.Struct({ protected_branches: Schema.Boolean, custom_branch_policies: Schema.Boolean })),
-  ),
-});
-const BranchPolicies = Schema.Struct({
-  branch_policies: Schema.Array(Schema.Struct({ id: Schema.Number, name: Schema.String })),
-});
-const IdOnly = Schema.Struct({ id: Schema.Number });
-const Contexts = Schema.Array(Schema.Struct({ context: Schema.String }));
-type LiveRulesetT = typeof LiveRuleset.Type;
-type LiveEnvT = typeof LiveEnv.Type;
 type Policy = { id: number; name: string };
 
 // ---------------------------------------------------------------- output
@@ -178,45 +119,41 @@ const finish = (out: Out): Outcome => ({ code: out.failed ? 1 : 0, stdout: out.s
 // ---------------------------------------------------------------- small helpers
 
 const squash = (s: string) => s.replace(/\s+/g, " ").trim();
-const firstLine = (s: string) => s.split("\n").find((l) => l.trim())?.trim() ?? "";
-
-/** JSON with sorted keys, so two equal values compare equal whatever their key order. */
-function stable(v: unknown): string {
-  if (Array.isArray(v)) return `[${v.map(stable).join(",")}]`;
-  if (v && typeof v === "object")
-    return `{${Object.keys(v)
-      .sort()
-      .map((k) => `${JSON.stringify(k)}:${stable((v as Record<string, unknown>)[k])}`)
-      .join(",")}}`;
-  return JSON.stringify(v) ?? "undefined";
-}
-const show = (v: unknown) => (v === undefined ? "absent" : JSON.stringify(v));
-const sorted = (xs: readonly string[]) => [...xs].sort();
-
-function contextsOf(v: unknown): string[] {
-  const d = Schema.decodeUnknownEither(Contexts)(v);
-  return Either.isRight(d) ? sorted(d.right.map((c) => c.context)) : [];
-}
+const firstLine = (s: string) =>
+  s
+    .split("\n")
+    .find((l) => l.trim())
+    ?.trim() ?? "";
 
 // ---------------------------------------------------------------- static check
 
-function jobNames(yml: string): string[] {
+function workflowJobNames(deps: Deps, out: Out): string[] | null {
+  const files = deps.listDir(WORKFLOWS_DIR);
+  if (Either.isLeft(files)) {
+    out.line("error", `cannot read ${WORKFLOWS_DIR}: ${files.left}`);
+    return null;
+  }
   const names: string[] = [];
-  let inJobs = false;
-  for (const line of yml.split("\n")) {
-    if (/^jobs:\s*$/.test(line)) inJobs = true;
-    else if (/^[^\s#]/.test(line)) inJobs = false;
-    const m = inJobs ? /^ {4}name:\s*(.+?)\s*$/.exec(line) : null;
-    if (m) names.push(m[1].replace(/^(["'])(.*)\1$/, "$2"));
+  for (const file of files.right.filter((f) => /\.ya?ml$/.test(f))) {
+    const text = deps.readFile(`${WORKFLOWS_DIR}/${file}`);
+    if (Either.isLeft(text)) {
+      out.line("error", `cannot read ${WORKFLOWS_DIR}/${file}: ${text.left}`);
+      return null;
+    }
+    names.push(...jobNames(text.right));
   }
   return names;
 }
 
-/** Load the declared rules and prove every required check names a real CI job. */
-function staticCheck(deps: Deps, out: Out): typeof Config.Type | null {
+/** Load the declared rules and prove every required check names a real workflow job. */
+function staticCheck(deps: Deps, out: Out): ConfigT | null {
   const file = deps.readFile(CONFIG_PATH);
   if (Either.isLeft(file)) {
     out.line("error", `cannot read ${CONFIG_PATH}: ${file.left}`);
+    return null;
+  }
+  if (hasOldShape(file.right)) {
+    out.line("error", `${CONFIG_PATH} has the old "ruleset" key; rename it to "rulesets" and make it an array of rulesets`);
     return null;
   }
   const parsed = Schema.decodeUnknownEither(Schema.parseJson(Config))(file.right);
@@ -225,19 +162,15 @@ function staticCheck(deps: Deps, out: Out): typeof Config.Type | null {
     return null;
   }
   const config = parsed.right;
-  const ci = deps.readFile(CI_PATH);
-  if (Either.isLeft(ci)) {
-    out.line("error", `cannot read ${CI_PATH}: ${ci.left}`);
-    return null;
-  }
-  const jobs = jobNames(ci.right);
-  const required = config.ruleset.rules.flatMap((r) =>
-    r.type === "required_status_checks" ? contextsOf(r.parameters?.required_status_checks) : [],
-  );
-  const missing = required.filter((c) => !jobs.includes(c));
-  for (const c of missing) out.line("error", `required check "${c}" is not a job name in ${CI_PATH}`);
+  const problems = checkProblems(config.rulesets);
+  for (const m of problems) out.line("error", m);
+  if (problems.length) return null;
+  const jobs = workflowJobNames(deps, out);
+  if (!jobs) return null;
+  const missing = requiredContexts(config.rulesets).filter((c) => !jobs.includes(c));
+  for (const c of missing) out.line("error", `required check "${c}" is not a job name in any workflow under ${WORKFLOWS_DIR}`);
   if (missing.length) return null;
-  out.line("ok", `${CONFIG_PATH} is valid and every required check is a job name in ${CI_PATH}`);
+  out.line("ok", `${CONFIG_PATH} is valid and every required check is a job name in a workflow under ${WORKFLOWS_DIR}`);
   return config;
 }
 
@@ -271,6 +204,8 @@ interface Repo {
   owner: { login: string; id: number; type: string };
   /** Whether the caller has admin rights. Only an admin is sure to see the protection on an environment. */
   admin: boolean;
+  /** GitHub shows this field only to tokens with enough rights. */
+  squashTitle: string | undefined;
 }
 
 function readRepo(deps: Deps): Read<Repo> {
@@ -289,6 +224,7 @@ function readRepo(deps: Deps): Read<Repo> {
     defaultBranch: info.value.default_branch,
     owner: info.value.owner,
     admin: info.value.permissions?.admin === true,
+    squashTitle: info.value.squash_merge_commit_title,
   });
 }
 
@@ -307,9 +243,7 @@ interface ResolvedEnv {
 function resolveReviewer(raw: string, repo: Repo, deps: Deps): Read<Reviewer> {
   if (raw === "@owner") {
     if (repo.owner.type !== "User")
-      return configError(
-        `"@owner" cannot be a reviewer because ${repo.owner.login} is an organisation; list a user or team in ${CONFIG_PATH}`,
-      );
+      return configError(`"@owner" cannot be a reviewer because ${repo.owner.login} is an organisation; list a user or team in ${CONFIG_PATH}`);
     return good({ label: raw, type: "User", id: repo.owner.id });
   }
   const isTeam = raw.includes("/");
@@ -340,22 +274,30 @@ interface LiveEnvironment {
   live: LiveEnvT | null;
   policies: Policy[];
 }
+interface LiveRulesetFound {
+  decl: Ruleset;
+  found: { id: number; live: LiveRulesetT } | null;
+}
 interface Gathered {
-  ruleset: { id: number; live: LiveRulesetT } | null;
+  rulesets: LiveRulesetFound[];
   envs: LiveEnvironment[];
 }
 
-function gather(config: typeof Config.Type, repo: Repo, deps: Deps): Read<Gathered> {
+function gather(config: ConfigT, repo: Repo, deps: Deps): Read<Gathered> {
   const base = `repos/${repo.nwo}`;
   const list = getJson(deps, RulesetList, `${base}/rulesets?per_page=100&includes_parents=false`);
   if (!list.ok) return list;
-  const found = (list.value ?? []).find((r) => r.name === config.ruleset.name);
-  let ruleset: Gathered["ruleset"] = null;
-  if (found) {
-    const full = getJson(deps, LiveRuleset, `${base}/rulesets/${found.id}`);
+  const rulesets: LiveRulesetFound[] = [];
+  for (const decl of config.rulesets) {
+    const entry = (list.value ?? []).find((r) => r.name === decl.name);
+    if (!entry) {
+      rulesets.push({ decl, found: null });
+      continue;
+    }
+    const full = getJson(deps, LiveRuleset, `${base}/rulesets/${entry.id}`);
     if (!full.ok) return full;
-    if (!full.value) return unreadable(`ruleset ${found.id} disappeared while reading`);
-    ruleset = { id: found.id, live: full.value };
+    if (!full.value) return unreadable(`ruleset ${entry.id} disappeared while reading`);
+    rulesets.push({ decl, found: { id: entry.id, live: full.value } });
   }
   const envs: LiveEnvironment[] = [];
   for (const d of config.environments) {
@@ -372,94 +314,12 @@ function gather(config: typeof Config.Type, repo: Repo, deps: Deps): Read<Gather
     }
     envs.push({ decl: decl.value, live: live.value, policies });
   }
-  return good({ ruleset, envs });
+  return good({ rulesets, envs });
 }
 
 const envPath = (repo: Repo, name: string) => `repos/${repo.nwo}/environments/${encodeURIComponent(name)}`;
 
 // ---------------------------------------------------------------- planning (pure)
-
-interface Finding {
-  /** missing is "not applied"; its text names the subject only. */
-  level: "ok" | "notice" | "missing" | "drift";
-  text: string;
-  /** A missing environment counts as drift only for an admin: GitHub may hide it from anyone else. */
-  adminOnly?: boolean;
-}
-interface Action {
-  method: "POST" | "PUT" | "DELETE";
-  path: string;
-  body?: unknown;
-}
-interface Plan {
-  findings: Finding[];
-  actions: Action[];
-  /** True when something of this part is live, even if it differs. */
-  applied: boolean;
-}
-
-/** Collects one drift line per field that differs. */
-function differ(prefix: string) {
-  const lines: string[] = [];
-  return {
-    lines,
-    cmp(field: string, declared: unknown, live: unknown) {
-      if (stable(declared) !== stable(live)) lines.push(`${prefix} ${field}: declared ${show(declared)}, live ${show(live)}`);
-    },
-  };
-}
-
-function rulesetDiffs(decl: Ruleset, live: LiveRulesetT): string[] {
-  const d = differ(`ruleset "${decl.name}"`);
-  // GitHub leaves bypass_actors out for a caller without admin rights; the caller reports that.
-  const actors = (xs: readonly unknown[]) => xs.map(stable).sort();
-  if (live.bypass_actors !== undefined) d.cmp("bypass_actors", actors(decl.bypass_actors), actors(live.bypass_actors));
-  d.cmp("target", decl.target, live.target);
-  d.cmp("enforcement", decl.enforcement, live.enforcement);
-  const ref = live.conditions?.ref_name;
-  d.cmp("conditions.ref_name.include", sorted(decl.conditions.ref_name.include), sorted(ref?.include ?? []));
-  d.cmp("conditions.ref_name.exclude", sorted(decl.conditions.ref_name.exclude), sorted(ref?.exclude ?? []));
-
-  const liveByType = new Map(live.rules.map((r) => [r.type, r]));
-  for (const r of decl.rules) {
-    const l = liveByType.get(r.type);
-    if (!l) {
-      d.lines.push(`ruleset "${decl.name}" rules.${r.type}: declared present, live absent`);
-      continue;
-    }
-    for (const [key, value] of Object.entries(r.parameters ?? {})) {
-      const field = `rules.${r.type}.${key}`;
-      const liveValue = l.parameters?.[key];
-      if (r.type === "required_status_checks" && key === "required_status_checks")
-        d.cmp(field, contextsOf(value), liveValue === undefined ? undefined : contextsOf(liveValue));
-      else d.cmp(field, value, liveValue);
-    }
-  }
-  const declaredTypes = new Set(decl.rules.map((r) => r.type));
-  for (const t of liveByType.keys())
-    if (!declaredTypes.has(t)) d.lines.push(`ruleset "${decl.name}" rules.${t}: declared absent, live present`);
-  return d.lines;
-}
-
-function planRuleset(decl: Ruleset, live: Gathered["ruleset"], base: string): Plan {
-  const name = decl.name;
-  if (!live)
-    return {
-      findings: [{ level: "missing", text: `ruleset "${name}"` }],
-      actions: [{ method: "POST", path: `${base}/rulesets`, body: decl }],
-      applied: false,
-    };
-  const diffs = rulesetDiffs(decl, live.live);
-  const findings: Finding[] = diffs.map((text) => ({ level: "drift", text }));
-  if (live.live.bypass_actors === undefined)
-    findings.push({ level: "notice", text: `ruleset "${name}" bypass list cannot be read without admin rights; not checked` });
-  else if (!diffs.length) findings.push({ level: "ok", text: `ruleset "${name}" matches ${CONFIG_PATH}` });
-  return {
-    findings,
-    actions: diffs.length ? [{ method: "PUT", path: `${base}/rulesets/${live.id}`, body: decl }] : [],
-    applied: true,
-  };
-}
 
 function branchPolicyActions(decl: ResolvedEnv, policies: Policy[], path: string): Action[] {
   const liveNames = policies.map((p) => p.name);
@@ -467,9 +327,7 @@ function branchPolicyActions(decl: ResolvedEnv, policies: Policy[], path: string
     ...decl.branches
       .filter((b) => !liveNames.includes(b))
       .map((b): Action => ({ method: "POST", path: `${path}/deployment-branch-policies`, body: { name: b, type: "branch" } })),
-    ...policies
-      .filter((p) => !decl.branches.includes(p.name))
-      .map((p): Action => ({ method: "DELETE", path: `${path}/deployment-branch-policies/${p.id}` })),
+    ...policies.filter((p) => !decl.branches.includes(p.name)).map((p): Action => ({ method: "DELETE", path: `${path}/deployment-branch-policies/${p.id}` })),
   ];
 }
 
@@ -509,10 +367,8 @@ function planEnv(e: LiveEnvironment, path: string): Plan {
   d.cmp("deployment_branches", sorted(decl.branches), sorted(policies.map((p) => p.name)));
   const branchActions = branchPolicyActions(decl, policies, path);
 
-  if (bare)
-    return { findings: [{ level: "missing", text: `environment "${name}"`, adminOnly: true }], actions: [put, ...branchActions], applied: false };
-  if (!d.lines.length)
-    return { findings: [{ level: "ok", text: `environment "${name}" matches ${CONFIG_PATH}` }], actions: [], applied: true };
+  if (bare) return { findings: [{ level: "missing", text: `environment "${name}"`, adminOnly: true }], actions: [put, ...branchActions], applied: false };
+  if (!d.lines.length) return { findings: [{ level: "ok", text: `environment "${name}" matches ${CONFIG_PATH}` }], actions: [], applied: true };
   return {
     findings: d.lines.map((text) => ({ level: "drift" as const, text })),
     actions: [...(protectionDrift ? [put] : []), ...branchActions],
@@ -525,8 +381,7 @@ function planEnv(e: LiveEnvironment, path: string): Plan {
 function adminHint(method: string, path: string, stderr: string): string {
   const status = /HTTP (\d{3})/.exec(stderr)?.[1];
   if (status === "403" || status === "404") return "; the token needs admin rights on the repo";
-  if (status === "422" && method === "PUT" && path.includes("/environments/"))
-    return "; required reviewers on a private repo need a paid GitHub plan";
+  if (status === "422" && method === "PUT" && path.includes("/environments/")) return "; required reviewers on a private repo need a paid GitHub plan";
   return "";
 }
 
@@ -586,8 +441,9 @@ export function run(argv: string[], deps: Deps = defaultDeps): Outcome {
 
   const base = `repos/${repo.value.nwo}`;
   const plans = [
-    planRuleset(config.ruleset, gathered.value.ruleset, base),
+    ...gathered.value.rulesets.map((r) => planRuleset(r.decl, r.found, base)),
     ...gathered.value.envs.map((e) => planEnv(e, envPath(repo.value, e.decl.name))),
+    ...(config.repository ? [planRepository(config.repository, repo.value.squashTitle, repo.value.nwo)] : []),
   ];
 
   if (!mode.apply) {
@@ -595,9 +451,9 @@ export function run(argv: string[], deps: Deps = defaultDeps): Outcome {
     // so weakening one half after an apply fails the gate.
     const anyApplied = plans.some((p) => p.applied);
     for (const f of plans.flatMap((p) => p.findings)) {
-      if (f.level !== "missing") out.line(f.level, f.text);
-      else if (anyApplied && f.adminOnly && !repo.value.admin)
-        out.line("notice", `${f.text} shows no protection to this token; only an admin can check it`);
+      if (f.level === "drift" && f.softWhenFresh && !anyApplied) out.line("notice", `${f.text}; run: ${APPLY_CMD}`);
+      else if (f.level !== "missing") out.line(f.level, f.text);
+      else if (anyApplied && f.adminOnly && !repo.value.admin) out.line("notice", `${f.text} shows no protection to this token; only an admin can check it`);
       else if (anyApplied) out.line("drift", `${f.text} is not applied but other rules are; run: ${APPLY_CMD}`);
       else out.line("notice", `${f.text} is not applied; run: ${APPLY_CMD}`);
     }
@@ -606,7 +462,8 @@ export function run(argv: string[], deps: Deps = defaultDeps): Outcome {
 
   const actions = plans.flatMap((p) => p.actions);
   if (!actions.length) out.line("ok", `nothing needs to change; the repo matches ${CONFIG_PATH}`);
-  else execute(actions, mode.dryRun, deps, out);
+  else if (execute(actions, mode.dryRun, deps, out) && actions.some((a) => a.pending))
+    out.line("notice", mode.dryRun ? PENDING_DRY_RUN_NOTICE : PENDING_APPLIED_NOTICE);
   return finish(out);
 }
 

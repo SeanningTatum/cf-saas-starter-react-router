@@ -1,11 +1,8 @@
 import { SiteHeader } from "./layout/site-header";
-import {
-  StatCard,
-  StatCardGrid,
-  TimeSeriesChart,
-  DistributionChart,
-  InsightsCard,
-} from "@/components/analytics";
+import { DistributionChart } from "@/components/analytics/distribution-chart";
+import { InsightsCard } from "@/components/analytics/insights-card";
+import { StatCard, StatCardGrid } from "@/components/analytics/stat-card";
+import { TimeSeriesChart } from "@/components/analytics/time-series-chart";
 import { buildUserInsights } from "@/lib/insights";
 import { Users, ShieldCheck, UserX, Shield } from "lucide-react";
 import type { Route } from "./+types/_index";
@@ -18,13 +15,12 @@ export const loader = async ({ context }: Route.LoaderArgs) => {
   const startDate = new Date();
   startDate.setDate(startDate.getDate() - 90);
 
-  const [stats, growthData, roleDistribution, verificationDistribution] =
-    await Promise.all([
-      context.trpc.analytics.getUserStats(),
-      context.trpc.analytics.getUserGrowth({ startDate, endDate }),
-      context.trpc.analytics.getRoleDistribution(),
-      context.trpc.analytics.getVerificationDistribution(),
-    ]);
+  const [stats, growthData, roleDistribution, verificationDistribution] = await Promise.all([
+    context.trpc.analytics.getUserStats(),
+    context.trpc.analytics.getUserGrowth({ startDate, endDate }),
+    context.trpc.analytics.getRoleDistribution(),
+    context.trpc.analytics.getVerificationDistribution(),
+  ]);
 
   return { stats, growthData, roleDistribution, verificationDistribution };
 };
@@ -44,8 +40,7 @@ export default function AdminHome({ loaderData }: Route.ComponentProps) {
     );
   }
 
-  const { stats, growthData, roleDistribution, verificationDistribution } =
-    loaderData;
+  const { stats, growthData, roleDistribution, verificationDistribution } = loaderData;
 
   const insights = buildUserInsights(stats, growthData, t);
 
@@ -55,7 +50,6 @@ export default function AdminHome({ loaderData }: Route.ComponentProps) {
       <div className="flex flex-1 flex-col">
         <div className="@container/main flex flex-1 flex-col gap-2">
           <div className="flex flex-col gap-4 py-4 md:gap-6 md:py-6">
-            {/* Stats Cards */}
             <div className="px-4 lg:px-6">
               <StatCardGrid columns={4}>
                 <StatCard
@@ -68,7 +62,9 @@ export default function AdminHome({ loaderData }: Route.ComponentProps) {
                   label={t("dashboard.verified_users")}
                   value={stats.verifiedUsers}
                   icon={ShieldCheck}
-                  description={t("dashboard.verified_users_description", { rate: stats.verificationRate })}
+                  description={t("dashboard.verified_users_description", {
+                    rate: stats.verificationRate,
+                  })}
                 />
                 <StatCard
                   label={t("dashboard.admins")}
@@ -85,7 +81,6 @@ export default function AdminHome({ loaderData }: Route.ComponentProps) {
               </StatCardGrid>
             </div>
 
-            {/* Charts Row */}
             <div className="px-4 lg:px-6">
               <div className="grid gap-4 lg:grid-cols-2 lg:gap-6">
                 <TimeSeriesChart
@@ -106,7 +101,6 @@ export default function AdminHome({ loaderData }: Route.ComponentProps) {
               </div>
             </div>
 
-            {/* Second Row: Verification Distribution + Insights */}
             <div className="px-4 lg:px-6">
               <div className="grid gap-4 lg:grid-cols-2 lg:gap-6">
                 <DistributionChart

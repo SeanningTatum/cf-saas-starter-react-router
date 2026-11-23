@@ -1,37 +1,26 @@
 import { describe, expect } from "vitest";
 import { it } from "@effect/vitest";
-import {
-  Context,
-  Effect,
-  Exit,
-  Logger,
-  ManagedRuntime,
-  Option,
-} from "effect";
+import { Context, Effect, Exit, Logger, ManagedRuntime, Option } from "effect";
 import {
   MAX_BUFFERED_SPANS,
   OtlpSpan,
   TracingLayer,
-  buildOtlpPayload,
   flushSpans,
   makeOtlpTracer,
   makeSpanBuffer,
   parseOtlpHeaders,
   readTracingConfig,
-  toOtlpValue,
   type FetchLike,
   type TracingConfig,
 } from "../tracing";
+import { buildOtlpPayload, toOtlpValue } from "../tracing-otlp";
 import type { RequestContext } from "@/lib/request-context";
-
-// --- helpers ------------------------------------------------------------------
 
 interface ExportCall {
   readonly url: string;
   readonly init: { method: string; headers: Record<string, string>; body: string };
 }
 
-/** Records every OTLP POST so tests can assert the wire payload. */
 const stubFetch = (result: { ok: boolean; status: number } | Error = { ok: true, status: 200 }) => {
   const calls: ExportCall[] = [];
   const fetchFn: FetchLike = async (url, init) => {
@@ -42,14 +31,13 @@ const stubFetch = (result: { ok: boolean; status: number } | Error = { ok: true,
   return { calls, fetchFn };
 };
 
-/** Captures log messages so the swallowed-export-failure path is observable. */
 const captureLogs = () => {
   const messages: string[] = [];
   const layer = Logger.replace(
     Logger.defaultLogger,
     Logger.make(({ message }) => {
       messages.push(String(message));
-    })
+    }),
   );
   return { messages, layer };
 };
@@ -66,39 +54,28 @@ const makeSpan = (
   buffer = makeSpanBuffer(),
   parent: Option.Option<OtlpSpan> = Option.none(),
   startTime = 100n,
-  kind: "internal" | "client" | "server" = "internal"
+  kind: "internal" | "client" | "server" = "internal",
 ) => new OtlpSpan(name, parent, [], startTime, kind, buffer);
 
-// --- parseOtlpHeaders ---------------------------------------------------------
-
 describe("parseOtlpHeaders", () => {
-  it("splits on commas, trims, and percent-decodes values", () => {
-    // Catches: dropping decodeURIComponent (an "Authorization=Bearer%20abc"
-    // header would be sent verbatim and the collector would 401) or dropping
-    // the trims (header keys/values with surrounding spaces are invalid).
+  it("splits on commas, trims, and percent-decodes values, so Bearer%20abc is not sent verbatim (a 401) and padded keys stay valid", () => {
     expect(parseOtlpHeaders(" Authorization = Bearer%20abc , x-scope=team%2Fa ")).toEqual({
       Authorization: "Bearer abc",
       "x-scope": "team/a",
     });
   });
 
-  it("splits each pair on the FIRST '=' only, keeping '=' inside the value", () => {
-    // Catches: rewriting the parser as pair.split("=") — base64 credentials
-    // end in "=" and would be silently truncated.
+  it("splits each pair on the FIRST '=' only, keeping '=' inside the value, so base64 credentials ending in '=' are not truncated", () => {
     expect(parseOtlpHeaders("Authorization=Basic dXNlcjpwYXNz==")).toEqual({
       Authorization: "Basic dXNlcjpwYXNz==",
     });
   });
 
-  it("skips malformed pairs (no '=', leading '=', blank key) and keeps the rest", () => {
-    // Catches: relaxing `eq <= 0` to `eq < 0` (an "=orphan" pair would produce
-    // an illegal empty header name) or dropping the `!key` guard.
+  it("skips malformed pairs (no '=', leading '=', blank key) and keeps the rest, so an =orphan pair never yields an empty header name", () => {
     expect(parseOtlpHeaders("novalue,=orphan, =spaced,ok=1")).toEqual({ ok: "1" });
   });
 
-  it("falls back to the raw value when percent-decoding throws", () => {
-    // Catches: removing Effect.orElseSucceed — a stray '%' in a header value
-    // would make decodeURIComponent throw and take down config parsing.
+  it("falls back to the raw value when percent-decoding throws, so a stray % in a header value cannot take down config parsing", () => {
     expect(parseOtlpHeaders("k=100%oops")).toEqual({ k: "100%oops" });
   });
 
@@ -108,29 +85,24 @@ describe("parseOtlpHeaders", () => {
   });
 });
 
-// --- readTracingConfig -------------------------------------------------------
-
 describe("readTracingConfig", () => {
-  it("returns null when the endpoint is missing, empty, or not a string", () => {
-    // Catches: a truthiness change that turns "" into a config and makes the
-    // tracer POST to "/v1/traces" on every request.
+  it("returns null when the endpoint is missing, empty, or not a string, so the tracer never POSTs to /v1/traces on every request", () => {
     expect(readTracingConfig({})).toBeNull();
     expect(readTracingConfig({ OTEL_EXPORTER_OTLP_ENDPOINT: "" })).toBeNull();
     expect(readTracingConfig({ OTEL_EXPORTER_OTLP_ENDPOINT: 4318 })).toBeNull();
   });
 
   it("strips trailing slashes and appends /v1/traces to a base endpoint", () => {
-    expect(
-      readTracingConfig({ OTEL_EXPORTER_OTLP_ENDPOINT: "http://collector:4318//" })?.url
-    ).toBe("http://collector:4318/v1/traces");
+    expect(readTracingConfig({ OTEL_EXPORTER_OTLP_ENDPOINT: "http://collector:4318//" })?.url).toBe(
+      "http://collector:4318/v1/traces",
+    );
   });
 
-  it("does not double-append when the endpoint already ends in /v1/traces", () => {
-    // Catches: unconditional concatenation → ".../v1/traces/v1/traces" (404s).
+  it("does not double-append when the endpoint already ends in /v1/traces, which would 404", () => {
     expect(
       readTracingConfig({
         OTEL_EXPORTER_OTLP_ENDPOINT: "https://api.honeycomb.io/v1/traces/",
-      })?.url
+      })?.url,
     ).toBe("https://api.honeycomb.io/v1/traces");
   });
 
@@ -142,9 +114,7 @@ describe("readTracingConfig", () => {
     expect(result?.headers).toEqual({});
   });
 
-  it("reads serviceName and headers from their env vars when set", () => {
-    // Catches: wiring headers off the wrong env var — every span export would
-    // be unauthenticated against a hosted collector.
+  it("reads serviceName and headers from their env vars when set, so span exports are authenticated against a hosted collector", () => {
     const result = readTracingConfig({
       OTEL_EXPORTER_OTLP_ENDPOINT: "http://collector:4318",
       OTEL_EXPORTER_OTLP_HEADERS: "x-api-key=abc123",
@@ -155,12 +125,8 @@ describe("readTracingConfig", () => {
   });
 });
 
-// --- OtlpSpan / tracer -------------------------------------------------------
-
 describe("OtlpSpan", () => {
-  it("inherits the parent's traceId while getting its own spanId", () => {
-    // Catches: generating a fresh traceId per span — child spans would land in
-    // separate traces and log/trace correlation would break entirely.
+  it("inherits the parent's traceId while getting its own spanId, so child spans stay in one trace and log/trace correlation holds", () => {
     const buffer = makeSpanBuffer();
     const parent = makeSpan("parent", buffer);
     const child = makeSpan("child", buffer, Option.some(parent));
@@ -187,9 +153,7 @@ describe("OtlpSpan", () => {
     }
   });
 
-  it(`counts a span as dropped instead of buffering it past MAX_BUFFERED_SPANS`, () => {
-    // Boundary: the 1000th span is kept, the 1001st is dropped. Catches a
-    // `>` / `>=` flip (unbounded buffer → worker OOM on a hot request).
+  it(`counts a span as dropped instead of buffering it past MAX_BUFFERED_SPANS, keeping the 1000th span and dropping the 1001st, so a hot request cannot grow the buffer until the worker runs out of memory`, () => {
     const buffer = makeSpanBuffer();
     for (let i = 0; i < MAX_BUFFERED_SPANS; i++) {
       makeSpan(`s${i}`, buffer).end(200n, Exit.void);
@@ -206,9 +170,7 @@ describe("OtlpSpan", () => {
 });
 
 describe("makeOtlpTracer", () => {
-  it("creates spans wired to the buffer it was built with", () => {
-    // Catches: allocating a buffer inside makeOtlpTracer — the flush finalizer
-    // would hold a different (always empty) buffer and export nothing.
+  it("creates spans wired to the buffer it was built with, so the flush finalizer holds the same buffer and exports its spans", () => {
     const buffer = makeSpanBuffer();
     const span = makeOtlpTracer(buffer).span(
       "manual",
@@ -216,7 +178,7 @@ describe("makeOtlpTracer", () => {
       Context.empty(),
       [],
       50n,
-      "server"
+      "server",
     );
 
     expect(span).toBeInstanceOf(OtlpSpan);
@@ -229,9 +191,7 @@ describe("makeOtlpTracer", () => {
   const startSpan = (tracer: ReturnType<typeof makeOtlpTracer>, name: string) =>
     tracer.span(name, Option.none(), Context.empty(), [], 50n, "internal");
 
-  it("stamps request.id on every span when built with a request", () => {
-    // Catches the tracer ignoring its request: no child span could be found
-    // by request id in the trace backend.
+  it("stamps request.id on every span when built with a request, so child spans can be found by request id in the trace backend", () => {
     const tracer = makeOtlpTracer(makeSpanBuffer(), {
       requestId: "req-1",
       method: "GET",
@@ -240,10 +200,7 @@ describe("makeOtlpTracer", () => {
     expect(startSpan(tracer, "a").attributes.get("request.id")).toBe("req-1");
   });
 
-  it("adds user.id only to spans started after the request's user is set", () => {
-    // Catches copying the request when the tracer is built: `userId` is set
-    // later, when the session resolves, so every span would lack the user.
-    // Also catches writing `user.id: undefined` on anonymous spans.
+  it("adds user.id only to spans started after the request's user is set (userId is set when the session resolves), never as undefined on anonymous spans", () => {
     const request: RequestContext = { requestId: "req-1", method: "GET", path: "/" };
     const tracer = makeOtlpTracer(makeSpanBuffer(), request);
 
@@ -262,12 +219,8 @@ describe("makeOtlpTracer", () => {
   });
 });
 
-// --- OTLP encoding -----------------------------------------------------------
-
 describe("toOtlpValue", () => {
-  it("maps integers to intValue strings and non-integers to doubleValue", () => {
-    // Catches: dropping the Number.isInteger branch — OTLP rejects a payload
-    // that puts 1.5 in intValue (and intValue must be a string, not a number).
+  it("maps integers to intValue strings and non-integers to doubleValue, since OTLP rejects 1.5 in intValue and wants intValue as a string", () => {
     expect(toOtlpValue(42)).toEqual({ intValue: "42" });
     expect(toOtlpValue(1.5)).toEqual({ doubleValue: 1.5 });
     expect(toOtlpValue(9007199254740993n)).toEqual({ intValue: "9007199254740993" });
@@ -278,9 +231,7 @@ describe("toOtlpValue", () => {
     expect(toOtlpValue(false)).toEqual({ boolValue: false });
   });
 
-  it("JSON-encodes objects and never emits a missing stringValue", () => {
-    // JSON.stringify(undefined) is undefined — without the `?? "undefined"`
-    // fallback the attribute would serialize as `{}` and break the collector.
+  it("JSON-encodes objects and never emits a missing stringValue, so an undefined attribute does not serialize as {} and break the collector", () => {
     expect(toOtlpValue({ a: 1 })).toEqual({ stringValue: '{"a":1}' });
     expect(toOtlpValue(undefined)).toEqual({ stringValue: "undefined" });
   });
@@ -295,31 +246,26 @@ describe("buildOtlpPayload", () => {
     child.event("retry", 250n, { attempt: 1 });
     child.end(300n, Exit.void);
     const payload = buildOtlpPayload([child], "svc");
-    return { parent, child, span: payload.resourceSpans[0].scopeSpans[0].spans[0], payload };
+    return { parent, child, span: payload.resourceSpans[0]?.scopeSpans[0]?.spans[0], payload };
   };
 
   it("puts service.name on the resource", () => {
-    expect(built().payload.resourceSpans[0].resource.attributes).toEqual([
+    expect(built().payload.resourceSpans[0]?.resource.attributes).toEqual([
       { key: "service.name", value: { stringValue: "svc" } },
     ]);
   });
 
-  it("emits ids, parent link, numeric kind, nanosecond strings and attributes", () => {
-    // Catches: dropping `.toString()` on the bigint timestamps (JSON.stringify
-    // throws on bigint), or sending the kind as the literal string "client"
-    // instead of 3.
+  it("emits ids, parent link, numeric kind, nanosecond strings and attributes, with bigint timestamps as strings and the kind as 3, not client", () => {
     const { parent, child, span } = built();
-    expect(span.traceId).toBe(parent.traceId);
-    expect(span.spanId).toBe(child.spanId);
-    expect(span.parentSpanId).toBe(parent.spanId);
-    expect(span.name).toBe("db.query user");
-    expect(span.kind).toBe(3);
-    expect(span.startTimeUnixNano).toBe("200");
-    expect(span.endTimeUnixNano).toBe("300");
-    expect(span.attributes).toEqual([
-      { key: "db.entity", value: { stringValue: "user" } },
-    ]);
-    expect(span.events).toEqual([
+    expect(span?.traceId).toBe(parent.traceId);
+    expect(span?.spanId).toBe(child.spanId);
+    expect(span?.parentSpanId).toBe(parent.spanId);
+    expect(span?.name).toBe("db.query user");
+    expect(span?.kind).toBe(3);
+    expect(span?.startTimeUnixNano).toBe("200");
+    expect(span?.endTimeUnixNano).toBe("300");
+    expect(span?.attributes).toEqual([{ key: "db.entity", value: { stringValue: "user" } }]);
+    expect(span?.events).toEqual([
       {
         name: "retry",
         timeUnixNano: "250",
@@ -328,37 +274,31 @@ describe("buildOtlpPayload", () => {
     ]);
   });
 
-  it("omits parentSpanId entirely for a root span", () => {
-    // Catches: `parentSpanId: undefined` — collectors reject a present-but-null
-    // parent id, and it would make every root span look orphaned.
+  it("omits parentSpanId entirely for a root span, since collectors reject a present-but-null parent id and root spans would look orphaned", () => {
     const buffer = makeSpanBuffer();
     const root = makeSpan("root", buffer);
     root.end(200n, Exit.void);
-    const span = buildOtlpPayload([root], "svc").resourceSpans[0].scopeSpans[0].spans[0];
+    const span = buildOtlpPayload([root], "svc").resourceSpans[0]?.scopeSpans[0]?.spans[0];
     expect(span).not.toHaveProperty("parentSpanId");
   });
 
-  it("marks a successful span OK (1) and a failed span ERROR (2) with a truncated message", () => {
-    // Catches: inverting the status codes (every span red in the trace UI) and
-    // removing the 512-char clamp (a huge cause would bloat every export).
+  it("marks a successful span OK (1) and a failed span ERROR (2) with a truncated message, so no span is red by inversion and a huge cause cannot bloat exports", () => {
     const buffer = makeSpanBuffer();
     const ok = makeSpan("ok", buffer);
     ok.end(200n, Exit.void);
     const bad = makeSpan("bad", buffer);
     bad.end(200n, Exit.fail(new Error("boom".padEnd(2000, "!"))));
 
-    const [okOut, badOut] = buildOtlpPayload([ok, bad], "svc").resourceSpans[0]
-      .scopeSpans[0].spans as ReadonlyArray<{
+    const [okOut, badOut] = (buildOtlpPayload([ok, bad], "svc").resourceSpans[0]?.scopeSpans[0]
+      ?.spans ?? []) as ReadonlyArray<{
       status: { code: number; message?: string };
     }>;
-    expect(okOut.status).toEqual({ code: 1 });
-    expect(badOut.status.code).toBe(2);
-    expect(badOut.status.message).toContain("boom");
-    expect(badOut.status.message!.length).toBeLessThanOrEqual(512);
+    expect(okOut?.status).toEqual({ code: 1 });
+    expect(badOut?.status.code).toBe(2);
+    expect(badOut?.status.message).toContain("boom");
+    expect(badOut?.status.message?.length).toBeLessThanOrEqual(512);
   });
 });
-
-// --- flushSpans --------------------------------------------------------------
 
 describe("flushSpans", () => {
   it.effect("does not call fetch when the buffer is empty", () =>
@@ -366,70 +306,66 @@ describe("flushSpans", () => {
       const { calls, fetchFn } = stubFetch();
       yield* flushSpans(config(), makeSpanBuffer(), fetchFn);
       expect(calls).toHaveLength(0);
-    })
+    }),
   );
 
-  it.effect("POSTs one JSON request to config.url with content-type + config headers", () =>
-    Effect.gen(function* () {
-      // Catches: dropping the content-type or the config headers spread — a
-      // hosted collector would reject every export as unauthenticated.
-      const { calls, fetchFn } = stubFetch();
-      const buffer = makeSpanBuffer();
-      makeSpan("work", buffer).end(200n, Exit.void);
+  it.effect(
+    "POSTs one JSON request to config.url with content-type + config headers, so a hosted collector does not reject every export as unauthenticated",
+    () =>
+      Effect.gen(function* () {
+        const { calls, fetchFn } = stubFetch();
+        const buffer = makeSpanBuffer();
+        makeSpan("work", buffer).end(200n, Exit.void);
 
-      yield* flushSpans(
-        config({ headers: { "x-api-key": "abc" } }),
-        buffer,
-        fetchFn
-      );
+        yield* flushSpans(config({ headers: { "x-api-key": "abc" } }), buffer, fetchFn);
 
-      expect(calls).toHaveLength(1);
-      expect(calls[0].url).toBe("http://collector:4318/v1/traces");
-      expect(calls[0].init.method).toBe("POST");
-      expect(calls[0].init.headers).toEqual({
-        "content-type": "application/json",
-        "x-api-key": "abc",
-      });
-      const body = JSON.parse(calls[0].init.body);
-      expect(body.resourceSpans[0].scopeSpans[0].spans.map((s: { name: string }) => s.name)).toEqual(
-        ["work"]
-      );
-    })
+        expect(calls).toHaveLength(1);
+        expect(calls[0]?.url).toBe("http://collector:4318/v1/traces");
+        expect(calls[0]?.init.method).toBe("POST");
+        expect(calls[0]?.init.headers).toEqual({
+          "content-type": "application/json",
+          "x-api-key": "abc",
+        });
+        const body = JSON.parse(calls[0]?.init.body ?? "");
+        expect(
+          body.resourceSpans[0].scopeSpans[0].spans.map((s: { name: string }) => s.name),
+        ).toEqual(["work"]);
+      }),
   );
 
-  it.effect("drains the buffer so a second flush exports nothing", () =>
-    Effect.gen(function* () {
-      // Catches: reading buffer.spans without splicing — every flush would
-      // re-send all previously exported spans (duplicate traces).
-      const { calls, fetchFn } = stubFetch();
-      const buffer = makeSpanBuffer();
-      makeSpan("work", buffer).end(200n, Exit.void);
+  it.effect(
+    "drains the buffer so a second flush exports nothing, so earlier spans are never re-sent as duplicate traces",
+    () =>
+      Effect.gen(function* () {
+        const { calls, fetchFn } = stubFetch();
+        const buffer = makeSpanBuffer();
+        makeSpan("work", buffer).end(200n, Exit.void);
 
-      yield* flushSpans(config(), buffer, fetchFn);
-      yield* flushSpans(config(), buffer, fetchFn);
+        yield* flushSpans(config(), buffer, fetchFn);
+        yield* flushSpans(config(), buffer, fetchFn);
 
-      expect(calls).toHaveLength(1);
-      expect(buffer.spans).toHaveLength(0);
-    })
+        expect(calls).toHaveLength(1);
+        expect(buffer.spans).toHaveLength(0);
+      }),
   );
 
-  it.effect("succeeds (never fails the app) and logs when the collector returns !ok", () =>
-    Effect.gen(function* () {
-      // Catches: letting an export failure propagate — a down collector would
-      // fail every request that flushes spans.
-      const { messages, layer } = captureLogs();
-      const { calls, fetchFn } = stubFetch({ ok: false, status: 503 });
-      const buffer = makeSpanBuffer();
-      makeSpan("work", buffer).end(200n, Exit.void);
+  it.effect(
+    "succeeds (never fails the app) and logs when the collector returns !ok, so a down collector cannot fail every request that flushes spans",
+    () =>
+      Effect.gen(function* () {
+        const { messages, layer } = captureLogs();
+        const { calls, fetchFn } = stubFetch({ ok: false, status: 503 });
+        const buffer = makeSpanBuffer();
+        makeSpan("work", buffer).end(200n, Exit.void);
 
-      const exit = yield* Effect.exit(
-        flushSpans(config(), buffer, fetchFn).pipe(Effect.provide(layer))
-      );
+        const exit = yield* Effect.exit(
+          flushSpans(config(), buffer, fetchFn).pipe(Effect.provide(layer)),
+        );
 
-      expect(Exit.isSuccess(exit)).toBe(true);
-      expect(calls).toHaveLength(1);
-      expect(messages).toContain("tracing.export_failed");
-    })
+        expect(Exit.isSuccess(exit)).toBe(true);
+        expect(calls).toHaveLength(1);
+        expect(messages).toContain("tracing.export_failed");
+      }),
   );
 
   it.effect("succeeds and logs when fetch itself rejects", () =>
@@ -440,62 +376,56 @@ describe("flushSpans", () => {
       makeSpan("work", buffer).end(200n, Exit.void);
 
       const exit = yield* Effect.exit(
-        flushSpans(config(), buffer, fetchFn).pipe(Effect.provide(layer))
+        flushSpans(config(), buffer, fetchFn).pipe(Effect.provide(layer)),
       );
 
       expect(Exit.isSuccess(exit)).toBe(true);
       expect(messages).toContain("tracing.export_failed");
-    })
+    }),
   );
 
-  it.effect("reports dropped spans once and resets the counter", () =>
-    Effect.gen(function* () {
-      // Catches: forgetting `buffer.dropped = 0` — the warning would repeat on
-      // every subsequent flush for the lifetime of the buffer.
-      const { messages, layer } = captureLogs();
-      const { fetchFn } = stubFetch();
-      const buffer = makeSpanBuffer();
-      makeSpan("work", buffer).end(200n, Exit.void);
-      buffer.dropped = 3;
+  it.effect(
+    "reports dropped spans once and resets the counter, so the warning does not repeat on every later flush",
+    () =>
+      Effect.gen(function* () {
+        const { messages, layer } = captureLogs();
+        const { fetchFn } = stubFetch();
+        const buffer = makeSpanBuffer();
+        makeSpan("work", buffer).end(200n, Exit.void);
+        buffer.dropped = 3;
 
-      yield* flushSpans(config(), buffer, fetchFn).pipe(Effect.provide(layer));
+        yield* flushSpans(config(), buffer, fetchFn).pipe(Effect.provide(layer));
 
-      expect(messages).toContain("tracing.spans_dropped");
-      expect(buffer.dropped).toBe(0);
-    })
+        expect(messages).toContain("tracing.spans_dropped");
+        expect(buffer.dropped).toBe(0);
+      }),
   );
 });
 
-// --- TracingLayer ------------------------------------------------------------
-
 describe("TracingLayer", () => {
-  it("exports the spans recorded by the runtime when the runtime is disposed", async () => {
-    // Catches: losing the flush finalizer (spans buffer forever and nothing is
-    // ever exported) or building the wrong URL from the endpoint env var.
+  it("exports the spans recorded by the runtime when the runtime is disposed, and nothing mid-request, so the flush finalizer exists and the URL comes from the endpoint env var", async () => {
     const { calls, fetchFn } = stubFetch();
     const runtime = ManagedRuntime.make(
-      TracingLayer({ OTEL_EXPORTER_OTLP_ENDPOINT: "http://localhost:4318" }, fetchFn)
+      TracingLayer({ OTEL_EXPORTER_OTLP_ENDPOINT: "http://localhost:4318" }, fetchFn),
     );
 
     await runtime.runPromise(Effect.void.pipe(Effect.withSpan("test.span")));
-    expect(calls).toHaveLength(0); // nothing exported mid-request
+    expect(calls).toHaveLength(0);
 
     await runtime.dispose();
 
     expect(calls).toHaveLength(1);
-    expect(calls[0].url).toBe("http://localhost:4318/v1/traces");
-    const body = JSON.parse(calls[0].init.body);
+    expect(calls[0]?.url).toBe("http://localhost:4318/v1/traces");
+    const body = JSON.parse(calls[0]?.init.body ?? "");
     expect(body.resourceSpans[0].resource.attributes).toEqual([
       { key: "service.name", value: { stringValue: "cf-saas-starter" } },
     ]);
     expect(
-      body.resourceSpans[0].scopeSpans[0].spans.map((s: { name: string }) => s.name)
+      body.resourceSpans[0].scopeSpans[0].spans.map((s: { name: string }) => s.name),
     ).toContain("test.span");
   });
 
-  it("exports nothing when OTEL_EXPORTER_OTLP_ENDPOINT is unset", async () => {
-    // Catches: inverting the `if (!config)` guard — an unconfigured deploy
-    // would fetch a bogus URL on every request.
+  it("exports nothing when OTEL_EXPORTER_OTLP_ENDPOINT is unset, so an unconfigured deploy never fetches a bogus URL on every request", async () => {
     const { calls, fetchFn } = stubFetch();
     const runtime = ManagedRuntime.make(TracingLayer({}, fetchFn));
     await runtime.runPromise(Effect.void.pipe(Effect.withSpan("test.span")));

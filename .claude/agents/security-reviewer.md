@@ -12,7 +12,7 @@ Find the ways a hostile or careless user breaks this diff. Report only what `scr
 
 ## Scope
 
-The diff given, or `git diff $(git merge-base HEAD main)..HEAD`. Read each changed file in full, then the callers and callees the finding depends on.
+The diff given, or `git diff $(git merge-base HEAD "origin/$(bun scripts/default-branch.ts)")..HEAD`. Read each changed file in full, then the callers and callees the finding depends on.
 
 ## Checks
 

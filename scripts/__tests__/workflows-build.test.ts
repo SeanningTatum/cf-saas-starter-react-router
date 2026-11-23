@@ -36,7 +36,9 @@ describe("buildWorkflow", () => {
 
   it("replaces the `// @lib` line with banner, library and end marker, in that order, and leaves no marker behind", () => {
     expect(out).not.toMatch(/^\/\/ @lib$/m);
-    const banner = lines.findIndex((l) => l.startsWith("// ---- generated from .claude/workflow-src/lib.js by scripts/workflows.ts; edit the source, then run `bun scripts/workflows.ts build`"));
+    const banner = lines.findIndex((l) =>
+      l.startsWith("// ---- generated from .claude/workflow-src/lib.js by scripts/workflows.ts; edit the source, then run `bun scripts/workflows.ts build`"),
+    );
     const end = lines.indexOf("// ---- end of .claude/workflow-src/lib.js ----");
     expect(banner).toBeGreaterThan(lines.indexOf("// header comment"));
     expect(end).toBeGreaterThan(banner);
@@ -44,7 +46,7 @@ describe("buildWorkflow", () => {
   });
 
   it("strips `export ` from every library declaration: a script body with `export function` does not parse", () => {
-    expect(out).toContain("const STR = { type: \"string\" };");
+    expect(out).toContain('const STR = { type: "string" };');
     expect(out).toContain("function twice(fn) {");
     expect(out).toContain("async function asyncHelper() {}");
     expect(out.split("\n").filter((l) => /^export /.test(l))).toEqual(["export const meta = {"]);
@@ -55,7 +57,7 @@ describe("buildWorkflow", () => {
   });
 
   it("refuses a source that does not begin with the meta literal", () => {
-    expect(() => buildWorkflow("demo", "// hello\n" + SRC, LIB)).toThrow(/must begin with "export const meta = "/);
+    expect(() => buildWorkflow("demo", `// hello\n${SRC}`, LIB)).toThrow(/must begin with "export const meta = "/);
   });
 
   it("refuses a source with no `// @lib` line, or with two: the library would be missing or defined twice", () => {
@@ -69,8 +71,8 @@ describe("buildWorkflow", () => {
   });
 
   it("refuses a library that imports: a workflow script has no import", () => {
-    expect(() => buildWorkflow("demo", SRC, 'import { a } from "./a.js";\n' + LIB)).toThrow(/must not import/);
-    expect(() => buildWorkflow("demo", SRC, LIB + "const m = await import('x');\n")).toThrow(/must not import/);
+    expect(() => buildWorkflow("demo", SRC, `import { a } from "./a.js";\n${LIB}`)).toThrow(/must not import/);
+    expect(() => buildWorkflow("demo", SRC, `${LIB}const m = await import('x');\n`)).toThrow(/must not import/);
   });
 });
 
@@ -100,13 +102,13 @@ describe("drift", () => {
   });
 
   it("flags a hand-edited built file, naming it: the edit would be lost at the next build", () => {
-    const p = drift(sources, { ...good, a: good.a + "// hand edit\n" }, LIB);
+    const p = drift(sources, { ...good, a: `${good.a}// hand edit\n` }, LIB);
     expect(p).toHaveLength(1);
     expect(p[0]).toMatch(/^a\.js: differs from what/);
   });
 
   it("flags every built file when the library changed and nobody rebuilt", () => {
-    expect(drift(sources, good, LIB + "export const NEW = 1;\n")).toHaveLength(2);
+    expect(drift(sources, good, `${LIB}export const NEW = 1;\n`)).toHaveLength(2);
   });
 
   it("flags a source with no built file", () => {
@@ -130,10 +132,18 @@ function memfs(files: Record<string, string>) {
       if (t === undefined) throw new Error(`ENOENT: ${p}`);
       return t;
     },
-    writeFile: (p, t) => void (written[p] = t),
+    writeFile: (p, t) => {
+      written[p] = t;
+    },
     listDir: (p) => {
       const prefix = p.endsWith("/") ? p : `${p}/`;
-      return [...new Set([...Object.keys(files), ...Object.keys(written)].filter((k) => k.startsWith(prefix) && !k.slice(prefix.length).includes("/")).map((k) => k.slice(prefix.length)))];
+      return [
+        ...new Set(
+          [...Object.keys(files), ...Object.keys(written)]
+            .filter((k) => k.startsWith(prefix) && !k.slice(prefix.length).includes("/"))
+            .map((k) => k.slice(prefix.length)),
+        ),
+      ];
     },
     mkdirp: (p) => void made.push(p),
   };
@@ -201,7 +211,7 @@ describe("run check", () => {
   });
 
   it("exits 1, naming the drifted file and saying how to fix it, when someone edited the built script", () => {
-    const { deps } = memfs(tree({ "/repo/.claude/workflows/demo.js": built + "// edit\n" }));
+    const { deps } = memfs(tree({ "/repo/.claude/workflows/demo.js": `${built}// edit\n` }));
     const r = run(["check"], ROOT, deps);
     expect(r.code).toBe(1);
     expect(r.stderr[0]).toContain(".claude/workflows/demo.js: differs");

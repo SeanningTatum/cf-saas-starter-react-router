@@ -12,7 +12,7 @@ Find what works with 20 seeded rows and breaks with real data. Read-only. No pra
 
 ## Scope
 
-The diff given, or `git diff $(git merge-base HEAD main)..HEAD`. Read changed repositories, procedures, routes and the new migration in `drizzle/` in full.
+The diff given, or `git diff $(git merge-base HEAD "origin/$(bun scripts/default-branch.ts)")..HEAD`. Read changed repositories, procedures, routes and the new migration in `drizzle/` in full.
 
 ## Checks
 

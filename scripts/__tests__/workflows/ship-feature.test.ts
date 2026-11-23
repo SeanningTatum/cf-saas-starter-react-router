@@ -8,96 +8,11 @@
  * fragments), never on how the script is laid out, so moving its helpers into a library keeps them green.
  */
 import { describe, expect, it } from "vitest";
-import { dryRun, labels, seq, type AgentCall, type AnswerRule, type DryRunResult } from "../../lib/workflow-dry-run";
+import { lintTitle } from "../helpers/lint-title";
+import { dryRun, labels, ledgerAt, callShape, rowShape, seq, type AgentCall, type AnswerInput, type AnswerRule, type DryRunResult } from "../../lib/workflow-dry-run";
+import { loadHarnessConfigFromDisk } from "../../lib/harness-config";
 
-const ROOT = "/work/repo";
-const SLUG = "demo-widget";
-const BASE_SHA = "a".repeat(40);
-const REVIEWED_SHA = "c".repeat(40);
-const ISSUE_URL = "https://github.com/o/r/issues/76";
-const PR1 = { n: 1, branch: `feat/${SLUG}/1-data`, base: "main", title: "Widget data", fence: ["app/repositories/widget.ts", "app/repositories/__tests__/widget.test.ts"], greptile_focus: "authorization" };
-const PR2 = { n: 2, branch: `feat/${SLUG}/2-ui`, base: PR1.branch, title: "Widget screen", fence: ["app/routes/widget.tsx"], greptile_focus: "empty and error states" };
-const CONTRACT = "export type Widget = { id: string; name: string }";
-const ARGS = { ticket: "76" };
-
-/** Anything that writes outside the machine. Reads (`gh pr checks`, `gh issue view`) are allowed before the ship stop. */
-const GITHUB_WRITE = /git push|gh pr (create|comment|merge|edit|review|close|ready)|gh issue (create|comment|edit|close)|gh api|@greptileai review/;
-
-const GATES = [
-  { name: "typecheck", pass: true, tail: "" },
-  { name: "unit", pass: true, tail: "" },
-  { name: "e2e", pass: true, tail: "" },
-];
-const PASS = { verdict: "PASS", findings: [], evidence: "" };
-const LANE_OK = (path: string) => ({ files: [{ path, summary: "done" }], typecheck: "pass", blocked: [] });
-
-const preflight = (over: Record<string, unknown> = {}) => ({
-  ok: true,
-  reason: "",
-  root: ROOT,
-  date: "2026-11-22",
-  untracked: [],
-  base_sha: BASE_SHA,
-  issue: { ref: "#76", url: ISSUE_URL, title: "Demo widget", body: "Let users add widgets." },
-  record_path: `${ROOT}/.verify/_intake/record-76.md`,
-  has_analytics: false,
-  has_codegraph: false,
-  moved_nested_modules: false,
-  baseline: GATES,
-  ...over,
-});
-
-const PLAN = {
-  slug: SLUG,
-  title: "Demo widget",
-  summary: "Users add and list widgets.",
-  ui: true,
-  surface: "app",
-  prototype: "",
-  metric: "",
-  acceptance: ["The list shows an empty state"],
-  golden_path: "Open /widgets and add one",
-  error_path: "A duplicate name shows an error",
-  contract: CONTRACT,
-  seed_fixtures: ["one widget"],
-  prs: [PR1, PR2],
-};
-
-/**
- * A ticket with a plan-feature decision record, two stacked PRs (backend, then UI), every check green,
- * Greptile 5/5 on the roll-up. `over` rules come first, so they win.
- */
-function happy(over: AnswerRule[] = []): AnswerRule[] {
-  return [
-    ...over,
-    ["preflight", preflight()],
-    ["intake:record", PLAN],
-    ["contract:branch", { ok: true, reason: "" }],
-    ["contract:map", { files: [] }],
-    ["contract:schema", LANE_OK(`app/lib/schemas/${SLUG}.ts`)],
-    [/^build:pr\d+-(backend|ui)$/, (c) => LANE_OK(c.label)],
-    [/^build:typecheck:/, { pass: true, errors: [] }],
-    ["write:impact", { changed: [], dependents: [] }],
-    ["write:unit", "tests written"],
-    ["write:e2e", { specs: [{ path: `e2e/${SLUG}.spec.ts`, regression: "golden path" }], run: { passed: 2, failed: 0, tail: "" }, skipped: [] }],
-    ["write:instrument", { events: [], files: [], skipped: [], spans: ["spans added"] }],
-    ["review:paths", { files: ["app/repositories/widget.ts", "app/routes/widget.tsx"] }],
-    [/^review:gates:/, { gates: GATES }],
-    [/^review:(effect|security|scale|lean|walk|critique):/, PASS],
-    ["docs", { files: ["GLOSSARY.md"], pr_bodies: [{ n: 1, path: "pr-1.md" }, { n: 2, path: "pr-2.md" }], adr: null }],
-    [/^ship:assign:/, { assignments: [{ n: 1, branch: PR1.branch, paths: PR1.fence }, { n: 2, branch: PR2.branch, paths: PR2.fence }], unassigned: [], overlaps: [], excluded: [] }],
-    [/^ship:videos:/, { passed: true, videos: [{ kind: "golden", title: "adds a widget", path: "video/golden-1.webm", status: "passed" }], unrecorded: [] }],
-    [/^memory:/, "recorded"],
-    ["split", { ok: true, failed_command: "", branches: [{ n: 1, branch: PR1.branch, sha: "b1" }, { n: 2, branch: PR2.branch, sha: "b2" }], checks: [] }],
-    [/^local:code-review:/, { method: "code-review skill", findings: [] }],
-    ["local:home", "switched"],
-    ["open:prs", { ok: true, failed_command: "", prs: [{ n: 2, number: 102, url: "https://github.com/o/r/pull/102", branch: PR2.branch }, { n: 1, number: 101, url: "https://github.com/o/r/pull/101", branch: PR1.branch }] }],
-    [/:checks$/, { prs: [{ number: 101, checks: [{ name: "ci", state: "SUCCESS" }] }], preview_url: "" }],
-    ["rollup:pr", { ok: true, failed_command: "", merged: [101, 102], number: 103, url: "https://github.com/o/r/pull/103" }],
-    ["rollup-greptile:trigger", { ok: true, failed_command: "" }],
-    [/^rollup-greptile:wait:/, { status: "reviewed", sha: REVIEWED_SHA, confidence: 5, summary: "Looks good", comments: [] }],
-  ];
-}
+import { ROOT, SLUG, BASE_SHA, REVIEWED_SHA, ISSUE_URL, PR1, PR2, CONTRACT, ARGS, GITHUB_WRITE, GATES, PASS, preflight, PLAN, happy } from "./ship-feature.fixtures";
 
 const approve = (n = 1) => ({ ...ARGS, ships: { [String(n)]: { approved: true } } });
 const find = (calls: AgentCall[], label: string): AgentCall => {
@@ -117,7 +32,7 @@ const fenced = (prompt: string, label: string): string | null => {
 /** The paths a build lane was told it owns. */
 const ownedPaths = (prompt: string): string[] => {
   const block = prompt.split("FILE FENCE")[1]?.split("A file outside them")[0] ?? "";
-  return [...block.matchAll(/^ {2}· (.+)$/gm)].map((m) => m[1]);
+  return [...block.matchAll(/^ {2}· (.+)$/gm)].map((m) => m[1] ?? "");
 };
 
 // The stop and the approved resume are shared by the happy-path and resume tests; run them once.
@@ -143,7 +58,7 @@ describe("ship-feature: happy path, a ticket with a decision record, two stacked
     expect(firstWrite).toBeGreaterThan(indexOf(shipped.calls, "local:code-review:2:1"));
   });
 
-  it("the ship page offers a stack whose PR 1 targets review/<slug>, not main (catches baseOf dropped: PR 1 would merge straight into main)", async () => {
+  it("the ship page offers a stack whose PR 1 targets review/<slug>, not the base (catches baseOf dropped: PR 1 would merge straight into the base)", async () => {
     const { stopped } = await runHappy();
     const r = stopped.result as { prs: { n: number; base: string }[]; open_findings: unknown[]; review: string };
     expect(r.prs.map((p) => [p.n, p.base])).toEqual([[1, `review/${SLUG}`], [2, PR1.branch]]);
@@ -155,6 +70,7 @@ describe("ship-feature: happy path, a ticket with a decision record, two stacked
     const { stopped, shipped } = await runHappy();
     const all = [...stopped.calls, ...shipped.live];
     const want: Record<string, string> = {
+      config: "runner",
       preflight: "runner",
       "intake:record": "context-scout",
       "contract:branch": "runner",
@@ -195,7 +111,7 @@ describe("ship-feature: happy path, a ticket with a decision record, two stacked
     // Catches the contract pasted bare, where text in a plan could pass for an instruction.
     expect(fenced(backend.prompt, "contract")).toBe(CONTRACT);
     // Catches a call made with agent() instead of ask(): it would run with no ROOT and no "never push" rule.
-    const missing = [...stopped.calls, ...shipped.live].filter((c) => c.label !== "preflight" && !c.prompt.startsWith(`ROOT = ${ROOT}.`)).map((c) => c.label);
+    const missing = [...stopped.calls, ...shipped.live].filter((c) => c.label !== "preflight" && c.label !== "config" && !c.prompt.startsWith(`ROOT = ${ROOT}.`)).map((c) => c.label);
     expect(missing).toEqual([]);
   });
 
@@ -215,7 +131,7 @@ describe("ship-feature: happy path, a ticket with a decision record, two stacked
     // Catches a merge command without --match-head-commit, or pinned to some other sha.
     expect((shipped.result as { next: string }).next).toContain(`gh pr merge 103 --squash --match-head-commit ${REVIEWED_SHA}`);
     // The roll-up gets its own CI watch and a working-memory record at the very end.
-    expect(labels(shipped.calls).slice(-2)).toEqual(["close:checks", "memory:record"]);
+    expect(labels(shipped.calls).slice(-3)).toEqual(["close:checks", "run:record", "memory:record"]);
     // Catches a phase() title renamed without meta, a phase out of order, or a call tagged with a phase that does not exist.
     const titles = (shipped.meta.phases ?? []).map((p) => p.title);
     expect(shipped.phases).toEqual(titles);
@@ -223,12 +139,51 @@ describe("ship-feature: happy path, a ticket with a decision record, two stacked
   });
 });
 
+describe("ship-feature: the base branch", () => {
+  const shipWith = async (args: Record<string, unknown>, reported: string) => {
+    const answers = happy([["preflight", preflight({ base_branch: reported })]]);
+    const stopped = await dryRun("ship-feature", { args, answers });
+    const shipped = await dryRun("ship-feature", { args: { ...args, ships: { "1": { approved: true } } }, answers, resumeFrom: stopped });
+    return { stopped, shipped };
+  };
+
+  it("with no base arg the roll-up targets the default branch preflight reported, and preflight is told to ask the repo (catches a literal main creeping back)", async () => {
+    const { stopped, shipped } = await shipWith(ARGS, "trunk-x");
+    expect(find(stopped.calls, "preflight").prompt).toContain("bun scripts/default-branch.ts");
+    expect(find(shipped.live, "rollup:pr").prompt).toContain("gh pr create --base 'trunk-x' --head review/");
+    expect(find(shipped.live, "rollup:pr").prompt).not.toMatch(/--base main\b/);
+  });
+
+  it("an explicit base arg wins over what preflight reports, and preflight is not sent to ask the repo (catches the arg ignored)", async () => {
+    const { stopped, shipped } = await shipWith({ ...ARGS, base: "release/v3" }, "trunk-x");
+    expect(find(stopped.calls, "preflight").prompt).toContain("'release/v3'");
+    expect(find(stopped.calls, "preflight").prompt).not.toContain("bun scripts/default-branch.ts");
+    expect(find(shipped.live, "rollup:pr").prompt).toContain("gh pr create --base 'release/v3' --head review/");
+  });
+
+  it("a reported base with a shell-active character reaches the roll-up prompt only quoted (catches an unquoted BASE in gh pr create and gh pr comment)", async () => {
+    const hostile = "x$(touch pwned)`id`";
+    const { shipped } = await shipWith(ARGS, hostile);
+    const prompt = find(shipped.live, "rollup:pr").prompt;
+    expect(prompt).toContain(`--base '${hostile}' --head review/`);
+    expect(prompt).toContain("--body 'Merged into ");
+    expect(prompt).not.toContain(`--base ${hostile}`);
+    expect(prompt).not.toContain('--body "Merged into');
+  });
+
+  it("a preflight that reports no default branch stops the run when no base arg was given", async () => {
+    const run = await dryRun("ship-feature", { args: ARGS, answers: happy([["preflight", preflight({ base_branch: "" })]]) });
+    expect(run.result).toMatchObject({ stopped: "Preflight", reason: "no default branch reported" });
+    expect(labels(run.calls)).toEqual(["config", "preflight"]);
+  });
+});
+
 describe("ship-feature: a failing gate", () => {
   it("a red baseline stops the run in Preflight, before any other agent (catches a run that builds on a red base and hides its own regressions)", async () => {
     const red = GATES.map((g) => (g.name === "unit" ? { ...g, pass: false, tail: "1 failed" } : g));
     const run = await dryRun("ship-feature", { args: ARGS, answers: happy([["preflight", preflight({ baseline: red })]]) });
-    expect(run.result).toMatchObject({ stopped: "Preflight", reason: "baseline red on main: unit" });
-    expect(labels(run.calls)).toEqual(["preflight"]);
+    expect(run.result).toMatchObject({ stopped: "Preflight", reason: "baseline red on staging: unit" });
+    expect(labels(run.calls)).toEqual(["config", "preflight"]);
   });
 
   it("a gate green on the base and red at Review is a P0 regression that goes to a fix round before Ship (catches it read as advisory)", async () => {
@@ -253,7 +208,7 @@ describe("ship-feature: a failing gate", () => {
 describe("ship-feature: stop and resume at the ship review", () => {
   it("an approved resume replays every call before the stop from cache, never records twice, and goes on to Split", async () => {
     const { stopped, shipped } = await runHappy();
-    const before = stopped.calls.length - 1; // every call but the stop's own memory record
+    const before = stopped.calls.length - 2; // every call but the stop's own ledger write and memory record
     expect(shipped.calls.slice(0, before).every((c) => c.cached)).toBe(true);
     // Catches a prompt that changes with args.ships: every agent before the stop would run again.
     expect(shipped.live.filter((c) => labels(stopped.calls).includes(c.label)).map((c) => c.label)).toEqual([]);
@@ -323,27 +278,59 @@ describe("ship-feature: fix rounds", () => {
     expect(r.open_findings).toEqual([expect.objectContaining({ source: "security", severity: "P1", file: SEC.file })]);
   });
 
-  // KNOWN DEFECT, pinned with it.fails: ship-feature.js builds `open` from one allFindings() call and filters
-  // `other_findings` with `!open.includes(f)` over a second call, whose objects are new, so the filter keeps
-  // everything: each open P0/P1 also shows under "other findings" on the ship page. When the workflow is
-  // fixed this test goes red; drop `.fails` then.
-  it.fails("the ship page's other_findings holds only what is not open (catches an open P0/P1 listed twice)", async () => {
+  it("the ship page's other_findings holds only what is not open (catches an open P0/P1 listed twice)", async () => {
     const r = (await runFix()).result as { other_findings: { source: string; severity: string }[] };
     expect(r.other_findings).toEqual([expect.objectContaining({ source: "effect", severity: "P2" })]);
   });
 
-  it("local review: a branch's P0/P1 goes to review-responder, later branches are restacked, and code-review stops after reviewRounds", async () => {
+  it("every commit the run asks for ends with the library's co-author line (catches a trailer that names a model no longer in use)", async () => {
     const finding = { severity: "P0", file: "app/repositories/widget.ts", line: 3, detail: "SQL built from input", fix: "bind it" };
     const run = await dryRun("ship-feature", {
       args: approve(),
       answers: happy([
         [/^local:code-review:1:/, { method: "code-review skill", findings: [finding] }],
-        [/^local:respond:code-review:1:/, (c) => ({ comments: [{ id: `cr-1-${c.label.split(":").pop()}-1`, action: "fixed", reply: "bound" }], commits: ["f1"], blocked: [] })],
+        [/^local:respond:code-review:1:/, (c: AnswerInput) => ({ comments: [{ id: `cr-1-${c.label.split(":").pop()}-1`, action: "fixed", reply: "bound" }], commits: ["f1"], blocked: [] })],
+        [/^local:restack:/, { ok: true, failed_command: "" }],
+      ]),
+    });
+    const trailers = (prompt: string) => prompt.match(/Co-Authored-By: [^\n"\\]+/g) ?? [];
+    const committing = run.calls.filter((c) => trailers(c.prompt).length > 0);
+    expect(labels(committing)).toEqual(expect.arrayContaining(["contract:branch", expect.stringMatching(/^local:respond:code-review:1:/)]));
+    for (const c of committing) expect({ label: c.label, trailers: [...new Set(trailers(c.prompt))] }).toEqual({ label: c.label, trailers: [loadHarnessConfigFromDisk().coauthor] });
+  });
+
+  it("stacked branches get one code-review round and the lean gates against the branch below at split and restack (catches a stacked branch paying for the full suite or a second round)", async () => {
+    const finding = { severity: "P0", file: "app/repositories/widget.ts", line: 3, detail: "SQL built from input", fix: "bind it" };
+    const run = await dryRun("ship-feature", {
+      args: approve(),
+      answers: happy([
+        [/^local:code-review:1:/, { method: "code-review skill", findings: [finding] }],
+        [/^local:respond:code-review:1:/, (c: AnswerInput) => ({ comments: [{ id: `cr-1-${c.label.split(":").pop()}-1`, action: "fixed", reply: "bound" }], commits: ["f1"], blocked: [] })],
+        [/^local:restack:/, { ok: true, failed_command: "" }],
+      ]),
+    });
+    expect(labels(run.calls).filter((x) => x.startsWith("local:code-review:1:"))).toEqual(["local:code-review:1:1"]);
+    const split = find(run.calls, "split").prompt;
+    expect(split).toContain("./scripts/verify.sh --changed");
+    expect(split).toContain(`${PR1.branch} against ${BASE_SHA}; ${PR2.branch} against ${PR1.branch}`);
+    expect(split).not.toContain("`bun run test`");
+    const restack = find(run.calls, "local:restack:code-review:1:1").prompt;
+    expect(restack).toContain("./scripts/verify.sh --changed");
+    expect(restack).toContain(`${PR2.branch} against ${PR1.branch}`);
+  });
+
+  it("local review: a branch's P0/P1 goes to review-responder, later branches are restacked, and code-review stops after reviewRounds", async () => {
+    const finding = { severity: "P0", file: "app/repositories/widget.ts", line: 3, detail: "SQL built from input", fix: "bind it" };
+    const run = await dryRun("ship-feature", {
+      args: { ...approve(), reviewRounds: 2 },
+      answers: happy([
+        [/^local:code-review:1:/, { method: "code-review skill", findings: [finding] }],
+        [/^local:respond:code-review:1:/, (c: AnswerInput) => ({ comments: [{ id: `cr-1-${c.label.split(":").pop()}-1`, action: "fixed", reply: "bound" }], commits: ["f1"], blocked: [] })],
         [/^local:restack:/, { ok: true, failed_command: "" }],
       ]),
     });
     const l = labels(run.calls);
-    // Catches the cap (reviewRounds, default 2) dropped or off by one.
+    // Catches the cap (reviewRounds) dropped or off by one.
     expect(l.filter((x) => x.startsWith("local:code-review:1:"))).toEqual(["local:code-review:1:1", "local:code-review:1:2"]);
     const resp = find(run.calls, "local:respond:code-review:1:1");
     expect(resp.opts.agentType).toBe("review-responder");
@@ -352,7 +339,7 @@ describe("ship-feature: fix rounds", () => {
     expect(find(run.calls, "local:restack:code-review:1:1").prompt).toContain(PR2.branch);
     expect(l.indexOf("local:restack:code-review:1:2")).toBeLessThan(l.indexOf("open:prs"));
     expect(run.result).toMatchObject({ status: "shipped", local_open: [] });
-    expect((run.result as { localReview: { rounds: { replies: { action: string }[] }[] }[] }).localReview[0].rounds.map((r) => r.replies.map((x) => x.action))).toEqual([["fixed"], ["fixed"]]);
+    expect((run.result as { localReview: { rounds: { replies: { action: string }[] }[] }[] }).localReview[0]?.rounds.map((r) => r.replies.map((x) => x.action))).toEqual([["fixed"], ["fixed"]]);
   });
 
   it("a local P0/P1 the responder never answered stays open in the result (catches a dead responder read as a pass at the merge bar)", async () => {
@@ -375,9 +362,9 @@ describe("ship-feature: one instrumenter, no per-PR Greptile, memory by script",
     const { stopped } = await runHappy();
     const instr = stopped.calls.filter((c) => /^write:(instrument|spans|analytics)/.test(c.label));
     expect(instr.map((c) => c.label)).toEqual(["write:instrument"]);
-    expect(instr[0].opts.agentType).toBe("instrumenter");
-    expect(instr[0].prompt).toContain("add spans only");
-    expect(instr[0].prompt).not.toContain("Success metric:");
+    expect(instr[0]?.opts.agentType).toBe("instrumenter");
+    expect(instr[0]?.prompt).toContain("add spans only");
+    expect(instr[0]?.prompt).not.toContain("Success metric:");
     expect(stopped.result).toMatchObject({ analytics: null });
     // A metric alone is not enough: with no wrapper the call stays spans-only.
     const noWrapper = await dryRun("ship-feature", {
@@ -399,7 +386,7 @@ describe("ship-feature: one instrumenter, no per-PR Greptile, memory by script",
     });
     const calls = run.calls.filter((c) => c.label.startsWith("write:instrument"));
     expect(calls).toHaveLength(1);
-    expect(calls[0].prompt).toContain("Success metric: share of users who add a widget");
+    expect(calls[0]?.prompt).toContain("Success metric: share of users who add a widget");
     expect((run.result as { analytics: { events: unknown[] } }).analytics.events).toEqual([event]);
     expect(find(run.calls, "docs").prompt).toContain("widget_added (app/trpc/routes/widget.ts:30)");
   });
@@ -448,7 +435,7 @@ describe("ship-feature: a ticket that is not ready", () => {
     ];
     const first = await dryRun("ship-feature", { args: ARGS, answers: happy(notReady) });
     expect(first.result).toMatchObject({ status: "needs-input", stage: "ready", verdict: "amend", gaps: [{ id: "errors", status: "missing" }] });
-    expect(labels(first.calls)).toEqual(["preflight", "intake:audit", "memory:needs-input:ready"]);
+    expect(labels(first.calls)).toEqual(["config", "preflight", "intake:audit", "run:record:needs-input:ready", "memory:needs-input:ready"]);
     // Catches the ticket body pasted outside the DATA fence, where it reads as an instruction.
     expect(fenced(find(first.calls, "intake:audit").prompt, "ticket")).toBe(`${ISSUE_URL}\n# Widgets\n\n${injected}`);
 
@@ -459,5 +446,176 @@ describe("ship-feature: a ticket that is not ready", () => {
     const overridden = await dryRun("ship-feature", { args: { ...ARGS, ready: "override" }, answers: happy(notReady), resumeFrom: first });
     expect(labels(overridden.live)).toEqual(["intake:architect", "intake:architect"]);
     expect(overridden.result).toMatchObject({ stopped: "Intake", reason: "architect returned nothing twice" });
+  });
+});
+
+describe("ship-feature: run ledger", () => {
+  const STOP = "run:record:needs-ship:1";
+
+  it("at the ship stop and at Close the run:record ledger lists exactly the calls made before it, in order, and its check line verifies: a call that dodges the ledger gives a false cost report", async () => {
+    const { stopped, shipped } = await runHappy();
+    for (const [r, label] of [
+      [stopped, STOP],
+      [shipped, "run:record"],
+    ] as const) {
+      const lg = ledgerAt(r, label);
+      expect(lg.verifies).toBe(true);
+      expect([lg.workflow, lg.slug]).toEqual(["ship-feature", SLUG]);
+      expect(rowShape(lg.rows)).toEqual(r.calls.slice(0, lg.at).map(callShape));
+    }
+  });
+
+  it("a re-run with the same args replays the stop's run:record call from cache with the same prompt: the ledger holds no clock and no random value", async () => {
+    const { stopped } = await runHappy();
+    const again = await dryRun("ship-feature", { args: ARGS, answers: happy(), resumeFrom: stopped });
+    const after = find(again.calls, STOP);
+    expect(after.cached).toBe(true);
+    expect(after.prompt).toBe(find(stopped.calls, STOP).prompt);
+    expect(again.live).toEqual([]);
+  });
+
+  it.each([
+    ["a dead agent", null, "empty"],
+    [
+      "a thrown error",
+      () => {
+        throw new Error("rate limited");
+      },
+      "threw",
+    ],
+  ] as const)("%s on the first try shows outcome %s with attempt 1, then the retry shows attempt 2: the ledger must tell a retry from a first try", async (_who, first, outcome) => {
+    const run = await dryRun("ship-feature", { args: ARGS, answers: happy([["intake:record", seq(first, PLAN)]]) });
+    const lg = ledgerAt(run, STOP);
+    expect(lg.rows.filter((row) => row.label === "intake:record").map((row) => [row.attempt, row.outcome])).toEqual([
+      [1, outcome],
+      [2, "ok"],
+    ]);
+    expect(lg.rows.filter((row) => row.attempt === 2)).toHaveLength(1);
+  });
+
+  it("the PR bodies and the roll-up body get the run summary: a PR that opens without its telemetry table breaks the ticket's second criterion", async () => {
+    const { shipped } = await runHappy();
+    for (const label of ["open:prs", "rollup:pr"]) {
+      const prompt = find(shipped.calls, label).prompt;
+      expect(prompt).toContain(`bun scripts/run-telemetry.ts summary ${SLUG} --markdown`);
+      expect(prompt).toContain("## Run");
+    }
+  });
+
+  it("an auditor slug that is not kebab-case stops the run before any memory or ledger call and reaches no prompt: it would otherwise land in a shell line", async () => {
+    const steered = "x; echo steered";
+    const audit = { slug: steered, verdict: "amend", reason: "no error states", items: [{ id: "errors", status: "missing", note: "" }], amended: { title: "Widgets", body: "Users add widgets." }, questions: [] };
+    const run = await dryRun("ship-feature", {
+      args: ARGS,
+      answers: happy([
+        ["preflight", preflight({ record_path: "", issue: { ref: "#76", url: ISSUE_URL, title: "Widgets", body: "Add widgets." } })],
+        ["intake:audit", audit],
+      ]),
+    });
+    expect(run.result).toMatchObject({ stopped: "Intake" });
+    expect(labels(run.calls)).toEqual(["config", "preflight", "intake:audit"]);
+    expect(run.calls.filter((c) => c.prompt.includes(steered))).toEqual([]);
+  });
+
+  it("the ship stop tells the main thread to show the run summary on its review page", async () => {
+    const { stopped } = await runHappy();
+    expect((stopped.result as { next: string }).next).toContain(`bun scripts/run-telemetry.ts summary ${SLUG}\``);
+    expect((stopped.result as { next: string }).next).toContain(`ingest ${SLUG} ship-feature`);
+  });
+});
+
+describe("ship-feature: every commit subject and PR title it writes passes the repo's commitlint config", () => {
+  const stackPlanOf = (calls: AgentCall[]) => {
+    const prompt = find(calls, "contract:branch").prompt;
+    const json = prompt.slice(prompt.indexOf("{\n"), prompt.lastIndexOf("}") + 1);
+    return JSON.parse(json) as { prs: { title: string; message: string }[] };
+  };
+  const quotedAfter = (prompt: string, flag: string) => [...prompt.matchAll(new RegExp(`${flag} '([^']*)'`, "g"))].map((m) => m[1] ?? "");
+  const verdictOf = async (titles: string[]) => Promise.all(titles.map(async (t) => [t, (await lintTitle(t)).valid] as const));
+
+  it("lints the stacked commit subjects, the stacked PR titles and the roll-up title, for a plan whose titles are plain words (a bare 'Widget data' would be refused by the PR title job)", async () => {
+    const { shipped } = await runHappy();
+    const plan = stackPlanOf(shipped.calls);
+    const subjects = plan.prs.map((p) => p.message.split("\n")[0] ?? "");
+    const openTitles = find(shipped.calls, "open:prs").prompt.split("\n").flatMap((l) => (l.match(/title='([^']*)'/) ? [l.match(/title='([^']*)'/)?.[1] ?? ""] : []));
+    const rollupTitles = quotedAfter(find(shipped.calls, "rollup:pr").prompt, "--title");
+    const all = [...subjects, ...plan.prs.map((p) => p.title), ...openTitles, ...rollupTitles];
+    expect(all.length).toBeGreaterThanOrEqual(7);
+    expect((await verdictOf(all)).filter(([, valid]) => !valid)).toEqual([]);
+  });
+
+  it("keeps a conforming plan title as written, and a roll-up of fixes is typed fix, not feat (the version script reads the type)", async () => {
+    const fixPlan = { ...PLAN, prs: [{ ...PR1, title: "fix(db): add the widget guard" }, { ...PR2, title: "fix(ui): show the widget error" }] };
+    const stopped = await dryRun("ship-feature", { args: ARGS, answers: happy([["intake:record", fixPlan]]) });
+    const run = await dryRun("ship-feature", { args: approve(), answers: happy([["intake:record", fixPlan]]), resumeFrom: stopped });
+    const plan = stackPlanOf(run.calls);
+    expect(plan.prs.map((p) => p.message.split("\n")[0])).toEqual(["fix(db): add the widget guard", "fix(ui): show the widget error"]);
+    expect(quotedAfter(find(run.calls, "rollup:pr").prompt, "--title")).toEqual(["fix: Demo widget"]);
+  });
+
+  it("types the roll-up feat when any stacked PR is a feat: a feature with one new screen is a minor bump", async () => {
+    const mixed = { ...PLAN, prs: [{ ...PR1, title: "fix(db): add the widget guard" }, { ...PR2, title: "feat(ui): add the widget screen" }] };
+    const stopped = await dryRun("ship-feature", { args: ARGS, answers: happy([["intake:record", mixed]]) });
+    const run = await dryRun("ship-feature", { args: approve(), answers: happy([["intake:record", mixed]]), resumeFrom: stopped });
+    expect(quotedAfter(find(run.calls, "rollup:pr").prompt, "--title")).toEqual(["feat: Demo widget"]);
+  });
+
+  const shipWith = async (plan: typeof PLAN, over: AnswerRule[] = []) => {
+    const answers = happy([["intake:record", plan], ...over]);
+    const stopped = await dryRun("ship-feature", { args: ARGS, answers });
+    return dryRun("ship-feature", { args: approve(), answers, resumeFrom: stopped });
+  };
+
+  it("gives a roll-up with a breaking stacked PR a feat! title that lints clean: a lost ! would ship a breaking stack as a minor", async () => {
+    const breaking = { ...PLAN, prs: [{ ...PR1, title: "feat(db)!: drop the old widget column" }, { ...PR2, title: "fix(ui): show the widget error" }] };
+    const run = await shipWith(breaking);
+    const [title] = quotedAfter(find(run.calls, "rollup:pr").prompt, "--title");
+    expect(title).toBe("feat!: Demo widget");
+    expect((await lintTitle(title ?? "")).problems).toEqual([]);
+    const fixOnly = { ...PLAN, prs: [{ ...PR1, title: "fix(db)!: drop the old column" }, { ...PR2, title: "fix(ui): show the error" }] };
+    expect(quotedAfter(find((await shipWith(fixOnly)).calls, "rollup:pr").prompt, "--title")).toEqual(["fix!: Demo widget"]);
+  });
+
+  it("does not double-prefix a plan title that is already conventional", async () => {
+    const run = await shipWith({ ...PLAN, title: "feat(db): Demo widget" });
+    expect(quotedAfter(find(run.calls, "rollup:pr").prompt, "--title")).toEqual(["feat: Demo widget"]);
+  });
+
+  it("names the same roll-up title in the retry hint as in the command, when the merge step stops half way", async () => {
+    const run = await shipWith(PLAN, [["rollup:pr", { ok: false, failed_command: "gh pr merge 102", merged: [101] }]]);
+    const [title] = quotedAfter(find(run.calls, "rollup:pr").prompt, "--title");
+    expect(title).toBe("feat: Demo widget");
+    expect(JSON.stringify(run.result)).toContain(`--title '${title}'`);
+  });
+
+  const chars = (n: number) => "word ".repeat(Math.ceil(n / 5)).slice(0, n).trimEnd();
+  const MAX = 100;
+
+  it("keeps a roll-up of a 95-character plain plan title within 100 characters and lint clean: 'feat: ' plus 95 is 101 and the roll-up PR would fail its title check", async () => {
+    const run = await shipWith({ ...PLAN, title: chars(95) });
+    const [title] = quotedAfter(find(run.calls, "rollup:pr").prompt, "--title");
+    expect((title ?? "").length).toBeLessThanOrEqual(MAX);
+    expect(title).toMatch(/^feat: word/);
+    expect((await lintTitle(title ?? "")).problems).toEqual([]);
+  });
+
+  it("keeps a 100-character conventional stacked title as written", async () => {
+    const exact = `fix(ui): ${chars(MAX - 9)}`;
+    expect(exact).toHaveLength(MAX);
+    const run = await shipWith({ ...PLAN, prs: [{ ...PR1, title: exact }, { ...PR2, title: "fix(ui): show the error" }] });
+    expect(stackPlanOf(run.calls).prs[0]?.message.split("\n")[0]).toBe(exact);
+  });
+
+  it("cuts a long stacked title in the subject only and leaves it lint clean, with the breaking mark kept", async () => {
+    const long = `feat(db)!: ${chars(150)}`;
+    const run = await shipWith({ ...PLAN, prs: [{ ...PR1, title: long }, { ...PR2, title: "fix(ui): show the error" }] });
+    const subject = stackPlanOf(run.calls).prs[0]?.message.split("\n")[0] ?? "";
+    expect(subject.length).toBeLessThanOrEqual(MAX);
+    expect(subject).toMatch(/^feat\(db\)!: word/);
+    expect(subject).not.toMatch(/[\s.]$/);
+    expect((await lintTitle(subject)).problems).toEqual([]);
+    const [rollup] = quotedAfter(find(run.calls, "rollup:pr").prompt, "--title");
+    expect(rollup).toMatch(/^feat!: /);
+    expect((await lintTitle(rollup ?? "")).problems).toEqual([]);
   });
 });

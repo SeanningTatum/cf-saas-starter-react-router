@@ -1,22 +1,23 @@
 import { describe, expect, it } from "vitest";
+import { BROWSER_REPORT_PATH, CSP_REPORT_GROUP } from "@/lib/constants/error-reporting";
 import {
   assetHeadersFile,
   makeNonce,
   securityHeaders,
   withSecurityHeaders,
 } from "../security-headers";
+import { TURNSTILE_ORIGIN } from "@/lib/constants/turnstile";
 
 const NONCE = "dGVzdC1ub25jZS0xMjM0NQ==";
 
 describe("securityHeaders", () => {
-  // `-u` rewrites this snapshot and public/_headers together, so allowing a
-  // host is one edit in the module plus one command; the diff shows the change.
-  it("sets the exact production header set (catches any silent loosening of the policy)", () => {
+  it("sets the exact production header set, so no silent loosening of the policy passes (update it with -u, see docs/security-headers.md)", () => {
     expect(securityHeaders({ nonce: NONCE })).toMatchInlineSnapshot(`
       {
-        "Content-Security-Policy": "default-src 'self'; script-src 'self' 'nonce-dGVzdC1ub25jZS0xMjM0NQ=='; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob: https://github.com https://avatars.githubusercontent.com; connect-src 'self'; frame-ancestors 'none'; object-src 'none'; base-uri 'self'; form-action 'self'; upgrade-insecure-requests",
+        "Content-Security-Policy": "default-src 'self'; script-src 'self' https://challenges.cloudflare.com 'nonce-dGVzdC1ub25jZS0xMjM0NQ=='; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob: https://github.com https://avatars.githubusercontent.com; connect-src 'self'; frame-src 'self' https://challenges.cloudflare.com; frame-ancestors 'none'; object-src 'none'; base-uri 'self'; form-action 'self'; upgrade-insecure-requests; report-uri /api/browser-report; report-to csp",
         "Permissions-Policy": "accelerometer=(), camera=(), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), payment=(), usb=()",
         "Referrer-Policy": "strict-origin-when-cross-origin",
+        "Reporting-Endpoints": "csp="/api/browser-report"",
         "Strict-Transport-Security": "max-age=31536000",
         "X-Content-Type-Options": "nosniff",
         "X-Frame-Options": "DENY",
@@ -29,15 +30,34 @@ describe("securityHeaders", () => {
     expect(securityHeaders({ nonce: NONCE, dev: true })).toEqual({
       ...prod,
       "Content-Security-Policy": prod["Content-Security-Policy"]
-        .replace("connect-src 'self'", "connect-src 'self' ws:")
-        .replace("; upgrade-insecure-requests", ""),
+        ?.replace("connect-src 'self'", "connect-src 'self' ws:")
+        ?.replace("; upgrade-insecure-requests", ""),
     });
   });
 
-  it("without a nonce allows only same-origin scripts (catches an empty or literal 'nonce-undefined')", () => {
+  it("sends CSP violations to the browser report endpoint in prod and dev, so that a blocked script or host is never silent", () => {
+    for (const dev of [false, true]) {
+      const headers = securityHeaders({ nonce: NONCE, dev });
+      const directives = headers["Content-Security-Policy"]?.split("; ") ?? [];
+      expect(directives).toContain(`report-uri ${BROWSER_REPORT_PATH}`);
+      expect(directives).toContain(`report-to ${CSP_REPORT_GROUP}`);
+      expect(headers["Reporting-Endpoints"]).toBe(`${CSP_REPORT_GROUP}="${BROWSER_REPORT_PATH}"`);
+    }
+  });
+
+  it("without a nonce allows only same-origin and Turnstile scripts (catches an empty or literal 'nonce-undefined')", () => {
     const csp = securityHeaders()["Content-Security-Policy"];
-    expect(csp).toContain("script-src 'self';");
+    expect(csp).toContain(`script-src 'self' ${TURNSTILE_ORIGIN};`);
     expect(csp).not.toContain("nonce-");
+  });
+
+  it("lets the Turnstile widget load its script and frame, and nothing more from its host", () => {
+    const directives = (securityHeaders()["Content-Security-Policy"] ?? "").split("; ");
+    const withTurnstile = directives
+      .filter((d) => d.includes(TURNSTILE_ORIGIN))
+      .map((d) => d.split(" ")[0]);
+    expect(withTurnstile).toEqual(["script-src", "frame-src"]);
+    expect(directives).toContain(`frame-src 'self' ${TURNSTILE_ORIGIN}`);
   });
 });
 

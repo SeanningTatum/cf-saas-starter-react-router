@@ -1,7 +1,15 @@
-import { useEffect, useRef, type ChangeEvent, type DragEvent, type KeyboardEvent } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  type ChangeEvent,
+  type DragEvent,
+  type KeyboardEvent,
+} from "react";
 import { useMachine } from "@xstate/react";
 import { useTranslation } from "react-i18next";
 import { cn } from "@/lib/utils";
+import { MAX_UPLOAD_SIZE_BYTES } from "@/lib/constants/upload";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { fileUploadMachine, type UploadFailure } from "./file-upload.machine";
@@ -10,35 +18,26 @@ interface FileUploadProps {
   onUploadSuccess?: (key: string) => void;
   onUploadError?: (error: string) => void;
   accept?: string;
-  /** In bytes. Read once, when the component mounts. */
   maxSize?: number;
   className?: string;
 }
 
 const toMB = (bytes: number) => (bytes / 1024 / 1024).toFixed(0);
 
-// React escapes text already; i18next's own escaping turns "/" in a key or "&"
-// in a file name into &#x2F; and &amp; on screen.
-const raw = { interpolation: { escapeValue: false } } as const;
+const skipI18nextEscaping = { interpolation: { escapeValue: false } } as const;
 
-// "image/png,image/jpeg" has no break points and overflows a phone-width zone.
-const formatList = (accept: string) =>
+const listWithBreakPoints = (accept: string) =>
   accept
     .split(",")
     .map((f) => f.trim())
     .filter(Boolean)
     .join(", ");
 
-/**
- * Drop zone that uploads one file to /api/upload-file. Its behaviour lives in
- * file-upload.machine.ts; this component only renders the machine's state and
- * forwards DOM events to it. `data-state` on the root mirrors that state.
- */
 export function FileUpload({
   onUploadSuccess,
   onUploadError,
   accept,
-  maxSize = 10 * 1024 * 1024,
+  maxSize = MAX_UPLOAD_SIZE_BYTES,
   className,
 }: FileUploadProps) {
   const { t } = useTranslation("upload");
@@ -47,16 +46,19 @@ export function FileUpload({
   const { file, key, error } = snapshot.context;
   const limit = toMB(snapshot.context.maxSize);
 
-  const describe = (failure: UploadFailure): string => {
-    switch (failure.reason) {
-      case "too_big":
-        return t("size_limit_exceeded", { size: limit });
-      case "rejected":
-        return failure.message;
-      case "unreachable":
-        return t("unreachable");
-    }
-  };
+  const describe = useCallback(
+    (failure: UploadFailure): string => {
+      switch (failure.reason) {
+        case "too_big":
+          return t("size_limit_exceeded", { size: limit });
+        case "rejected":
+          return failure.message;
+        case "unreachable":
+          return t("unreachable");
+      }
+    },
+    [t, limit],
+  );
 
   useEffect(() => {
     const uploaded = actorRef.on("uploaded", (e) => onUploadSuccess?.(e.key));
@@ -65,12 +67,9 @@ export function FileUpload({
       uploaded.unsubscribe();
       failed.unsubscribe();
     };
-    // describe only reads t and the size limit, both listed here.
-  }, [actorRef, onUploadSuccess, onUploadError, t, limit]);
+  }, [actorRef, onUploadSuccess, onUploadError, describe]);
 
-  // Focus can stay on the zone during an upload, and `uploading` takes no PICK,
-  // so a file picked then would be dropped. Keep the picker shut.
-  const openPicker = () => {
+  const openPickerUnlessUploading = () => {
     if (!snapshot.matches("uploading")) fileInputRef.current?.click();
   };
 
@@ -81,8 +80,9 @@ export function FileUpload({
 
   const handleDragLeave = (e: DragEvent<HTMLDivElement>) => {
     e.preventDefault();
-    // dragleave also fires when the pointer moves onto a child of the zone.
-    if (e.relatedTarget instanceof Node && e.currentTarget.contains(e.relatedTarget)) return;
+    const pointerMovedOntoAChild =
+      e.relatedTarget instanceof Node && e.currentTarget.contains(e.relatedTarget);
+    if (pointerMovedOntoAChild) return;
     send({ type: "DRAG_LEAVE" });
   };
 
@@ -95,7 +95,6 @@ export function FileUpload({
 
   const handleInputChange = (e: ChangeEvent<HTMLInputElement>) => {
     const picked = e.target.files?.[0];
-    // Clear the input so picking the same file again still fires change.
     e.target.value = "";
     if (picked) send({ type: "PICK", file: picked });
   };
@@ -103,7 +102,7 @@ export function FileUpload({
   const handleKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
     if (e.key === "Enter" || e.key === " ") {
       e.preventDefault();
-      openPicker();
+      openPickerUnlessUploading();
     }
   };
 
@@ -148,13 +147,14 @@ export function FileUpload({
             className="text-xs text-foreground/90 mb-4 font-mono max-w-full break-all text-center"
             data-testid="file-upload-key"
           >
-            {t("key_label", { key, ...raw })}
+            {t("key_label", { key, ...skipI18nextEscaping })}
           </p>
           <Button onClick={reset} variant="outline" size="sm" data-testid="file-upload-reset">
             {t("upload_another")}
           </Button>
         </div>
       ) : (
+        // biome-ignore lint/a11y/useSemanticElements: the zone wraps a file input the upload machine drives; a new element is its own UI change
         <div
           role="button"
           tabIndex={uploading ? -1 : 0}
@@ -163,7 +163,7 @@ export function FileUpload({
           onDragOver={handleDragOver}
           onDragLeave={handleDragLeave}
           onDrop={handleDrop}
-          onClick={openPicker}
+          onClick={openPickerUnlessUploading}
           onKeyDown={handleKeyDown}
           data-testid="file-upload-dropzone"
           className={cn(
@@ -173,7 +173,7 @@ export function FileUpload({
               ? "border-primary bg-primary/5 scale-[1.02] motion-reduce:scale-100"
               : "border-input hover:border-muted-foreground/60",
             "bg-background hover:bg-accent/50 dark:bg-input/10",
-            uploading && "pointer-events-none opacity-70"
+            uploading && "pointer-events-none opacity-70",
           )}
         >
           {uploading ? (
@@ -181,7 +181,7 @@ export function FileUpload({
               <Spinner size="lg" />
               <div className="text-center">
                 <p className="text-sm font-medium text-foreground max-w-full truncate">
-                  {t("uploading", { name: file?.name, ...raw })}
+                  {t("uploading", { name: file?.name, ...skipI18nextEscaping })}
                 </p>
                 <p className="text-xs text-muted-foreground mt-1">{t("please_wait")}</p>
               </div>
@@ -209,7 +209,10 @@ export function FileUpload({
                 </p>
                 <p className="text-xs text-muted-foreground text-balance break-words">
                   {accept
-                    ? t("dropzone.accepted_formats", { formats: formatList(accept), ...raw })
+                    ? t("dropzone.accepted_formats", {
+                        formats: listWithBreakPoints(accept),
+                        ...skipI18nextEscaping,
+                      })
                     : t("dropzone.any_file_type")}
                 </p>
                 <p className="text-xs text-muted-foreground mt-1">

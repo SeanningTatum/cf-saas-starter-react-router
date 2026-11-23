@@ -1,7 +1,7 @@
 import { createTRPCContext } from "@/trpc";
 import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
 import { appRouter } from "@/trpc/router";
-import { loggers } from "@/lib/logger";
+import { API_ROUTES } from "@/lib/constants/routes";
 
 import type { Route } from "./+types/trpc.$";
 
@@ -9,7 +9,7 @@ import type { AppLoadContext } from "react-router";
 
 const handler = async (req: Request, context: AppLoadContext) => {
   return fetchRequestHandler({
-    endpoint: "/api/trpc",
+    endpoint: API_ROUTES.trpc,
     router: appRouter,
     req,
     createContext: () =>
@@ -17,11 +17,8 @@ const handler = async (req: Request, context: AppLoadContext) => {
         headers: req.headers,
         runtime: context.runtime,
       }),
-    onError({ error, path }) {
-      loggers.trpc.error(
-        { path, code: error.code, stack: error.stack },
-        error.message
-      );
+    onError({ error }) {
+      context.reportError({ error, source: "trpc" });
     },
   });
 };

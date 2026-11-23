@@ -2,18 +2,16 @@
 
 `CLAUDE.md` is a symlink to this file. **Edit `AGENTS.md` only**; never replace the symlink with a real file. Workflows, commands, gates, installs: [`docs/agents/harness.md`](docs/agents/harness.md).
 
-## Overview
+**Where a rule goes.** A rule a tool can check goes in Biome (`biome.jsonc`) when a built-in rule states it exactly, else in the house linter (`scripts/lint/rules/`, one file per rule) or in a test; its finding says the fix, so it needs no prose here. Only a rule that needs judgment goes in this file. `bun run lint <files>` checks an edit ([`docs/agents/lint.md`](docs/agents/lint.md)); the house rules and how to add one: [`docs/agents/lint-rules.md`](docs/agents/lint-rules.md).
 
-SaaS starter on **Cloudflare Workers + React Router v7 + tRPC + D1/Drizzle + Better Auth + Effect TS + ShadCN/Tailwind**.
-
-**Retrieval over recall.** Read the issue, `context-memory` recall, `GLOSSARY.md` and `docs/adr/` first. Training data is not project state.
+SaaS starter on **Cloudflare Workers + React Router v7 + tRPC + D1/Drizzle + Better Auth + Effect TS + ShadCN/Tailwind**. **Retrieval over recall:** read the issue, `context-memory` recall, `GLOSSARY.md` and `docs/adr/` first. Training data is not project state.
 
 ## Where things live
 
 | What | Where |
 |------|-------|
 | Work, specs, tickets | GitHub issues ([`docs/agents/issue-tracker.md`](docs/agents/issue-tracker.md)); `--label ready-for-agent` |
-| Domain terms | `GLOSSARY.md`  |
+| Domain terms | `GLOSSARY.md`; add each new term |
 | Hard-to-reverse decisions | `docs/adr/NNNN-<slug>.md` ([`docs/agents/domain.md`](docs/agents/domain.md)) |
 | Proof a flow works | `.verify/<slug>/` (screenshots, videos + `verdict.md`, gitignored), pasted in the PR; smoke videos from the `@golden`/`@error` specs, demos via `scripts/lib/record.ts` ([videos](docs/agents/harness.md#walkthrough-videos)) |
 | Working memory per feature | [`context-memory`](.claude/agents/context-memory.md) store outside the repo (`./scripts/memory-dir.sh`) |
@@ -25,11 +23,11 @@ SaaS starter on **Cloudflare Workers + React Router v7 + tRPC + D1/Drizzle + Bet
 
 1. **Start:** `context-memory` recall, `gh issue view <n>`, `./scripts/verify.sh --baseline`. If red, stop and say so.
 2. **Plan** (when a decision is involved): `/grill-me` or `/grill-with-docs`, then `/to-spec`, then `/to-tickets`.
-3. **Work:** one ticket at a time, lanes in parallel (below).
+3. **Work:** one ticket at a time (`gh issue edit <n> --add-assignee @me`), lanes in parallel (below).
 4. **Verify:** `feature-verifier` browser-walks any user-visible flow.
-5. **Done:** `./scripts/verify.sh` green, PASS verdict in the PR, PR has `Closes #<n>`, one `context-memory` record. A stacked feature merges on the [merge bar](docs/agents/harness.md#review-loop-and-merge-bar): local reviews with no open P0/P1, Greptile 5/5 on the roll-up's current head only (not per stacked PR).
+5. **Done:** `./scripts/verify.sh` green, PASS verdict in the PR (user-visible work), PR has `Closes #<n>`, one `context-memory` record. A stacked PR runs `./scripts/verify.sh --changed <branch below>` only; the full suite, a second review round and Greptile run once, on the roll-up's head ([merge bar](docs/agents/harness.md#review-loop-and-merge-bar): no open P0/P1, Greptile 5/5).
 
-Trivial edits (typo, comment, one line) skip the bookends, but never skip `./scripts/verify.sh` on user-visible work. `./scripts/verify.sh` runs every gate, `--baseline` the quick set; the list is in `scripts/verify.sh`.
+Trivial edits (typo, one line) skip the bookends, but never skip `./scripts/verify.sh` on user-visible work. `./scripts/verify.sh` runs every gate, `--baseline` the quick set, `--changed` what a stacked diff needs; the list is in `scripts/verify.sh`. **Scope creep:** a diff that touches more than two tickets stops and splits; a cross-feature refactor is its own ticket.
 
 ## Delegate in parallel
 
@@ -42,12 +40,6 @@ Any change beyond one file runs as parallel sub-agents, not one long thread.
 5. **Converge:** the main thread reads every report, re-dispatches the owner of each P0/P1, then runs Done. Lanes never record.
 
 `plan-feature` plans a feature (ticket or idea to a decision record on the issue); `ship-feature` builds, reviews and opens it as stacked PRs. Stay sequential for a one-file change, an unknown interface, a red baseline, or lanes sharing a file.
-
-## Scope policy
-
-- **One ticket in progress at a time.** Assign yourself (`gh issue edit <n> --add-assignee @me`).
-- **Done** is Workflow step 5, plus a PASS `feature-verifier` verdict for user-visible work.
-- **Scope creep:** if you touch >2 tickets in one diff, stop and split. A cross-feature refactor is its own ticket.
 
 ## Frontend tasks: load a design skill every time
 
@@ -62,34 +54,26 @@ Load one of these before the first UI edit; one lead per surface. Use the plain 
 | Finish pass before verify, any surface | `impeccable` `audit` / `harden` / `polish` |
 | Motion | `emil-design-eng` + `animate` (build) · `review-animations` (critique) |
 
-Every UI agent reads `PRODUCT.md` and `DESIGN.md` before its first edit (a fresh fork runs `brand-init` first).
+Every UI agent reads `PRODUCT.md` and `DESIGN.md` before its first edit (a fresh fork runs `brand-init` first). `ui-ux-pro-max` (a11y) still applies. Tokens in `app/app.css` beat every skill.
 
 **Critique gates the work.** Judge desktop and mobile screenshots. App screens: fix every `impeccable` P0/P1, then critique again. Public pages: run the taste loop up to three rounds; a page under 7.5 is reported as such, never rounded up. Paste the last critique into the verdict.
 
-`ui-ux-pro-max` (a11y) still applies. Tokens in `app/app.css` beat every skill.
-
 ## Five non-negotiables
 
-Enforced by `scripts/check-non-negotiables.ts`.
+One line each, as orientation. The `lint` gate (`bun run lint`) checks all five and prints the fix.
 
-1. **Effect TS** is the default. No `throw`, no `try/catch` outside `Effect.tryPromise`.
-2. **Effect Schema** for all validation. **No Zod.**
-3. **Tagged errors** in `app/models/errors/`. Map in `app/lib/effect-trpc.ts`.
-4. **Unit test for every helper and repository.**
-5. **Cloudflare Workers, not Node.** Bindings via `CloudflareEnv` Tag or `context.cloudflare.env`. Never `process.env`.
+1. **Effect TS** is the default: failures travel in the Effect error channel.
+2. **Effect Schema** for all validation.
+3. **Tagged errors** in `app/models/errors/`, each mapped to a tRPC error.
+4. **Every source file has its proof:** a unit test, a paths spec, an e2e spec or another kind, as `scripts/lint/test-map.json` says for its folder.
+5. **Cloudflare Workers, not Node:** bindings come from the `CloudflareEnv` Tag or `context.cloudflare.env`.
 
 ## When you change something
 
 | Change | Do |
 |--------|----|
-| New tagged error | Add it to `tagToTRPC` in `app/lib/effect-trpc.ts` |
-| New helper or repository | Add its unit test in the same diff |
-| New / changed tRPC procedure | Add it to `LEVELS` (and `OWNERSHIP` if `protected`) in `app/trpc/__tests__/router.test.ts`; cap every string and array in its input (`input-bounds.test.ts`) |
+| New / changed migration | Add, backfill, switch reads and writes, drop later, each in its own deploy: every migration must work with the code before it and the code after it. Never edit a merged migration. A `DROP`, `RENAME` or `NOT NULL` column with no default needs `drizzle/<name>.reason.md`. Way back: [`docs/ci/rollback.md`](docs/ci/rollback.md) |
 | New / changed DB table or user-visible data | Extend the fixtures in `scripts/seed-preview.ts` |
-| New / changed user-visible flow | `feature-verifier` → `.verify/<slug>/verdict.md`, in the PR |
 | New / changed component driven by a `*.machine.ts` | Unit tests on the machine own the logic: every transition, guard and reachable state. The e2e spec owns the wiring: generated paths that hit each DOM binding and each state's view once, never one per transition (model: `e2e/file-upload.paths.spec.ts`) |
 | New / changed workflow | Edit `.claude/workflow-src/`, never `.claude/workflows/`; `bun scripts/workflows.ts build`; a dry-run test for the new branch ([how](docs/agents/harness.md#editing-a-workflow)) |
-| New / changed feature | A GitHub issue (`/to-spec`, `/to-tickets`); its PR closes it |
-| A new domain term | `GLOSSARY.md`  |
-| A decision worth keeping | `context-memory` record (dated, why); an ADR if hard to reverse; an agent rule goes in this file |
-| Stopping mid-feature | `context-memory` record: where you stopped, what is next, open todos |
+| A decision worth keeping | `context-memory` record (dated, why); an ADR if hard to reverse; where you stopped and what is next when you stop mid-feature |

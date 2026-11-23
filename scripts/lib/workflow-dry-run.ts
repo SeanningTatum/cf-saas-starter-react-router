@@ -15,8 +15,12 @@
 import { appendFileSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { Either } from "effect";
+import { configChecksum, HARNESS_ROOT, loadHarnessConfig, loadHarnessConfigFromDisk, shownConfig, type HarnessConfig } from "./harness-config";
+import { CONFIG_FILE_NAME } from "./harness-config-constants";
+import { parseLedger, type LedgerCall } from "./run-telemetry";
 
-export interface AgentOpts {
+interface AgentOpts {
   label?: string;
   phase?: string;
   schema?: unknown;
@@ -42,13 +46,13 @@ export interface AgentCall {
 
 /** What an answer function sees: the call, and how many calls this rule has answered before it. */
 export type AnswerInput = Omit<AgentCall, "cached" | "result"> & { nth: number };
-export type Answer = unknown | ((call: AnswerInput) => unknown);
+type Answer = unknown | ((call: AnswerInput) => unknown);
 /** A string matches the whole label; a RegExp tests the label; a function sees the call. */
-export type Matcher = string | RegExp | ((call: Omit<AnswerInput, "nth">) => boolean);
+type Matcher = string | RegExp | ((call: Omit<AnswerInput, "nth">) => boolean);
 /** `[matcher, answer]`. The first rule that matches answers. Answer `null` is an agent that died. */
 export type AnswerRule = [Matcher, Answer];
 
-export interface WorkflowMeta {
+interface WorkflowMeta {
   name: string;
   description: string;
   whenToUse?: string;
@@ -101,8 +105,7 @@ type Schema = {
   enum?: unknown[];
 };
 
-const typeOf = (v: unknown): string =>
-  v === null ? "null" : Array.isArray(v) ? "array" : Number.isInteger(v) ? "integer" : typeof v;
+const typeOf = (v: unknown): string => (v === null ? "null" : Array.isArray(v) ? "array" : Number.isInteger(v) ? "integer" : typeof v);
 
 /** The JSON Schema keywords the workflows use: type, properties, required, additionalProperties, items, enum. */
 export function schemaErrors(schema: unknown, value: unknown, path = "$"): string[] {
@@ -127,7 +130,10 @@ export function schemaErrors(schema: unknown, value: unknown, path = "$"): strin
       else if (s.additionalProperties && typeof s.additionalProperties === "object") errors.push(...schemaErrors(s.additionalProperties, v, `${path}.${k}`));
     }
   }
-  if (Array.isArray(value) && s.items) value.forEach((v, i) => errors.push(...schemaErrors(s.items, v, `${path}[${i}]`)));
+  if (Array.isArray(value) && s.items)
+    value.forEach((v, i) => {
+      errors.push(...schemaErrors(s.items, v, `${path}[${i}]`));
+    });
   return errors;
 }
 
@@ -217,8 +223,8 @@ export async function dryRun(name: string, options: DryRunOptions): Promise<DryR
           let prev: unknown = item;
           for (const stage of stages) prev = await stage(prev, item, i);
           return prev;
-        })
-      )
+        }),
+      ),
     );
   const phase = (title: string) => {
     currentPhase = title;
@@ -242,7 +248,15 @@ export async function dryRun(name: string, options: DryRunOptions): Promise<DryR
   // JSON line. Diff two trace files to prove an edit to a workflow changed no prompt.
   const traceFile = process.env.WORKFLOW_DRY_RUN_TRACE;
   if (traceFile) {
-    const trace = { name, args: options.args, calls: calls.map(({ prompt, opts, cached, result: r }) => ({ prompt, opts, cached, result: r })), logs, phases, result, threw: thrown ? String(thrown) : null };
+    const trace = {
+      name,
+      args: options.args,
+      calls: calls.map(({ prompt, opts, cached, result: r }) => ({ prompt, opts, cached, result: r })),
+      logs,
+      phases,
+      result,
+      threw: thrown ? String(thrown) : null,
+    };
     appendFileSync(traceFile, `${JSON.stringify(trace)}\n`);
   }
   if (problems.length) {
@@ -253,3 +267,49 @@ export async function dryRun(name: string, options: DryRunOptions): Promise<DryR
   if (!metaBox.value) throw new Error(`${file}: meta was never set`);
   return { meta: metaBox.value, result, calls, live: calls.filter((c) => !c.cached), logs, phases };
 }
+
+/** A call as a ledger row shows it: label, phase and agent type, `""` when it has none. */
+export const callShape = (c: AgentCall) => ({ label: c.label, phase: c.opts.phase ?? "", agent: c.opts.agentType ?? "" });
+
+/** A ledger row cut to the same three fields as `callShape`. */
+export const rowShape = (rows: { label: string; phase: string; agent: string }[]) => rows.map(({ label, phase, agent }) => ({ label, phase, agent }));
+
+/** What a stubbed runner prints when the ledger write worked. */
+export const RUN_OK = "run-telemetry: recorded 1 calls for x in .verify/x/run.json";
+
+/** The ledger a `run:record` prompt carries, read by the same parser scripts/run-telemetry.ts uses; `verifies` is false when that parser refuses it. */
+export function ledgerOf(prompt: string): { workflow: string; slug: string; rows: LedgerCall[]; verifies: boolean } {
+  const m = /bun scripts\/run-telemetry\.ts record (\S+) (\S+) <<'RUN_EOF'\n([\s\S]*)\nRUN_EOF$/.exec(prompt);
+  const [, slug, workflow, body] = m ?? [];
+  if (slug === undefined || workflow === undefined || body === undefined) throw new Error(`not a run-telemetry record command: ${prompt.slice(-200)}`);
+  const parsed = parseLedger(body);
+  return "error" in parsed ? { slug, workflow, rows: [], verifies: false } : { slug, workflow, rows: parsed.calls, verifies: true };
+}
+
+/** The ledger in the call labelled `label`, with that call's position: its rows should match the calls before it. */
+export function ledgerAt(result: DryRunResult, label: string) {
+  const at = result.calls.findIndex((c) => c.label === label);
+  const call = result.calls[at];
+  if (!call) throw new Error(`no call labelled ${label}; got ${labels(result.calls).join(", ")}`);
+  return { at, ...ledgerOf(call.prompt) };
+}
+
+export const configLine = (change: (config: HarnessConfig) => HarnessConfig = (config) => config): string => {
+  const config = shownConfig(change(loadHarnessConfigFromDisk()));
+  return JSON.stringify({ config, check: configChecksum(config) });
+};
+
+const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null && !Array.isArray(value);
+
+/** The line `show` prints for this repo's file with `patch` laid over it (one level deep), loaded as typed: the loader's folder rules apply. */
+export const configLineFromFile = (patch: Record<string, unknown>): string => {
+  const file: unknown = JSON.parse(readFileSync(join(HARNESS_ROOT, CONFIG_FILE_NAME), "utf8"));
+  if (!isRecord(file)) throw new Error(`${CONFIG_FILE_NAME} is not an object`);
+  const merged = Object.fromEntries(
+    Object.entries(patch).map(([key, value]) => [key, isRecord(file[key]) && isRecord(value) ? { ...file[key], ...value } : value]),
+  );
+  const loaded = loadHarnessConfig({ root: HARNESS_ROOT, readFile: () => JSON.stringify({ ...file, ...merged }) });
+  if (Either.isLeft(loaded)) throw new Error(loaded.left);
+  const config = shownConfig(loaded.right);
+  return JSON.stringify({ config, check: configChecksum(config) });
+};

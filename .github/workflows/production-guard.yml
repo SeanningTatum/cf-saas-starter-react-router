@@ -1,0 +1,35 @@
+# Only `staging` may be merged into `production`.
+#
+# GitHub rulesets can't restrict a PR's SOURCE branch, so this job is the
+# gate: the `production` ruleset lists "Source branch is staging" as a
+# required status check. A PR into production from any other branch (or from
+# a fork's `staging`) fails this check and can't be merged.
+#
+# `edited` is included so retargeting an existing PR to production re-runs it.
+name: Production Guard
+
+on:
+  pull_request:
+    branches: [production]
+    types: [opened, synchronize, reopened, edited]
+
+permissions:
+  contents: read
+
+jobs:
+  source-branch:
+    name: Source branch is staging
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Only staging may merge into production
+        env:
+          HEAD_REF: ${{ github.head_ref }}
+          HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+          REPO: ${{ github.repository }}
+        run: |
+          if [ "$HEAD_REF" != "staging" ] || [ "$HEAD_REPO" != "$REPO" ]; then
+            echo "::error::Only $REPO:staging can be merged into production (this PR is from $HEAD_REPO:$HEAD_REF)."
+            exit 1
+          fi
+          echo "OK: staging -> production"

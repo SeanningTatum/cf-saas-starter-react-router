@@ -6,9 +6,23 @@
  * This workflow has no fix round (it audits and scores once), so there is nothing to test there.
  */
 import { describe, expect, it } from "vitest";
-import { dryRun, labels, type AnswerRule, type DryRunResult } from "../../lib/workflow-dry-run";
+import { dryRun, labels, ledgerOf, callShape, rowShape, RUN_OK, type AnswerRule, type DryRunResult } from "../../lib/workflow-dry-run";
 
-const IDS = ["problem", "user", "fit", "duplicate", "acceptance", "non_goals", "metric", "ui_states", "data", "roles", "i18n_analytics", "errors", "non_negotiables"];
+const IDS = [
+  "problem",
+  "user",
+  "fit",
+  "duplicate",
+  "acceptance",
+  "non_goals",
+  "metric",
+  "ui_states",
+  "data",
+  "roles",
+  "i18n_analytics",
+  "errors",
+  "non_negotiables",
+];
 const BANDS = ["typical", "edge", "adversarial", "refuse"];
 const MENTION_FIELDS = ["amended", "amended.body", "questions", "items.metric.note", "items.*.note"];
 
@@ -29,11 +43,11 @@ const CASES: Case[] = Array.from({ length: 20 }, (_, i) => {
   const field = MENTION_FIELDS[i - 2];
   return {
     id,
-    band: BANDS[i % 4],
+    band: BANDS[i % 4] ?? "",
     frozen: i < 2,
     held_out: i >= 18,
     expect: {
-      verdict: ["ready", "amend", "reject"][i % 3],
+      verdict: ["ready", "amend", "reject"][i % 3] ?? "",
       flagged: i % 2 ? ["metric", "ui_states"] : [],
       not_flagged: ["problem", "user", "fit", "data", "roles", "i18n_analytics"],
       ...(field ? { mentions: [{ field, text: `Secret-${id}` }] } : {}),
@@ -52,21 +66,28 @@ function goodAudit(c: Case): Audit {
   const i = Number(c.id.slice(5));
   const items: Item[] = IDS.map((id) => ({
     id,
-    status: c.expect.flagged.includes(id) ? ["missing", "guess", "fails"][i % 3] : id === "i18n_analytics" ? "n/a" : "present",
+    status: c.expect.flagged.includes(id) ? (["missing", "guess", "fails"][i % 3] ?? "") : id === "i18n_analytics" ? "n/a" : "present",
     note: `note on ${id}`,
   }));
-  const fill = (id: string, source: string) => Object.assign(items.find((it) => it.id === id)!, { status: "filled", source });
+  const find = (id: string) => {
+    const it = items.find((x) => x.id === id);
+    if (!it) throw new Error(`no item ${id}`);
+    return it;
+  };
+  const fill = (id: string, source: string) => Object.assign(find(id), { status: "filled", source });
   if (i === 7) fill("fit", "features/auth");
   if (i === 8) fill("data", "product; AGENTS.md#non-negotiables");
   if (i === 9) fill("roles", "admin-dashboard");
 
-  const out: Audit = { slug: c.id, verdict: c.expect.verdict, reason: "because", items, amended: { title: "t", body: "b" }, questions: [{ text: "q?" }] };
+  const amended = { title: "t", body: "b" };
+  const questions = [{ text: "q?" }];
+  const out: Audit = { slug: c.id, verdict: c.expect.verdict, reason: "because", items, amended, questions };
   for (const m of c.expect.mentions ?? []) {
     const text = m.text.toUpperCase();
-    if (m.field === "amended") out.amended!.title += ` ${text}`;
-    if (m.field === "amended.body") out.amended!.body += ` ${text}`;
-    if (m.field === "questions") out.questions!.push({ text });
-    if (m.field === "items.metric.note") items.find((it) => it.id === "metric")!.note += ` ${text}`;
+    if (m.field === "amended") amended.title += ` ${text}`;
+    if (m.field === "amended.body") amended.body += ` ${text}`;
+    if (m.field === "questions") questions.push({ text });
+    if (m.field === "items.metric.note") find("metric").note += ` ${text}`;
     // items.*.note is satisfied by the top-level reason too.
     if (m.field === "items.*.note") out.reason += ` ${text}`;
   }
@@ -80,12 +101,15 @@ function answers(cases: Case[] = CASES, override: Record<string, (good: Audit) =
   return [
     ["load metadata", { cases, sources: SOURCES }],
     ["verify loaded copy", { identical: true, diff: "" }],
+    [/^run:record/, RUN_OK],
     [
       /^audit /,
       ({ label }: { label: string }) => {
-        const c = byId.get(label.slice("audit ".length))!;
+        const c = byId.get(label.slice("audit ".length));
+        if (!c) throw new Error(`no case for ${label}`);
         const good = goodAudit(c);
-        return override[c.id] ? override[c.id](good) : good;
+        const replace = override[c.id];
+        return replace ? replace(good) : good;
       },
     ],
   ];
@@ -167,6 +191,32 @@ describe("eval-plan-feature: stops before any audit", () => {
     expect(r.phases).not.toContain("Audit");
   });
 
+  it("after a 'differs from disk' stop, a resume with args.reload loads again and finishes; without it the old load replays and stops again", async () => {
+    const stopped = await dryRun("eval-plan-feature", {
+      args: {},
+      answers: [["verify loaded copy", { identical: false, diff: "< a\n> b" }], ...answers()],
+    });
+    expect(stopped.result).toMatchObject({ stopped: "Load", next: expect.stringContaining("args.reload") });
+
+    const replayed = await dryRun("eval-plan-feature", { args: {}, answers: answers(), resumeFrom: stopped });
+    expect(replayed.live).toEqual([]);
+    expect(replayed.result).toMatchObject({ stopped: "Load" });
+
+    const reloaded = await dryRun("eval-plan-feature", { args: { reload: 1 }, answers: answers(), resumeFrom: stopped });
+    expect(labels(reloaded.live).slice(0, 2)).toEqual(["load metadata", "verify loaded copy"]);
+    expect(reloaded.live[0]?.prompt).toContain("This is reload 1");
+    expect(resultOf(reloaded)).toMatchObject({ score: 20, total: 20, gate: true });
+  });
+
+  it("without args.reload the Load prompt is unchanged, so an eval that never stopped keeps its cached load", async () => {
+    const plain = await dryRun("eval-plan-feature", { args: {}, answers: answers() });
+    expect(plain.calls[0]?.prompt).not.toContain("reload");
+    for (const bad of [0, -1, 1.5, "2", true]) {
+      const r = await dryRun("eval-plan-feature", { args: { reload: bad }, answers: answers() });
+      expect({ bad, prompt: r.calls[0]?.prompt }).toEqual({ bad, prompt: plain.calls[0]?.prompt });
+    }
+  });
+
   it("a loader that died, or an `only` that selects nothing, stops at Load instead of crashing or scoring 0/0", async () => {
     const dead = await dryRun("eval-plan-feature", { args: {}, answers: [["load metadata", null]] });
     expect(dead.result).toMatchObject({ stopped: "Load" });
@@ -179,7 +229,11 @@ describe("eval-plan-feature: stops before any audit", () => {
 });
 
 describe("eval-plan-feature: scoring", () => {
-  const item = (a: Audit, id: string) => a.items.find((it) => it.id === id)!;
+  const item = (a: Audit, id: string) => {
+    const it = a.items.find((x) => x.id === id);
+    if (!it) throw new Error(`no item ${id}`);
+    return it;
+  };
   const edit = (f: (a: Audit) => unknown) => (a: Audit) => {
     f(a);
     return a;
@@ -193,18 +247,35 @@ describe("eval-plan-feature: scoring", () => {
     ["a missing checklist id", "case-10", edit((a) => (a.items = a.items.filter((it) => it.id !== "errors"))), /errors missing from items/],
     ["a filled item with an unknown source", "case-7", edit((a) => (item(a, "fit").source = "features/nope")), /fit filled with unknown source/],
     ["a filled item with no source", "case-7", edit((a) => delete item(a, "fit").source), /fit filled with unknown source/],
-    ["a filled item citing one known and one unknown source", "case-8", edit((a) => (item(a, "data").source = "product; made-up")), /data filled with unknown source/],
-    ["a mention that is absent", "case-3", edit((a) => (a.amended!.body = "nothing here")), /amended.body should mention/],
-    ["an items.<id>.note mention found only in another item's note", "case-5", edit((a) => {
-      const m = item(a, "metric");
-      item(a, "problem").note += m.note;
-      m.note = "plain";
-    }), /items.metric.note should mention/],
+    [
+      "a filled item citing one known and one unknown source",
+      "case-8",
+      edit((a) => (item(a, "data").source = "product; made-up")),
+      /data filled with unknown source/,
+    ],
+    [
+      "a mention that is absent",
+      "case-3",
+      edit((a) => {
+        if (a.amended) a.amended.body = "nothing here";
+      }),
+      /amended.body should mention/,
+    ],
+    [
+      "an items.<id>.note mention found only in another item's note",
+      "case-5",
+      edit((a) => {
+        const m = item(a, "metric");
+        item(a, "problem").note += m.note;
+        m.note = "plain";
+      }),
+      /items.metric.note should mention/,
+    ],
   ])("%s fails that case", async (_name, id, mutate, reason) => {
     const r = await dryRun("eval-plan-feature", { args: {}, answers: answers(CASES, { [id]: mutate }) });
     const bad = failing(r);
     expect(bad.map((c) => c.id)).toEqual([id]);
-    expect(bad[0].reasons.join("; ")).toMatch(reason);
+    expect(bad[0]?.reasons.join("; ")).toMatch(reason);
     expect(resultOf(r).score).toBe(19);
   });
 
@@ -227,5 +298,41 @@ describe("eval-plan-feature: degrade", () => {
       expect(call.prompt).toContain("quick ticket reviewer");
     }
     expect(resultOf(r)).toMatchObject({ degrade: true, total: 20 });
+  });
+});
+
+describe("eval-plan-feature: run ledger", () => {
+  it("the last call is a run:record on the runner that lists the loader, the verifier and every audit, in order, and its check line verifies: an audit that dodges the ledger is missing from the cost report", async () => {
+    const r = await dryRun("eval-plan-feature", { args: {}, answers: answers() });
+    const record = r.calls.at(-1);
+    if (!record) throw new Error("no calls");
+    expect(record.opts).toEqual({ effort: "low", label: "run:record", phase: "Score", agentType: "runner" });
+    const lg = ledgerOf(record.prompt);
+    expect(lg.verifies).toBe(true);
+    expect([lg.workflow, lg.slug]).toEqual(["eval-plan-feature", "eval-plan-feature"]);
+    expect(rowShape(lg.rows)).toEqual(r.calls.slice(0, -1).map(callShape));
+    expect(lg.rows.map((row) => row.label)).toEqual(["load metadata", "verify loaded copy", ...CASES.map((c) => `audit ${c.id}`)]);
+    expect(record.prompt).toContain("Run this command from the repository root exactly as written");
+  });
+
+  it("a run that stops at Load makes no run:record call: there is nothing worth a file yet", async () => {
+    const dead = await dryRun("eval-plan-feature", { args: {}, answers: [["load metadata", null]] });
+    const differs = await dryRun("eval-plan-feature", {
+      args: {},
+      answers: [
+        ["load metadata", { cases: CASES, sources: SOURCES }],
+        ["verify loaded copy", { identical: false, diff: "x" }],
+      ],
+    });
+    const none = await dryRun("eval-plan-feature", { args: { only: ["no-such-case"] }, answers: answers() });
+    for (const r of [dead, differs, none]) expect(labels(r.calls).filter((l) => l.startsWith("run:record"))).toEqual([]);
+  });
+
+  it("a ledger write that fails only logs: the score, the gate and the cases come back as they would have", async () => {
+    const ok = await dryRun("eval-plan-feature", { args: {}, answers: answers() });
+    const failed = await dryRun("eval-plan-feature", { args: {}, answers: [[/^run:record/, "bun: command not found"], ...answers()] });
+    expect(failed.result).toEqual(ok.result);
+    expect(failed.logs.filter((l) => l.startsWith("Run telemetry: not recorded"))).toEqual(["Run telemetry: not recorded (bun: command not found)"]);
+    expect(ok.logs.filter((l) => l.startsWith("Run telemetry"))).toEqual([]);
   });
 });

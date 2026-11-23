@@ -1,7 +1,7 @@
 export const meta = {
   name: "ship-feature",
   description:
-    "Ship a ready ticket, prompt or plan-feature record — specialist build lanes, unit and e2e tests, security, scale and regression review, docs, one stop before push, a local code-review loop on each stacked branch, then stacked PRs with seeded previews, a roll-up PR, and Greptile on the roll-up only",
+    "Ship a ready ticket, prompt or plan-feature record — specialist build lanes, unit and e2e tests, security, scale and regression review, docs, one stop before push, a local code-review loop on each stacked branch, then stacked PRs on lean checks, a roll-up PR with the full suite and a seeded preview, and Greptile on the roll-up only",
   whenToUse:
     "A feature that is already well defined: a plan-feature decision record on the issue, a GitHub issue the ticket-auditor rates ready, or a precise prompt. Not for planning (plan-feature does that), not for a one-file change.",
   phases: [
@@ -14,9 +14,9 @@ export const meta = {
     { title: "Fix", detail: "each P0/P1 goes back to the lane that owns the file; failed checks re-run; two rounds" },
     { title: "Docs", detail: "docs-writer: the record, glossary, ADR, changed docs and one PR body per PR" },
     { title: "Ship", detail: "the @golden and @error specs re-run on video; the run stops on a lavish page: the stack, the verdicts, the open findings, the videos; you approve or ask for changes" },
-    { title: "Split", detail: "split into stacked branches by fence, typecheck and test each on its own" },
-    { title: "Local review", detail: "per stacked branch in order, before any push: the code-review skill (high) on its diff against the branch below, review-responder fixes or declines each P0/P1, restack, re-check; two rounds" },
-    { title: "Open", detail: "more than one PR: push review/<slug> at the base first, PR 1 targets it; push, open the PRs, wait for every PR's checks and the seeded preview, walk the preview" },
+    { title: "Split", detail: "split into stacked branches by fence, then the lean gates on each against the branch below (verify.sh --changed)" },
+    { title: "Local review", detail: "per stacked branch in order, before any push: the code-review skill (high) on its diff against the branch below, review-responder fixes or declines each P0/P1, restack, lean re-check; one round (the second look is Greptile on the roll-up)" },
+    { title: "Open", detail: "more than one PR: push review/<slug> at the base first, PR 1 targets it; push, open the PRs, wait for every PR's checks (lean on a stacked PR; a single PR into the base gets the full suite and its seeded preview, which is walked)" },
     { title: "Rollup", detail: "more than one PR: merge the stacked PRs bottom-up into review/<slug> (merge commits, each retargeted first), then one roll-up PR review/<slug> -> base for the human, all in one step" },
     { title: "Roll-up Greptile", detail: "Greptile on the roll-up (or the single PR) only: one trigger, fixes committed on review/<slug> inside the fence of the stacked PR that owns each file, fast-forward pushed, every GitHub write of a round in one step; three rounds, to 5/5 or every comment declined" },
     { title: "Close", detail: "the roll-up's CI and a walk of its own preview; one working-memory record; the PR links" },
@@ -27,12 +27,12 @@ export const meta = {
  * WHY THIS EXISTS
  *   plan-feature ends with an approved decision record: a contract and a PR stack on disjoint fences.
  *   This workflow takes that record (or a ticket or prompt that is already precise) to open, reviewed
- *   pull requests a human can test in one click: each PR has its own preview with its own seeded D1.
+ *   pull requests a human can test in one click: the roll-up (or the single PR) has a preview with its own seeded D1.
  *
  * SHAPE
  *   The feature is built ONCE, on one working tree, against the contract; lanes own disjoint paths and
  *   run in parallel. It is tested and reviewed as a whole, then split into the stacked branches by
- *   fence only at Split (scripts/stack.ts), and each branch is typechecked and tested on its own. Building
+ *   fence only at Split (scripts/stack.ts), and each branch gets the lean gates against the branch below. Building
  *   each layer on its own branch would mean building and verifying the feature n times.
  *
  * REVIEW: LOCAL PER BRANCH, GREPTILE ON THE ROLL-UP ONLY
@@ -74,13 +74,13 @@ export const meta = {
  *
  * args:
  *   a string: a ticket ref (12, #12, an issue URL) or a prompt
- *   { ticket?, prompt?, record?: path to a decision record, slug?, base?: "main", root?,
+ *   { ticket?, prompt?, record?: path to a decision record, slug?, base?: a branch name (default: the repo's default branch, read at Preflight), root?,
  *     ready?: "override" | "stop", ships?: { "1": { approved, changes? } },
- *     reviewRounds?: number (code-review rounds per stacked branch before push; default 2, 0 skips),
+ *     reviewRounds?: number (code-review rounds per stacked branch before push; default 1, 0 skips),
  *     rollupRounds?: number (Greptile rounds on the roll-up, or the single PR; default 3, 0 skips) }
  */
 // @lib
-const { twice, checkArgs, asker } = workflowLib({ agent, log });
+const { twice, checkArgs, asker, loadConfig, tracked } = workflowLib({ agent, log, name: "ship-feature" });
 
 const ARG_TYPES = [["ticket", "string"], ["prompt", "string"], ["record", "string"], ["slug", "string"], ["base", "string"], ["root", "string"], ["ready", "string"], ["ships", "object"], ["reviewRounds", "number"], ["rollupRounds", "number"]];
 const input = parseArgs(args, "prompt");
@@ -97,12 +97,37 @@ if (!input.ticket && !input.prompt && !input.record) {
 if (input.slug !== undefined && !SLUG.test(input.slug)) {
   return { error: "args.slug must be kebab-case" };
 }
-const BASE = input.base || "main";
+// BASE: the caller's base, else the config's baseBranch (set after the config step), else Preflight asks `bun scripts/default-branch.ts`.
+let BASE = "";
 // POSIX single-quote: nothing inside is expanded, so ticket or plan text can never run as a command.
 const shq = (v) => `'${String(v).replace(/'/g, `'\\''`)}'`;
-const REVIEW_ROUNDS = Math.max(0, Math.min(3, input.reviewRounds ?? 2));
+const REVIEW_ROUNDS = Math.max(0, Math.min(3, input.reviewRounds ?? 1));
 const ROLLUP_ROUNDS = Math.max(0, Math.min(5, input.rollupRounds ?? 3));
-const COAUTHOR = "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>";
+// A PR title is the commit subject once squashed, and release versions are read from subjects: `type(scope)?!?: subject`
+// (types and scopes live in .commitlintrc.json). The architect writes conventional titles; a title without the shape gets
+// "feat: " here. This checks the shape only, not the scope list: an unlisted scope is caught by the commit-msg hook and the PR title job.
+const TITLE_PARTS = /^([a-z]+)(?:\([a-z0-9-]+\))?(!)?: (\S.*)$/;
+const COMMITLINTRC_HEADER_MAX_LENGTH = 100;
+// Cuts only the subject: at a word boundary when there is one, with no trailing space or full stop.
+const fitHeader = (prefix, subject) => {
+  const room = COMMITLINTRC_HEADER_MAX_LENGTH - prefix.length;
+  if (subject.length <= room) return prefix + subject;
+  let cut = subject.slice(0, room);
+  const space = cut.lastIndexOf(" ");
+  if (subject[room] !== " " && space > 0) cut = cut.slice(0, space);
+  return prefix + cut.replace(/[\s.]+$/, "");
+};
+const asConventional = (title) => {
+  const m = TITLE_PARTS.exec(title);
+  return m ? fitHeader(title.slice(0, title.length - m[3].length), m[3]) : fitHeader("feat: ", title);
+};
+// The roll-up squashes into the base branch: a feat when any stacked PR is one, else the last PR's type, with "!" when any PR is breaking.
+const rollupTitle = (title, stacked) => {
+  const parts = stacked.map((p) => TITLE_PARTS.exec(p.title) || ["", "feat", "", ""]);
+  const type = parts.some((m) => m[1] === "feat") ? "feat" : parts[parts.length - 1][1];
+  const subject = (TITLE_PARTS.exec(title) || [])[3] || title;
+  return fitHeader(`${type}${parts.some((m) => m[2]) ? "!" : ""}: `, subject);
+};
 // The e2e dev server must not collide with another on 5173 (a second checkout, another project's dev server):
 // every gate or e2e run gets a free port. playwright.config.ts reads E2E_PORT.
 const E2E_ENV = `E2E_PORT=$(bun -e 'const s=Bun.listen({hostname:"localhost",port:0,socket:{data(){}}});console.log(s.port);s.stop(true)')`;
@@ -158,13 +183,31 @@ const ARCHITECT = obj({
 // =============================================================================================
 phase("Preflight");
 
+// The config comes first: the base branch and the paths below depend on it. A runner copies the one line; the script verifies it.
+const conf = await loadConfig(
+  "ship-feature",
+  typeof input.root === "string" ? `Use ${shq(input.root)}: \`git -C <it> rev-parse --show-toplevel\` is ROOT.` : "`git rev-parse --show-toplevel` is ROOT.",
+  [
+    "paths.appRoot", "paths.sourceRoots", "paths.tokens", "paths.rootLayout", "paths.components", "paths.routes", "paths.locales", "paths.hooks", "paths.routeTable",
+    "paths.schemas", "paths.analytics", "paths.analyticsEvents", "paths.trpc", "paths.repositories", "ship.sharedFiles",
+  ]
+);
+if (conf.error) return { stopped: "Preflight", reason: conf.error };
+const cfg = conf.config;
+if (!cfg.paths.sourceRoots.length) return { stopped: "Preflight", reason: "harness-config: paths.sourceRoots must name at least one folder in harness.config.json" };
+// The loader gives folders with no trailing slash; prompts and prefix tests add it.
+const APP_DIR = `${cfg.paths.appRoot}/`;
+const SOURCE_DIRS = cfg.paths.sourceRoots.map((r) => `${r}/`);
+const wantedBase = input.base || cfg.baseBranch || "";
+BASE = wantedBase;
+
 const recordLine = input.record
   ? `  7. Record. The caller gave ${shq(input.record)}. It must exist (relative to ROOT). Return its absolute path as record_path.`
   : input.ticket
     ? `  7. Record. Find the issue comment whose body starts with \`<!-- plan-feature:decision-record -->\` (\`gh issue view <n> --json comments\`; the last one wins). If there is one, write its body WITHOUT that first marker line to ROOT/.verify/_intake/record-<issue number>.md (mkdir -p) and return that absolute path as record_path. Else record_path "".`
     : "  7. Record. None (prompt input): record_path \"\".";
 
-const pre = await agent(
+const pre = await tracked(
   `Pre-flight for ship-feature. Check each item in order and stop at the first failure. Change nothing except the move in item 4b and the files item 7 names.
 
   0. Root. ${typeof input.root === "string" ? `Use ${shq(input.root)}: \`git -C <it> rev-parse --show-toplevel\` is ROOT.` : "`git rev-parse --show-toplevel` is ROOT."} cd there; everything below runs in ROOT.
@@ -173,10 +216,10 @@ const pre = await agent(
   3. Tracked files must be clean: \`git status --porcelain --untracked-files=no\` prints nothing, else fail "commit or stash your changes first". Then list untracked files with \`git ls-files --others --exclude-standard\` -> untracked (array, may be empty).
   4. \`git --version\` must be 2.38 or newer (restack uses rebase --update-refs).
   4b. Worktree guard. Only in a linked worktree (\`git rev-parse --git-dir\` differs from \`git rev-parse --git-common-dir\`): if \`node_modules/node_modules\` is a symlink (it points at the main checkout's modules and breaks tests with "Invalid hook call" and Playwright "No tests found"), move it aside with \`mv node_modules/node_modules node_modules/.nested-modules-aside\` and return moved_nested_modules true. Never touch the main checkout. Else moved_nested_modules false.
-  5. \`git fetch -q origin ${BASE}\`, then \`git rev-parse origin/${BASE}\` -> base_sha.
+  5. Base branch: ${wantedBase ? shq(wantedBase) : "run `bun scripts/default-branch.ts` (it prints the repo's default branch; if it fails, fail with its message)"} -> base_branch, a bare branch name. \`git fetch -q origin <base_branch>\`, then \`git rev-parse origin/<base_branch>\` -> base_sha.
   6. ${input.ticket ? `Ticket: \`bun run scripts/tracker.ts view ${shq(input.ticket)}\`; return its JSON as issue, unchanged.` : "No ticket: issue null."}
 ${recordLine}
-  8. Does app/services/analytics.ts exist -> has_analytics.
+  8. Does ${cfg.paths.analytics} exist -> has_analytics.
   9. CodeGraph: \`./scripts/codegraph.sh ensure\` (it never fails), then \`./scripts/codegraph.sh status\` -> has_codegraph (true when it prints index stats, false on any error).
  10. Baseline (Bash timeout 600000 ms) on the base commit, not on whatever is checked out. Note the current position (\`git symbolic-ref -q --short HEAD\`, else \`git rev-parse HEAD\`), \`git switch --detach <base_sha>\`, run \`CI=1 ${E2E_ENV} ./scripts/verify.sh\` (even if slow; CI=1 because the base commit's verify.sh may lack the e2e fix and the dev server would ask for Cloudflare credentials; E2E_PORT so the e2e server never collides with another dev server on 5173), then switch back to the noted position (\`git switch <branch>\`, or \`git switch --detach <sha>\`) even when the gates fail. For each gate it reports, return { name, pass, tail } (last 15 lines of a failing gate, "" for a passing one).
 Return ok=false with a one-line reason at the first failure in 0-6; items 7-10 never fail the run.`,
@@ -192,6 +235,7 @@ Return ok=false with a one-line reason at the first failure in 0-6; items 7-10 n
         root: STR,
         date: STR,
         untracked: STRS,
+        base_branch: STR,
         base_sha: STR,
         issue: { type: ["object", "null"], additionalProperties: true },
         record_path: STR,
@@ -200,14 +244,16 @@ Return ok=false with a one-line reason at the first failure in 0-6; items 7-10 n
         moved_nested_modules: BOOL,
         baseline: arr(obj({ name: STR, pass: BOOL, tail: STR })),
       },
-      ["ok", "reason", "root", "date", "untracked", "base_sha", "record_path", "has_analytics", "baseline"]
+      ["ok", "reason", "root", "date", "untracked", "base_branch", "base_sha", "record_path", "has_analytics", "baseline"]
     ),
   }
 );
 if (!pre || !pre.ok) return { stopped: "Preflight", reason: pre ? pre.reason : "preflight returned nothing" };
 if (!pre.root || !pre.root.startsWith("/")) return { stopped: "Preflight", reason: "no absolute repo root" };
+if (!wantedBase && !pre.base_branch) return { stopped: "Preflight", reason: "no default branch reported" };
 if (input.ticket && !pre.issue) return { stopped: "Preflight", reason: "ticket could not be read" };
 ROOT = pre.root.replace(/\/+$/, "");
+BASE = wantedBase || pre.base_branch;
 const DATE = pre.date;
 const issue = pre.issue || null;
 const baselineRed = pre.baseline.filter((g) => !g.pass).map((g) => g.name);
@@ -260,7 +306,7 @@ if (pre.record_path) {
   plan = await twice(
     () =>
       ask(
-        `Read the decision record ${pre.record_path} (format: docs/features/FORMAT.md) and return it as the plan object. Copy, do not invent:
+        `Read the decision record ${pre.record_path} (format: ${cfg.docs.features}/FORMAT.md) and return it as the plan object. Copy, do not invent:
 - slug, title from frontmatter; summary = the Summary section; ui = frontmatter ui !== false.
 - surface: "app" or "public" from the UX section (app screens vs public pages), "none" when ui is false.
 - prototype: the \`plans/<slug>-proto-<id>.html\` path of the "Chosen:" prototype, "" if none.
@@ -269,7 +315,7 @@ if (pre.record_path) {
 - golden_path / error_path: one sentence each, the main user flow and its most likely failure, from UX and Flow.
 - contract: the Contract section's code block, verbatim.
 - seed_fixtures: from Architecture.
-- prs: the PR stack table rows: n, branch, base, title (a short PR title you write from the fence and the Summary), fence (the backticked paths, without backticks), greptile_focus.
+- prs: the PR stack table rows: n, branch, base, title (a short PR title you write from the fence and the Summary, as a Conventional Commits subject per .commitlintrc.json: \`type(scope): subject\`, 100 characters at most), fence (the backticked paths, without backticks), greptile_focus.
 ${input.slug ? `The caller fixed the slug: ${input.slug}.` : ""}
 ${DATA_FENCE}`,
         { label: "intake:record", phase: "Intake", agentType: "context-scout", schema: PLAN }
@@ -292,6 +338,7 @@ ${sourceText}`,
   );
   if (!audit) return { stopped: "Intake", reason: "ticket-auditor returned nothing twice" };
   slug = input.slug || audit.slug;
+  if (!SLUG.test(slug)) return { stopped: "Intake", reason: "the ticket-auditor returned a slug that is not kebab-case" };
   if (audit.verdict !== "ready") {
     if (input.ready === "stop") return { stopped: "Intake", reason: `stopped by the human: ticket not ready (${audit.verdict})` };
     if (input.ready !== "override") {
@@ -352,7 +399,7 @@ ${fence("audited ticket", JSON.stringify(audit.amended, null, 1))}`,
 
 slug = input.slug || plan.slug || slug;
 if (!SLUG.test(slug)) return { stopped: "Intake", reason: `no usable slug (${JSON.stringify(slug)})` };
-const prs = [...plan.prs].sort((a, b) => a.n - b.n);
+const prs = [...plan.prs].sort((a, b) => a.n - b.n).map((p) => ({ ...p, title: asConventional(p.title) }));
 if (!prs.length) return { stopped: "Intake", reason: "the plan has no PRs" };
 // A stack merges into review/<slug> and reaches the base through the roll-up, so PR 1 targets review/<slug>.
 const rollupBranch = prs.length > 1 ? `review/${slug}` : "";
@@ -360,7 +407,7 @@ const baseOf = (p) => (rollupBranch && p.n === prs[0].n ? rollupBranch : p.base)
 const hasUi = plan.ui;
 const ACCEPT = plan.acceptance.map((a) => `  · ${a}`).join("\n");
 const wantsAnalytics = pre.has_analytics && !!plan.metric.trim();
-if (!pre.has_analytics && plan.metric.trim()) log("No analytics wrapper (app/services/analytics.ts): the success metric gets no events this run");
+if (!pre.has_analytics && plan.metric.trim()) log(`No analytics wrapper (${cfg.paths.analytics}): the success metric gets no events this run`);
 log(`Intake: "${plan.title}" (${slug}), ${prs.length} PR(s), ui ${hasUi}, ${plan.acceptance.length} acceptance line(s)`);
 
 // =============================================================================================
@@ -375,18 +422,10 @@ const allFence = () => prs.flatMap((p) => p.fence.map(norm));
 const firstWith = (re) => prs.find((p) => p.fence.some((f) => re.test(f))) || prs[0];
 const lastPr = prs[prs.length - 1];
 const extra = [
-  ["drizzle/", firstWith(/^app\/db\//)],
-  ["scripts/seed-preview.ts", firstWith(/^app\/db\//)],
-  ["app/models/errors/", firstWith(/^app\/(trpc|repositories)\//)],
-  ["app/models/errors/index.ts", firstWith(/^app\/(models\/errors|trpc|repositories)\//)],
-  ["app/lib/effect-trpc.ts", firstWith(/^app\/trpc\//)],
-  ["app/trpc/router.ts", firstWith(/^app\/trpc\//)],
-  ["app/routes.ts", firstWith(/^app\/(routes|components)\//)],
-  ["app/locales/", firstWith(/^app\/(routes|components)\//)],
-  ["app/lib/analytics/events.ts", firstWith(/^app\/trpc\//)],
-  [`docs/features/${slug}.md`, prs[0]],
-  ["GLOSSARY.md", prs[0]],
-  ["docs/adr/", prs[0]],
+  ...cfg.ship.sharedFiles.map((f) => [f.path, firstWith(new RegExp(f.owner))]),
+  [`${cfg.docs.features}/${slug}.md`, prs[0]],
+  [cfg.docs.glossary, prs[0]],
+  [`${cfg.docs.adr}/`, prs[0]],
   ["e2e/", lastPr],
 ];
 const claimed = (p) => covers(allFence(), p) || allFence().some((f) => f.startsWith(p.endsWith("/") ? p : `${p}/`));
@@ -399,8 +438,12 @@ for (const [p, pr] of extra) {
 
 // Lanes: each PR's fence split into what a UI builder owns and what a backend builder owns. Docs and
 // e2e paths are not build lanes; their writers run later.
-const isUi = (p) => /^app\/(routes|components|locales|hooks)\//.test(p) || /^app\/(root\.tsx|app\.css|routes\.ts)$/.test(p) || /^public\//.test(p);
-const isLater = (p) => /^(e2e\/|docs\/|GLOSSARY\.md|app\/lib\/analytics\/)/.test(p);
+const alt = (paths) => paths.map(reEscape).join("|");
+const uiDirs = new RegExp(`^(${alt([cfg.paths.routes, cfg.paths.components, cfg.paths.locales, cfg.paths.hooks])})/`);
+const uiFiles = new RegExp(`^(${alt([cfg.paths.rootLayout, cfg.paths.tokens, cfg.paths.routeTable])})$`);
+const isUi = (p) => uiDirs.test(p) || uiFiles.test(p) || /^public\//.test(p);
+const laterPaths = new RegExp(`^(e2e/|docs/)|^(${alt([cfg.docs.glossary, cfg.paths.analyticsEvents])})$`);
+const isLater = (p) => laterPaths.test(p);
 const lanes = [];
 for (const pr of prs) {
   const paths = pr.fence.map(norm).filter((p) => !isLater(p));
@@ -430,13 +473,13 @@ const stackPlan = {
   base: pre.base_sha, // the commit the work starts from; the local BASE branch may lag origin
   rest: lastPr.n,
   // Untracked files stay out unless a fence names that exact file (plan-feature leaves its prototypes uncommitted for PR 1); owning the directory is not enough.
-  exclude: [...pre.untracked.filter((u) => !allFence().includes(norm(u))), ".verify/", "tmp/"],
+  exclude: [...pre.untracked.filter((u) => !allFence().includes(norm(u))), ...cfg.scratchDirs],
   prs: prs.map((p) => ({
     n: p.n,
     branch: p.branch,
     title: p.title,
     fence: p.fence.map(norm),
-    message: `feat(${slug}): ${p.title}\n\n${issue ? `${p.n === prs.length ? "Closes" : "Part of"} ${issue.url}\n\n` : ""}${COAUTHOR}`,
+    message: `${p.title}\n\n${issue ? `${p.n === prs.length ? "Closes" : "Part of"} ${issue.url}\n\n` : ""}${cfg.coauthor}`,
   })),
 };
 
@@ -454,7 +497,7 @@ const MAP_SCHEMA = obj({ files: arr(obj({ path: STR, role: STR })) });
 const map = await sh(
   pre.has_codegraph
     ? `Run \`./scripts/codegraph.sh context ${shq(`${plan.title}. ${plan.summary}`.slice(0, 300))}\`. From its output return up to 15 files a builder should copy or extend, each with a one-line role ("repository pattern to copy", "router to register the procedure in"). Paths repo-relative. Add nothing the output does not show.`
-    : `CodeGraph is off. Run \`rg -l -i ${shq((plan.title.split(/\s+/).filter((w) => w.length > 3)[0] || slug).toLowerCase())} app workers | head -15\` and return those files with role "matches the feature name".`,
+    : `CodeGraph is off. Run \`rg -l -i ${shq((plan.title.split(/\s+/).filter((w) => w.length > 3)[0] || slug).toLowerCase())} -- ${cfg.paths.sourceRoots.map(shq).join(" ")} | head -15\` and return those files with role "matches the feature name".`,
   { label: "contract:map", phase: "Contract", schema: MAP_SCHEMA }
 );
 const mapText = map && map.files.length ? `\nNearest existing code (${pre.has_codegraph ? "CodeGraph" : "rg"}) — read these before writing, copy their patterns:\n${map.files.map((f) => `  · ${f.path} — ${f.role}`).join("\n")}` : "";
@@ -470,7 +513,7 @@ const contractOut = await twice(
     ask(
       `${FEATURE}
 
-CONTRACT MODE. Before the build lanes start, write ONLY the shared Effect Schema / types file(s) the contract below defines (usually app/lib/schemas/${slug}.ts, following app/lib/schemas/), so lanes written in parallel import one definition. Each file must lie inside one of these fences: ${lanes.map((l) => l.owns.join(", ")).join(" | ")}. Nothing else: no repository, procedure or UI. If the contract defines no shared types, write nothing and return an empty files list. \`bun run typecheck\` must pass.
+CONTRACT MODE. Before the build lanes start, write ONLY the shared Effect Schema / types file(s) the contract below defines (usually ${cfg.paths.schemas}/${slug}.ts, following ${cfg.paths.schemas}/), so lanes written in parallel import one definition. Each file must lie inside one of these fences: ${lanes.map((l) => l.owns.join(", ")).join(" | ")}. Nothing else: no repository, procedure or UI. If the contract defines no shared types, write nothing and return an empty files list. \`bun run typecheck\` must pass.
 
 ${fence("contract", plan.contract)}`,
       { label: "contract:schema", phase: "Contract", agentType: "backend-builder", schema: LANE_OUT }
@@ -552,7 +595,7 @@ phase("Write");
 const IMPACT_SCHEMA = obj({ changed: STRS, dependents: arr(obj({ path: STR, uses: STR })) });
 const impact = await sh(
   `Find the existing code that depends on this feature's changes (the regression blast radius).
-  1. Changed source: \`git diff --name-only ${pre.base_sha}\` plus \`git ls-files --others --exclude-standard\`, kept to app/, workers/ and scripts/ .ts/.tsx files that are not tests -> changed.
+  1. Changed source: \`git diff --name-only ${pre.base_sha}\` plus \`git ls-files --others --exclude-standard\`, kept to ${andList([...SOURCE_DIRS, "scripts/"])} .ts/.tsx files that are not tests -> changed.
   2. ${pre.has_codegraph ? `\`./scripts/codegraph.sh sync\`, then for each changed file that existed on the base (\`git cat-file -e ${pre.base_sha}:<path>\` succeeds) run \`./scripts/codegraph.sh node <path>\` and read its dependents.` : `For each changed file that existed on the base, \`rg -l "<its import path without extension, as @/... and relative>" app workers\`.`}
   3. dependents: every file from step 2 that is NOT in changed, with uses = which changed file/symbol it uses. At most 40; say so in the last entry's uses if you cut.`,
   { label: "write:impact", phase: "Write", schema: IMPACT_SCHEMA }
@@ -564,7 +607,7 @@ if (impact) log(`Impact: ${impact.changed.length} changed source file(s), ${impa
 
 const writers = await parallel([
   () =>
-    ask(`${FEATURE}\n\nWrite or update the unit tests for this feature's changed code: \`git diff --name-only ${pre.base_sha}\` plus untracked files under app/ and workers/. Every new helper, repository and procedure branch with a tagged error needs one (non-negotiable 4). Edit test files only. Where a dependent below relies on behaviour this diff changed and no test pins it, add one.${blast}`, {
+    ask(`${FEATURE}\n\nWrite or update the unit tests for this feature's changed code: \`git diff --name-only ${pre.base_sha}\` plus untracked files under ${andList(SOURCE_DIRS)}. Every new helper, repository and procedure branch with a tagged error needs one (non-negotiable 4). Edit test files only. Where a dependent below relies on behaviour this diff changed and no test pins it, add one.${blast}`, {
       label: "write:unit",
       phase: "Write",
       agentType: "test-author",
@@ -586,9 +629,9 @@ const writers = await parallel([
   // One agent does both jobs: spans always, analytics events when there is a metric and the wrapper exists.
   () =>
     ask(
-      `${FEATURE}\n\nAdd or correct tracing spans on this feature's new procedures, repository methods and service calls (\`git diff --name-only ${pre.base_sha}\` plus untracked under app/). Edit source only, never tests.${
+      `${FEATURE}\n\nAdd or correct tracing spans on this feature's new procedures, repository methods and service calls (\`git diff --name-only ${pre.base_sha}\` plus untracked under ${APP_DIR}). Edit source only, never tests.${
         wantsAnalytics
-          ? `\n\nThen instrument the success metric with analytics events through the Analytics wrapper.\nSuccess metric: ${plan.metric}\nYou may also edit app/lib/analytics/events.ts and the procedure and repository files this feature changed (\`git diff --name-only ${pre.base_sha}\` plus untracked under app/trpc/ and app/repositories/).`
+          ? `\n\nThen instrument the success metric with analytics events through the Analytics wrapper.\nSuccess metric: ${plan.metric}\nYou may also edit ${cfg.paths.analyticsEvents} and the procedure and repository files this feature changed (\`git diff --name-only ${pre.base_sha}\` plus untracked under ${cfg.paths.trpc}/ and ${cfg.paths.repositories}/).`
           : "\n\nNo success metric, or no Analytics wrapper: add spans only and return events [] (no analytics edits)."
       } \`bun run typecheck\` must pass.`,
       {
@@ -752,8 +795,8 @@ const docs = await twice(
       `${FEATURE}
 
 Document the built feature and draft the PR bodies.
-${pre.record_path ? `Commit the decision record: copy ${pre.record_path} to docs/features/${slug}.md (\`bun run scripts/check-feature-doc.ts docs/features/${slug}.md\` must pass).` : "There is no decision record: do not write docs/features/."}
-Then GLOSSARY.md, an ADR only for a hard-to-reverse decision, and any doc the diff (\`git diff ${pre.base_sha}\` plus untracked) makes wrong.
+${pre.record_path ? `Commit the decision record: copy ${pre.record_path} to ${cfg.docs.features}/${slug}.md (\`bun run scripts/check-feature-doc.ts ${cfg.docs.features}/${slug}.md\` must pass).` : `There is no decision record: do not write ${cfg.docs.features}/.`}
+Then ${cfg.docs.glossary}, an ADR only for a hard-to-reverse decision, and any doc the diff (\`git diff ${pre.base_sha}\` plus untracked) makes wrong.
 
 PR bodies, one per PR, at ${outDir()}/pr-<n>.md:
 ${prs.map((p) => `  · PR ${p.n}: ${p.branch} -> ${baseOf(p)}, "${p.title}", fence ${p.fence.join(", ")}; Greptile focus: ${p.greptile_focus}`).join("\n")}
@@ -819,7 +862,7 @@ for (; shipRound <= 3; shipRound++) {
       overlaps: assignment ? assignment.overlaps : [],
       verdicts: `${verdictLines()}${reelLine}`,
       open_findings: open,
-      other_findings: allFindings().filter((f) => !open.includes(f)),
+      other_findings: allFindings().filter((f) => !isP0P1(f)),
       blocked: blockedNotes,
       analytics: instrEvents,
       e2e: e2eOut,
@@ -827,7 +870,7 @@ for (; shipRound <= 3; shipRound++) {
       shots: hasUi ? `${shotsDir}/` : null,
       videos: reel,
       review: page,
-      next: `Write ${page} (run \`npx -y lavish-axi playbook explanation\` and \`playbook input\` first; style it with the tokens in app/app.css; relative image paths, never a leading /). Top: the feature, the verdict lines and a one-line recommendation (ship, or what blocks). Then: the PR stack as cards (title, branch -> base, its paths, a link to its body file); OPEN P0/P1 findings as a table, most severe first${hasUi ? "; the browser-walk screenshots from shots/ at desktop and mobile; every video in video/ (golden-*, error-*, demo-*) as a <video controls> element captioned with its file name" : ""}; the other findings collapsed; unfenced paths that fell to the last PR. One form: Approve (push and open the PRs) or Request changes (a textarea, one change per line), one submit that calls window.lavish.queuePrompt once. Open it with \`npx -y lavish-axi ${page}\`, run \`npx -y lavish-axi poll ${page}\` in the foreground (re-run on timeout), then ${resumeHow(`ships: { ...earlier rounds, "${shipRound}": <the answer> }`)} Never run \`lavish-axi share\`.`,
+      next: `Write ${page} (run \`npx -y lavish-axi playbook explanation\` and \`playbook input\` first; style it with the tokens in ${cfg.paths.tokens}; relative image paths, never a leading /). Top: the feature, the verdict lines and a one-line recommendation (ship, or what blocks). Then: the PR stack as cards (title, branch -> base, its paths, a link to its body file); OPEN P0/P1 findings as a table, most severe first${hasUi ? "; the browser-walk screenshots from shots/ at desktop and mobile; every video in video/ (golden-*, error-*, demo-*) as a <video controls> element captioned with its file name" : ""}; the other findings collapsed; unfenced paths that fell to the last PR. ${runSummaryNote(slug, "ship-feature")} One form: Approve (push and open the PRs) or Request changes (a textarea, one change per line), one submit that calls window.lavish.queuePrompt once. Open it with \`npx -y lavish-axi ${page}\`, run \`npx -y lavish-axi poll ${page}\` in the foreground (re-run on timeout), then ${resumeHow(`ships: { ...earlier rounds, "${shipRound}": <the answer> }`)} Never run \`lavish-axi share\`.`,
     });
   }
   if (answer.approved) {
@@ -861,7 +904,7 @@ phase("Split");
 const split = await sh(
   `The human approved shipping "${slug}". In order, stop at the first failure (ok=false, failed_command, its error):
   1. \`bun run scripts/stack.ts split --plan "${stackPlanFile}"\` -> branches [{ n, branch, sha }].
-  2. For each branch in order: \`git switch <branch>\`, then \`bun run typecheck\` and \`bun run test\`. Record { branch, pass, tail } (tail: last 20 lines of a failure). Go on to the next branch even if one fails, then fail if any failed.
+  2. For each branch in order: \`git switch <branch>\`, then \`${E2E_ENV} ./scripts/verify.sh --changed <the base named here>\` (the lean gates: typecheck, the linter on the changed files, the related unit tests and the e2e specs mapped to them; it falls back to every gate itself when a gate script, config or lockfile changed). Branches and bases, in order: ${prs.map((p, i) => `${p.branch} against ${i === 0 ? pre.base_sha : prs[i - 1].branch}`).join("; ")}. Record { branch, pass, tail } (tail: last 20 lines of a failure). Go on to the next branch even if one fails, then fail if any failed. The full \`./scripts/verify.sh\` already ran on the whole tree at Review and runs again in CI on the roll-up.
   3. \`git branch -D ship/${slug}\` (it is left at the base; the work is on the stacked branches).
 Return ok, failed_command, branches, checks.`,
   {
@@ -928,7 +971,7 @@ for (const [i, pr] of stackOrder.entries()) {
     const resp = await ask(
       `LOCAL review: the code-review skill's P0/P1 findings on branch ${pr.branch} against ${base}, which is checked out. No PR exists yet, so there are no threads: do not call gh, and put the reply you would have posted in each comment's reply field. The branch's fence: ${pr.fence.join(", ")}. Its review focus: ${pr.greptile_focus}.
 ${fence("review comments", w.comments.map((c) => `id ${c.id} — ${c.severity ? `${c.severity} — ` : ""}${c.path}${c.line ? `:${c.line}` : ""}\n${c.body}`).join("\n\n"))}
-${declined.length ? `You declined these in earlier rounds; a comment that repeats one is a duplicate, with the same reason:\n${fence("declined earlier", declined.map((d) => `${d.comment}\n→ ${d.reply}`).join("\n\n"))}\n` : ""}Commit trailer: ${COAUTHOR}`,
+${declined.length ? `You declined these in earlier rounds; a comment that repeats one is a duplicate, with the same reason:\n${fence("declined earlier", declined.map((d) => `${d.comment}\n→ ${d.reply}`).join("\n\n"))}\n` : ""}Commit trailer: ${cfg.coauthor}`,
       { label: `local:respond:${source}:${pr.n}:${round}`, phase: "Local review", agentType: "review-responder", schema: RESPONSE }
     );
     if (resp) {
@@ -950,7 +993,7 @@ ${declined.length ? `You declined these in earlier rounds; a comment that repeat
       const re = await sh(
         `In order, stop at the first failure:
   1. \`bun run scripts/stack.ts restack --from ${pr.n} --plan "${stackPlanFile}"\` (nothing is pushed yet, so a rebase is safe here).
-  2. For each later branch (${later.join(", ")}), in stack order: \`git switch <branch>\`, then \`bun run typecheck\` and \`bun run test\` (a lower branch can break a caller that lives only in a later one with no git conflict). Stop at the first failure, with that command as failed_command.
+  2. For each later branch, in stack order: \`git switch <branch>\`, then \`${E2E_ENV} ./scripts/verify.sh --changed <its base>\` (a lower branch can break a caller that lives only in a later one with no git conflict). Branches and bases: ${stackOrder.filter((x) => x.n > pr.n).map((x) => `${x.branch} against ${stackOrder[stackOrder.indexOf(x) - 1].branch}`).join("; ")}. Stop at the first failure, with that command as failed_command.
 Do not push. Return ok and failed_command.`,
         { label: `local:restack:${source}:${pr.n}:${round}`, phase: "Local review", schema: obj({ ok: BOOL, failed_command: STR }) }
       );
@@ -974,10 +1017,12 @@ const opened = await sh(
   `Push and open the stacked PRs for "${slug}". In order, stop at the first failure:
   0. ${rollupBranch ? `\`git branch -f ${rollupBranch} ${pre.base_sha}\`, then \`git push -u origin ${rollupBranch}\` (the roll-up branch, at the base commit; PR 1 targets it). A plain push: if origin already has ${rollupBranch} from an earlier run and refuses it, fail with that push.` : "Single PR: it targets the base directly; skip."}
   1. \`git push -u origin ${prs.map((p) => p.branch).join(" ")}\`.
-  2. For each PR in order: \`gh pr create --base <base> --head <branch> --title <title> --body-file <body>\` with
+  2. The size table (docs/ci/pipelines.md#reading-the-size-table). For each PR in order, from ROOT: \`git switch <branch>\`, then \`bun run size --base <base> --pr-body\` with a 900000 ms Bash timeout (it builds the branch and its base; the base is cached by commit, so the next PR reuses it). Append a blank line and its output to the body file: it is \`## Size\` and either the table with its load-time line or "No shipped code changed.". If it fails, append \`## Size\` and the line \`Not measured: <its last error line>\` and go on; CI's PR body check then asks for the table. Then \`git switch ${prs[prs.length - 1].branch}\`.
+${prs.map((p) => `       branch=${p.branch} base=${shq(`origin/${baseOf(p)}`)} body=${outDir()}/pr-${p.n}.md`).join("\n")}
+  3. First run \`bun scripts/run-telemetry.ts summary ${slug} --markdown\` once from ROOT. If it fails, skip the \`## Run\` part below. For each PR in order, append a blank line, the heading \`## Run\` and that output to its body file, then \`gh pr create --base <base> --head <branch> --title <title> --body-file <body>\` with
 ${prs.map((p) => `       n=${p.n} base=${baseOf(p)} branch=${p.branch} title=${shq(p.title)} body=${outDir()}/pr-${p.n}.md`).join("\n")}
      Record each PR's number and url.
-  3. ${prs.length > 1 ? `For each PR: append to its body file a section "## Stack" listing every PR in order as "${"`"}n. #<number> <title>${"`"}" with "← this PR" on its own line, then \`gh pr edit <number> --body-file <body>\`.` : "Single PR: nothing to do."}
+  4. ${prs.length > 1 ? `For each PR: append to its body file a section "## Stack" listing every PR in order as "${"`"}n. #<number> <title>${"`"}" with "← this PR" on its own line, then \`gh pr edit <number> --body-file <body>\`.` : "Single PR: nothing to do."}
 Return ok, failed_command, prs [{ n, number, url, branch }].`,
   { label: "open:prs", phase: "Open", schema: obj({ ok: BOOL, failed_command: STR, prs: arr(obj({ n: NUM, number: NUM, url: STR, branch: STR })) }) }
 );
@@ -985,9 +1030,9 @@ if (!opened || !opened.ok) return { stopped: "Open", reason: opened ? opened.fai
 const openPrs = opened.prs.sort((a, b) => a.n - b.n);
 log(`Opened: ${openPrs.map((p) => p.url).join(" ")}`);
 
-// CI and the preview workflow run on every PR in the stack, whatever its base; the preview deploys each PR with
-// its own seeded D1 and posts the URL as a sticky comment. The walk uses the top PR's preview, the whole feature.
-// Once the stack has merged into review/<slug> their previews close; later walks use the roll-up's own.
+// A stacked PR (base review/<slug> or a branch below) gets CI's lean job and no preview, so preview_url is "" here and
+// the walk waits for the roll-up's own preview at Close. A single PR targets the base: full suite, seeded preview, walked here.
+// docs/ci/pipelines.md#which-checks-run-where lists the checks per base.
 const top = openPrs[openPrs.length - 1];
 let checks = null;
 let previewUrl = "";
@@ -1067,7 +1112,7 @@ ${rows.join("\n")}
 ${verdictLines()}
 
 ## How to test
-${previewUrl ? `This PR's own preview: the "Preview deployment" comment below (the stacked PRs' previews closed when they merged into ${rollupBranch}).` : "No preview deployed."}
+This PR's own preview: the "Preview deployment" comment below, once its deploy finishes (none when previews are not set up). The stacked PRs into ${rollupBranch} ran lean checks and had no preview.
 Fixture logins: copy the fixture logins line from ${outDir()}/pr-1.md (How to test).
 Locally: \`bun run db:seed && bun run dev\`
 
@@ -1081,14 +1126,16 @@ ${issue ? `\nCloses ${issue.url}` : ""}
     `Merge the stacked PRs of "${slug}" into ${rollupBranch}, then open the roll-up PR. In order, stop at the first failure (ok=false, failed_command):
   1. Write this text byte for byte to ${outDir()}/rollup.md with a quoted heredoc. In it, replace the line starting "Fixture logins:" with the fixture logins line you find under "How to test" in ${outDir()}/pr-1.md (keep the "Fixture logins:" prefix).
 ${fence("rollup.md", body)}
+     Then run \`bun scripts/run-telemetry.ts summary ${slug} --markdown\` from ROOT and append a blank line, the heading \`## Run\` and its output to that file; if the command fails, append nothing.
+     Then, on ${top.branch} (its tree is the roll-up's), run \`bun run size --base ${shq(`origin/${BASE}`)} --pr-body\` from ROOT with a 900000 ms Bash timeout and append a blank line and its output to that file; if it fails, append \`## Size\` and the line \`Not measured: <its last error line>\`.
   2. For each PR in order (${openPrs.map((p) => `#${p.number} ${p.branch}`).join(", ")}):
      a. \`gh pr edit <n> --base ${rollupBranch}\` (PR 1 targets it already, and GitHub may have retargeted the others; then it is a no-op).
      b. \`gh pr merge <n> --merge --match-head-commit $(git rev-parse <branch>)\`. Never --squash, --rebase, --admin, --auto or --delete-branch. If GitHub says the PR is not mergeable yet or its base was just modified, wait 10 s and run it again, up to three times.
      Record each merged PR's number in merged.
   3. \`git fetch -q origin\`, then \`git diff --quiet origin/${rollupBranch} ${top.branch}\` must exit 0: ${rollupBranch} must hold exactly the top branch's tree.
   4. \`git branch -f ${rollupBranch} origin/${rollupBranch}\`.
-  5. \`gh pr create --base ${BASE} --head ${rollupBranch} --title ${shq(`${plan.title} (roll-up)`)} --body-file ${outDir()}/rollup.md\` -> number and url.
-  6. For each of ${openPrs.map((p) => `#${p.number}`).join(", ")}: \`gh pr comment <n> --body "Merged into ${rollupBranch}; it lands on ${BASE} with the roll-up #<roll-up number>."\`
+  5. \`gh pr create --base ${shq(BASE)} --head ${rollupBranch} --title ${shq(rollupTitle(plan.title, prs))} --body-file ${outDir()}/rollup.md\` -> number and url.
+  6. For each of ${openPrs.map((p) => `#${p.number}`).join(", ")}: \`gh pr comment <n> --body ${shq(`Merged into ${rollupBranch}; it lands on ${BASE} with the roll-up #<roll-up number>.`)}\`
 Return ok, failed_command, merged, number, url.`,
     { label: "rollup:pr", phase: "Rollup", schema: obj({ ok: BOOL, failed_command: STR, merged: arr(NUM), number: NUM, url: STR }, ["ok", "failed_command", "merged"]) }
   );
@@ -1097,14 +1144,14 @@ Return ok, failed_command, merged, number, url.`,
     const rest = openPrs.filter((p) => !merged.includes(p.number));
     // Step 5 may have opened the roll-up before a pointer comment failed: keep it, never open a second one.
     const opened = rollup && rollup.number && rollup.url ? { number: rollup.number, url: rollup.url } : null;
-    const comment = `\`gh pr comment <n> --body "Merged into ${rollupBranch}; it lands on ${BASE} with the roll-up #${opened ? opened.number : "<roll-up number>"}."\``;
+    const comment = `\`gh pr comment <n> --body ${shq(`Merged into ${rollupBranch}; it lands on ${BASE} with the roll-up #${opened ? opened.number : "<roll-up number>"}.`)}\``;
     return {
       stopped: "Rollup",
       reason: rollup ? rollup.failed_command : "rollup returned nothing",
       prs: openPrs,
       merged_into_rollup: merged,
       rollup: opened ? opened.url : null,
-      next: `${merged.length ? `Merged into ${rollupBranch}: ${merged.map((n) => `#${n}`).join(", ")}. ` : ""}${rest.length ? `Merge the rest in order: for each of ${rest.map((p) => `#${p.number}`).join(", ")}, \`gh pr edit <n> --base ${rollupBranch}\` then \`gh pr merge <n> --merge\`. ` : ""}${opened ? `The roll-up is open: ${opened.url}; do not create another.` : `Then open the roll-up: \`gh pr create --base ${BASE} --head ${rollupBranch} --title ${shq(`${plan.title} (roll-up)`)} --body-file ${outDir()}/rollup.md\`.`} On each stacked PR that lacks it, ${comment}. Then post "@greptileai review" on the roll-up.`,
+      next: `${merged.length ? `Merged into ${rollupBranch}: ${merged.map((n) => `#${n}`).join(", ")}. ` : ""}${rest.length ? `Merge the rest in order: for each of ${rest.map((p) => `#${p.number}`).join(", ")}, \`gh pr edit <n> --base ${rollupBranch}\` then \`gh pr merge <n> --merge\`. ` : ""}${opened ? `The roll-up is open: ${opened.url}; do not create another.` : `Then open the roll-up: \`gh pr create --base ${shq(BASE)} --head ${rollupBranch} --title ${shq(rollupTitle(plan.title, prs))} --body-file ${outDir()}/rollup.md\`.`} On each stacked PR that lacks it, ${comment}. Then post "${cfg.reviewBot.trigger}" on the roll-up.`,
     };
   }
   log(`Rollup: ${openPrs.length} stacked PRs merged into ${rollupBranch}; ${rollup.url}`);
@@ -1130,7 +1177,7 @@ else if (ROLLUP_ROUNDS === 0) log("Roll-up Greptile: skipped (rollupRounds 0)");
 else {
   const allDeclined = [...localDeclined.values()].flat();
   const seen = new Set();
-  const trig = await sh(`\`gh pr comment ${target.number} --body "@greptileai review"\`. Return ok and failed_command.`, { label: "rollup-greptile:trigger", phase: "Roll-up Greptile", schema: obj({ ok: BOOL, failed_command: STR }) });
+  const trig = await sh(`\`gh pr comment ${target.number} --body ${shq(cfg.reviewBot.trigger)}\`. Return ok and failed_command.`, { label: "rollup-greptile:trigger", phase: "Roll-up Greptile", schema: obj({ ok: BOOL, failed_command: STR }) });
   if (!trig || !trig.ok) rollupReview.status = "trigger failed";
   let head = "";
   for (let round = 1; trig && trig.ok && round <= ROLLUP_ROUNDS; round++) {
@@ -1166,7 +1213,7 @@ else {
 Confidence ${w.confidence ?? "n/a"}/5. Summary:
 ${fence("greptile summary", w.summary)}
 ${fence("greptile comments", g.cs.map((c) => `id ${c.id} — ${c.path}${c.line ? `:${c.line}` : ""} — ${c.url}\n${c.body}`).join("\n\n"))}
-${allDeclined.length ? `The local review declined these; answer a repeat the same way:\n${fence("declined locally", allDeclined.map((d) => `${d.comment}\n→ ${d.reply}`).join("\n\n"))}\n` : ""}Commit trailer: ${COAUTHOR}`,
+${allDeclined.length ? `The local review declined these; answer a repeat the same way:\n${fence("declined locally", allDeclined.map((d) => `${d.comment}\n→ ${d.reply}`).join("\n\n"))}\n` : ""}Commit trailer: ${cfg.coauthor}`,
         { label: `rollup-greptile:respond:${g.pr.n}:${round}`, phase: "Roll-up Greptile", agentType: "review-responder", schema: RESPONSE }
       );
       // Every comment needs its own reply: a missing or partial result leaves the rest open.
@@ -1189,7 +1236,7 @@ ${allDeclined.length ? `The local review declined these; answer a repeat the sam
 ${fence("replies json", JSON.stringify(entry.replies.map((r) => ({ id: r.id, reply: r.reply }))))}
   2. ${fixed ? `\`git push origin ${target.branch}\` (a fast-forward; never --force).` : "Nothing to push."}
   3. For each entry: write its reply to a temp file, then \`gh api repos/{owner}/{repo}/pulls/${target.number}/comments/<id>/replies -F body=@<temp file>\`.
-  4. ${fixed && !last ? `\`gh pr comment ${target.number} --body "@greptileai review"\`.` : "No re-trigger."}
+  4. ${fixed && !last ? `\`gh pr comment ${target.number} --body ${shq(cfg.reviewBot.trigger)}\`.` : "No re-trigger."}
 Return ok, failed_command, and head = \`git rev-parse ${target.branch}\`.`,
       { label: `rollup-greptile:write:${round}`, phase: "Roll-up Greptile", schema: obj({ ok: BOOL, failed_command: STR, head: STR }, ["ok", "failed_command"]) }
     );
@@ -1222,9 +1269,9 @@ const rollupPassed = rollupReview.status === "passed" || rollupReview.status ===
 // =============================================================================================
 phase("Close");
 
-// The roll-up is the PR that merges, and it runs its own CI: the stacked PRs' checks do not stand in for it.
-// Its preview is the only one left: the stacked PRs' previews closed when they merged into review/<slug>, so
-// walk it here, or the verdict would describe a preview that no longer exists.
+// The roll-up is the PR that merges, and it runs the full suite: the stacked PRs ran lean checks only.
+// Its preview is the only one: a stacked PR gets none (its base is not the default branch), so walk it
+// here, or the verdict would describe no preview at all.
 if (rollup) {
   await checkAndWalk("close", "Close", [target], target);
   if (!checks) redChecks = [`#${rollup.number} checks (could not read them)`];
@@ -1244,7 +1291,7 @@ const rollupLine = !target
   ? "no roll-up PR, so Greptile did not run"
   : rollupPassed
     ? `Greptile ${rollupReview.confidence ?? "n/a"}/5 on #${target.number} at ${rollupReview.sha.slice(0, 8)}${rollupReview.status === "declined" ? " (remaining comments declined with reasons)" : ""}`
-    : `Greptile on #${target.number} did not pass (${rollupReview.status}); re-trigger it with "@greptileai review" and loop to 5/5 before merging`;
+    : `Greptile on #${target.number} did not pass (${rollupReview.status}); re-trigger it with "${cfg.reviewBot.trigger}" and loop to 5/5 before merging`;
 const todos = [
   open.length ? `${open.length} P0/P1 still open: ${open.map((f) => `${f.source} ${f.file}: ${f.detail.split("\n")[0]}`).join("; ")}` : "",
   shipReel && !shipReel.passed ? `smoke videos failed and were accepted at the ship review: ${shipReel.reason}` : "",
@@ -1265,7 +1312,7 @@ const memory = await remember(
     next: `human review of ${rollup ? rollup.url : openPrs[0].url}`,
     link: [
       ...(previewUrl ? [`preview: ${previewUrl}`] : []),
-      ...(pre.record_path ? [`record: docs/features/${slug}.md (PR 1)`] : []),
+      ...(pre.record_path ? [`record: ${cfg.docs.features}/${slug}.md (PR 1)`] : []),
       ...(rollup ? [`roll-up PR: ${rollup.url}`] : []),
       ...openPrs.map((p) => `PR ${p.n}: ${p.url}`),
     ],

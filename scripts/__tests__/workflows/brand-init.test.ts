@@ -6,107 +6,11 @@
  * never on how the script is laid out, so moving its helpers into a shared library must keep them green.
  */
 import { readdirSync } from "node:fs";
-import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { dryRun, labels, seq, type AgentCall, type AnswerInput, type AnswerRule, type DryRunResult } from "../../lib/workflow-dry-run";
+import { lintTitle } from "../helpers/lint-title";
+import { labels, ledgerAt, callShape, rowShape, seq, type AnswerInput, type AnswerRule, type DryRunResult } from "../../lib/workflow-dry-run";
 
-/** The workflow returns untyped JSON. */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type Obj = Record<string, any>;
-
-const ROOT = "/work/acme";
-const OUT = `${ROOT}/.verify/brand-init`;
-const UI_DIR = fileURLToPath(new URL("../../../app/components/ui", import.meta.url));
-
-const ANSWERS = { users: "Studio owners who bill by the hour" };
-/** Args that settle both the brief and the pick, so a run goes straight to Contract. */
-const SHIP_ARGS = { answers: ANSWERS, pick: 2, rebuildHome: true };
-
-const run = (args: unknown, answers: AnswerRule[], resumeFrom?: DryRunResult) => dryRun("brand-init", { args, answers, resumeFrom });
-const res = (r: DryRunResult) => r.result as Obj;
-const byLabel = (r: DryRunResult, label: string) => r.calls.filter((c) => c.label === label);
-const one = (r: DryRunResult, label: string): AgentCall => {
-  const found = byLabel(r, label);
-  expect(found, `exactly one call labelled ${label}`).toHaveLength(1);
-  return found[0];
-};
-const indexOf = (r: DryRunResult, label: string) => r.calls.findIndex((c) => c.label === label);
-
-/** The `  · path` lines under a prompt's FILE FENCE header: the paths that lane is held to. */
-function fenceIn(prompt: string): string[] {
-  const after = prompt.split("FILE FENCE")[1];
-  if (!after) return [];
-  const out: string[] = [];
-  for (const line of after.split("\n").slice(1)) {
-    const m = /^\s+· (\S+)$/.exec(line);
-    if (!m) break;
-    out.push(m[1]);
-  }
-  return out;
-}
-const fileIn = (fence: string) => (fence.endsWith("/**") ? `${fence.slice(0, -2)}index.tsx` : fence);
-/** A lane that edited the first file of its own fence. */
-const laneDid = (c: AnswerInput, files = [fileIn(fenceIn(c.prompt)[0])]) => ({ files, report: `${c.label}: done`, cwd: ROOT });
-
-const idOf = (label: string) => Number(label.split(":")[1]);
-const tokensFor = (id: number, stage: "drawn" | "tasted") => ({
-  name: `Comp ${id} ${stage}`,
-  light: { primary: `oklch(0.5 0.2 ${id * 90})` },
-  dark: { primary: `oklch(0.7 0.2 ${id * 90})` },
-  voice: [`Voice of comp ${id}`],
-});
-
-const QUESTIONS = [
-  { id: "users", question: "Who uses it?", draft: "Small teams", confident: false },
-  { id: "tone", question: "What tone?", draft: "Calm and exact", confident: true },
-];
-const PASS = { verdict: "PASS", findings: [], evidence: "all green" };
-const SHIPPED = { shipped: true, gatesGreen: true, verdictWritten: true, commit: "abc1234", pr: "https://github.com/acme/app/pull/7" };
-
-/** The happy path. Overrides go first, because the first matching rule answers. */
-function rules(overrides: AnswerRule[] = []): AnswerRule[] {
-  return [
-    ...overrides,
-    ["preflight", { ok: true, reason: "", branch: "feat/brand-init", root: ROOT }],
-    ["memory:recall", "nothing recorded"],
-    [/^memory:record:/, (c: AnswerInput) => `recorded ${c.label}`],
-    ["brief:interview", { questions: QUESTIONS }],
-    ["brief:write", { oneLine: "Invoicing for small studios", sector: "saas" }],
-    [
-      /^draw:directions:\d+$/,
-      (c: AnswerInput) => {
-        const first = Number(c.label.split(":")[2]);
-        const ids = [first, first + 1, first + 2];
-        return { drawIds: ids.map((i) => `dir-${i}`), directions: ids.map((id) => ({ id, sheet: `${OUT}/directions/${id}.md` })) };
-      },
-    ],
-    [
-      /^draw:\d+(:redraw)?$/,
-      (c: AnswerInput) => {
-        const id = idOf(c.label);
-        const dir = `${OUT}/${id}${c.label.endsWith(":redraw") ? "-r" : ""}`;
-        return { html: `${dir}/comp.html`, tokens: tokensFor(id, "drawn"), screenshots: [`${dir}/shots/mobile-light.png`, `${dir}/shots/desktop-light.png`] };
-      },
-    ],
-    [/^critique:\d+:taste$/, (c: AnswerInput) => ({ score: 8, notes: "hero type tightened", tokens: tokensFor(idOf(c.label), "tasted") })],
-    [/^critique:\d+:impeccable$/, { findings: [], contrastAA: { light: true, dark: true } }],
-    [/^critique:\d+:motion$/, { verdict: "PASS", notes: "eases out, reduced motion collapses" }],
-    ["critique:sameness", { pairs: [] }],
-    ["contract:snapshot", { paths: ["PRODUCT.md"] }],
-    ["contract:tokens", { files: ["app/app.css", "app/root.tsx"], report: "contrast: muted-foreground L 0.55 -> 0.50", cwd: ROOT }],
-    ["build:fence-diff", { paths: ["PRODUCT.md", "app/app.css"] }],
-    ["build:polish", { files: [], report: "polish: nothing to change", cwd: ROOT }],
-    [/^build:/, (c: AnswerInput) => laneDid(c)],
-    [/^check:/, PASS],
-    [/^fix:\d+:repair:/, { files: [], reverted: [], report: "repair: nothing reverted", cwd: ROOT }],
-    [/^fix:\d+:revert-strays$/, { files: [], reverted: [], report: "nothing reverted", cwd: ROOT }],
-    [/^fix:\w+:orphans$/, { files: [], report: "orphans: nothing changed", cwd: ROOT }],
-    [/^fix:/, (c: AnswerInput) => laneDid(c)],
-    ["close:design-md", { written: true, files: ["DESIGN.md"] }],
-    ["close:synthesis", "STATE: brand applied. BLOCKING: none."],
-    ["ship:record-commit-pr", SHIPPED],
-  ];
-}
+import { type Obj, ROOT, OUT, UI_DIR, ANSWERS, SHIP_ARGS, run, res, byLabel, one, indexOf, fenceIn, laneDid, tokensFor, PASS, SHIPPED, rules } from "./brand-init.fixtures";
 
 /** Brief stop, then pick stop, then the build: the three runs a user drives by hand. */
 let happy: Promise<{ r1: DryRunResult; r2: DryRunResult; r3: DryRunResult }> | undefined;
@@ -127,10 +31,10 @@ describe("brand-init: happy path, Preflight to Ship", () => {
     expect(res(r1).questions).toHaveLength(1);
     expect(labels(r1.calls).at(-1)).toBe("memory:record:needs-input");
     // The resume replays preflight, recall and the interview from cache, and does not record the brief stop again.
-    expect(labels(r2.calls.filter((c) => c.cached))).toEqual(["preflight", "memory:recall", "brief:interview"]);
-    expect(r2.live[0].label).toBe("brief:write");
+    expect(labels(r2.calls.filter((c) => c.cached))).toEqual(["config", "preflight", "memory:recall", "brief:interview"]);
+    expect(r2.live[0]?.label).toBe("brief:write");
     expect(byLabel(r2, "memory:record:needs-input")).toEqual([]);
-    expect(r3.live[0].label).toBe("contract:snapshot");
+    expect(r3.live[0]?.label).toBe("contract:snapshot");
 
     // An answered id replaces its draft; an id left out keeps its draft. Catches dropping either.
     const write = one(r2, "brief:write").prompt;
@@ -183,8 +87,8 @@ describe("brand-init: happy path, Preflight to Ship", () => {
     for (const r of [r1, r2]) expect(r.calls.filter((c) => c.phase === "Ship")).toEqual([]);
     const committers = r3.calls.filter((c) => /ONE commit, one PR/.test(c.prompt));
     expect(labels(committers)).toEqual(["ship:record-commit-pr"]);
-    expect(committers[0].phase).toBe("Ship");
-    expect(labels(r3.calls.filter((c) => c.phase === "Ship"))).toEqual(["ship:record-commit-pr", "memory:record:ship"]);
+    expect(committers[0]?.phase).toBe("Ship");
+    expect(labels(r3.calls.filter((c) => c.phase === "Ship"))).toEqual(["ship:record-commit-pr", "run:record:ship", "memory:record:ship"]);
     // DESIGN.md describes the shipped tree: it is written after every check and before the commit.
     expect(indexOf(r3, "close:design-md")).toBeGreaterThan(Math.max(...r3.calls.filter((c) => c.label.startsWith("check:")).map((c) => c.n)));
     expect(indexOf(r3, "close:design-md")).toBeLessThan(indexOf(r3, "ship:record-commit-pr"));
@@ -203,11 +107,12 @@ describe("brand-init: happy path, Preflight to Ship", () => {
     for (const c of [...r1.calls, ...r2.calls, ...r3.calls]) expect(declared).toContain(c.phase);
 
     // An agent that starts in the launcher's checkout must be told where to work. Catches a call that skips the preamble.
-    for (const c of r3.calls.filter((c) => c.label !== "preflight")) {
+    for (const c of r3.calls.filter((c) => c.label !== "preflight" && c.label !== "config")) {
       expect(c.prompt.startsWith(`ROOT = ${ROOT}\nWork only inside ${ROOT}.`), c.label).toBe(true);
     }
 
     const typeOf = (label: string) => one(r3, label).opts.agentType;
+    expect(typeOf("config")).toBe("runner");
     expect(typeOf("preflight")).toBe("runner");
     expect(typeOf("contract:snapshot")).toBe("runner");
     expect(typeOf("contract:tokens")).toBe("ui-builder");
@@ -314,20 +219,29 @@ describe("brand-init: happy path, Preflight to Ship", () => {
   });
 });
 
+describe("brand-init: the branch to leave", () => {
+  it("preflight asks for a new branch off the repo's default branch, read from scripts/default-branch.ts, not off a literal main (catches a repo whose default is staging getting brand work committed on it)", async () => {
+    const r = await run({}, rules([["preflight", { ok: false, reason: "stop here", branch: "staging", root: ROOT }]]));
+    const prompt = one(r, "preflight").prompt;
+    expect(prompt).toContain("bun scripts/default-branch.ts");
+    expect(prompt).not.toMatch(/If on main\b/);
+  });
+});
+
 describe("brand-init: a failing gate stops the run", () => {
   it("a red preflight, a relative root or a bad arg stops before any other agent", async () => {
-    const red = await run({}, rules([["preflight", { ok: false, reason: "baseline red: typecheck", branch: "main", root: ROOT }]]));
-    expect(labels(red.calls)).toEqual(["preflight"]);
+    const red = await run({}, rules([["preflight", { ok: false, reason: "baseline red: typecheck", branch: "staging", root: ROOT }]]));
+    expect(labels(red.calls)).toEqual(["config", "preflight"]);
     expect(res(red)).toEqual({ error: "baseline red: typecheck" });
     // The DESIGN.md guard lives in the preflight agent; the script must hand it the redo flag.
-    expect(red.calls[0].prompt).toContain("redo is false");
-    const redo = await run({ redo: true }, rules([["preflight", { ok: false, reason: "dirty tree: app/root.tsx", branch: "main", root: ROOT }]]));
-    expect(redo.calls[0].prompt).toContain("redo is true");
-    expect(labels(redo.calls)).toEqual(["preflight"]);
+    expect(one(red, "preflight").prompt).toContain("redo is false");
+    const redo = await run({ redo: true }, rules([["preflight", { ok: false, reason: "dirty tree: app/root.tsx", branch: "staging", root: ROOT }]]));
+    expect(one(redo, "preflight").prompt).toContain("redo is true");
+    expect(labels(redo.calls)).toEqual(["config", "preflight"]);
 
     // Every later agent is fenced to ROOT; a relative one would fence them to wherever they start.
     const relative = await run({}, rules([["preflight", { ok: true, reason: "", branch: "feat/brand-init", root: "work/acme" }]]));
-    expect(labels(relative.calls)).toEqual(["preflight"]);
+    expect(labels(relative.calls)).toEqual(["config", "preflight"]);
     expect(res(relative)).toEqual({ error: "preflight did not resolve an absolute repo root" });
 
     // A pick typed as a string would never match a comp id: rejected before any agent runs.
@@ -352,7 +266,7 @@ describe("brand-init: a failing gate stops the run", () => {
 
     const declined = await run({ ...SHIP_ARGS, accept: { "post-fix": false } }, rules([redGate]), stopped);
     // The fix rounds replay from cache; only the report and the final record are new.
-    expect(labels(declined.live)).toEqual(["close:synthesis", "memory:record:ship"]);
+    expect(labels(declined.live)).toEqual(["close:synthesis", "run:record:ship", "memory:record:ship"]);
     expect(res(declined)).toMatchObject({ designMd: null, ship: { shipped: false }, escalations: [{ decision: "stop" }] });
   });
 
@@ -374,8 +288,8 @@ describe("brand-init: stop at the pick and resume", () => {
   it("a re-run replays every call before the stop, never writes the stop's record twice, and moves on to Contract", async () => {
     const stopped = await run({ answers: ANSWERS }, rules());
     expect(res(stopped)).toMatchObject({ status: "needs-pick", needs: ["pick", "rebuildHome"] });
-    const recordAt = indexOf(stopped, "memory:record:needs-pick");
-    expect(recordAt).toBe(stopped.calls.length - 1);
+    const recordAt = indexOf(stopped, "run:record:needs-pick");
+    expect(recordAt).toBe(stopped.calls.length - 2);
 
     // Same args again (the user has not answered yet): the record prompt carries no clock, so it replays.
     const again = await run({ answers: ANSWERS }, rules(), stopped);
@@ -384,7 +298,7 @@ describe("brand-init: stop at the pick and resume", () => {
 
     const resumed = await run({ answers: ANSWERS, pick: 3, rebuildHome: false }, rules(), stopped);
     expect(resumed.calls.slice(0, recordAt).every((c) => c.cached)).toBe(true);
-    expect(resumed.live[0].label).toBe("contract:snapshot");
+    expect(resumed.live[0]?.label).toBe("contract:snapshot");
     expect(byLabel(resumed, "memory:record:needs-pick")).toEqual([]);
     expect(resumed.phases).not.toContain("Pick");
     expect(res(resumed)).toMatchObject({ pick: 3, rebuildHome: false, ship: { shipped: true } });
@@ -415,13 +329,27 @@ describe("brand-init: stop at the pick and resume", () => {
   it("look-alike comps get exactly one redraw, into its own directory, which replaces the original in the pick", async () => {
     const r = await run({ answers: ANSWERS }, rules([["critique:sameness", { pairs: [[1, 2], [2, 3]] }]]));
     // Catches redrawing every flagged pair, or redrawing in place (a failed redraw would corrupt the original).
-    expect(labels(r.calls).filter((l) => l.endsWith(":redraw"))).toEqual(["draw:2:redraw"]);
+    expect(labels(r.calls).filter((l) => l.startsWith("draw:") && l.endsWith(":redraw"))).toEqual(["draw:2:redraw"]);
     expect(one(r, "draw:2:redraw").prompt).toContain(`write only under ${OUT}/2-r/ and nowhere else`);
     expect(res(r).comps.map((c: Obj) => [c.id, c.html, c.redrawn])).toEqual([
       [1, `${OUT}/1/comp.html`, false],
       [2, `${OUT}/2-r/comp.html`, true],
       [3, `${OUT}/3/comp.html`, false],
     ]);
+  });
+
+  it("a redrawn comp's critics carry their own labels (catches two critic calls sharing one label, the first comp's and the redraw's)", async () => {
+    const r = await run({ answers: ANSWERS }, rules([["critique:sameness", { pairs: [[1, 2]] }]]));
+    const critics = labels(r.calls).filter((l) => l.startsWith("critique:2:"));
+    expect(critics.sort()).toEqual([
+      "critique:2:impeccable",
+      "critique:2:impeccable:redraw",
+      "critique:2:motion",
+      "critique:2:motion:redraw",
+      "critique:2:taste",
+      "critique:2:taste:redraw",
+    ]);
+    expect(one(r, "critique:2:taste:redraw").prompt).toContain(`${OUT}/2-r/comp.html`);
   });
 });
 
@@ -434,7 +362,7 @@ describe("brand-init: fix rounds", () => {
     const fixes = r.calls.filter((c) => c.label.startsWith("fix:"));
     // Catches routing by anything but the hardcoded fences, or handing the lane no finding.
     expect(labels(fixes)).toEqual(["fix:1:primitives:dialogs-sheets"]);
-    const fix = fixes[0];
+    const fix = one(r, "fix:1:primitives:dialogs-sheets");
     expect(fix.opts.agentType).toBe("ui-builder");
     expect(fix.prompt).toContain(`[P1] impeccable critique: ${dialogP1.issue} (${dialogP1.file})`);
     expect(fenceIn(fix.prompt)).toEqual(["app/components/ui/dialog.tsx", "app/components/ui/alert-dialog.tsx", "app/components/ui/sheet.tsx", "app/components/ui/drawer.tsx"]);
@@ -442,7 +370,7 @@ describe("brand-init: fix rounds", () => {
     for (const label of checkLabels) {
       const runs = byLabel(r, label);
       expect(runs, label).toHaveLength(2);
-      expect(runs[1].n).toBeGreaterThan(fix.n);
+      expect(runs[1]?.n).toBeGreaterThan(fix.n);
     }
     expect(res(r)).toMatchObject({ blockingFindings: [], ship: { shipped: true } });
   });
@@ -496,5 +424,81 @@ describe("brand-init: fix rounds", () => {
       items: [expect.objectContaining({ severity: "P0", source: "fence:primitives:feedback", file: "app/components/ui/button.tsx" })],
     });
     expect(byLabel(r, "ship:record-commit-pr")).toEqual([]);
+  });
+});
+
+describe("brand-init: run ledger", () => {
+  const drawn = () => ({ html: `${OUT}/1/comp.html`, tokens: tokensFor(1, "drawn"), screenshots: [`${OUT}/1/shots/mobile-light.png`, `${OUT}/1/shots/desktop-light.png`] });
+
+  it("at the brief stop, the pick stop and Ship the run:record ledger lists exactly the calls made before it, in order, and its check line verifies: a call that dodges the ledger gives a false cost report", async () => {
+    const { r1, r2, r3 } = await happyPath();
+    for (const [r, label] of [
+      [r1, "run:record:needs-input"],
+      [r2, "run:record:needs-pick"],
+      [r3, "run:record:ship"],
+    ] as const) {
+      const lg = ledgerAt(r, label);
+      expect(lg.verifies).toBe(true);
+      expect([lg.workflow, lg.slug]).toEqual(["brand-init", "brand-init"]);
+      expect(rowShape(lg.rows)).toEqual(r.calls.slice(0, lg.at).map(callShape));
+    }
+  });
+
+  it("a re-run with the same args replays the stop's run:record call from cache with the same prompt: the ledger holds no clock and no random value", async () => {
+    const { r2 } = await happyPath();
+    const again = await run({ answers: ANSWERS }, rules(), r2);
+    const before = one(r2, "run:record:needs-pick");
+    const after = one(again, "run:record:needs-pick");
+    expect(after.cached).toBe(true);
+    expect(after.prompt).toBe(before.prompt);
+    expect(again.live).toEqual([]);
+  });
+
+  it.each([
+    ["a dead agent", null, "empty"],
+    [
+      "a thrown error",
+      () => {
+        throw new Error("rate limited");
+      },
+      "threw",
+    ],
+  ] as const)("%s on the first try shows outcome %s with attempt 1, then the retry shows attempt 2: the ledger must tell a retry from a first try", async (_who, first, outcome) => {
+    const r = await run({ answers: ANSWERS }, rules([[/^draw:1$/, seq(first, drawn)]]));
+    const lg = ledgerAt(r, "run:record:needs-pick");
+    expect(lg.rows.filter((row) => row.label === "draw:1").map((row) => [row.attempt, row.outcome])).toEqual([
+      [1, outcome],
+      [2, "ok"],
+    ]);
+    expect(lg.rows.filter((row) => row.attempt === 2)).toHaveLength(1);
+  });
+
+  it("a build lane retried by hand shows as attempt 2 in the ledger: a retry outside twice() must not read as a first try", async () => {
+    const { r2 } = await happyPath();
+    const r = await run({ answers: ANSWERS, pick: 2, rebuildHome: true }, rules([["build:shell", seq(null, (c: AnswerInput) => laneDid(c))]]), r2);
+    const lg = ledgerAt(r, "run:record:ship");
+    expect(lg.rows.filter((row) => row.label === "build:shell").map((row) => [row.attempt, row.outcome])).toEqual([
+      [1, "empty"],
+      [2, "ok"],
+    ]);
+  });
+
+  it("the PR body gets the run summary and the pick and accept stops tell the main thread to show it: a PR or a review page without the telemetry table breaks the ticket's second criterion", async () => {
+    const { r2, r3 } = await happyPath();
+    expect(one(r3, "ship:record-commit-pr").prompt).toContain("`## Run` heading and the output of `bun scripts/run-telemetry.ts summary brand-init --markdown`");
+    expect(res(r2).next).toContain("`bun scripts/run-telemetry.ts summary brand-init`");
+    const stopped = await run(SHIP_ARGS, rules([["check:gates", { verdict: "FAIL", findings: [], evidence: "typecheck: 3 errors" }]]));
+    expect(res(stopped).next).toContain("ingest brand-init brand-init <this run's transcript directory>");
+  });
+});
+
+describe("brand-init: the commit subject it dictates passes the repo's commitlint config", () => {
+  it("names a subject in the list of scopes: the old 'feat(brand)' scope would fail the commit-msg hook and the PR title job", async () => {
+    const { r3 } = await happyPath();
+    const prompt = one(r3, "ship:record-commit-pr").prompt;
+    const subject = prompt.match(/`(feat\([a-z-]+\): [^`]*)`/)?.[1] ?? "";
+    expect(subject).toContain("feat(design): ");
+    expect((await lintTitle(subject)).problems).toEqual([]);
+    expect(prompt).toContain("the PR title is the same line");
   });
 });

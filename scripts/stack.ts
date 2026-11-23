@@ -6,6 +6,7 @@
  *   bun run scripts/stack.ts restack --plan <file.json> --from <n>   (needs git 2.38 for rebase --update-refs; the workflow checks)
  *
  * Plan: { base, prs: [{ n, branch, title, fence: [path | dir/], message }], rest?: n, exclude?: [path | dir/] }.
+ * A plan with no `exclude` uses `scratchDirs` from harness.config.json; an `exclude` of its own, even [], wins.
  * Excluded paths are never assigned, never unassigned and never staged; `assign` lists them as `excluded`.
  * A fence entry ending in "/" is a directory prefix; any other entry is an exact path.
  * Success prints one JSON object to stdout. Failure prints { error, code, help } to stderr.
@@ -19,6 +20,7 @@
  */
 import { readFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
+import { loadHarnessConfigFromDisk } from "./lib/harness-config";
 
 export interface GitResult {
   code: number;
@@ -31,6 +33,7 @@ export type GitRunner = (args: string[]) => GitResult;
 export interface Deps {
   git: GitRunner;
   readFile: (path: string) => string;
+  scratchDirs: string[];
 }
 
 export interface Outcome {
@@ -70,8 +73,7 @@ const bad = (code: number, kind: string, error: string, help: string): Outcome =
   code,
   err: { error, code: kind, help },
 });
-const usage = (error: string): Outcome =>
-  bad(1, "USAGE", error, "verbs: assign --plan <f> | split --plan <f> | restack --plan <f> --from <n>");
+const usage = (error: string): Outcome => bad(1, "USAGE", error, "verbs: assign --plan <f> | split --plan <f> | restack --plan <f> --from <n>");
 const gitFailure = (r: GitResult, what: string): Outcome =>
   bad(2, "GIT", `${what}: ${r.stderr.trim() || r.stdout.trim() || `git exited ${r.code}`}`, "run the same git command by hand to see why");
 
@@ -82,6 +84,7 @@ export const defaultDeps: Deps = {
     return { code: r.status ?? 1, stdout: r.stdout ?? "", stderr: r.stderr ?? "" };
   },
   readFile: (p) => readFileSync(p, "utf8"),
+  scratchDirs: loadHarnessConfigFromDisk().scratchDirs,
 };
 
 /** Drop "./" prefixes and doubled slashes; keep a trailing "/" (the directory marker). */
@@ -101,7 +104,7 @@ export function parsePorcelain(text: string): { paths: string[]; renamedFrom: Ma
   const parts = text.split("\0");
   for (let i = 0; i < parts.length; i++) {
     const entry = parts[i];
-    if (entry.length < 4 || entry.startsWith("!!")) continue;
+    if (entry === undefined || entry.length < 4 || entry.startsWith("!!")) continue;
     const newP = normalizePath(entry.slice(3));
     paths.push(newP);
     if (entry[0] === "R" || entry[0] === "C" || entry[1] === "R" || entry[1] === "C") {
@@ -133,12 +136,12 @@ export function assignPaths(plan: Plan, changed: string[], renamedFrom: Map<stri
     }
     const hit = fences.filter((f) => f.fence.some((e) => matches(e, path))).map((f) => f.pr.n);
     if (hit.length > 1) overlaps.push({ path, prs: hit });
-    else if (hit.length === 1) buckets.get(hit[0])!.push(path);
-    else if (plan.rest !== undefined && buckets.has(plan.rest)) buckets.get(plan.rest)!.push(path);
+    else if (hit.length === 1) buckets.get(hit[0] ?? Number.NaN)?.push(path);
+    else if (plan.rest !== undefined && buckets.has(plan.rest)) buckets.get(plan.rest)?.push(path);
     else unassigned.push(path);
   }
   const assignments = plan.prs.map((p) => {
-    const paths = buckets.get(p.n)!;
+    const paths = buckets.get(p.n) ?? [];
     const olds = paths.map((x) => renamedFrom.get(x)).filter((x): x is string => !!x);
     return { n: p.n, branch: p.branch, paths: [...paths, ...olds] };
   });
@@ -162,9 +165,10 @@ function loadPlan(path: string | undefined, deps: Deps): Plan | Outcome {
   }
   const ns = p.prs.map((x) => x.n);
   if (new Set(ns).size !== ns.length) return usage("plan.prs has a duplicate n");
-  if (p.exclude !== undefined && (!Array.isArray(p.exclude) || p.exclude.some((e) => typeof e !== "string"))) return usage("plan.exclude must be an array of strings");
+  if (p.exclude !== undefined && (!Array.isArray(p.exclude) || p.exclude.some((e) => typeof e !== "string")))
+    return usage("plan.exclude must be an array of strings");
   if (p.rest !== undefined && !ns.includes(p.rest)) return usage(`plan.rest ${p.rest} is not a PR in plan.prs`);
-  return { ...(p as Plan), prs: [...p.prs].sort((a, b) => a.n - b.n) };
+  return { ...(p as Plan), exclude: p.exclude ?? deps.scratchDirs, prs: [...p.prs].sort((a, b) => a.n - b.n) };
 }
 
 const isOutcome = (v: unknown): v is Outcome => typeof v === "object" && v !== null && "code" in v;
@@ -193,8 +197,7 @@ function split(plan: Plan, deps: Deps): Outcome {
       "narrow the fences so each path belongs to one PR",
     );
   const empty = a.assignments.filter((x) => x.paths.length === 0);
-  if (empty.length)
-    return bad(3, "EMPTY_PR", `PR ${empty.map((e) => e.n).join(", ")} has no changed paths`, "drop the PR from the plan or widen its fence");
+  if (empty.length) return bad(3, "EMPTY_PR", `PR ${empty.map((e) => e.n).join(", ")} has no changed paths`, "drop the PR from the plan or widen its fence");
   const ahead = deps.git(["rev-list", "--count", `${plan.base}..HEAD`]);
   if (ahead.code !== 0) return gitFailure(ahead, "git rev-list");
   if (Number(ahead.stdout.trim()) > 0)
@@ -217,7 +220,7 @@ function split(plan: Plan, deps: Deps): Outcome {
 
   const branches: { n: number; branch: string; sha: string; paths: string[] }[] = [];
   for (const pr of plan.prs) {
-    const paths = a.assignments.find((x) => x.n === pr.n)!.paths;
+    const paths = a.assignments.find((x) => x.n === pr.n)?.paths ?? [];
     for (const [args, what] of [
       [["switch", "-c", pr.branch], `git switch -c ${pr.branch}`],
       [["add", "-A", "--", ...paths], `git add for PR ${pr.n}`],
@@ -238,13 +241,16 @@ function restack(plan: Plan, from: string | undefined, deps: Deps): Outcome {
   if (!Number.isInteger(n)) return usage("--from <n> is required and must be a PR number");
   const target = plan.prs.find((p) => p.n === n);
   if (!target) return usage(`--from ${n}: no such PR in the plan`);
-  const last = plan.prs[plan.prs.length - 1];
+  const last = plan.prs.at(-1) ?? target;
   const sw = deps.git(["switch", last.branch]);
   if (sw.code !== 0) return gitFailure(sw, `git switch ${last.branch}`);
   const rb = deps.git(["rebase", "--update-refs", target.branch]);
   if (rb.code !== 0) {
     const u = deps.git(["diff", "--name-only", "--diff-filter=U"]);
-    const paths = u.stdout.split("\n").map((l) => l.trim()).filter(Boolean);
+    const paths = u.stdout
+      .split("\n")
+      .map((l) => l.trim())
+      .filter(Boolean);
     const ab = deps.git(["rebase", "--abort"]);
     if (!paths.length) return gitFailure(rb, "git rebase");
     const e = bad(
@@ -271,7 +277,7 @@ export function run(argv: string[], deps: Deps = defaultDeps): Outcome {
   const flags = new Map<string, string>();
   const positional: string[] = [];
   for (let i = 0; i < argv.length; i++) {
-    const a = argv[i];
+    const a = argv[i] ?? "";
     if (a.startsWith("--")) {
       const v = argv[i + 1];
       if (v === undefined || v.startsWith("--")) return usage(`${a} needs a value`);

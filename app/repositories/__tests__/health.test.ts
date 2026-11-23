@@ -45,21 +45,21 @@ describe("HealthRepository.pingDatabase", () => {
     }).pipe(Effect.provide(provideStub({ run })));
   });
 
-  it.effect("measures the query's own duration, in milliseconds", () => {
-    // Catches: timing outside the query (always ~0), reporting seconds or
-    // nanoseconds instead of ms. The clock's monotonic time moves only while
-    // the stub query runs, so the expected latency is exact.
-    let nanos = 0n;
-    const clock = Clock.make();
-    clock.unsafeCurrentTimeNanos = () => nanos;
-    const run = () => {
-      nanos += 25_000_000n;
-      return Promise.resolve({ success: true });
-    };
-    return Effect.gen(function* () {
-      const repo = yield* HealthRepository;
-      const result = yield* repo.pingDatabase().pipe(Effect.withClock(clock));
-      expect(result).toEqual({ ok: true, latencyMs: 25 });
-    }).pipe(Effect.provide(provideStub({ run })));
-  });
+  it.effect(
+    "measures the query's own duration in ms, not time outside it or in seconds or nanoseconds (the stub clock moves only inside the query)",
+    () => {
+      let nanos = 0n;
+      const clock = Clock.make();
+      clock.unsafeCurrentTimeNanos = () => nanos;
+      const run = () => {
+        nanos += 25_000_000n;
+        return Promise.resolve({ success: true });
+      };
+      return Effect.gen(function* () {
+        const repo = yield* HealthRepository;
+        const result = yield* repo.pingDatabase().pipe(Effect.withClock(clock));
+        expect(result).toEqual({ ok: true, latencyMs: 25 });
+      }).pipe(Effect.provide(provideStub({ run })));
+    },
+  );
 });

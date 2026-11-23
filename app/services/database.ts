@@ -10,10 +10,7 @@ export interface DatabaseShape {
   readonly db: DrizzleD1;
 }
 
-export class Database extends Context.Tag("app/Database")<
-  Database,
-  DatabaseShape
->() {}
+export class Database extends Context.Tag("app/Database")<Database, DatabaseShape>() {}
 
 export const DatabaseLive = Layer.effect(
   Database,
@@ -24,9 +21,9 @@ export const DatabaseLive = Layer.effect(
         new ConfigurationError({
           service: "Database",
           field: "DATABASE",
-        })
+        }),
       );
     }
     return { db: drizzleD1(env.DATABASE, { schema, logger: false }) };
-  })
+  }),
 );

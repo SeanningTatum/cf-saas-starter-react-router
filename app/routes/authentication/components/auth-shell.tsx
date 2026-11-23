@@ -13,23 +13,16 @@ import { LanguageSwitcher } from "@/components/language-switcher";
 import { StackBadge } from "@/components/stack-badge";
 
 interface AuthShellProps {
-  /** Form column content (the sign-in / sign-up card). */
   children: React.ReactNode;
 }
 
-/**
- * Split-pane shell for the auth pages. Form on the left (always visible), an
- * educational context panel on the right (md+ only) so engineers evaluating
- * the boilerplate immediately see what's powering the auth flow.
- */
 export function AuthShell({ children }: AuthShellProps) {
   const { t } = useTranslation("auth");
   const { t: tc } = useTranslation("common");
 
   return (
     <div className="grid min-h-svh grid-cols-1 md:grid-cols-[5fr_7fr]">
-      {/* Form column */}
-      <div className="relative flex flex-col px-6 py-8 md:px-10">
+      <div className="relative flex flex-col px-4 py-8 sm:px-6 md:px-10">
         <div className="flex items-center justify-between">
           <Link
             to="/"
@@ -47,10 +40,7 @@ export function AuthShell({ children }: AuthShellProps) {
 
         <div className="flex flex-1 items-center justify-center py-10">
           <div className="flex w-full max-w-sm flex-col gap-8">
-            <Link
-              to="/"
-              className="flex items-center gap-2 self-start text-sm font-medium"
-            >
+            <Link to="/" className="flex items-center gap-2 self-start text-sm font-medium">
               <span className="flex size-6 items-center justify-center rounded-md bg-primary text-primary-foreground font-mono text-[10px] font-bold">
                 {tc("app_name_short")}
               </span>
@@ -61,7 +51,6 @@ export function AuthShell({ children }: AuthShellProps) {
         </div>
       </div>
 
-      {/* Context column */}
       <aside
         aria-hidden="true"
         className="relative hidden flex-col justify-between border-l border-border bg-muted/30 p-12 md:flex"
@@ -73,12 +62,8 @@ export function AuthShell({ children }: AuthShellProps) {
               <span className="size-1.5 rounded-full bg-primary" />
               {t("shell.eyebrow")}
             </span>
-            <h2 className="text-2xl font-semibold tracking-tight">
-              {t("shell.heading")}
-            </h2>
-            <p className="max-w-md text-sm text-muted-foreground">
-              {t("shell.description")}
-            </p>
+            <h2 className="text-2xl font-semibold tracking-tight">{t("shell.heading")}</h2>
+            <p className="max-w-md text-sm text-muted-foreground">{t("shell.description")}</p>
           </div>
 
           <ul className="flex flex-col gap-4">
@@ -115,15 +100,7 @@ export function AuthShell({ children }: AuthShellProps) {
   );
 }
 
-function ContextRow({
-  icon,
-  title,
-  body,
-}: {
-  icon: React.ReactNode;
-  title: string;
-  body: string;
-}) {
+function ContextRow({ icon, title, body }: { icon: React.ReactNode; title: string; body: string }) {
   return (
     <li className="flex items-start gap-4">
       <span className="mt-0.5 flex size-9 items-center justify-center rounded-md border border-border bg-card text-foreground">

@@ -8,21 +8,12 @@ import { posthogAdapter } from "@/lib/analytics/adapters/posthog";
 import { loggers } from "@/lib/logger";
 
 export interface AnalyticsShape {
-  /** Buffers the event. Never fails, never waits on the network. */
   readonly capture: (event: AnalyticsEvent) => Effect.Effect<void>;
-  /** Buffers a provider-side update of a person's traits. Never fails. */
-  readonly identify: (
-    distinctId: string,
-    traits: Record<string, unknown>
-  ) => Effect.Effect<void>;
+  readonly identify: (distinctId: string, traits: Record<string, unknown>) => Effect.Effect<void>;
 }
 
-export class Analytics extends Context.Tag("app/Analytics")<
-  Analytics,
-  AnalyticsShape
->() {}
+export class Analytics extends Context.Tag("app/Analytics")<Analytics, AnalyticsShape>() {}
 
-/** Unknown provider names, and `posthog` with no key, fall back to no-op so a bad config cannot break requests. */
 export const selectAdapter = (env: Partial<Env>): AnalyticsAdapter => {
   switch (env.ANALYTICS_PROVIDER) {
     case "console":
@@ -39,13 +30,9 @@ export const selectAdapter = (env: Partial<Env>): AnalyticsAdapter => {
 const stamp = (event: Omit<CapturedEvent, "timestamp">) =>
   Effect.map(
     Clock.currentTimeMillis,
-    (ms): CapturedEvent => ({ ...event, timestamp: new Date(ms).toISOString() })
+    (ms): CapturedEvent => ({ ...event, timestamp: new Date(ms).toISOString() }),
   );
 
-/**
- * Events buffer for the life of the per-request runtime and go out as one
- * batch when it is disposed, which workers/app.ts runs under `ctx.waitUntil`.
- */
 export const AnalyticsFrom = (adapter: AnalyticsAdapter) =>
   Layer.scoped(
     Analytics,
@@ -54,16 +41,18 @@ export const AnalyticsFrom = (adapter: AnalyticsAdapter) =>
 
       yield* Effect.addFinalizer(() => {
         if (buffer.length === 0) return Effect.void;
-        return adapter.send(buffer).pipe(
-          Effect.catchAllCause((cause) =>
-            Effect.sync(() =>
-              loggers.server.warn(
-                { provider: adapter.name, dropped: buffer.length, cause: String(cause) },
-                "analytics delivery failed; batch dropped"
-              )
-            )
-          )
-        );
+        return adapter
+          .send(buffer)
+          .pipe(
+            Effect.catchAllCause((cause) =>
+              Effect.sync(() =>
+                loggers.server.warn(
+                  { provider: adapter.name, dropped: buffer.length, cause: String(cause) },
+                  "analytics delivery failed; batch dropped",
+                ),
+              ),
+            ),
+          );
       });
 
       return {
@@ -76,12 +65,12 @@ export const AnalyticsFrom = (adapter: AnalyticsAdapter) =>
             stamp({ event: "$identify", distinctId, properties: { $set: traits } }),
             (e) => {
               buffer.push(e);
-            }
+            },
           ),
       };
-    })
+    }),
   );
 
 export const AnalyticsLive = Layer.unwrapEffect(
-  Effect.map(CloudflareEnv, (env) => AnalyticsFrom(selectAdapter(env)))
+  Effect.map(CloudflareEnv, (env) => AnalyticsFrom(selectAdapter(env))),
 );
