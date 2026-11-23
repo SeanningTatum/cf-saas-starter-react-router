@@ -1,26 +1,27 @@
 #!/usr/bin/env bun
+import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { Effect, Either } from "effect";
 import type { ScenarioName } from "../app/lib/fixtures/schema";
 import { DevServerRunningError, SeedError } from "../app/models/errors/fixture";
-import { BUN_RUN_MIGRATE, LOCAL_STATE_DIR, LSOF_BIN, PID_PATTERN, SEED_SCRIPT, SPAWN_MISSING, WIPED_STATE_DIRS } from "./lib/db-reset-constants";
+import { BUN_RUN_MIGRATE, LOCAL_STATE_DIR, LSOF_BIN, PID_PATTERN, LSOF_NO_HOLDER_CODE, SEED_SCRIPT, WIPED_STATE_DIRS } from "./lib/db-reset-constants";
 import { realShell, step, type Shell } from "./lib/shell";
-import { BUN_BIN, EXIT_FAIL } from "./lib/shell-constants";
+import { BUN_BIN, EXIT_FAIL, EXIT_OK } from "./lib/shell-constants";
 import { readScenario } from "./seed-preview";
+
+const pidsIn = (stdout: string): ReadonlyArray<number> =>
+  stdout
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => PID_PATTERN.test(line))
+    .map(Number);
 
 export const holdersOf = (shell: Shell, stateDir: string): Either.Either<ReadonlyArray<number>, string> => {
   const result = shell.run(LSOF_BIN, ["-t", "+D", stateDir], shell.cwd);
-  if (result.stderr.includes(SPAWN_MISSING)) {
-    return Either.left(
-      `\`${LSOF_BIN}\` is not installed, so the reset cannot tell whether a dev server holds ${stateDir}. Stop it, then delete that folder by hand.`,
-    );
-  }
-  return Either.right(
-    result.stdout
-      .split("\n")
-      .map((line) => line.trim())
-      .filter((line) => PID_PATTERN.test(line))
-      .map(Number),
+  if (result.code === EXIT_OK) return Either.right(pidsIn(result.stdout));
+  if (result.code === LSOF_NO_HOLDER_CODE && result.stdout.trim() === "" && result.stderr.trim() === "") return Either.right([]);
+  return Either.left(
+    `\`${LSOF_BIN}\` could not check whether a dev server holds ${stateDir} (${result.stderr.trim() || `exit ${result.code}`}). Stop the dev server, then delete that folder by hand.`,
   );
 };
 
@@ -30,11 +31,15 @@ const runStep = (shell: Shell, scenario: ScenarioName, args: ReadonlyArray<strin
     onRight: (result) => Effect.sync(() => shell.out(result.stdout.trimEnd())),
   });
 
-export const reset = (scenario: ScenarioName, shell: Shell): Effect.Effect<void, DevServerRunningError | SeedError> =>
+export const reset = (
+  scenario: ScenarioName,
+  shell: Shell,
+  exists: (path: string) => boolean = existsSync,
+): Effect.Effect<void, DevServerRunningError | SeedError> =>
   Effect.gen(function* () {
     const stateDir = join(shell.cwd, LOCAL_STATE_DIR);
     const local = (message: string, cause?: unknown) => new SeedError({ scenario, target: "local", message, cause });
-    const pids = yield* Either.mapLeft(holdersOf(shell, stateDir), (message) => local(message));
+    const pids = exists(stateDir) ? yield* Either.mapLeft(holdersOf(shell, stateDir), (message) => local(message)) : [];
     if (pids.length > 0) return yield* Effect.fail(new DevServerRunningError({ pids, stateDir }));
     yield* Effect.try({
       try: () => {

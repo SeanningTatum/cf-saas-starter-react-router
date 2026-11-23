@@ -9,9 +9,10 @@ const caller = (baseURL: string | undefined) => ({
 });
 
 test.describe("Seeded logins restored by global setup", () => {
-  test("admin and user sign in with the fixture password and get their fixture roles, so a fresh checkout needs no manual seed", {
-    tag: "@golden",
-  }, async ({ request, baseURL }) => {
+  test("admin and user sign in with the fixture password and get their fixture roles, so a fresh checkout needs no manual seed", async ({
+    request,
+    baseURL,
+  }) => {
     for (const [role, email] of [
       ["admin", SEEDED_LOGINS.admin],
       ["user", SEEDED_LOGINS.user],
@@ -26,9 +27,10 @@ test.describe("Seeded logins restored by global setup", () => {
     }
   });
 
-  test("the banned fixture is refused a session, so the seed restored its ban", {
-    tag: "@error",
-  }, async ({ request, baseURL }) => {
+  test("the banned fixture is refused a session, so the seed restored its ban", async ({
+    request,
+    baseURL,
+  }) => {
     const res = await postSignIn(request, caller(baseURL), {
       email: SEEDED_LOGINS.banned,
       password: SEEDED_PASSWORD,
