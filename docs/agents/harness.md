@@ -213,6 +213,18 @@ const layer = UserRepository.Default.pipe(Layer.provide(makeSeededDatabase("many
 
 The helper is test support: only tests import it, so it never reaches the Worker bundle. Its own tests: `app/services/__tests__/database.seeded-layer.test.ts`.
 
+## State machines
+
+A component with UI logic keeps it in an XState machine, `<name>.machine.ts` beside the component (model: `app/components/file-upload.machine.ts`). The `machines` gate (`bun scripts/check-machines.ts`, or name the files) imports every `*.machine.ts` under `app/` and `workers/` and walks its states with XState's graph helpers. It fails when:
+
+- a state is unreachable from the initial state (`machines/unreachable`);
+- a state has no path back to the initial state or to a final state and is not marked `type: "final"` (`machines/dead-end`);
+- the machine starts in a state that invokes or spawns an actor, so `useMachine` would start that work during the server render (`machines/starts-work`).
+
+Each finding names the file, the machine, the state and the fix. The walk follows the machine's shape and ignores guards: a state behind a guard that is never true still counts as reachable, so the unit tests own the guards. The self-test is `scripts/lib/__tests__/machine-check.test.ts`, on bad machines in `scripts/lib/__tests__/fixtures/machines.ts`. The gate runs in the baseline tier, and `--changed` runs it only for a machine the diff changes or that imports a changed file directly (a change two imports away waits for the baseline run).
+
+A pull request that adds or changes a machine pastes its diagram in the body. `bun scripts/machine-diagram.ts app/components/file-upload.machine.ts` prints each machine in the file as a fenced Mermaid state diagram, which GitHub draws.
+
 ## Gates
 
 Listed in `gates` in [`harness.config.json`](../../harness.config.json) and run by [`scripts/verify.sh`](../../scripts/verify.sh), the one runner for CI, `init.sh` and agents:
@@ -228,12 +240,13 @@ Listed in `gates` in [`harness.config.json`](../../harness.config.json) and run 
 | harness | `./scripts/harness-check.sh` | baseline, full |
 | secrets | `bun run scripts/secret-scan.ts` | baseline, full |
 | audit | `bun run scripts/package-audit.ts` | baseline, full |
+| machines | `bun scripts/check-machines.ts` ([state machines](#state-machines)) | baseline, full |
 | build | `bun run build` | full |
 | e2e | `bun run test:e2e` | full |
 
 `./scripts/verify.sh` runs the full set, `--baseline` the quick set, `--lean` the lean tier (CI's job on a stacked PR), `--only <gate>` one gate, `--list` prints them. To add a gate, add an object to `gates` in `harness.config.json`, with the `tier` it first runs in (see [`harness-config.md`](harness-config.md)) — CI picks it up.
 
-`./scripts/verify.sh --changed [base]` is for a stacked change. It diffs the working tree (committed, staged, unstaged and untracked) against the merge base with `base` (default: the pull request's target, else the default branch) and runs: typecheck; `bun run lint <changed .ts/.tsx>` (Biome and the house linter on those files); `bunx vitest related --run <changed .ts/.tsx>` (the tests that import them, at any depth); and `CI=1 bun run test:e2e <specs>` for the specs the [test map](lint-rules.md#the-test-map) ties to them (a changed spec, a `covered-by` spec, a machine's paths spec, the specs that visit a changed route, the specs that import a changed file). It prints the base, what it ran, and each gate it skipped with the reason. A change to a gate script, `harness.config.json`, `scripts/lint/**`, the lint runner, a config file (`biome.jsonc` and `knip.json` included), `.github/`, `.claude/`, a migration, the schema or the lockfile runs every gate instead and says which file caused it. The plan is `scripts/verify-changed.ts`; its rules are `scripts/lib/verify-plan.ts`.
+`./scripts/verify.sh --changed [base]` is for a stacked change. It diffs the working tree (committed, staged, unstaged and untracked) against the merge base with `base` (default: the pull request's target, else the default branch) and runs: typecheck; `bun run lint <changed .ts/.tsx>` (Biome and the house linter on those files); `bunx vitest related --run <changed .ts/.tsx>` (the tests that import them, at any depth); and `CI=1 bun run test:e2e <specs>` for the specs the [test map](lint-rules.md#the-test-map) ties to them (a changed spec, a `covered-by` spec, a machine's paths spec, the specs that visit a changed route, the specs that import a changed file). When a `*.machine.ts` changed, or a machine imports a changed file, it also runs `bun scripts/check-machines.ts <those machines>`. It prints the base, what it ran, and each gate it skipped with the reason. A change to a gate script, `harness.config.json`, `scripts/lint/**`, the lint runner, a config file (`biome.jsonc` and `knip.json` included), `.github/`, `.claude/`, a migration, the schema or the lockfile runs every gate instead and says which file caused it. The plan is `scripts/verify-changed.ts`; its rules are `scripts/lib/verify-plan.ts`.
 
 The `e2e` gate needs the network: the sign-in and sign-up pages load Turnstile from `challenges.cloudflare.com`. Each spec file sends its own client IP (`e2e/lib/client-ip.ts`), so the auth rate limits count per file ([`docs/auth.md`](../auth.md#rate-limits)).
 

@@ -43,6 +43,12 @@
       "tier": "baseline",
       "limitSeconds": 120
     },
+    {
+      "name": "machines",
+      "run": "bun scripts/check-machines.ts",
+      "tier": "baseline",
+      "limitSeconds": 120
+    },
     { "name": "build", "run": "bun run build", "tier": "full", "limitSeconds": 900 },
     { "name": "e2e", "run": "CI=1 bun run test:e2e", "tier": "full", "limitSeconds": 900 }
   ],

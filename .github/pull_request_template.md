@@ -21,6 +21,9 @@ Closes #
 
 ## What changed
 
+<!-- A PR that adds or changes a `*.machine.ts` pastes its diagram here:
+     `bun scripts/machine-diagram.ts <file>` prints it as a Mermaid block. -->
+
 -
 
 ## Verification

@@ -6,6 +6,7 @@ import { parseTestMap, type TestMap } from "../lint/test-map/map";
 import { specsVisiting } from "../lint/test-map/route";
 import type { Repo } from "../lint/types";
 import { LINTABLE_FILE } from "./lint-constants";
+import { machineFiles } from "./machine-load";
 import {
   COMMAND,
   FIELD,
@@ -70,6 +71,13 @@ export function e2eSpecsFor(repo: Repo, map: TestMap, changed: readonly string[]
   return [...new Set(changed.flatMap((path) => specsFor(repo, map, path, specs)))].sort();
 }
 
+export function machinesFor(repo: Repo, changed: readonly string[]): string[] {
+  return machineFiles(repo).filter((machine) => {
+    const source = repo.source(machine);
+    return changed.includes(machine) || (source !== undefined && changed.some((path) => importsFile(source, path)));
+  });
+}
+
 export function planChanged(repo: Repo, changed: readonly string[]): Plan {
   const reasons = fullRunReasons(changed);
   if (reasons.length > 0) return { kind: "full", reasons: [...new Set(reasons)] };
@@ -85,6 +93,9 @@ export function planChanged(repo: Repo, changed: readonly string[]): Plan {
   else skip.push({ gate: GATE.lint, reason: SKIP_REASON.noCode });
   if (modules.length > 0) run.push({ gate: GATE.test, command: withArgs(COMMAND.test, modules) });
   else skip.push({ gate: GATE.test, reason: SKIP_REASON.noModule });
+  const machines = machinesFor(repo, present);
+  if (machines.length > 0) run.push({ gate: GATE.machines, command: withArgs(COMMAND.machines, machines) });
+  else skip.push({ gate: GATE.machines, reason: SKIP_REASON.noMachine });
   if (specs.length > 0) run.push({ gate: GATE.e2e, command: withArgs(COMMAND.e2e, specs) });
   else skip.push({ gate: GATE.e2e, reason: SKIP_REASON.noSpec });
   return { kind: "lean", run, skip };
