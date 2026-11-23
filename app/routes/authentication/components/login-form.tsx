@@ -18,7 +18,7 @@ import {
 import { Input } from "@/components/ui/input"
 import { Link, useNavigate } from "react-router"
 import { authClient } from "@/auth/client"
-import { effectTsResolver as effectResolver } from "@hookform/resolvers/effect-ts"
+import { effectTsResolver } from "@hookform/resolvers/effect-ts"
 import { useForm } from "react-hook-form"
 import { LoginSchema, type LoginInput } from "@/lib/schemas/auth"
 import { useState } from "react"
@@ -42,7 +42,7 @@ export function LoginForm({ className, turnstileSiteKey = null, ...props }: Logi
   const awaitingCheck = turnstile.enabled && turnstile.token === null
 
   const form = useForm<LoginInput>({
-    resolver: effectResolver(LoginSchema),
+    resolver: effectTsResolver(LoginSchema),
     defaultValues: {
       email: "",
       password: "",

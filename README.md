@@ -382,14 +382,14 @@ npx skills add <owner/repo> --skill <name> -y   # adds it to skills-lock.json
 ./scripts/restore-skills.sh                     # installs and links it; commit the lock only
 ```
 
-**Forms — always Effect Schema + `effectResolver`** (no Zod resolver):
+**Forms — always Effect Schema + `effectTsResolver`** (no Zod resolver):
 
 ```ts
-import { effectResolver } from "@hookform/resolvers/effect-ts";
+import { effectTsResolver } from "@hookform/resolvers/effect-ts";
 import { LoginSchema, type LoginInput } from "@/lib/schemas/auth";
 
 const form = useForm<LoginInput>({
-  resolver: effectResolver(LoginSchema),
+  resolver: effectTsResolver(LoginSchema),
 });
 ```
 
