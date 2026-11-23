@@ -3,16 +3,16 @@ import type { GhResult, GhRunner } from "../../lib/gh";
 import { type AnswerInput, type AnswerRule, configLine, RUN_OK } from "../../lib/workflow-dry-run";
 import { type Deps, run } from "../../wave";
 
-export const ROOT = "/work/repo";
+const ROOT = "/work/repo";
 export const WAVE = "v3/wave-2";
-export const INTO = "release/v3.0";
+const INTO = "release/v3.0";
 export const SLUG = "v3-wave-2";
 export const ROLLUP_PR = 900;
 export const ARGS = { wave: WAVE, into: INTO, tickets: [11, 12, 13] };
 export const APPROVED = { ...ARGS, plan: { approved: true } };
-export const STATE_FILE = join(ROOT, ".verify", SLUG, "wave.json");
+const STATE_FILE = join(ROOT, ".verify", SLUG, "wave.json");
 export const MODELS = { plan: "opus", design: "opus", build: "sonnet", review: "sonnet", mechanical: "haiku" };
-export const GREEN = [{ name: "unit", status: "COMPLETED", conclusion: "SUCCESS" }];
+const GREEN = [{ name: "unit", status: "COMPLETED", conclusion: "SUCCESS" }];
 export const RED = [{ name: "unit", status: "COMPLETED", conclusion: "FAILURE" }];
 export const OPEN_THREAD = { isResolved: false, comments: { nodes: [{ author: { login: "greptile-apps" }, url: "https://x/thread/1" }] } };
 export const ANSWERED_THREAD = {
@@ -25,7 +25,7 @@ export const ANSWERED_THREAD = {
   },
 };
 
-export const PLANNED = [
+const PLANNED = [
   { n: 11, title: "Billing schema", kind: "build", blockedBy: [], files: ["src/billing/"], wide: false },
   { n: 12, title: "Billing page", kind: "design", blockedBy: [], files: ["src/pages/billing.tsx"], wide: false },
   { n: 13, title: "Billing emails", kind: "build", blockedBy: [11], files: ["src/billing/email.ts"], wide: false },
@@ -102,7 +102,7 @@ export type World = ReturnType<typeof world>;
 const shellWords = (text: string): string[] =>
   [...text.matchAll(/'((?:[^']|'\\'')*)'|(\S+)/g)].map((m) => (m[1] !== undefined ? m[1].split("'\\''").join("'") : (m[2] ?? "")));
 
-export async function runWave(w: World, prompt: string) {
+async function runWave(w: World, prompt: string) {
   const m = /bun scripts\/wave\.ts ([^\n]*?)(?: <<'WAVE_EOF'\n([\s\S]*?)\nWAVE_EOF)?$/.exec(prompt);
   if (!m) throw new Error(`no wave command in: ${prompt.slice(-200)}`);
   const o = await w.cli(shellWords(m[1] ?? ""), m[2] ?? "");

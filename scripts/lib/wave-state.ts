@@ -20,7 +20,7 @@ const Count = Schema.NonNegativeInt;
 const Branch = Schema.String.pipe(Schema.pattern(BRANCH_PATTERN));
 const Kind = Schema.Literal(...TICKET_KINDS);
 
-export const PlanTicketSchema = Schema.Struct({
+const PlanTicketSchema = Schema.Struct({
   n: TicketNumber,
   title: Text,
   kind: Kind,
@@ -29,7 +29,7 @@ export const PlanTicketSchema = Schema.Struct({
   wide: Schema.Boolean,
 });
 
-export const PlanInputSchema = Schema.Struct({
+const PlanInputSchema = Schema.Struct({
   tickets: Schema.Array(PlanTicketSchema).pipe(Schema.minItems(1), Schema.maxItems(MAX_TICKETS)),
 });
 
@@ -69,7 +69,7 @@ const BatchSchema = Schema.Struct({
 
 const FailureSchema = Schema.Struct({ n: TicketNumber, track: Text, signature: Text });
 
-export const WaveStateSchema = Schema.Struct({
+const WaveStateSchema = Schema.Struct({
   version: Schema.Literal(WAVE_STATE_VERSION),
   slug: Schema.String.pipe(Schema.pattern(SLUG_PATTERN)),
   wave: Branch,
@@ -90,7 +90,7 @@ export const WaveStateSchema = Schema.Struct({
   log: Schema.Array(Text),
 });
 
-export const EventSchema = Schema.Union(
+const EventSchema = Schema.Union(
   Schema.Struct({ type: Schema.Literal("opened"), n: TicketNumber, pr: TicketNumber, branch: Branch, head: Text, ownerSteps: Texts }),
   Schema.Struct({ type: Schema.Literal("failed"), n: TicketNumber, line: Text }),
   Schema.Struct({ type: Schema.Literal("reviewed"), n: TicketNumber, blocking: Texts }),
