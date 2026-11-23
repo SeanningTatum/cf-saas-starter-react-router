@@ -128,6 +128,8 @@ const appErrorToTRPC = (e: AppError): TRPCError => {
       });
     case "FixtureValidationError":
     case "SeedError":
+    case "FixtureLoginError":
+    case "RealAnalyticsProviderError":
       return new TRPCError({
         code: "INTERNAL_SERVER_ERROR",
         message: "Internal Server Error",

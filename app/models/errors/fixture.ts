@@ -18,4 +18,21 @@ export class DevServerRunningError extends Data.TaggedError("DevServerRunningErr
   readonly stateDir: string;
 }> {}
 
-export type FixtureError = FixtureValidationError | SeedError | DevServerRunningError;
+export class FixtureLoginError extends Data.TaggedError("FixtureLoginError")<{
+  readonly role: "admin" | "user" | "banned";
+  readonly status: number;
+  readonly message: string;
+}> {}
+
+export class RealAnalyticsProviderError extends Data.TaggedError("RealAnalyticsProviderError")<{
+  readonly file: string;
+  readonly provider: string;
+  readonly message: string;
+}> {}
+
+export type FixtureError =
+  | FixtureValidationError
+  | SeedError
+  | DevServerRunningError
+  | FixtureLoginError
+  | RealAnalyticsProviderError;

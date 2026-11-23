@@ -182,6 +182,8 @@ const NO_PROCEDURE_RAISES_IT: Readonly<Record<string, string>> = {
   FixtureValidationError: "raised by the seed scripts, never under a request",
   SeedError: "raised by the seed scripts, never under a request",
   DevServerRunningError: "raised by the seed scripts, never under a request",
+  FixtureLoginError: "raised by Playwright global setup, never under a request",
+  RealAnalyticsProviderError: "raised by Playwright global setup, never under a request",
 };
 
 describe("every tagged error is accounted for", () => {

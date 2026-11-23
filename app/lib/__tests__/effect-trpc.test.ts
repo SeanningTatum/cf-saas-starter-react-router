@@ -29,7 +29,13 @@ import {
   BucketValidationError,
 } from "@/models/errors/bucket";
 import { RateLimitError } from "@/models/errors/rate-limit";
-import { DevServerRunningError, FixtureValidationError, SeedError } from "@/models/errors/fixture";
+import {
+  DevServerRunningError,
+  FixtureLoginError,
+  FixtureValidationError,
+  RealAnalyticsProviderError,
+  SeedError,
+} from "@/models/errors/fixture";
 import { RATE_LIMITED_MESSAGE } from "@/lib/constants/rate-limit";
 
 const failExit = <E>(e: E) => Effect.exit(tagToTRPC(Effect.fail(e)));
@@ -197,6 +203,20 @@ describe("tagToTRPC error mapping", () => {
           new DevServerRunningError({ pids: [42], stateDir: ".wrangler/state/v3" }),
         );
         expectTRPC(exit, "CONFLICT");
+      }),
+  );
+
+  it.effect.each([
+    new FixtureLoginError({ role: "admin", status: 401, message: "Invalid email or password" }),
+    new RealAnalyticsProviderError({ file: ".dev.vars", provider: "posthog", message: "posthog" }),
+  ])(
+    "$_tag → INTERNAL_SERVER_ERROR without the role, env file or auth reply in the message",
+    (error) =>
+      Effect.gen(function* () {
+        const exit = yield* failExit(error);
+        expectTRPC(exit, "INTERNAL_SERVER_ERROR");
+        const failure = Exit.isFailure(exit) ? Cause.failureOption(exit.cause) : Option.none();
+        expect(Option.map(failure, (e) => e.message)).toEqual(Option.some("Internal Server Error"));
       }),
   );
 

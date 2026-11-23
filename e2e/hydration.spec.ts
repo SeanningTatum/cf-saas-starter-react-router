@@ -1,6 +1,6 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import { BROWSER_REPORT_PATH } from "../app/lib/constants/error-reporting";
-import { useAdminSessionSignedInOncePerFile } from "./lib/admin-session";
+import { useSavedSession } from "./lib/saved-session";
 import { useClientIpPerFile } from "./lib/client-ip";
 import { loadHydrated } from "./lib/hydration";
 import { PAGE_PATHS } from "./lib/values";
@@ -73,7 +73,7 @@ test.describe("Hydration, signed out (issue #166: the server and the browser ren
 });
 
 test.describe("Hydration, signed in as admin", () => {
-  useAdminSessionSignedInOncePerFile("hydration");
+  useSavedSession("admin", "hydration");
 
   test("dashboard and admin hydrate with no warning, so the signed-in layouts render the same HTML on the server and in the browser", async ({
     page,
