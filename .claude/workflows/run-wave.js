@@ -434,6 +434,8 @@ if ([pre.default_branch, cfg.baseBranch].includes(WAVE)) return { stopped: "Pref
 const { ask, sh, remember } = asker(`ROOT is ${ROOT}. cd there before anything else.`);
 const WT = (n) => `${ROOT}/.verify/${WAVE_SLUG}/wt/${n}`;
 const modelFor = (kind) => (kind === "design" ? MODELS.design : kind === "mechanical" ? MODELS.mechanical : MODELS.build);
+const PROOF = (n) => `${ROOT}/.verify/${WAVE_SLUG}/proof/${n}`;
+const GATE_DIR = `${ROOT}/.verify/${WAVE_SLUG}/gate`;
 const trackPhase = (t) => `Track ${t.track}`;
 let halted = null;
 let paused = false;
@@ -468,7 +470,7 @@ ${input.rules ? `- Read ${shq(input.rules)} first and follow it.\n` : ""}- The t
 - Work only in your worktree WT (below). Never touch ROOT's own checkout, another ticket's worktree, or ${WAVE}, ${INTO} or the default branch: never push to them, never merge any PR, never enable auto-merge, never force-push or rebase a pushed branch.
 - No change to repo settings, rulesets, environments, secrets, tokens or cloud resources, and no new accounts or keys: a step like that goes under "Human steps" in the PR body and in owner_steps.
 - Checks are lean: \`./scripts/verify.sh --changed origin/${WAVE}\` (with \`CI=1 E2E_PORT=<a free port>\` when it selects e2e) plus the tests you wrote. Never skip hooks.
-- Commits and PR titles follow Conventional Commits (.commitlintrc.json); every commit message ends with: ${cfg.coauthor}`;
+- Commits and PR titles follow Conventional Commits (.commitlintrc.json); every commit message ends with a Co-Authored-By line that names the model you run on (read it from your own system prompt; the line below is an example of the form, not your name): ${cfg.coauthor}`;
 
 const worktreeSetup = (t) => `WT = ${WT(t.n)}. If WT does not exist: \`git -C ${ROOT} fetch -q origin ${shq(t.branch)}\` then \`git -C ${ROOT} worktree add ${WT(t.n)} ${shq(t.branch)}\` (or track origin/${t.branch} if no local branch). Then in WT: \`git pull --ff-only\` and \`bun install --frozen-lockfile\`.`;
 
@@ -481,7 +483,7 @@ ${RULES}
 Steps:
 1. WT = ${WT(t.n)}. \`git -C ${ROOT} fetch -q origin ${WAVE}\`. If WT exists, cd there and carry on with the branch it holds. Else pick the branch \`${PREFIX}${t.n}-<two or three word slug>\` and run \`git -C ${ROOT} worktree add -b <branch> ${WT(t.n)} origin/${WAVE}\`. In WT: \`bun install --frozen-lockfile\`; before any e2e run \`bun run db:migrate:local && bun run db:seed\`.
 2. Build the ticket to its "Done when" list, with tests. Then the lean checks.
-3. Push the branch and open the PR with base ${WAVE}: \`gh pr create --base ${WAVE}\`, a Conventional Commits title, a body that starts with "Closes #${t.n}" and ends with a "Human steps" section. Comment the PR URL on the issue.
+3. Push the branch and open the PR with base ${WAVE}: \`gh pr create --base ${WAVE}\`, a Conventional Commits title, a body that starts with "Closes #${t.n}" and ends with a "Human steps" section. Comment the PR URL on the issue. Your WT goes away after the PR merges: the run first copies WT's \`.verify/\` folder to ${PROOF(t.n)}, so a Human step that points at proof names that path, never a path inside WT.
 Return ok, pr (the PR number), branch, head (\`git rev-parse HEAD\` after the push), owner_steps (each human step, one line each; [] when none), summary (one line). If you cannot finish, return ok=false, pr 0, and error_line: the first line of the error that stopped you, copied verbatim.`;
 
 const FINDING = obj({ severity: { type: "string", enum: ["P0", "P1", "P2", "P3"] }, file: STR, line: NUM, detail: STR, fix: STR }, ["severity", "file", "detail", "fix"]);
@@ -529,12 +531,14 @@ async function doStep(t, label) {
   if (t.step === "review") {
     const a = await ask(reviewPrompt(t), opts(MODELS.review, REVIEW));
     if (!a) return event(t, label, { type: "failed", line: "the review agent returned nothing" });
-    const blocking = a.findings.filter(isP0P1).map((f) => `${f.severity} ${f.file}${f.line ? `:${f.line}` : ""} ${f.detail} Fix: ${f.fix}`.slice(0, 500));
-    return event(t, label, { type: "reviewed", blocking: blocking.slice(0, 50) });
+    const text = (f) => `${f.severity} ${f.file}${f.line ? `:${f.line}` : ""} ${f.detail} Fix: ${f.fix}`.slice(0, 500);
+    const blocking = a.findings.filter(isP0P1).map(text);
+    const kept = a.findings.filter((f) => !isP0P1(f)).map(text);
+    return event(t, label, { type: "reviewed", blocking: blocking.slice(0, 50), kept: kept.slice(0, 50) });
   }
   const what = FIX_KIND[t.step];
   if (!what) return { error: `unknown step ${t.step}` };
-  const model = what === "threads" || what === "refresh" ? MODELS.mechanical : modelFor(t.kind);
+  const model = what === "refresh" ? MODELS.mechanical : modelFor(t.kind);
   const a = await ask(fixPrompt(t, t.step), opts(model, FIX));
   if (a && a.ok) return event(t, label, { type: "fixed", what, head: String(a.head || "").slice(0, 500), cause: String(a.cause || "").slice(0, 500) });
   return event(t, label, { type: "failed", line: ((a && a.error_line) || `the ${what} agent returned nothing`).slice(0, 500) });
@@ -568,6 +572,8 @@ For each ticket, read it with \`gh issue view <n> --comments\` and the code it n
 - wide: true only when it edits most of the repo (a format pass, a repo-wide rename or clean-up); it then runs alone, last.
 Tickets: ${TICKETS.map((n) => `#${n}`).join(", ")}.${changes ? `\nThe person asked for these changes to the last plan:\n${fence("changes", changes)}` : ""}`;
 
+const MEMORY_STATUS = { plan: "planned", rollup: "in-progress", paused: "blocked", stuck: "blocked", gate: "blocked", "shared-failure": "blocked" };
+
 async function stopWith(step, i) {
   const status = step.stop === "plan" ? "needs-plan" : step.stop === "rollup" ? "needs-rollup" : step.stop === "paused" ? "paused" : "needs-help";
   const statusCmd = `bun scripts/wave.ts status ${WAVE_SLUG}`;
@@ -585,9 +591,23 @@ async function stopWith(step, i) {
   if (step.stop === "stuck") result.tickets = step.tickets.map((t) => ({ n: t.n, pr: t.pr, why: t.why }));
   if (step.stop === "shared-failure") Object.assign(result, { signature: step.signature, tickets: step.tickets });
   if (step.stop === "gate") result.log = step.log;
-  await remember(WAVE_SLUG, { status: `run-wave ${status} (${step.stop})`, stopped: `run-wave stopped: ${step.stop}`, next: result.next }, `memory:${step.stop}:${i}`, "Stop");
+  const memoryStatus = MEMORY_STATUS[step.stop] || "blocked";
+  await remember(WAVE_SLUG, { status: memoryStatus, stopped: `run-wave stopped: ${step.stop} (${status})`, next: result.next }, `memory:${step.stop}:${i}`, "Stop");
   return result;
 }
+
+const cleanPrompt = (merged) => `A batch gate passed. Clear the worktrees of the merged tickets ${merged.map((n) => `#${n}`).join(", ")}. For each ticket number N, WT = ${ROOT}/.verify/${WAVE_SLUG}/wt/N:
+  1. If WT does not exist, skip N.
+  2. If WT/.verify exists: \`mkdir -p ${ROOT}/.verify/${WAVE_SLUG}/proof/N\`, then \`cp -R WT/.verify/. ${ROOT}/.verify/${WAVE_SLUG}/proof/N/\`. If the copy fails, leave WT as it is and list N in kept.
+  3. \`git -C ${ROOT} worktree remove WT\`. Never add --force and never delete the folder another way: if git refuses (the worktree has changes), leave it and list N in kept with git's first error line.
+Return ok=true, removed (the numbers removed) and kept (one line each: "#N: why").`;
+const CLEAN = obj({ ok: BOOL, removed: arr(NUM), kept: STRS });
+
+const sizePrompt = `Measure the roll-up's size table. Change no tracked file.
+  1. From ROOT: \`git fetch -q origin ${shq(WAVE)} ${shq(INTO)}\`; HEAD = \`git rev-parse origin/${WAVE}\`.
+  2. GATE = ${GATE_DIR}. If it does not exist: \`git worktree add --detach ${GATE_DIR} $HEAD\`; else \`git -C ${GATE_DIR} checkout -q --detach $HEAD\`.
+  3. In GATE: \`bun install --frozen-lockfile\`, then \`bun run size --base origin/${INTO} --pr-body\` with a Bash timeout of 900000 ms (it builds both sides). Write its output to ${ROOT}/.verify/${WAVE_SLUG}/size.md. If a command fails, write instead the two lines \`## Size\`, a blank line and \`Not measured: <its last error line>\` to that file.
+Return ok=true when the file exists, else ok=false, and out: the file's first line.`;
 
 const gatePrompt = (i) => `Run the full checks once on the combined wave branch. Change nothing else.
   1. From ROOT: \`git fetch -q origin ${shq(WAVE)}\`; HEAD = \`git rev-parse origin/${WAVE}\`.
@@ -639,11 +659,20 @@ for (let i = 1; i <= MAX_WAVE_STEPS; i++) {
     const read = g && g.ok ? readOut(g.out) : { error: g ? String(g.out).slice(0, 300) : "the runner returned nothing" };
     if (read.error) return { stopped: "Gate", reason: read.error };
     log(`Gate on ${WAVE}: ${read.out.gate}`);
+    if (read.out.gate === "pass" && read.out.merged.length) {
+      const c = await sh(cleanPrompt(read.out.merged), { label: `wave:clean:${i}`, phase: "Gate", schema: CLEAN });
+      if (c && c.kept.length) log(`Worktrees kept: ${c.kept.join("; ")}`);
+    }
   } else if (step.kind === "rollup") {
     phase("Roll-up");
     const title = input.rollupTitle || `feat: roll up ${WAVE} into ${INTO}`;
-    const u = await waveCmd("rollup", `--title ${shq(title)}`, "wave:rollup", "Roll-up");
+    const sizeFile = `${ROOT}/.verify/${WAVE_SLUG}/size.md`;
+    const z = await sh(sizePrompt, { label: "wave:rollup-size", phase: "Roll-up", schema: OUT });
+    if (!z || !z.ok) return { stopped: "Roll-up", reason: z ? `the size table was not measured: ${String(z.out).slice(0, 300)}` : "the size agent returned nothing" };
+    const u = await waveCmd("rollup", `--title ${shq(title)} --size-file ${shq(sizeFile)}`, "wave:rollup", "Roll-up");
     if (u.error) return { stopped: "Roll-up", reason: u.error };
+    const g = await sh(`Remove the gate checkout: \`git -C ${ROOT} worktree remove ${GATE_DIR}\`. Never add --force. If git refuses, leave it and say why. Return ok=true and out: "removed" or git's first error line.`, { label: "wave:clean-gate", phase: "Roll-up", schema: OUT });
+    if (g && g.out !== "removed") log(`Gate checkout kept: ${String(g.out).slice(0, 200)}`);
   }
 }
 return { stopped: "Build", reason: `more than ${MAX_WAVE_STEPS} wave steps; run again to go on from the state file` };

@@ -103,7 +103,7 @@ describe("run-wave: a wave of two batches, approved, run to the roll-up", () => 
 });
 
 describe("run-wave: the merge guard", () => {
-  it("a PR with an unanswered review thread is not merged until the thread step answers it, on the mechanical model", async () => {
+  it("a PR with an unanswered review thread is not merged until the thread step answers it, on the ticket's build model, since an answer often needs a code fix", async () => {
     const { w } = await planned();
     const r = await dryRun("run-wave", {
       args: APPROVED,
@@ -121,7 +121,7 @@ describe("run-wave: the merge guard", () => {
     });
     const threads = steps(r, "answer-threads");
     expect(threads.map((c) => ticketOf(c.label))).toEqual([11]);
-    expect(threads[0]?.opts.model).toBe(MODELS.mechanical);
+    expect(threads[0]?.opts.model).toBe(MODELS.build);
     const mergeAt = firstIndex(r.calls, (c) => c.label.startsWith("wave:merge:"));
     expect(mergeAt).toBeGreaterThan(threads[0]?.n ?? Infinity);
     expect(r.result).toMatchObject({ status: "needs-rollup" });

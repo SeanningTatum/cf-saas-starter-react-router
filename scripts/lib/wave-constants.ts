@@ -24,6 +24,12 @@ export const MAX_TEXT = 500;
 export const MAX_LIST = 50;
 export const SIGNATURE_MAX = 160;
 export const LOG_TAIL_LINES = 15;
+export const SIZE_FILE_NAME = "size.md";
+export const SIZE_HEADING_LINE = "## Size";
+export const RUN_HEADING_PREFIX = "## Run ";
+export const SECTION_PREFIX = "## ";
+export const DATE_LENGTH = 10;
+export const WHOLE_WAVE_NOTE = "This PR holds everything on the wave branch since the base, not only the tickets of one run.";
 export const DEFAULT_WAIT_SECONDS = 0;
 export const MAX_WAIT_SECONDS = 540;
 export const POLL_SECONDS = 30;
@@ -67,4 +73,4 @@ export const VERB_RESUME = "resume";
 export const VERB_RETRY = "retry";
 export const VERB_SKIP = "skip";
 export const USAGE_TEXT =
-  "usage: bun scripts/wave.ts plan <slug> --wave <branch> --into <branch> --tracks <n> --review-rounds <n> (tickets JSON on stdin) | approve <slug> | next <slug> | event <slug> (event JSON on stdin) | guard <slug> <ticket> [--wait <seconds>] | merge <slug> | gate <slug> --head <sha> --code <n> [--log <path>] | rollup <slug> --title <text> | status <slug> [--json] | pause <slug> | resume <slug> | retry <slug> <ticket> | skip <slug> <ticket>";
+  "usage: bun scripts/wave.ts plan <slug> --wave <branch> --into <branch> --tracks <n> --review-rounds <n> (tickets JSON on stdin) | approve <slug> | next <slug> | event <slug> (event JSON on stdin) | guard <slug> <ticket> [--wait <seconds>] | merge <slug> | gate <slug> --head <sha> --code <n> [--log <path>] | rollup <slug> --title <text> [--size-file <path>] | status <slug> [--json] | pause <slug> | resume <slug> | retry <slug> <ticket> | skip <slug> <ticket>";

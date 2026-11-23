@@ -45,6 +45,7 @@ const TicketSchema = Schema.extend(
     reviewed: Count,
     reviewBlocking: Schema.Boolean,
     findings: Texts,
+    kept: Schema.optionalWith(Texts, { default: () => [] }),
     needsFix: Schema.Boolean,
     checkFailures: Count,
     needsCheckFix: Schema.Boolean,
@@ -93,7 +94,7 @@ const WaveStateSchema = Schema.Struct({
 const EventSchema = Schema.Union(
   Schema.Struct({ type: Schema.Literal("opened"), n: TicketNumber, pr: TicketNumber, branch: Branch, head: Text, ownerSteps: Texts }),
   Schema.Struct({ type: Schema.Literal("failed"), n: TicketNumber, line: Text }),
-  Schema.Struct({ type: Schema.Literal("reviewed"), n: TicketNumber, blocking: Texts }),
+  Schema.Struct({ type: Schema.Literal("reviewed"), n: TicketNumber, blocking: Texts, kept: Schema.optional(Texts) }),
   Schema.Struct({
     type: Schema.Literal("fixed"),
     n: TicketNumber,
@@ -126,6 +127,10 @@ export const decodeState = decoder(WaveStateSchema);
 export const decodePlanInput = decoder(PlanInputSchema);
 export const decodeEvent = decoder(EventSchema);
 
+const OpenPrsSchema = Schema.Array(Schema.Struct({ number: TicketNumber, body: Schema.NullOr(Schema.String) }));
+export const decodeOpenPrs = (text: string): Either.Either<readonly { number: number; body: string | null }[], string> =>
+  text.trim() ? decoder(OpenPrsSchema)(text) : Either.right([]);
+
 export const newTicket = (t: PlanTicketInput, track: string): Ticket => ({
   ...t,
   track,
@@ -137,6 +142,7 @@ export const newTicket = (t: PlanTicketInput, track: string): Ticket => ({
   reviewed: 0,
   reviewBlocking: false,
   findings: [],
+  kept: [],
   needsFix: false,
   checkFailures: 0,
   needsCheckFix: false,

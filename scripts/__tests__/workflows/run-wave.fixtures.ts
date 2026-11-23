@@ -8,6 +8,7 @@ export const WAVE = "v3/wave-2";
 const INTO = "release/v3.0";
 export const SLUG = "v3-wave-2";
 export const ROLLUP_PR = 900;
+const SIZE_SECTION = "## Size\n\n| | base | This PR | Change |\n|---|---:|---:|---:|\n| Worker upload, gzip | 1 | 1 | 0 |";
 export const ARGS = { wave: WAVE, into: INTO, tickets: [11, 12, 13] };
 export const APPROVED = { ...ARGS, plan: { approved: true } };
 const STATE_FILE = join(ROOT, ".verify", SLUG, "wave.json");
@@ -50,9 +51,18 @@ export function world() {
   const files = new Map<string, string>();
   const prs = new Map<number, Pr>();
   const gh: string[] = [];
+  const edits: { n: string; body: string }[] = [];
+  const open = { rollup: null as { number: number; body: string } | null };
   let stdin = "";
   const ok = (v: unknown): GhResult => ({ code: 0, stdout: typeof v === "string" ? v : JSON.stringify(v), stderr: "" });
-  const runner: GhRunner = (args) => {
+  const onRollup = (verb: string, n: string | undefined, input: string | undefined): GhResult | null => {
+    if (verb === "list") return ok(open.rollup ? [open.rollup] : "");
+    if (verb === "create") return ok(`https://github.com/o/r/pull/${ROLLUP_PR}\n`);
+    if (verb !== "edit") return null;
+    edits.push({ n: n ?? "", body: input ?? "" });
+    return ok("");
+  };
+  const runner: GhRunner = (args, input) => {
     gh.push(args.join(" "));
     if (args[0] === "repo") return ok("o/r\n");
     if (args[0] === "api") {
@@ -60,8 +70,8 @@ export function world() {
       return ok({ data: { repository: { pullRequest: { reviewThreads: { pageInfo: { hasNextPage: false }, nodes: pr?.threads ?? [] } } } } });
     }
     const [, verb, n] = args;
-    if (verb === "list") return ok("");
-    if (verb === "create") return ok(`https://github.com/o/r/pull/${ROLLUP_PR}\n`);
+    const rollup = onRollup(verb ?? "", n, input);
+    if (rollup) return rollup;
     const pr = prs.get(Number(n));
     if (!pr) return { code: 1, stdout: "", stderr: `no PR ${n}` };
     if (verb === "merge") {
@@ -100,7 +110,7 @@ export function world() {
     prs.set(100 + n, pr);
     return pr;
   };
-  return { files, prs, gh, cli, state, openPr, sha };
+  return { files, prs, gh, edits, open, cli, state, openPr, sha };
 }
 
 export type World = ReturnType<typeof world>;
@@ -145,6 +155,15 @@ export function answers(w: World, s: Script = {}, over: AnswerRule[] = []): Answ
     ["preflight", { ok: true, reason: "", root: ROOT, default_branch: "staging", into: INTO }],
     ["plan", { tickets: PLANNED }],
     [/^(memory|run:record)/, (c: AnswerInput) => (c.label.startsWith("run:") ? RUN_OK : "memory: recorded")],
+    [
+      "wave:rollup-size",
+      () => {
+        w.files.set(join(ROOT, ".verify", SLUG, "size.md"), SIZE_SECTION);
+        return { ok: true, out: "## Size" };
+      },
+    ],
+    ["wave:clean-gate", { ok: true, out: "removed" }],
+    [/^wave:clean:/, { ok: true, removed: [], kept: [] }],
     [
       /^wave:gate:/,
       async (c: AnswerInput) => {

@@ -7,6 +7,7 @@ import { WAVE_MAX_REVIEW_ROUNDS, WAVE_MAX_TRACKS } from "./lib/harness-config-co
 import {
   BRANCH_PATTERN,
   CONFLICTING,
+  DATE_LENGTH,
   DEFAULT_WAIT_SECONDS,
   EXIT_BAD_INPUT,
   EXIT_GH,
@@ -41,8 +42,8 @@ import {
 } from "./lib/wave-constants";
 import { mergePr, readGuard, type GuardResult } from "./lib/wave-guard";
 import { planWave } from "./lib/wave-plan";
-import { outLine, rollupBody, statusLines } from "./lib/wave-report";
-import { decodeEvent, decodePlanInput, decodeState, newWave, ticketOf, type WaveState, withLog, withTicket } from "./lib/wave-state";
+import { mergeRollupBody, outLine, rollupBody, statusLines } from "./lib/wave-report";
+import { decodeEvent, decodeOpenPrs, decodePlanInput, decodeState, newWave, ticketOf, type WaveState, withLog, withTicket } from "./lib/wave-state";
 import { type PersonChange, pause, resume, retry, skip } from "./lib/wave-person";
 import { afterMerge, applyEvent, applyGate, applyGuard, nextWaveStep, viewOf } from "./lib/wave-step";
 
@@ -224,6 +225,8 @@ async function merge(deps: Deps, state: WaveState): Promise<Outcome> {
   return settle(saved, (line) => line);
 }
 
+const mergedOf = (state: WaveState): number[] => (state.batch?.tickets ?? []).filter((n) => ticketOf(state, n)?.status === "merged");
+
 async function gate(deps: Deps, state: WaveState, flags: Map<string, string>): Promise<Outcome> {
   const head = flags.get("--head") ?? "";
   if (!SHA_PATTERN.test(head)) return usage("--head must be a full commit sha");
@@ -235,26 +238,51 @@ async function gate(deps: Deps, state: WaveState, flags: Map<string, string>): P
   const tail = logPath ? (deps.readFile(logPath) ?? "").trimEnd().split("\n").slice(-LOG_TAIL_LINES).join("\n") : "";
   const saved = await commit(deps, state.slug, (fresh) => {
     const after = applyGate(fresh, head, code, logPath);
-    return { state: after, value: outLine({ gate: code === 0 ? "pass" : "fail", failures: after.batch?.gateFailures ?? 0, tail }) };
+    return { state: after, value: outLine({ gate: code === 0 ? "pass" : "fail", failures: after.batch?.gateFailures ?? 0, tail, merged: mergedOf(after) }) };
   });
   return settle(saved, (line) => line);
+}
+
+async function readSize(deps: Deps, slug: string, flags: Map<string, string>): Promise<Either.Either<string, Outcome>> {
+  const path = flags.get("--size-file");
+  if (path === undefined) return Either.right("");
+  const ownDir = join(deps.root, VERIFY_DIR, slug);
+  if (!resolve(path).startsWith(`${ownDir}/`)) return Either.left(usage(`--size-file must name a file under ${ownDir}`));
+  const text = deps.readFile(path);
+  return text === null ? Either.left(fail(`--size-file ${path} does not exist`)) : Either.right(text);
+}
+
+const editRollup = (deps: Deps, pr: number, body: string): Either.Either<number, Outcome> => {
+  const edited = deps.gh(["pr", "edit", String(pr), "--body-file", "-"], body);
+  return edited.code === 0 ? Either.right(pr) : Either.left(fail(`gh pr edit: ${edited.stderr.trim()}`, EXIT_GH));
+};
+
+function createRollup(deps: Deps, state: WaveState, title: string, body: string): Either.Either<number, Outcome> {
+  const made = deps.gh(["pr", "create", "--base", state.into, "--head", state.wave, "--title", title, "--body-file", "-"], body);
+  if (made.code !== 0) return Either.left(fail(`gh pr create: ${made.stderr.trim()}`, EXIT_GH));
+  const pr = Number(made.stdout.trim().split("/").pop());
+  if (!Number.isInteger(pr) || pr <= 0) return Either.left(fail(`gh pr create printed no PR url: ${made.stdout.trim()}`, EXIT_GH));
+  return Either.right(pr);
 }
 
 async function rollup(deps: Deps, state: WaveState, flags: Map<string, string>): Promise<Outcome> {
   const title = flags.get("--title") ?? "";
   if (!title.trim()) return usage("--title is required");
-  const open = deps.gh(["pr", "list", "--head", state.wave, "--base", state.into, "--state", "open", "--json", "number", "-q", ".[0].number"]);
+  const size = await readSize(deps, state.slug, flags);
+  if (Either.isLeft(size)) return size.left;
+  const open = deps.gh(["pr", "list", "--head", state.wave, "--base", state.into, "--state", "open", "--json", "number,body"]);
   if (open.code !== 0) return fail(`gh pr list: ${open.stderr.trim()}`, EXIT_GH);
-  let pr = Number(open.stdout.trim());
-  if (!Number.isInteger(pr) || pr <= 0) {
-    const made = deps.gh(["pr", "create", "--base", state.into, "--head", state.wave, "--title", title, "--body-file", "-"], rollupBody(state));
-    if (made.code !== 0) return fail(`gh pr create: ${made.stderr.trim()}`, EXIT_GH);
-    pr = Number(made.stdout.trim().split("/").pop());
-    if (!Number.isInteger(pr) || pr <= 0) return fail(`gh pr create printed no PR url: ${made.stdout.trim()}`, EXIT_GH);
-  }
-  const opened = pr;
+  const found = decodeOpenPrs(open.stdout);
+  if (Either.isLeft(found)) return fail(`gh pr list printed something else than PRs: ${found.left}`, EXIT_GH);
+  const existing = found.right[0];
+  const date = new Date(deps.now()).toISOString().slice(0, DATE_LENGTH);
+  const published = existing
+    ? editRollup(deps, existing.number, mergeRollupBody(existing.body ?? "", state, date, size.right))
+    : createRollup(deps, state, title, rollupBody(state, size.right));
+  if (Either.isLeft(published)) return published.left;
+  const opened = published.right;
   const saved = await commit(deps, state.slug, (fresh) => ({
-    state: withLog({ ...fresh, rollupPr: opened }, `roll-up PR #${opened} open; the run never merges it`),
+    state: withLog({ ...fresh, rollupPr: opened }, `roll-up PR #${opened} ${existing ? "updated" : "open"}; the run never merges it`),
     value: outLine({ pr: opened }),
   }));
   return settle(saved, (line) => line);
