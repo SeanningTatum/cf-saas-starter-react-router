@@ -84,18 +84,20 @@ function groupByFiles(tickets: readonly PlanTicket[]): number[][] {
   return [...groups.values()].map((g) => g.sort(byNumber));
 }
 
-function orderTrack(members: number[], byN: ReadonlyMap<number, PlanTicket>): number[] {
-  const inTrack = new Set(members);
-  const ordered: number[] = [];
-  const left = new Set(members);
+function dependencyOrder(tickets: readonly PlanTicket[]): Map<number, number> {
+  const wave = new Set(tickets.map((t) => t.n));
+  const left = new Map(tickets.map((t) => [t.n, new Set(inWaveBlockers(t, wave))]));
+  const rank = new Map<number, number>();
   while (left.size) {
-    const ready = [...left].sort(byNumber).find((n) => (byN.get(n)?.blockedBy ?? []).every((b) => !inTrack.has(b) || !left.has(b) || b === n));
-    const next = ready ?? Math.min(...left);
-    ordered.push(next);
+    const ready = [...left.keys()].filter((n) => [...(left.get(n) ?? [])].every((b) => rank.has(b))).sort(byNumber);
+    const next = ready[0] ?? Math.min(...left.keys());
+    rank.set(next, rank.size);
     left.delete(next);
   }
-  return ordered;
+  return rank;
 }
+
+const orderTrack = (members: number[], rank: ReadonlyMap<number, number>): number[] => [...members].sort((a, b) => (rank.get(a) ?? 0) - (rank.get(b) ?? 0));
 
 export function nextBatch(s: Schedule): number[] {
   const byN = new Map(s.tickets.map((t) => [t.n, t]));
@@ -126,12 +128,12 @@ export function planWave(tickets: readonly PlanTicket[], max: number): Either.Ei
   }
   const cycle = findCycle(tickets);
   if (cycle) return Either.left(`tickets ${cycle.map((n) => `#${n}`).join(", ")} block each other; break the loop before planning`);
-  const byN = new Map(tickets.map((t) => [t.n, t]));
+  const rank = dependencyOrder(tickets);
   const notes = tickets.flatMap((t) =>
     t.blockedBy.filter((b) => !seen.has(b)).map((b) => `#${t.n} is blocked by #${b}, which is not in this wave: treated as done`),
   );
   const groups = groupByFiles(tickets).sort((a, b) => (a[0] ?? 0) - (b[0] ?? 0));
-  const tracks = groups.map((g, i) => ({ id: `${TRACK_PREFIX}${i + 1}`, tickets: orderTrack(g, byN) }));
+  const tracks = groups.map((g, i) => ({ id: `${TRACK_PREFIX}${i + 1}`, tickets: orderTrack(g, rank) }));
   const done = new Set<number>();
   const batches: number[][] = [];
   while (done.size < tickets.length) {

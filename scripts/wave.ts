@@ -1,4 +1,4 @@
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { Either } from "effect";
@@ -12,6 +12,9 @@ import {
   EXIT_GH,
   EXIT_OK,
   EXIT_USAGE,
+  LOCK_SUFFIX,
+  LOCK_TRIES,
+  LOCK_WAIT_MS,
   LOG_TAIL_LINES,
   MAX_WAIT_SECONDS,
   MESSAGE_PREFIX,
@@ -49,6 +52,8 @@ export interface Deps {
   readFile: (path: string) => string | null;
   writeFile: (path: string, text: string) => void;
   mkdirp: (path: string) => void;
+  createExclusive: (path: string, text: string) => boolean;
+  remove: (path: string) => void;
   gh: GhRunner;
   sleep: (ms: number) => Promise<void>;
   now: () => number;
@@ -73,9 +78,36 @@ function load(deps: Deps, slug: string): Either.Either<WaveState, string> {
 }
 
 function save(deps: Deps, state: WaveState): void {
-  deps.mkdirp(join(deps.root, VERIFY_DIR, state.slug));
   deps.writeFile(statePath(deps, state.slug), `${JSON.stringify(state, null, 2)}\n`);
 }
+
+async function withLock<T>(deps: Deps, slug: string, fn: () => T): Promise<Either.Either<T, string>> {
+  deps.mkdirp(join(deps.root, VERIFY_DIR, slug));
+  const lock = `${statePath(deps, slug)}${LOCK_SUFFIX}`;
+  for (let i = 0; !deps.createExclusive(lock, String(deps.now())); i++) {
+    if (i >= LOCK_TRIES) return Either.left(`the wave state is locked by another step (${lock}); if no wave step is running, delete that file`);
+    await deps.sleep(LOCK_WAIT_MS);
+  }
+  try {
+    return Either.right(fn());
+  } finally {
+    deps.remove(lock);
+  }
+}
+
+async function commit<T>(deps: Deps, slug: string, change: (fresh: WaveState) => { state: WaveState; value: T }): Promise<Either.Either<T, string>> {
+  const result = await withLock(deps, slug, () =>
+    Either.map(load(deps, slug), (fresh) => {
+      const changed = change(fresh);
+      if (changed.state !== fresh) save(deps, changed.state);
+      return changed.value;
+    }),
+  );
+  return Either.flatMap(result, (inner) => inner);
+}
+
+const settle = <T>(result: Either.Either<T, string>, show: (value: T) => string): Outcome =>
+  Either.isLeft(result) ? fail(result.left) : done(show(result.right));
 
 function parseFlags(args: string[]): { positional: string[]; flags: Map<string, string> } | string {
   const positional: string[] = [];
@@ -100,7 +132,7 @@ const intFlag = (flags: Map<string, string>, name: string, min: number, max: num
   return Number.isInteger(n) && n >= min && n <= max ? n : `${name} must be a whole number from ${min} to ${max}, got "${raw}"`;
 };
 
-function plan(deps: Deps, slug: string, flags: Map<string, string>): Outcome {
+async function plan(deps: Deps, slug: string, flags: Map<string, string>): Promise<Outcome> {
   const wave = flags.get("--wave") ?? "";
   const into = flags.get("--into") ?? "";
   if (!BRANCH_PATTERN.test(wave) || !BRANCH_PATTERN.test(into)) return usage("--wave and --into must be branch names");
@@ -109,15 +141,18 @@ function plan(deps: Deps, slug: string, flags: Map<string, string>): Outcome {
   const rounds = intFlag(flags, "--review-rounds", 0, WAVE_MAX_REVIEW_ROUNDS);
   if (typeof tracks === "string") return usage(tracks);
   if (typeof rounds === "string") return usage(rounds);
-  const before = deps.readFile(statePath(deps, slug)) === null ? null : load(deps, slug);
-  if (before && Either.isRight(before) && before.right.planApproved)
-    return fail("the plan is approved and cannot change; edit the state with retry or skip instead");
   const input = decodePlanInput(deps.readStdin());
   if (Either.isLeft(input)) return fail(`plan input: ${input.left}`);
   const made = planWave(input.right.tickets, tracks);
   if (Either.isLeft(made)) return fail(made.left);
-  const state = newWave({ slug, wave, into, tracksAtOnce: tracks, reviewRounds: rounds, plan: made.right, tickets: input.right.tickets });
-  save(deps, state);
+  const written = await withLock(deps, slug, () => {
+    const before = deps.readFile(statePath(deps, slug)) === null ? null : load(deps, slug);
+    if (before && Either.isRight(before) && before.right.planApproved) return false;
+    save(deps, newWave({ slug, wave, into, tracksAtOnce: tracks, reviewRounds: rounds, plan: made.right, tickets: input.right.tickets }));
+    return true;
+  });
+  if (Either.isLeft(written)) return fail(written.left);
+  if (!written.right) return fail("the plan is approved and cannot change; edit the state with retry or skip instead");
   return done(outLine({ tracks: made.right.tracks, batches: made.right.batches, notes: made.right.notes }));
 }
 
@@ -143,27 +178,26 @@ async function guard(deps: Deps, state: WaveState, n: number, flags: Map<string,
   if (typeof wait === "string") return usage(wait);
   const read = await waitGuard(deps, t.pr, state.wave, t.branch, wait);
   if (Either.isLeft(read)) return fail(read.left, EXIT_GH);
-  const next = applyGuard(state, n, read.right);
-  save(deps, next);
-  return done(ticketOut(next, n, { guard: read.right }));
+  const guarded = read.right;
+  const saved = await commit(deps, state.slug, (fresh) => {
+    const after = applyGuard(fresh, n, guarded);
+    return { state: after, value: ticketOut(after, n, { guard: guarded }) };
+  });
+  return settle(saved, (line) => line);
 }
 
-function merge(deps: Deps, state: WaveState): Outcome {
+async function merge(deps: Deps, state: WaveState): Promise<Outcome> {
   if (!state.batch) return fail("no batch is running");
-  let next = state;
+  const reopened: { n: number; guard: GuardResult }[] = [];
   const merged: number[] = [];
   const refused: { n: number; why: string }[] = [];
   for (const n of state.batch.tickets) {
-    const t = ticketOf(next, n);
+    const t = ticketOf(state, n);
     if (t?.status !== "green" || t.pr === null) continue;
     const read = readGuard(deps.gh, t.pr, state.wave, t.branch);
     if (Either.isLeft(read)) return fail(read.left, EXIT_GH);
     if (read.right.verdict !== "green") {
-      next = applyGuard(
-        withTicket(next, n, () => ({ status: "open" })),
-        n,
-        read.right,
-      );
+      reopened.push({ n, guard: read.right });
       continue;
     }
     if (read.right.mergeable === CONFLICTING) {
@@ -174,12 +208,23 @@ function merge(deps: Deps, state: WaveState): Outcome {
     if (Either.isRight(result)) merged.push(n);
     else refused.push({ n, why: result.left });
   }
-  next = afterMerge(next, merged, refused);
-  save(deps, next);
-  return done(outLine({ merged, refused, halt: next.halt, paused: next.paused }));
+  const saved = await commit(deps, state.slug, (fresh) => {
+    const guarded = reopened.reduce(
+      (s, r) =>
+        applyGuard(
+          withTicket(s, r.n, () => ({ status: "open" })),
+          r.n,
+          r.guard,
+        ),
+      fresh,
+    );
+    const after = afterMerge(guarded, merged, refused);
+    return { state: after, value: outLine({ merged, refused, halt: after.halt, paused: after.paused }) };
+  });
+  return settle(saved, (line) => line);
 }
 
-function gate(deps: Deps, state: WaveState, flags: Map<string, string>): Outcome {
+async function gate(deps: Deps, state: WaveState, flags: Map<string, string>): Promise<Outcome> {
   const head = flags.get("--head") ?? "";
   if (!SHA_PATTERN.test(head)) return usage("--head must be a full commit sha");
   const code = intFlag(flags, "--code", 0, Number.MAX_SAFE_INTEGER);
@@ -188,12 +233,14 @@ function gate(deps: Deps, state: WaveState, flags: Map<string, string>): Outcome
   const ownDir = join(deps.root, VERIFY_DIR, state.slug);
   if (logPath && !resolve(logPath).startsWith(`${ownDir}/`)) return usage(`--log must name a file under ${ownDir}`);
   const tail = logPath ? (deps.readFile(logPath) ?? "").trimEnd().split("\n").slice(-LOG_TAIL_LINES).join("\n") : "";
-  const next = applyGate(state, head, code, logPath);
-  save(deps, next);
-  return done(outLine({ gate: code === 0 ? "pass" : "fail", failures: next.batch?.gateFailures ?? 0, tail }));
+  const saved = await commit(deps, state.slug, (fresh) => {
+    const after = applyGate(fresh, head, code, logPath);
+    return { state: after, value: outLine({ gate: code === 0 ? "pass" : "fail", failures: after.batch?.gateFailures ?? 0, tail }) };
+  });
+  return settle(saved, (line) => line);
 }
 
-function rollup(deps: Deps, state: WaveState, flags: Map<string, string>): Outcome {
+async function rollup(deps: Deps, state: WaveState, flags: Map<string, string>): Promise<Outcome> {
   const title = flags.get("--title") ?? "";
   if (!title.trim()) return usage("--title is required");
   const open = deps.gh(["pr", "list", "--head", state.wave, "--base", state.into, "--state", "open", "--json", "number", "-q", ".[0].number"]);
@@ -205,15 +252,21 @@ function rollup(deps: Deps, state: WaveState, flags: Map<string, string>): Outco
     pr = Number(made.stdout.trim().split("/").pop());
     if (!Number.isInteger(pr) || pr <= 0) return fail(`gh pr create printed no PR url: ${made.stdout.trim()}`, EXIT_GH);
   }
-  const next = withLog({ ...state, rollupPr: pr }, `roll-up PR #${pr} open; the run never merges it`);
-  save(deps, next);
-  return done(outLine({ pr }));
+  const opened = pr;
+  const saved = await commit(deps, state.slug, (fresh) => ({
+    state: withLog({ ...fresh, rollupPr: opened }, `roll-up PR #${opened} open; the run never merges it`),
+    value: outLine({ pr: opened }),
+  }));
+  return settle(saved, (line) => line);
 }
 
-const person = (deps: Deps, change: Either.Either<PersonChange, string>): Outcome => {
-  if (Either.isLeft(change)) return fail(change.left);
-  save(deps, change.right.state);
-  return done(`${MESSAGE_PREFIX} ${change.right.message}`);
+const person = async (deps: Deps, slug: string, change: (fresh: WaveState) => Either.Either<PersonChange, string>): Promise<Outcome> => {
+  const saved = await commit<Either.Either<PersonChange, string>>(deps, slug, (fresh) => {
+    const c = change(fresh);
+    return { state: Either.isRight(c) ? c.right.state : fresh, value: c };
+  });
+  const flat = Either.flatMap(saved, (c) => c);
+  return Either.isLeft(flat) ? fail(flat.left) : done(`${MESSAGE_PREFIX} ${flat.right.message}`);
 };
 
 type Handler = (deps: Deps, state: WaveState, ticket: number | null, flags: Map<string, string>) => Outcome | Promise<Outcome>;
@@ -223,26 +276,32 @@ const needTicket =
   (deps, state, ticket, flags) =>
     ticket === null || !Number.isInteger(ticket) ? usage("this verb needs a ticket number") : go(deps, state, ticket, flags);
 
-function next(deps: Deps, state: WaveState): Outcome {
-  const advanced = nextWaveStep(state);
-  if (advanced.state !== state) save(deps, advanced.state);
-  return done(outLine({ step: advanced.step }));
+async function next(deps: Deps, state: WaveState): Promise<Outcome> {
+  const saved = await commit(deps, state.slug, (fresh) => {
+    const advanced = nextWaveStep(fresh);
+    return { state: advanced.state, value: outLine({ step: advanced.step }) };
+  });
+  return settle(saved, (line) => line);
 }
 
-function event(deps: Deps, state: WaveState): Outcome {
+async function event(deps: Deps, state: WaveState): Promise<Outcome> {
   const decoded = decodeEvent(deps.readStdin());
   if (Either.isLeft(decoded)) return fail(`event: ${decoded.left}`);
-  if (!ticketOf(state, decoded.right.n)) return fail(`#${decoded.right.n} is not in this wave`);
-  const after = applyEvent(state, decoded.right);
-  save(deps, after);
-  return done(ticketOut(after, decoded.right.n));
+  const e = decoded.right;
+  if (!ticketOf(state, e.n)) return fail(`#${e.n} is not in this wave`);
+  const saved = await commit(deps, state.slug, (fresh) => {
+    const after = applyEvent(fresh, e);
+    return { state: after, value: ticketOut(after, e.n) };
+  });
+  return settle(saved, (line) => line);
 }
 
 const HANDLERS: Record<string, Handler> = {
-  [VERB_APPROVE]: (deps, state) => {
-    save(deps, withLog({ ...state, planApproved: true }, "plan approved"));
-    return done(outLine({ approved: true }));
-  },
+  [VERB_APPROVE]: async (deps, state) =>
+    settle(
+      await commit(deps, state.slug, (fresh) => ({ state: withLog({ ...fresh, planApproved: true }, "plan approved"), value: outLine({ approved: true }) })),
+      (line) => line,
+    ),
   [VERB_NEXT]: (deps, state) => next(deps, state),
   [VERB_EVENT]: (deps, state) => event(deps, state),
   [VERB_GUARD]: needTicket(guard),
@@ -250,10 +309,10 @@ const HANDLERS: Record<string, Handler> = {
   [VERB_GATE]: (deps, state, _ticket, flags) => gate(deps, state, flags),
   [VERB_ROLLUP]: (deps, state, _ticket, flags) => rollup(deps, state, flags),
   [VERB_STATUS]: (_deps, state, _ticket, flags) => done(flags.has("--json") ? JSON.stringify(state) : statusLines(state).join("\n")),
-  [VERB_PAUSE]: (deps, state) => person(deps, Either.right(pause(state))),
-  [VERB_RESUME]: (deps, state) => person(deps, Either.right(resume(state))),
-  [VERB_RETRY]: needTicket((deps, state, n) => person(deps, retry(state, n))),
-  [VERB_SKIP]: needTicket((deps, state, n) => person(deps, skip(state, n))),
+  [VERB_PAUSE]: (deps, state) => person(deps, state.slug, (fresh) => Either.right(pause(fresh))),
+  [VERB_RESUME]: (deps, state) => person(deps, state.slug, (fresh) => Either.right(resume(fresh))),
+  [VERB_RETRY]: needTicket((deps, state, n) => person(deps, state.slug, (fresh) => retry(fresh, n))),
+  [VERB_SKIP]: needTicket((deps, state, n) => person(deps, state.slug, (fresh) => skip(fresh, n))),
 };
 
 export async function run(argv: string[], deps: Deps): Promise<Outcome> {
@@ -286,6 +345,15 @@ export const defaultDeps = (root: string): Deps => ({
   readFile: readOrNull,
   writeFile: (p, t) => writeFileSync(p, t),
   mkdirp: (p) => void mkdirSync(p, { recursive: true }),
+  createExclusive: (p, t) => {
+    try {
+      writeFileSync(p, t, { flag: "wx" });
+      return true;
+    } catch {
+      return false;
+    }
+  },
+  remove: (p) => rmSync(p, { force: true }),
   gh: ghSpawn,
   sleep: (ms) => new Promise((res) => setTimeout(res, ms)),
   now: () => Date.now(),

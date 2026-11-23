@@ -8,7 +8,7 @@ const run = (name: string, conclusion: string | null, status = "COMPLETED"): Che
 const ctx = (context: string, state: string): Check => ({ context, state });
 const thread = (authors: (string | null)[], isResolved = false): Thread => ({
   isResolved,
-  comments: { nodes: authors.map((login, i) => ({ author: login === null ? null : { login }, url: `https://x/c${i}` })) },
+  comments: { pageInfo: { hasNextPage: false }, nodes: authors.map((login, i) => ({ author: login === null ? null : { login }, url: `https://x/c${i}` })) },
 });
 const view = (over: Partial<PrView> = {}): PrView => ({
   state: "OPEN",
@@ -52,7 +52,9 @@ describe("unansweredThreads", () => {
   });
 
   it("a thread without urls is still listed, by its reviewer", () => {
-    expect(unansweredThreads([{ isResolved: false, comments: { nodes: [{ author: { login: "bot" } }] } }])).toEqual(["thread by bot"]);
+    expect(unansweredThreads([{ isResolved: false, comments: { pageInfo: { hasNextPage: false }, nodes: [{ author: { login: "bot" } }] } }])).toEqual([
+      "thread by bot",
+    ]);
   });
 });
 
@@ -98,7 +100,9 @@ describe("guardDecision", () => {
 });
 
 const ok = (stdout: unknown): GhResult => ({ code: 0, stdout: typeof stdout === "string" ? stdout : JSON.stringify(stdout), stderr: "" });
-const threadsReply = (nodes: Thread[]) => ({ data: { repository: { pullRequest: { reviewThreads: { nodes } } } } });
+const threadsReply = (nodes: Thread[], more = false) => ({
+  data: { repository: { pullRequest: { reviewThreads: { pageInfo: { hasNextPage: more }, nodes } } } },
+});
 
 function fakeGh(answers: { repo?: GhResult; view?: GhResult; threads?: GhResult; merge?: GhResult }) {
   const calls: string[][] = [];
@@ -121,6 +125,24 @@ describe("readGuard", () => {
     expect(calls[2]).toEqual(expect.arrayContaining(["owner=acme", "name=saas", "pr=101"]));
   });
 
+  it("more threads than one read returns is unreadable, never green: unread feedback must not pass the guard", () => {
+    const { gh } = fakeGh({ threads: ok(threadsReply([], true)) });
+    expect(readGuard(gh, 101, WAVE)).toEqual(Either.right(expect.objectContaining({ verdict: "unreadable" })));
+  });
+
+  it("a thread with more comments than one read returns is unreadable, never green: the reply may sit on the next page", () => {
+    const long = thread(["bot", "agent"]);
+    const cut = { ...long, comments: { ...long.comments, pageInfo: { hasNextPage: true } } };
+    const { gh } = fakeGh({ threads: ok(threadsReply([cut])) });
+    expect(readGuard(gh, 101, WAVE)).toEqual(Either.right(expect.objectContaining({ verdict: "unreadable" })));
+    expect(readGuard(fakeGh({ threads: ok(threadsReply([long])) }).gh, 101, WAVE)).toEqual(Either.right(expect.objectContaining({ verdict: "green" })));
+  });
+
+  it("a threads reply without page info is refused, so the guard never assumes it read everything", () => {
+    const bare = { data: { repository: { pullRequest: { reviewThreads: { nodes: [] } } } } };
+    expect(readGuard(fakeGh({ threads: ok(bare) }).gh, 101, WAVE)).toEqual(Either.left("gh api graphql (review threads of 101): unexpected output"));
+  });
+
   it("a gh failure or output it cannot read is a refusal naming the step, never a green verdict", () => {
     const fail = { code: 1, stdout: "", stderr: "HTTP 502" };
     expect(readGuard(fakeGh({ repo: fail }).gh, 101, WAVE)).toEqual(Either.left("gh repo view: HTTP 502"));
@@ -132,7 +154,7 @@ describe("readGuard", () => {
 });
 
 describe("mergePr", () => {
-  it("squash-merges only the head the guard saw, so a push after the guard cannot slip in", () => {
+  it("merges with a merge commit, and only the head the guard saw, so a push after the guard cannot slip in", () => {
     const { gh, calls } = fakeGh({});
     expect(mergePr(gh, 101, SHA_A)).toEqual(Either.right(true));
     expect(calls).toEqual([["pr", "merge", "101", "--merge", "--match-head-commit", SHA_A]]);

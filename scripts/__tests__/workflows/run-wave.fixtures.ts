@@ -14,10 +14,14 @@ const STATE_FILE = join(ROOT, ".verify", SLUG, "wave.json");
 export const MODELS = { plan: "opus", design: "opus", build: "sonnet", review: "sonnet", mechanical: "haiku" };
 const GREEN = [{ name: "unit", status: "COMPLETED", conclusion: "SUCCESS" }];
 export const RED = [{ name: "unit", status: "COMPLETED", conclusion: "FAILURE" }];
-export const OPEN_THREAD = { isResolved: false, comments: { nodes: [{ author: { login: "greptile-apps" }, url: "https://x/thread/1" }] } };
+export const OPEN_THREAD = {
+  isResolved: false,
+  comments: { pageInfo: { hasNextPage: false }, nodes: [{ author: { login: "greptile-apps" }, url: "https://x/thread/1" }] },
+};
 export const ANSWERED_THREAD = {
   isResolved: false,
   comments: {
+    pageInfo: { hasNextPage: false },
     nodes: [
       { author: { login: "greptile-apps" }, url: "https://x/thread/1" },
       { author: { login: "wave-bot" }, url: "https://x/thread/2" },
@@ -53,7 +57,7 @@ export function world() {
     if (args[0] === "repo") return ok("o/r\n");
     if (args[0] === "api") {
       const pr = prs.get(Number(args.find((a) => a.startsWith("pr="))?.slice(3)));
-      return ok({ data: { repository: { pullRequest: { reviewThreads: { nodes: pr?.threads ?? [] } } } } });
+      return ok({ data: { repository: { pullRequest: { reviewThreads: { pageInfo: { hasNextPage: false }, nodes: pr?.threads ?? [] } } } } });
     }
     const [, verb, n] = args;
     if (verb === "list") return ok("");
@@ -80,6 +84,8 @@ export function world() {
     readFile: (p) => files.get(p) ?? null,
     writeFile: (p, t) => void files.set(p, t),
     mkdirp: () => undefined,
+    createExclusive: (p) => !files.has(p) && Boolean(files.set(p, "lock")),
+    remove: (p) => void files.delete(p),
     gh: runner,
     sleep: async () => undefined,
     now: () => 0,

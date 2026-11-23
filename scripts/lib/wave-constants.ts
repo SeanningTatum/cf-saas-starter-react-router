@@ -12,7 +12,7 @@ export const TICKET_KINDS = ["design", "build", "mechanical"] as const;
 export const TICKET_STATUSES = ["queued", "open", "green", "merged", "stuck", "skipped"] as const;
 export const FIX_KINDS = ["review", "check", "threads", "refresh"] as const;
 export const GATE_RESULTS = ["", "pass", "fail"] as const;
-export const GUARD_VERDICTS = ["green", "red", "pending", "threads", "closed", "merged"] as const;
+export const GUARD_VERDICTS = ["green", "red", "pending", "threads", "unreadable", "closed", "merged"] as const;
 
 export const MAX_CHECK_FAILURES = 2;
 export const MAX_THREAD_ROUNDS = 3;
@@ -28,6 +28,9 @@ export const DEFAULT_WAIT_SECONDS = 0;
 export const MAX_WAIT_SECONDS = 540;
 export const POLL_SECONDS = 30;
 export const MS_PER_SECOND = 1000;
+export const LOCK_SUFFIX = ".lock";
+export const LOCK_TRIES = 200;
+export const LOCK_WAIT_MS = 50;
 
 export const TRACK_PREFIX = "t";
 export const PASSING_CONCLUSIONS = ["SUCCESS", "SKIPPED"] as const;
@@ -40,7 +43,7 @@ export const CONFLICTING = "CONFLICTING";
 export const PR_VIEW_FIELDS = "state,baseRefName,headRefName,headRefOid,isCrossRepository,mergeable,statusCheckRollup";
 export const REPO_VIEW_ARGS = ["repo", "view", "--json", "owner,name", "-q", '.owner.login + "/" + .name'];
 export const THREADS_QUERY =
-  "query($owner:String!,$name:String!,$pr:Int!){repository(owner:$owner,name:$name){pullRequest(number:$pr){reviewThreads(first:100){nodes{isResolved comments(first:100){nodes{author{login} url}}}}}}}";
+  "query($owner:String!,$name:String!,$pr:Int!){repository(owner:$owner,name:$name){pullRequest(number:$pr){reviewThreads(first:100){pageInfo{hasNextPage} nodes{isResolved comments(first:100){pageInfo{hasNextPage} nodes{author{login} url}}}}}}}";
 
 export const SIGNATURE_HEX = /\b(?=[0-9]*[a-f])[0-9a-f]{7,40}\b/g;
 export const SIGNATURE_DIGITS = /\d+/g;

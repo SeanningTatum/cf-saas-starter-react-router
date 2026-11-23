@@ -87,7 +87,7 @@ const ROOT = pre.root.replace(/\/+$/, "");
 const INTO = wantedInto || pre.into;
 if (!BRANCH.test(INTO) || INTO === WAVE) return { stopped: "Preflight", reason: "the roll-up base must be a branch other than the wave branch" };
 if ([pre.default_branch, cfg.baseBranch].includes(WAVE)) return { stopped: "Preflight", reason: "the wave branch must not be the default branch or the configured base: the run merges PRs into it" };
-const { sh, remember } = asker(`ROOT is ${ROOT}. cd there before anything else.`);
+const { ask, sh, remember } = asker(`ROOT is ${ROOT}. cd there before anything else.`);
 const WT = (n) => `${ROOT}/.verify/${WAVE_SLUG}/wt/${n}`;
 const modelFor = (kind) => (kind === "design" ? MODELS.design : kind === "mechanical" ? MODELS.mechanical : MODELS.build);
 const trackPhase = (t) => `Track ${t.track}`;
@@ -176,14 +176,14 @@ async function doStep(t, label) {
   const opts = (model, schema) => ({ label, phase: trackPhase(t), agentType: "general-purpose", model, schema });
   if (t.step === "guard") return waveCmd("guard", `${t.n} --wait ${GUARD_WAIT_SECONDS}`, label, trackPhase(t), undefined, true);
   if (t.step === "build") {
-    const a = await tracked(buildPrompt(t), opts(modelFor(t.kind), BUILD));
+    const a = await ask(buildPrompt(t), opts(modelFor(t.kind), BUILD));
     if (a && a.ok && a.pr > 0 && BRANCH.test(a.branch)) {
       return event(t, label, { type: "opened", pr: a.pr, branch: a.branch, head: a.head, ownerSteps: a.owner_steps.slice(0, 50).map((s) => s.slice(0, 500)) });
     }
     return event(t, label, { type: "failed", line: ((a && a.error_line) || "the build agent returned no PR").slice(0, 500) });
   }
   if (t.step === "review") {
-    const a = await tracked(reviewPrompt(t), opts(MODELS.review, REVIEW));
+    const a = await ask(reviewPrompt(t), opts(MODELS.review, REVIEW));
     if (!a) return event(t, label, { type: "failed", line: "the review agent returned nothing" });
     const blocking = a.findings.filter(isP0P1).map((f) => `${f.severity} ${f.file}${f.line ? `:${f.line}` : ""} ${f.detail} Fix: ${f.fix}`.slice(0, 500));
     return event(t, label, { type: "reviewed", blocking: blocking.slice(0, 50) });
@@ -191,7 +191,7 @@ async function doStep(t, label) {
   const what = FIX_KIND[t.step];
   if (!what) return { error: `unknown step ${t.step}` };
   const model = what === "threads" || what === "refresh" ? MODELS.mechanical : modelFor(t.kind);
-  const a = await tracked(fixPrompt(t, t.step), opts(model, FIX));
+  const a = await ask(fixPrompt(t, t.step), opts(model, FIX));
   if (a && a.ok) return event(t, label, { type: "fixed", what, head: String(a.head || "").slice(0, 500), cause: String(a.cause || "").slice(0, 500) });
   return event(t, label, { type: "failed", line: ((a && a.error_line) || `the ${what} agent returned nothing`).slice(0, 500) });
 }
@@ -259,7 +259,7 @@ if (start.error) return { stopped: "Plan", reason: start.error };
 let planned = false;
 const awaitingPlan = start.out.step.kind === "stop" && start.out.step.stop === "plan";
 if (start.out.step.kind === "plan" || (awaitingPlan && changes)) {
-  const p = await tracked(planPrompt(changes), { label: "plan", phase: "Plan", agentType: "general-purpose", model: MODELS.plan, schema: PLAN_OUT });
+  const p = await ask(planPrompt(changes), { label: "plan", phase: "Plan", agentType: "general-purpose", model: MODELS.plan, schema: PLAN_OUT });
   const got = p ? p.tickets.map((x) => x.n).sort((a, b) => a - b) : [];
   if (JSON.stringify(got) !== JSON.stringify([...TICKETS].sort((a, b) => a - b))) return { stopped: "Plan", reason: "the planner did not return exactly the tickets asked for" };
   const made = await waveCmd("plan", `--wave ${shq(WAVE)} --into ${shq(INTO)} --tracks ${TRACKS} --review-rounds ${cfg.wave.reviewRounds}`, "wave:plan", "Plan", { tickets: p.tickets });

@@ -31,10 +31,11 @@ const PrViewSchema = Schema.Struct({
 });
 
 const CommentSchema = Schema.Struct({ author: Schema.NullOr(Schema.Struct({ login: Schema.String })), url: Schema.optional(Schema.String) });
-const ThreadSchema = Schema.Struct({ isResolved: Schema.Boolean, comments: Schema.Struct({ nodes: Schema.Array(CommentSchema) }) });
+const PageInfo = Schema.Struct({ hasNextPage: Schema.Boolean });
+const ThreadSchema = Schema.Struct({ isResolved: Schema.Boolean, comments: Schema.Struct({ pageInfo: PageInfo, nodes: Schema.Array(CommentSchema) }) });
 const ThreadsReplySchema = Schema.Struct({
   data: Schema.Struct({
-    repository: Schema.Struct({ pullRequest: Schema.Struct({ reviewThreads: Schema.Struct({ nodes: Schema.Array(ThreadSchema) }) }) }),
+    repository: Schema.Struct({ pullRequest: Schema.Struct({ reviewThreads: Schema.Struct({ pageInfo: PageInfo, nodes: Schema.Array(ThreadSchema) }) }) }),
   }),
 });
 
@@ -76,13 +77,20 @@ export function unansweredThreads(threads: readonly Thread[]): string[] {
   });
 }
 
-export function guardDecision(view: PrView, threads: readonly Thread[], wave: string, branch?: string): GuardResult {
+export function guardDecision(view: PrView, threads: readonly Thread[], wave: string, branch?: string, truncated = false): GuardResult {
   const base = { head: view.headRefOid, mergeable: view.mergeable ?? "", red: [], pending: [], unanswered: [] };
   if (view.state === MERGED_STATE) return { ...base, verdict: "merged", line: "the PR was merged outside the run" };
   if (view.state !== OPEN_STATE) return { ...base, verdict: "closed", line: `the PR is ${view.state.toLowerCase()}` };
   if (view.baseRefName !== wave) return { ...base, verdict: "closed", line: `the PR's base is ${view.baseRefName}, not the wave branch ${wave}` };
   if (branch !== undefined && (view.headRefName !== branch || view.isCrossRepository !== false)) {
     return { ...base, verdict: "closed", line: `the PR's head is not the ticket's own branch ${branch} in this repo` };
+  }
+  if (truncated) {
+    return {
+      ...base,
+      verdict: "unreadable",
+      line: "the PR has more review threads, or a thread more comments, than one read returns; check every thread by hand",
+    };
   }
   const { red, pending } = sortChecks(view.statusCheckRollup ?? []);
   const unanswered = unansweredThreads(threads);
@@ -107,7 +115,9 @@ export function readGuard(gh: GhRunner, pr: number, wave: string, branch?: strin
   if (threads.code !== 0) return Either.left(`gh api graphql (review threads of ${pr}): ${threads.stderr.trim()}`);
   const parsedThreads = decodeJson(ThreadsReplySchema, threads.stdout);
   if (Option.isNone(parsedThreads)) return Either.left(`gh api graphql (review threads of ${pr}): unexpected output`);
-  return Either.right(guardDecision(parsedView.value, parsedThreads.value.data.repository.pullRequest.reviewThreads.nodes, wave, branch));
+  const list = parsedThreads.value.data.repository.pullRequest.reviewThreads;
+  const truncated = list.pageInfo.hasNextPage || list.nodes.some((t) => t.comments.pageInfo.hasNextPage);
+  return Either.right(guardDecision(parsedView.value, list.nodes, wave, branch, truncated));
 }
 
 export function mergePr(gh: GhRunner, pr: number, head: string): Either.Either<true, string> {

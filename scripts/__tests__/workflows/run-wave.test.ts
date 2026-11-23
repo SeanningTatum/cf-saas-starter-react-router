@@ -60,6 +60,17 @@ describe("run-wave: a wave of two batches, approved, run to the roll-up", () => 
     expect(w.state()).toMatchObject({ batchesDone: 2, rollupPr: ROLLUP_PR });
   });
 
+  it("every agent after preflight, planner and reviewer included, is told the absolute ROOT, so none reads the launching checkout", async () => {
+    const { w } = await planned();
+    const r = await dryRun("run-wave", { args: APPROVED, answers: answers(w) });
+    const later = r.calls.filter((c) => c.label !== "config" && c.label !== "preflight");
+    const stray = later.filter((c) => !c.prompt.startsWith("ROOT is /work/repo. cd there before anything else.")).map((c) => c.label);
+    expect(stray).toEqual([]);
+    expect(later.some((c) => stepOf(c.label) === "review")).toBe(true);
+    const plan = (await planned()).stopped.calls.find((c) => c.label === "plan");
+    expect(plan?.prompt.startsWith("ROOT is /work/repo.")).toBe(true);
+  });
+
   it("checking and merging run as script steps on the runner, never as a model's judgment", async () => {
     const { r } = await go();
     const scriptSteps = r.calls.filter((c) => /bun scripts\/wave\.ts (guard|merge|gate)/.test(c.prompt));

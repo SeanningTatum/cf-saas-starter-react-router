@@ -33,7 +33,7 @@ function world() {
   const calls: string[][] = [];
   const bodies: string[] = [];
   const slept: number[] = [];
-  const afterSleep: (() => void)[] = [];
+  const afterSleep: (() => unknown)[] = [];
   const lists = { rollup: "" };
   let clock = 0;
   let stdin = "";
@@ -41,7 +41,7 @@ function world() {
   const no = (stderr: string): GhResult => ({ code: 1, stdout: "", stderr });
   const threads = (args: string[]): GhResult => {
     const pr = prs.get(Number(args.find((x) => x.startsWith("pr="))?.slice(3)));
-    return ok({ data: { repository: { pullRequest: { reviewThreads: { nodes: pr?.threads ?? [] } } } } });
+    return ok({ data: { repository: { pullRequest: { reviewThreads: { pageInfo: { hasNextPage: false }, nodes: pr?.threads ?? [] } } } } });
   };
   const merge = (pr: Pr): GhResult => {
     if (pr.refuse) return no(pr.refuse);
@@ -84,11 +84,13 @@ function world() {
     readFile: (p) => files.get(p) ?? null,
     writeFile: (p, t) => void files.set(p, t),
     mkdirp: () => undefined,
+    createExclusive: (p) => !files.has(p) && Boolean(files.set(p, "lock")),
+    remove: (p) => void files.delete(p),
     gh,
     sleep: async (ms) => {
       slept.push(ms);
       clock += ms;
-      afterSleep.shift()?.();
+      await afterSleep.shift()?.();
     },
     now: () => clock,
   };
@@ -219,7 +221,9 @@ describe("wave CLI", () => {
   it("guard never reports green over an unanswered thread, a red check or a pending list", async () => {
     const w = world();
     await w.approved();
-    await w.open(11, { threads: [{ isResolved: false, comments: { nodes: [{ author: { login: "bot" }, url: "https://x/t1" }] } }] });
+    await w.open(11, {
+      threads: [{ isResolved: false, comments: { pageInfo: { hasNextPage: false }, nodes: [{ author: { login: "bot" }, url: "https://x/t1" }] } }],
+    });
     await w.review(11);
     expect(await w.guard(11)).toMatchObject({ guard: { verdict: "threads", unanswered: ["https://x/t1"] }, ticket: { step: "answer-threads" } });
     await w.open(13, { checks: RED });
@@ -240,6 +244,38 @@ describe("wave CLI", () => {
     });
     expect(await w.guard(11, "--wait", "120")).toMatchObject({ guard: { verdict: "green" } });
     expect(w.slept).toEqual([30_000]);
+  });
+
+  it("a guard that waits on CI writes over nothing: another ticket's event and a pause made during the wait both survive", async () => {
+    const w = world();
+    await w.approved();
+    await w.open(11, { checks: RUNNING });
+    await w.review(11);
+    w.afterSleep.push(async () => {
+      w.prs.set(113, { state: "OPEN", base: WAVE, head: SHA_B, mergeable: "MERGEABLE", checks: PASS, threads: [], refuse: "" });
+      await w.cli(["event", SLUG], JSON.stringify({ type: "opened", n: 13, pr: 113, branch: "w/13", head: SHA_A, ownerSteps: [] }));
+      await w.cli(["pause", SLUG]);
+      w.pr(111).checks = PASS;
+    });
+    expect(await w.guard(11, "--wait", "120")).toMatchObject({ guard: { verdict: "green" }, paused: true });
+    expect(w.ticket(11).status).toBe("green");
+    expect(w.ticket(13)).toMatchObject({ status: "open", pr: 113 });
+    expect(w.state().paused).toBe(true);
+  });
+
+  it("a write waits for the state lock, gives up with a clear line when it never frees, and leaves no lock behind after a normal write", async () => {
+    const w = world();
+    await w.approved();
+    const lock = `${STATE}.lock`;
+    expect(w.files.has(lock)).toBe(false);
+    w.files.set(lock, "held");
+    const blocked = await w.cli(["pause", SLUG]);
+    expect(blocked.code).toBe(1);
+    expect(blocked.stderr[0]).toContain("the wave state is locked by another step");
+    expect(w.state().paused).toBe(false);
+    w.files.delete(lock);
+    expect((await w.cli(["pause", SLUG])).code).toBe(0);
+    expect(w.files.has(lock)).toBe(false);
   });
 
   it("a merge conflict sends the ticket back for a refresh without calling gh pr merge; a second refusal sticks it", async () => {

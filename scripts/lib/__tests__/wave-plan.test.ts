@@ -37,6 +37,13 @@ describe("planWave", () => {
     expect(plan.batches).toEqual([[1, 2], [3]]);
   });
 
+  it("a track follows blockers that sit outside it: #3 then #2 then #1 starts, where ordering the track alone would refuse it", () => {
+    const tickets = [t(1, { files: ["src/shared.ts"], blockedBy: [2] }), t(2, { blockedBy: [3] }), t(3, { files: ["src/shared.ts"] })];
+    const plan = planned(tickets, 2);
+    expect(plan.tracks.find((x) => x.tickets.includes(1))?.tickets).toEqual([3, 1]);
+    expect(plan.batches).toEqual([[3], [2], [1]]);
+  });
+
   it("a blocker in another track holds its dependant back one batch even when there is room", () => {
     expect(planned([t(1), t(2, { blockedBy: [1] })], 8).batches).toEqual([[1], [2]]);
   });

@@ -156,6 +156,7 @@ export function applyGuard(state: WaveState, n: number, g: GuardResult): WaveSta
         `#${n} was merged outside the run`,
       );
     case "closed":
+    case "unreadable":
       return stuck(at, n, g.line);
     case "threads":
       if (t.threadRounds >= MAX_THREAD_ROUNDS) return stuck(at, n, `review threads still unanswered after ${MAX_THREAD_ROUNDS} rounds`);
