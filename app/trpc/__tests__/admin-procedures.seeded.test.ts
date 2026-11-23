@@ -21,14 +21,23 @@ const GHOST = "ghost-user";
 const PAGE = 10;
 const SESSION_TTL_MS = 86_400_000;
 
-type Row = { id: string; name: string; role: string; banned: number; ban_reason: string | null };
+type Row = {
+  id: string;
+  name: string;
+  role: string;
+  banned: number;
+  ban_reason: string | null;
+  ban_expires: number | null;
+};
 
 const newestFirst = (users: ReadonlyArray<UserFixture>) =>
   [...users].sort((a, b) => b.createdAtMs - a.createdAtMs);
 
 const userRow = async (app: ReturnType<typeof startSeededApp>, id: string) =>
   (
-    await app.rows<Row>(sql`select id, name, role, banned, ban_reason from user where id = ${id}`)
+    await app.rows<Row>(
+      sql`select id, name, role, banned, ban_reason, ban_expires from user where id = ${id}`,
+    )
   )[0];
 
 const countOf = async (app: ReturnType<typeof startSeededApp>, table: string, id: string) =>
@@ -57,12 +66,28 @@ describe("admin reads, through the real procedure on many-users", () => {
     expect(result.totalPages).toBe(Math.ceil(scenario.users.length / PAGE));
   });
 
-  it("getUsers with a role and a status filter returns only matching rows and a matching total, so a filter is not applied to the page and not the count", async () => {
+  it("getUsers with a status filter returns only matching rows and a matching total, so a filter is not applied to the page and not the count", async () => {
     const app = startSeededApp("many-users");
     const banned = scenario.users.filter((u) => u.banned);
     const result = await app.callerAs().admin.getUsers({ page: 0, limit: 100, status: "banned" });
     expect(result.total).toBe(banned.length);
     expect(result.users.every((u) => u.banned)).toBe(true);
+  });
+
+  it("getUsers with a role and a status together returns the rows that meet both, so dropping either filter changes the answer (no admin is banned)", async () => {
+    const app = startSeededApp("many-users");
+    const caller = app.callerAs();
+    const both = await caller.admin.getUsers({
+      page: 0,
+      limit: 100,
+      role: "admin",
+      status: "banned",
+    });
+    expect(both).toMatchObject({ users: [], total: 0 });
+    const admins = await caller.admin.getUsers({ page: 0, limit: 100, role: "admin" });
+    expect(admins.users.map((u) => u.id)).toEqual(
+      scenario.users.filter((u) => u.role === "admin").map((u) => u.id),
+    );
   });
 
   it("getUsers past the last page returns no rows and the same total, so an out-of-range page does not fail", async () => {
@@ -156,10 +181,18 @@ describe("admin.banUser", () => {
 describe("admin.unbanUser", () => {
   it("clears the flag, the reason and the expiry, so an unbanned user is not half banned", async () => {
     const app = startSeededApp("many-users");
+    await app.exec(
+      sql`update user set ban_expires = ${Date.now() + SESSION_TTL_MS} where id = ${BANNED}`,
+    );
+    expect((await userRow(app, BANNED))?.ban_expires).not.toBeNull();
     await expect(app.callerAs().admin.unbanUser({ userId: BANNED })).resolves.toEqual({
       success: true,
     });
-    expect(await userRow(app, BANNED)).toMatchObject({ banned: 0, ban_reason: null });
+    expect(await userRow(app, BANNED)).toMatchObject({
+      banned: 0,
+      ban_reason: null,
+      ban_expires: null,
+    });
   });
 
   it("is NOT_FOUND for an unknown id, so a stale unban click does not report success", async () => {
