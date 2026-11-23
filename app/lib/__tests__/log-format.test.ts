@@ -114,8 +114,8 @@ describe("emitLog", () => {
   it("prints a five-letter level and a shorter one with a space between the colour reset and the prefix, so the line reads ERROR [trpc] and INFO  [trpc]", () => {
     emitLog("error", "boom", { layer: "trpc" });
     emitLog("info", "hi", { layer: "trpc" });
-    expect(errorSpy.mock.calls[0]![0]).toBe("\x1b[31mERROR\x1b[0m [trpc] boom");
-    expect(infoSpy.mock.calls[0]![0]).toBe("\x1b[32mINFO \x1b[0m [trpc] hi");
+    expect(errorSpy.mock.calls[0]?.[0]).toBe("\x1b[31mERROR\x1b[0m [trpc] boom");
+    expect(infoSpy.mock.calls[0]?.[0]).toBe("\x1b[32mINFO \x1b[0m [trpc] hi");
   });
 });
 
