@@ -93,9 +93,13 @@ jobs:
           PREVIEW_SEED_SECRET: ${{ secrets.PREVIEW_SEED_SECRET }}
         run: bun scripts/seed-preview.ts --preview --pr "$PR_NUMBER"
 
+      # VITE_SANDBOX=1 puts the dev-only routes (/sandbox.json, later /sandbox and the kitchen sink)
+      # into this preview build and sets SANDBOX_ENABLED on its Worker. The production and staging
+      # builds never set it, so their bundles hold no sandbox code (app/lib/sandbox/switch.ts, #47).
       - name: Build (preview env)
         env:
           CLOUDFLARE_ENV: preview
+          VITE_SANDBOX: "1"
         run: bun run build
 
       - name: Upload preview version

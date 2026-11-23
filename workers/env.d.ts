@@ -13,4 +13,5 @@ interface Env {
   ENVIRONMENT?: string;
   LOG_SAMPLE_RATE?: string;
   TRACE_SAMPLE_RATE?: string;
+  SANDBOX_ENABLED?: string;
 }

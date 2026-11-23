@@ -13,3 +13,6 @@ export const FIXTURES_APPLY_MIGRATIONS_SPAN = "fixtures.apply_migrations";
 export const FIXTURES_APPLY_SCENARIO_SPAN = "fixtures.apply_scenario";
 export const UPLOAD_RESERVE_SPAN = "upload.reserve";
 export const UPLOAD_PURGE_SPAN = "upload.purge";
+export const SANDBOX_LOAD_PAGE_SPAN = "sandbox.load_page";
+export const SANDBOX_RESOLVE_SELECTION_SPAN = "sandbox.resolve_selection";
+export const SANDBOX_LOAD_MANIFEST_SPAN = "sandbox.load_manifest";

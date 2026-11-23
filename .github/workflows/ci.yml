@@ -112,6 +112,11 @@ jobs:
       - name: Bundle budgets
         run: ./scripts/verify.sh --only size-budgets
 
+      # After the build, on the build it made: this is the production build (no VITE_SANDBOX), so it
+      # fails when a sandbox route, its code or the SANDBOX_ENABLED var reached it (issue #47).
+      - name: No sandbox in the production build
+        run: ./scripts/verify.sh --only sandbox-absent
+
       # A PR only lowers a budget: compared with the base branch's file, no build needed.
       - name: Budgets only shrink
         if: github.event_name == 'pull_request'

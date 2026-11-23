@@ -24,4 +24,8 @@ export const APP_ERROR_TAGS: ReadonlySet<AppError["_tag"]> = new Set<AppError["_
   "DevServerRunningError",
   "FixtureLoginError",
   "RealAnalyticsProviderError",
+  "SandboxDisabledError",
+  "SandboxUnknownModuleError",
+  "SandboxUnknownScenarioError",
+  "SandboxCaseNotDeclaredError",
 ]);
