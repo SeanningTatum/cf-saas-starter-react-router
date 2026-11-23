@@ -2,6 +2,7 @@ import { Either } from "effect";
 import { afterEach, describe, expect, it } from "vitest";
 import { parseArgs, realDeps, run, type Deps } from "../size";
 import type { RunResult } from "../lib/shell";
+import { BUDGETS_PATH } from "../lib/size-budgets-constants";
 
 const CWD = "/repo";
 const BASE_DIR = "/tmp/size-base-1";
@@ -193,7 +194,11 @@ describe("bun run size --budgets", () => {
     const base = fake().deps;
     const deps: Deps = {
       ...f.deps,
-      run: (command, args, cwd) => (args[0] === "show" ? { code: 0, stdout: budgets(2048, 60), stderr: "" } : base.run(command, args, cwd)),
+      run: (command, args, cwd) => {
+        if (args[0] === "ls-tree") return { code: 0, stdout: `${BUDGETS_PATH}\n`, stderr: "" };
+        if (args[0] === "show") return { code: 0, stdout: budgets(2048, 60), stderr: "" };
+        return base.run(command, args, cwd);
+      },
     };
     expect(run(["--ratchet", "origin/main"], deps)).toBe(1);
     expect(f.err[0]).toContain("/ went up from 60 to 90");
@@ -204,9 +209,33 @@ describe("bun run size --budgets", () => {
     const f = fake({ files: { [BUDGET_FILE]: budgets(2048, 90) } });
     const deps: Deps = {
       ...f.deps,
-      run: (command, args, cwd) => (args[0] === "show" ? { code: 128, stdout: "", stderr: "missing" } : f.deps.run(command, args, cwd)),
+      run: (command, args, cwd) => (args[0] === "ls-tree" ? { code: 0, stdout: "", stderr: "" } : f.deps.run(command, args, cwd)),
     };
     expect(run(["--ratchet", "origin/main"], deps)).toBe(0);
     expect(f.out[0]).toContain("does not exist on origin/main");
+  });
+
+  it("--ratchet fails on a ref that does not resolve, instead of skipping the comparison", () => {
+    const f = fake({ files: { [BUDGET_FILE]: budgets(2048, 90) }, fail: /rev-parse/ });
+    expect(run(["--ratchet", "origin/stagin"], f.deps)).toBe(1);
+    expect(f.out.join("\n")).not.toContain("does not exist");
+  });
+
+  it("--ratchet fails when listing the base tree errors, rather than treating it as a missing file", () => {
+    const f = fake({ files: { [BUDGET_FILE]: budgets(2048, 90) }, fail: /ls-tree/ });
+    expect(run(["--ratchet", "origin/main"], f.deps)).toBe(1);
+    expect(f.out.join("\n")).not.toContain("does not exist");
+  });
+
+  it.each([
+    ["--json", "out.json"],
+    ["--base", "origin/main"],
+  ])("--budgets rejects %s: it would be ignored", (flag, value) => {
+    expect(Either.isLeft(parseArgs(["--budgets", flag, value]))).toBe(true);
+    expect(Either.isLeft(parseArgs(["--ratchet", "origin/main", flag, value]))).toBe(true);
+  });
+
+  it("--budgets still takes --markdown", () => {
+    expect(Either.isRight(parseArgs(["--budgets", "--built", "--markdown", "b.md"]))).toBe(true);
   });
 });

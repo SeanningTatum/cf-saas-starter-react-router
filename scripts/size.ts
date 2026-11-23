@@ -57,6 +57,8 @@ export function parseArgs(argv: string[]): Either.Either<Options, string> {
   }
   if (options.prBody && (!options.base || options.base.endsWith(JSON_SUFFIX))) return Either.left(USAGE);
   if (options.built && !options.budgets) return Either.left(USAGE);
+  const checkOnly = options.budgets || options.ratchet !== undefined;
+  if (checkOnly && (options.base || options.json || options.prBody)) return Either.left(USAGE);
   return Either.right(options);
 }
 
@@ -124,9 +126,13 @@ export const checkBudgets = (deps: Deps, options: Options): Either.Either<{ text
       problems.push(...failures(rows));
     }
     if (options.ratchet !== undefined) {
-      const before = deps.run(GIT_BIN, ["show", `${options.ratchet}:${BUDGETS_PATH}`], deps.cwd);
-      if (before.code !== 0) sections.push(RATCHET_SKIPPED(options.ratchet));
-      else problems.push(...ratchet(yield* parseBudgets(before.stdout), budgets));
+      const sha = yield* resolveCommit(deps, options.ratchet);
+      const listed = yield* step(deps, GIT_BIN, ["ls-tree", "--name-only", sha, "--", BUDGETS_PATH], deps.cwd);
+      if (listed.stdout.trim() === "") sections.push(RATCHET_SKIPPED(options.ratchet));
+      else {
+        const before = yield* step(deps, GIT_BIN, ["show", `${sha}:${BUDGETS_PATH}`], deps.cwd);
+        problems.push(...ratchet(yield* parseBudgets(before.stdout), budgets));
+      }
     }
     return { text: sections.join("\n\n"), problems };
   });

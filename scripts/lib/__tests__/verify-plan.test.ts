@@ -51,6 +51,8 @@ describe("fullRunReasons", () => {
     ["scripts/check-non-negotiables.ts", "a gate script"],
     ["scripts/check-machines.ts", "a gate script"],
     ["scripts/lib/machine-graph.ts", "a gate script"],
+    ["scripts/size.ts", "a gate script"],
+    ["scripts/lib/size-budgets.ts", "a gate script"],
     ["scripts/lint-all.ts", "the lint runner"],
     ["scripts/lib/lint-findings.ts", "the lint runner"],
     ["biome.jsonc", "a config file"],
