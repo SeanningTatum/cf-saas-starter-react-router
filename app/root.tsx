@@ -18,6 +18,7 @@ import { useTranslation } from "react-i18next";
 import { useChangeLanguage } from "remix-i18next/react";
 import { i18nServer } from "./i18n/i18n.server";
 import { useNonce } from "./lib/csp-nonce";
+import { STYLESHEETS_TAKE_NO_NONCE } from "./lib/constants/csp";
 import { useDocumentRequestId } from "./lib/request-id";
 import { useReportBoundaryError } from "./lib/error-reporting/browser";
 
@@ -59,7 +60,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
         <meta charSet="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <Meta />
-        <Links />
+        <Links nonce={STYLESHEETS_TAKE_NO_NONCE} />
       </head>
       <body>
         {children}

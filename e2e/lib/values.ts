@@ -11,6 +11,7 @@ export const PAGE_PATHS = {
   login: "/login",
   signUp: "/sign-up",
   dashboard: "/dashboard",
+  admin: "/admin",
 } as const;
 
 export const API_PATHS = {
@@ -29,6 +30,7 @@ export const CLIENT_IPS = {
   "security-headers": "203.0.113.12",
   "file-upload": "203.0.113.13",
   "admin-user-toasts": "203.0.113.14",
+  hydration: "203.0.113.15",
 } as const;
 
 export type SpecFile = keyof typeof CLIENT_IPS;
