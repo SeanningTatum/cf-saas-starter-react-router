@@ -19,5 +19,5 @@ export const BucketLive = Layer.effect(
       return yield* Effect.fail(new BucketBindingError({}));
     }
     return { bucket };
-  })
+  }),
 );

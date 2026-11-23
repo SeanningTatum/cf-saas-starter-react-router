@@ -36,9 +36,7 @@ export class ConfigurationError extends Data.TaggedError("ConfigurationError")<{
   readonly field?: string;
 }> {}
 
-export class ExternalServiceError extends Data.TaggedError(
-  "ExternalServiceError"
-)<{
+export class ExternalServiceError extends Data.TaggedError("ExternalServiceError")<{
   readonly service: string;
   readonly cause?: unknown;
 }> {}

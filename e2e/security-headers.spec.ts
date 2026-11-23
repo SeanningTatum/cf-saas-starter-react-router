@@ -1,10 +1,4 @@
-import {
-  test,
-  expect,
-  type APIResponse,
-  type Locator,
-  type Page,
-} from "@playwright/test";
+import { test, expect, type APIResponse, type Locator, type Page } from "@playwright/test";
 import { securityHeaders } from "../workers/security-headers";
 import { useAdminSessionSignedInOncePerFile } from "./lib/admin-session";
 import { loadHydratedReloadingWhileViteReoptimizesDeps } from "./lib/hydration";
@@ -118,22 +112,29 @@ const turnstileReadyUnderTheCsp = (page: Page) =>
 test.describe("Security headers, signed out (nonce CSP, issue #72; see docs/features/security-headers-e2e.md)", () => {
   useClientIpPerFile("security-headers");
 
-  test(
-    "home and login send the headers, and the login page's Turnstile widget reaches ready with no CSP violation",
-    { tag: "@golden" },
-    async ({ page }) => {
-      await checkPage(page, "/", (p) => p.getByTestId("topbar-sign-in"));
-      await checkPage(page, "/login", (p) => p.getByTestId("login-submit"), turnstileReadyUnderTheCsp);
-    },
-  );
+  test("home and login send the headers, and the login page's Turnstile widget reaches ready with no CSP violation", {
+    tag: "@golden",
+  }, async ({ page }) => {
+    await checkPage(page, "/", (p) => p.getByTestId("topbar-sign-in"));
+    await checkPage(
+      page,
+      "/login",
+      (p) => p.getByTestId("login-submit"),
+      turnstileReadyUnderTheCsp,
+    );
+  });
 
-  test("each request gets a fresh nonce, so a nonce made once per isolate or hard-coded cannot be read once by an attacker and reused", async ({ request }) => {
+  test("each request gets a fresh nonce, so a nonce made once per isolate or hard-coded cannot be read once by an attacker and reused", async ({
+    request,
+  }) => {
     const first = nonceOf((await request.get("/login")).headers()["content-security-policy"]);
     const second = nonceOf((await request.get("/login")).headers()["content-security-policy"]);
     expect(first).not.toBe(second);
   });
 
-  test("an API response carries the headers too, so they are not applied only in the page renderer, leaving API routes bare", async ({ request }) => {
+  test("an API response carries the headers too, so they are not applied only in the page renderer, leaving API routes bare", async ({
+    request,
+  }) => {
     const res: APIResponse = await request.get("/api/auth/get-session");
     expect(res.status()).toBe(200);
     expectSecurityHeaders(res.headers(), "/api/auth/get-session");
@@ -145,15 +146,21 @@ test.describe("Security headers, signed in as admin", () => {
 
   const sidebarToggle = (p: Page) => p.getByRole("button", { name: "Toggle Sidebar" }).first();
 
-  test("dashboard sends the headers and loads with no CSP violation, so the CSP blocks neither its scripts nor the theme script", async ({ page }) => {
+  test("dashboard sends the headers and loads with no CSP violation, so the CSP blocks neither its scripts nor the theme script", async ({
+    page,
+  }) => {
     await checkPage(page, "/dashboard", (p) => p.getByTestId("dashboard-go-admin"));
   });
 
-  test("admin sends the headers and loads with no CSP violation, so the CSP blocks neither the admin charts nor the sidebar", async ({ page }) => {
+  test("admin sends the headers and loads with no CSP violation, so the CSP blocks neither the admin charts nor the sidebar", async ({
+    page,
+  }) => {
     await checkPage(page, "/admin", sidebarToggle);
   });
 
-  test("kitchen sink sends the headers and loads with no CSP violation, so no gallery component (Radix, charts, toasts, upload) needs an inline script or an outside host the CSP does not allow", async ({ page }) => {
+  test("kitchen sink sends the headers and loads with no CSP violation, so no gallery component (Radix, charts, toasts, upload) needs an inline script or an outside host the CSP does not allow", async ({
+    page,
+  }) => {
     await checkPage(page, "/admin/kitchen-sink", (p) => p.getByTestId("file-upload-dropzone"));
   });
 });

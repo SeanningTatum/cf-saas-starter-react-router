@@ -1,10 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  BIOME_BIN,
-  EXIT,
-  IMPORT_CYCLE_RULE,
-  KNIP_BIN,
-} from "../lib/lint-constants";
+import { BIOME_BIN, EXIT, IMPORT_CYCLE_RULE, KNIP_BIN } from "../lib/lint-constants";
 import { type Deps, lint, parseArgs, realDeps } from "../lint-all";
 import type { RunResult } from "../lib/shell";
 
@@ -33,7 +28,7 @@ const ok = (stdout: string): RunResult => ({ code: 0, stdout, stderr: "" });
 const failed = (stdout: string, stderr = "boom"): RunResult => ({ code: 1, stdout, stderr });
 
 const CLEAN_BIOME = '{"summary":{"errors":0},"diagnostics":[],"command":"check"}';
-const CLEAN_KNIP = "Using latest D1 database: miniflare-D1DatabaseObject/abc.sqlite\n{\"issues\":[]}\n";
+const CLEAN_KNIP = 'Using latest D1 database: miniflare-D1DatabaseObject/abc.sqlite\n{"issues":[]}\n';
 const CLEAN_HOUSE = "house lint: clean. 518 file(s), 13 rule(s).\n";
 
 const CYCLES_FLAG = `--only=${IMPORT_CYCLE_RULE}`;
@@ -70,8 +65,7 @@ function fake(setup: Setup = {}): Fake {
 }
 
 const commands = (f: Fake): string[] => f.calls.map((call) => call.command);
-const argsOf = (f: Fake, command: string): readonly string[] | undefined =>
-  f.calls.find((call) => call.command === command)?.args;
+const argsOf = (f: Fake, command: string): readonly string[] | undefined => f.calls.find((call) => call.command === command)?.args;
 
 describe("parseArgs", () => {
   it("splits flags from files, so --staged is never linted as a path", () => {

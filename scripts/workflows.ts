@@ -80,7 +80,10 @@ export function buildWorkflow(name: string, source: string, lib: string): string
 
 /** The workflow names a source directory holds: every .js file but lib.js, without the extension. */
 export function sourceNames(files: string[]): string[] {
-  return files.filter((f) => f.endsWith(".js") && f !== LIB_FILE).map((f) => f.slice(0, -3)).sort();
+  return files
+    .filter((f) => f.endsWith(".js") && f !== LIB_FILE)
+    .map((f) => f.slice(0, -3))
+    .sort();
 }
 
 /**
@@ -136,10 +139,12 @@ export function run(argv: string[], root: string, deps: Deps): Outcome {
     try {
       const lines = names.map((n) => ({ n, text: buildWorkflow(n, sources[n] ?? "", lib) }));
       deps.mkdirp(outDir);
-      return done(lines.map(({ n, text }) => {
-        deps.writeFile(join(outDir, `${n}.js`), text);
-        return `built ${out}/${n}.js (${text.split("\n").length} lines)`;
-      }));
+      return done(
+        lines.map(({ n, text }) => {
+          deps.writeFile(join(outDir, `${n}.js`), text);
+          return `built ${out}/${n}.js (${text.split("\n").length} lines)`;
+        }),
+      );
     } catch (e) {
       return fail(1, (e as Error).message);
     }
@@ -153,7 +158,8 @@ export function run(argv: string[], root: string, deps: Deps): Outcome {
   } catch (e) {
     return fail(1, (e as Error).message);
   }
-  if (problems.length) return fail(1, ...problems.map((p) => `workflows: ${out}/${p}`), `fix: run \`${BUILD_CMD}\` and commit the result (edit ${SRC_DIR}/, never ${out}/)`);
+  if (problems.length)
+    return fail(1, ...problems.map((p) => `workflows: ${out}/${p}`), `fix: run \`${BUILD_CMD}\` and commit the result (edit ${SRC_DIR}/, never ${out}/)`);
   return done([`workflows: ${names.length} built scripts match their sources`]);
 }
 

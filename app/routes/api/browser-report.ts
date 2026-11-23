@@ -60,7 +60,7 @@ const respond = (outcome: Outcome): Response => {
   if ("reason" in outcome) {
     loggers.server.debug(
       { status: outcome.status, reason: outcome.reason },
-      "browser report rejected"
+      "browser report rejected",
     );
   }
   return new Response(null, { status: outcome.status, headers: headersFor(outcome.status) });

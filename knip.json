@@ -15,21 +15,12 @@
     "e2e/**/*.ts",
     "*.config.ts"
   ],
-  "ignore": [
-    "app/components/ui/**"
-  ],
-  "ignoreDependencies": [
-    "tailwindcss",
-    "tw-animate-css",
-    "husky",
-    "lighthouse"
-  ],
+  "ignore": ["app/components/ui/**"],
+  "ignoreDependencies": ["tailwindcss", "tw-animate-css", "husky", "lighthouse"],
   "drizzle": false,
   "ignoreExportsUsedInFile": {
     "interface": true,
     "type": true
   },
-  "ignoreUnresolved": [
-    "./scripts/verify.sh"
-  ]
+  "ignoreUnresolved": ["./scripts/verify.sh"]
 }

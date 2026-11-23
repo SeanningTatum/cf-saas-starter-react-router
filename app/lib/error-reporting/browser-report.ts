@@ -47,7 +47,7 @@ const LegacyCspReportSchema = Schema.Struct({
       "document-uri": capped(MAX_REPORT_URL_LENGTH),
       "blocked-uri": Schema.optional(capped(MAX_REPORT_URL_LENGTH)),
       "violated-directive": capped(MAX_CSP_DIRECTIVE_LENGTH),
-    })
+    }),
   ),
 });
 
@@ -63,13 +63,13 @@ const CspViolationReport = Schema.Struct({
 
 const OtherReport = Schema.Struct({
   type: capped(MAX_REPORT_TYPE_LENGTH).pipe(
-    Schema.filter((type) => type !== CSP_VIOLATION_REPORT_TYPE)
+    Schema.filter((type) => type !== CSP_VIOLATION_REPORT_TYPE),
   ),
 });
 
-const ReportingApiReportsSchema = Schema.Array(
-  Schema.Union(CspViolationReport, OtherReport)
-).pipe(Schema.maxItems(MAX_REPORTS_PER_BODY));
+const ReportingApiReportsSchema = Schema.Array(Schema.Union(CspViolationReport, OtherReport)).pipe(
+  Schema.maxItems(MAX_REPORTS_PER_BODY),
+);
 
 export type ReportIntake =
   | {
@@ -84,9 +84,7 @@ export type ReportIntake =
       readonly reason: string;
     };
 
-export type CappedText =
-  | { readonly fits: true; readonly text: string }
-  | { readonly fits: false };
+export type CappedText = { readonly fits: true; readonly text: string } | { readonly fits: false };
 
 type ReportKind = "browser-error" | "legacy-csp" | "reporting-api";
 
@@ -94,7 +92,7 @@ const tooLarge = (): CappedText => ({ fits: false });
 
 const readWithin = async (
   body: ReadableStream<Uint8Array>,
-  maxBytes: number
+  maxBytes: number,
 ): Promise<CappedText> => {
   const reader = body.getReader();
   const decoder = new TextDecoder();
@@ -114,7 +112,7 @@ const readWithin = async (
 
 export const readCappedText = (
   request: Request,
-  maxBytes: number
+  maxBytes: number,
 ): Effect.Effect<CappedText, ExternalServiceError> => {
   if (Number(request.headers.get("content-length")) > maxBytes) {
     return Effect.succeed(tooLarge());
@@ -159,7 +157,7 @@ const blockedTarget = (blocked: string): string => {
 const cspCapture = (
   documentUrl: string,
   directive: string,
-  blocked: string | undefined
+  blocked: string | undefined,
 ): ErrorCapture => ({
   error: {
     name: CSP_VIOLATION_ERROR_NAME,
@@ -172,12 +170,12 @@ const cspCapture = (
 
 const decodeCaptures = (
   kind: ReportKind,
-  json: unknown
+  json: unknown,
 ): Effect.Effect<ReadonlyArray<ErrorCapture>, ParseResult.ParseError> => {
   switch (kind) {
     case "browser-error":
       return Schema.decodeUnknown(BrowserErrorReportSchema)(json).pipe(
-        Effect.map((report) => [browserCapture(report)])
+        Effect.map((report) => [browserCapture(report)]),
       );
     case "legacy-csp":
       return Schema.decodeUnknown(LegacyCspReportSchema)(json).pipe(
@@ -187,9 +185,9 @@ const decodeCaptures = (
             "effective-directive" in report
               ? report["effective-directive"]
               : report["violated-directive"],
-            report["blocked-uri"]
+            report["blocked-uri"],
           ),
-        ])
+        ]),
       );
     case "reporting-api":
       return Schema.decodeUnknown(ReportingApiReportsSchema)(json).pipe(
@@ -200,26 +198,25 @@ const decodeCaptures = (
                   cspCapture(
                     report.body.documentURL,
                     report.body.effectiveDirective,
-                    report.body.blockedURL
+                    report.body.blockedURL,
                   ),
                 ]
-              : []
-          )
-        )
+              : [],
+          ),
+        ),
       );
   }
 };
 
 const rejected = (
   status: Exclude<ReportIntake["status"], typeof BROWSER_REPORT_ACCEPTED_STATUS>,
-  reason: string
+  reason: string,
 ): ReportIntake => ({ status, reason });
 
 const parseJson = (text: string): Effect.Effect<unknown, ValidationError> =>
   Effect.try({
     try: (): unknown => JSON.parse(text),
-    catch: () =>
-      new ValidationError({ entity: "browser-report", message: "body is not JSON" }),
+    catch: () => new ValidationError({ entity: "browser-report", message: "body is not JSON" }),
   });
 
 const intakeOf = (kind: ReportKind, read: CappedText): Effect.Effect<ReportIntake> => {
@@ -228,8 +225,7 @@ const intakeOf = (kind: ReportKind, read: CappedText): Effect.Effect<ReportIntak
   }
   return parseJson(read.text).pipe(
     Effect.matchEffect({
-      onFailure: () =>
-        Effect.succeed(rejected(BROWSER_REPORT_BAD_BODY_STATUS, "body is not JSON")),
+      onFailure: () => Effect.succeed(rejected(BROWSER_REPORT_BAD_BODY_STATUS, "body is not JSON")),
       onSuccess: (json) =>
         decodeCaptures(kind, json).pipe(
           Effect.match({
@@ -239,24 +235,22 @@ const intakeOf = (kind: ReportKind, read: CappedText): Effect.Effect<ReportIntak
               status: BROWSER_REPORT_ACCEPTED_STATUS,
               captures,
             }),
-          })
+          }),
         ),
-    })
+    }),
   );
 };
 
 export const readBrowserReports = (request: Request): Effect.Effect<ReportIntake> => {
   const kind = reportKindOf(request.headers.get("content-type"));
   if (kind === undefined) {
-    return Effect.succeed(
-      rejected(BROWSER_REPORT_WRONG_TYPE_STATUS, "unsupported content type")
-    );
+    return Effect.succeed(rejected(BROWSER_REPORT_WRONG_TYPE_STATUS, "unsupported content type"));
   }
   return readCappedText(request, MAX_REPORT_BODY_BYTES).pipe(
     Effect.matchEffect({
       onFailure: () =>
         Effect.succeed(rejected(BROWSER_REPORT_BAD_BODY_STATUS, "body could not be read")),
       onSuccess: (read) => intakeOf(kind, read),
-    })
+    }),
   );
 };

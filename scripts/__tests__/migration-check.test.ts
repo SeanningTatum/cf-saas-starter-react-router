@@ -16,11 +16,7 @@ import {
   type DriftProbe,
   type GitResult,
 } from "../migration-check";
-import {
-  DEFAULT_SCHEMA_PATH,
-  DRIZZLE_DIR,
-  MIN_REASON_CHARS,
-} from "../lib/migration-constants";
+import { DEFAULT_SCHEMA_PATH, DRIZZLE_DIR, MIN_REASON_CHARS } from "../lib/migration-constants";
 
 const repoRoot = path.join(__dirname, "..", "..");
 const FILE = "drizzle/0001_x.sql";
@@ -38,10 +34,7 @@ describe("statement scanner", () => {
     expect(kinds("ALTER TABLE `t` DROP COLUMN `c`;\nALTER TABLE t DROP c;")).toEqual(["drop", "drop"]);
   });
   it("flags RENAME TO and RENAME COLUMN as renames", () => {
-    expect(kinds("ALTER TABLE a RENAME TO b;\nALTER TABLE a RENAME COLUMN x TO y;")).toEqual([
-      "rename",
-      "rename",
-    ]);
+    expect(kinds("ALTER TABLE a RENAME TO b;\nALTER TABLE a RENAME COLUMN x TO y;")).toEqual(["rename", "rename"]);
   });
   it("flags ADD COLUMN NOT NULL with no DEFAULT", () => {
     expect(kinds("ALTER TABLE `t` ADD `c` text NOT NULL;")).toEqual(["not-null-no-default"]);
@@ -57,17 +50,13 @@ describe("statement scanner", () => {
     expect(kinds("CREATE TABLE t (id text NOT NULL, n integer NOT NULL);")).toEqual([]);
   });
   it("matches lower-case SQL", () => {
-    expect(
-      kinds("drop table t;\nalter table t rename to u;\nalter table t add c text not null;"),
-    ).toEqual(["drop", "rename", "not-null-no-default"]);
+    expect(kinds("drop table t;\nalter table t rename to u;\nalter table t add c text not null;")).toEqual(["drop", "rename", "not-null-no-default"]);
   });
   it("ignores a column named drop_reason", () => {
     expect(kinds("CREATE TABLE t (drop_reason text, `drop` text);")).toEqual([]);
   });
   it("ignores a table named rename_log in quotes and brackets", () => {
-    expect(
-      kinds("CREATE TABLE `rename_log` (id text);\nCREATE INDEX [drop me] ON `rename_log` (id);"),
-    ).toEqual([]);
+    expect(kinds("CREATE TABLE `rename_log` (id text);\nCREATE INDEX [drop me] ON `rename_log` (id);")).toEqual([]);
   });
   it("ignores DROP inside a string default", () => {
     expect(kinds("ALTER TABLE t ADD c text DEFAULT 'DROP TABLE x';")).toEqual([]);
@@ -76,14 +65,10 @@ describe("statement scanner", () => {
     expect(kinds("INSERT INTO t VALUES ('a; DROP TABLE x');")).toEqual([]);
   });
   it("ignores statements hidden in -- and block comments", () => {
-    expect(
-      kinds("-- DROP TABLE t;\n/* ALTER TABLE t RENAME TO u; */\nCREATE TABLE z (id text);"),
-    ).toEqual([]);
+    expect(kinds("-- DROP TABLE t;\n/* ALTER TABLE t RENAME TO u; */\nCREATE TABLE z (id text);")).toEqual([]);
   });
   it("reads past the Drizzle statement-breakpoint marker", () => {
-    expect(kinds("CREATE TABLE a (id text);\n--> statement-breakpoint\nDROP TABLE b;")).toEqual([
-      "drop",
-    ]);
+    expect(kinds("CREATE TABLE a (id text);\n--> statement-breakpoint\nDROP TABLE b;")).toEqual(["drop"]);
   });
   it("flags the Drizzle SQLite table rebuild through its DROP and RENAME", () => {
     const rebuild = [
@@ -156,18 +141,14 @@ function fakeGit(script: GitScript, calls: string[][] = []) {
     calls.push(argv);
     const verb = argv[0];
     if (verb === "symbolic-ref") {
-      return script.symbolic === undefined
-        ? { status: 1, stdout: "" }
-        : { status: 0, stdout: `${script.symbolic}\n` };
+      return script.symbolic === undefined ? { status: 1, stdout: "" } : { status: 0, stdout: `${script.symbolic}\n` };
     }
     if (verb === "rev-parse") {
       const ref = (argv[argv.length - 1] ?? "").replace("^{commit}", "");
       return { status: (script.valid ?? []).includes(ref) ? 0 : 1, stdout: "" };
     }
     if (verb === "merge-base") {
-      return script.mergeBase === undefined
-        ? { status: 1, stdout: "" }
-        : { status: 0, stdout: `${script.mergeBase}\n` };
+      return script.mergeBase === undefined ? { status: 1, stdout: "" } : { status: 0, stdout: `${script.mergeBase}\n` };
     }
     return script.diff ?? { status: 0, stdout: "" };
   };
@@ -278,9 +259,7 @@ describe("run exit codes", () => {
       files: { ...DROP_FILES, "drizzle/0001_x.reason.md": LONG_REASON },
     });
     expect(run(deps)).toBe(0);
-    expect(out[0]).toBe(
-      "✓ drizzle/0001_x.sql: drop: DROP TABLE t (reason: drizzle/0001_x.reason.md)",
-    );
+    expect(out[0]).toBe("✓ drizzle/0001_x.sql: drop: DROP TABLE t (reason: drizzle/0001_x.reason.md)");
   });
   it("lets one reason file cover every finding on its migration", () => {
     const files = {

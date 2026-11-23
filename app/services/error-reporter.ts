@@ -35,7 +35,7 @@ const remoteBudget = makeReportBudget({
 
 const loggedThenSentIfError = (
   remote: ErrorReporterAdapter,
-  budget: ReportBudget
+  budget: ReportBudget,
 ): ErrorReporterAdapter => ({
   name: remote.name,
   send: (batch) => {
@@ -43,31 +43,28 @@ const loggedThenSentIfError = (
     return consoleAdapter.send(batch).pipe(
       Effect.zipRight(Clock.currentTimeMillis),
       Effect.flatMap((ms) =>
-        errors.length > 0 && budget.take(ms) ? remote.send(errors) : Effect.void
-      )
+        errors.length > 0 && budget.take(ms) ? remote.send(errors) : Effect.void,
+      ),
     );
   },
 });
 
 export const selectErrorAdapter = (
   env: Partial<Env>,
-  budget: ReportBudget = remoteBudget
+  budget: ReportBudget = remoteBudget,
 ): ErrorReporterAdapter => {
   const dsn = parseSentryDsn(env.SENTRY_DSN);
   switch (env.ERROR_REPORTER) {
     case "none":
       return noopAdapter;
     case "sentry":
-      return dsn
-        ? loggedThenSentIfError(sentryAdapter({ dsn }), budget)
-        : consoleAdapter;
+      return dsn ? loggedThenSentIfError(sentryAdapter({ dsn }), budget) : consoleAdapter;
     default:
       return consoleAdapter;
   }
 };
 
-export const readRelease = (env: Partial<Env>): string =>
-  env.RELEASE_VERSION || UNKNOWN_RELEASE;
+export const readRelease = (env: Partial<Env>): string => env.RELEASE_VERSION || UNKNOWN_RELEASE;
 
 export const readEnvironment = (env: Partial<Env>, dev: boolean = isDev): string =>
   env.ENVIRONMENT || (dev ? DEVELOPMENT_ENVIRONMENT : PRODUCTION_ENVIRONMENT);
@@ -80,9 +77,7 @@ export interface ErrorReporterOptions {
   readonly waitUntil: (delivery: Promise<void>) => void;
 }
 
-export const makeErrorReporter = (
-  options: ErrorReporterOptions
-): ErrorReporterShape => {
+export const makeErrorReporter = (options: ErrorReporterOptions): ErrorReporterShape => {
   const { adapter, request } = options;
   const counts = { captured: 0 };
   const seen = new WeakSet<object>();
@@ -106,16 +101,16 @@ export const makeErrorReporter = (
           method: request?.method,
           path: request?.path,
         }),
-      ])
+      ]),
     ).pipe(
       Effect.catchAllCause((cause) =>
         Effect.sync(() =>
           loggers.server.warn(
             { provider: adapter.name, cause: String(cause) },
-            "error report delivery failed; report dropped"
-          )
-        )
-      )
+            "error report delivery failed; report dropped",
+          ),
+        ),
+      ),
     );
 
   return {
@@ -127,7 +122,7 @@ export const makeErrorReporter = (
           if (counts.captured === MAX_REPORTS_PER_REQUEST + 1) {
             loggers.server.warn(
               { limit: MAX_REPORTS_PER_REQUEST },
-              "error report limit reached for this request; later reports dropped"
+              "error report limit reached for this request; later reports dropped",
             );
           }
           return;
@@ -140,7 +135,7 @@ export const makeErrorReporter = (
 export const requestErrorReporter = (
   env: Partial<Env>,
   request?: RequestContext,
-  waitUntil: (delivery: Promise<void>) => void = () => undefined
+  waitUntil: (delivery: Promise<void>) => void = () => undefined,
 ): ErrorReporterShape =>
   makeErrorReporter({
     adapter: selectErrorAdapter(env),
@@ -153,7 +148,5 @@ export const requestErrorReporter = (
 export const ErrorReporterFrom = (reporter: ErrorReporterShape) =>
   Layer.succeed(ErrorReporter, reporter);
 
-export const reportError = (
-  reporter: ErrorReporterShape,
-  capture: ErrorCapture
-): void => Effect.runSync(reporter.capture(capture));
+export const reportError = (reporter: ErrorReporterShape, capture: ErrorCapture): void =>
+  Effect.runSync(reporter.capture(capture));

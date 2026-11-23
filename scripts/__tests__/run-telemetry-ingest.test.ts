@@ -99,11 +99,7 @@ describe("ingest", () => {
 
   it("builds the calls from the journal when no ledger exists: a crashed run still yields numbers", () => {
     const files = {
-      [`${DIR}/journal.jsonl`]: journal([
-        started("k1", "a1", "audit"),
-        result("k1", "a1", { pass: false }),
-        started("k2", "a2", "build", "Build"),
-      ]),
+      [`${DIR}/journal.jsonl`]: journal([started("k1", "a1", "audit"), result("k1", "a1", { pass: false }), started("k2", "a2", "build", "Build")]),
       [`${DIR}/agent-a1.meta.json`]: JSON.stringify({ agentType: "ticket-auditor", model: "sonnet" }),
       [`${DIR}/agent-a1.jsonl`]: journal([assistant("m", { input_tokens: 4, output_tokens: 2 }, "2026-01-01T00:00:00Z")]),
     };
@@ -134,7 +130,9 @@ describe("ingest", () => {
       [`${DIR}/journal.jsonl`]: journal(labels.flatMap((label, n) => [started(`k${n}`, `a${n}`, label), result(`k${n}`, `a${n}`, { pass: true })])),
     };
     const { deps } = memory(files);
-    expect(text(run(["ingest", "demo", "w", DIR], deps))).toBe("run-telemetry: 0 of 5 calls now have tokens; 2 journal entries had no ledger call and were added");
+    expect(text(run(["ingest", "demo", "w", DIR], deps))).toBe(
+      "run-telemetry: 0 of 5 calls now have tokens; 2 journal entries had no ledger call and were added",
+    );
     const total = run(["summary", "demo"], deps).stdout.find((l) => l.startsWith("total")) ?? "";
     expect(total.split(/\s+/)[1]).toBe("5");
   });
@@ -153,4 +151,3 @@ describe("ingest", () => {
     expect(JSON.parse(store.get(RUN_PATH) ?? "").workflows.w.calls[0]).toMatchObject({ tokens: null, seconds: null, ran_model: null });
   });
 });
-

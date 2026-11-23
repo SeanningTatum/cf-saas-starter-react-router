@@ -26,7 +26,9 @@ describe("reading a Lighthouse report", () => {
 
   it("refuses a run that ended on another page: a /dashboard that redirects to /login must not report the login page's score", () => {
     const redirected = metricsOf(lhr(0.98, 1800, 0, 0, "http://localhost:4173/login"), "http://localhost:4173/dashboard");
-    expect(redirected).toEqual(Either.left("Lighthouse asked for http://localhost:4173/dashboard but ended on http://localhost:4173/login, so its numbers are not that page's"));
+    expect(redirected).toEqual(
+      Either.left("Lighthouse asked for http://localhost:4173/dashboard but ended on http://localhost:4173/login, so its numbers are not that page's"),
+    );
     expect(Either.isRight(metricsOf(lhr(0.98, 1800, 0, 0, "http://localhost:4173/dashboard/"), "http://localhost:4173/dashboard"))).toBe(true);
     expect(Either.isRight(metricsOf(lhr(0.98, 1800, 0, 0, "http://localhost:4173/login?next=1"), "http://localhost:4173/login"))).toBe(true);
   });

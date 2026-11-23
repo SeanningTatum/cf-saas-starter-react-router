@@ -18,8 +18,7 @@ export type AdminTarget =
   | { readonly _tag: "User"; readonly userId: string }
   | { readonly _tag: "Session"; readonly sessionToken: string };
 
-export type AdminGuardRefusal =
-  (typeof ADMIN_GUARD_REFUSALS)[keyof typeof ADMIN_GUARD_REFUSALS];
+export type AdminGuardRefusal = (typeof ADMIN_GUARD_REFUSALS)[keyof typeof ADMIN_GUARD_REFUSALS];
 
 type NamedTarget = Extract<AdminTarget, { _tag: "User" | "Session" }>;
 type InternalAdapter = GenericEndpointContext["context"]["internalAdapter"];
@@ -50,14 +49,12 @@ export const readAdminTarget = (path: string, body: unknown): AdminTarget => {
 
 export const withEmailVerificationReset = (
   body: unknown,
-  storedEmail: string
+  storedEmail: string,
 ): { readonly data: Record<string, unknown> } | null =>
   Option.match(Schema.decodeUnknownOption(UserDataBody)(body), {
     onNone: () => null,
     onSome: ({ data }) =>
-      isEmailChange(storedEmail, data.email)
-        ? { data: { ...data, emailVerified: false } }
-        : null,
+      isEmailChange(storedEmail, data.email) ? { data: { ...data, emailVerified: false } } : null,
   });
 
 export const refusalError = (refusal: AdminGuardRefusal): APIError =>

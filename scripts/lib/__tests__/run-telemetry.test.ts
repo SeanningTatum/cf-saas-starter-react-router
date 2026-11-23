@@ -61,7 +61,9 @@ describe("mergeLedger", () => {
       ...first,
       workflows: {
         "plan-feature": { calls: [] },
-        "ship-feature": { calls: calls.map((c, n) => (n === 0 ? { ...c, tokens: { in: 10, out: 5, cache_read: 0, cache_write: 0 }, seconds: 2, ran_model: "m" } : c)) },
+        "ship-feature": {
+          calls: calls.map((c, n) => (n === 0 ? { ...c, tokens: { in: 10, out: 5, cache_read: 0, cache_write: 0 }, seconds: 2, ran_model: "m" } : c)),
+        },
       },
     };
     const again = mergeLedger(withTokens, "ship-feature", [call(), call({ label: "build:1", phase: "Build" }), call({ label: "docs", phase: "Docs" })]);
@@ -77,28 +79,46 @@ describe("mergeLedger", () => {
   it("drops the old numbers when a different call now sits at that position: tokens must never be credited to the wrong call", () => {
     const first = mergeLedger(emptyRunFile("demo"), "ship-feature", [call()]);
     const calls = first.workflows["ship-feature"]?.calls ?? [];
-    const withTokens = { ...first, workflows: { "ship-feature": { calls: calls.map((c) => ({ ...c, tokens: { in: 10, out: 5, cache_read: 0, cache_write: 0 } })) } } };
+    const withTokens = {
+      ...first,
+      workflows: { "ship-feature": { calls: calls.map((c) => ({ ...c, tokens: { in: 10, out: 5, cache_read: 0, cache_write: 0 } })) } },
+    };
     const again = mergeLedger(withTokens, "ship-feature", [call({ label: "other" })]);
     expect(again.workflows["ship-feature"]?.calls[0]?.tokens ?? null).toBeNull();
   });
 
   const measured = (labels: string[]) => {
-    const first = mergeLedger(emptyRunFile("demo"), "w", labels.map((label) => call({ label })));
+    const first = mergeLedger(
+      emptyRunFile("demo"),
+      "w",
+      labels.map((label) => call({ label })),
+    );
     const calls = first.workflows.w?.calls ?? [];
     const numbers = { tokens: { in: 10, out: 5, cache_read: 0, cache_write: 0 }, seconds: 2, ran_model: "m", agent_id: "old" };
     return { ...first, workflows: { w: { calls: calls.map((c) => ({ ...c, ...numbers })) } } };
   };
   const mergedAfter = (labels: string[], stored: ReturnType<typeof measured>) =>
-    mergeLedger(stored, "w", labels.map((label) => call({ label }))).workflows.w?.calls ?? [];
+    mergeLedger(
+      stored,
+      "w",
+      labels.map((label) => call({ label })),
+    ).workflows.w?.calls ?? [];
 
   it("keeps numbers and agent ids for the stored prefix when the new ledger is longer: only a resumed run does that", () => {
     const calls = mergedAfter(["a", "b", "c"], measured(["a", "b"]));
-    expect(calls.map((c) => [c.tokens?.in ?? null, c.agent_id])).toEqual([[10, "old"], [10, "old"], [null, null]]);
+    expect(calls.map((c) => [c.tokens?.in ?? null, c.agent_id])).toEqual([
+      [10, "old"],
+      [10, "old"],
+      [null, null],
+    ]);
   });
 
   it("starts clean when the new ledger equals the stored one: a rerun with the same labels must not inherit the last run's numbers", () => {
     const calls = mergedAfter(["a", "b"], measured(["a", "b"]));
-    expect(calls.map((c) => [c.tokens, c.seconds, c.ran_model, c.agent_id])).toEqual([[null, null, null, null], [null, null, null, null]]);
+    expect(calls.map((c) => [c.tokens, c.seconds, c.ran_model, c.agent_id])).toEqual([
+      [null, null, null, null],
+      [null, null, null, null],
+    ]);
   });
 
   it("starts clean when the new ledger is shorter than the stored one: a shorter ledger cannot be a resume", () => {
@@ -117,7 +137,12 @@ describe("parseRunFile", () => {
   });
 
   it("answers with a reason, not a file, for text that is not a run file: a hand edit must not be overwritten as if it were empty", () => {
-    for (const text of ["{", "[]", JSON.stringify({ version: 1, slug: "../x", workflows: {} }), JSON.stringify({ version: 1, slug: "demo", workflows: { "Bad Name": { calls: [] } } })]) {
+    for (const text of [
+      "{",
+      "[]",
+      JSON.stringify({ version: 1, slug: "../x", workflows: {} }),
+      JSON.stringify({ version: 1, slug: "demo", workflows: { "Bad Name": { calls: [] } } }),
+    ]) {
       expect(typeof parseRunFile(text)).toBe("string");
     }
   });

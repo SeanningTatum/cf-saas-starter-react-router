@@ -78,7 +78,8 @@ describe("record: decisions", () => {
   });
 
   it("treats a decision the old agent marked superseded as the same text, not a new one", () => {
-    const old = "---\nfeature: demo\nstatus: in-progress\nissue: none\nupdated: 2026-01-01\n---\n\n## Decisions\n- 2026-01-01 — use KV (superseded 2026-02-01) — cheap — chat\n";
+    const old =
+      "---\nfeature: demo\nstatus: in-progress\nissue: none\nupdated: 2026-01-01\n---\n\n## Decisions\n- 2026-01-01 — use KV (superseded 2026-02-01) — cheap — chat\n";
     const m = mergeRecord(old, "demo", { decision: ["use KV — cheap — chat"] }, "2026-11-22");
     expect(m.text.match(/use KV/g)).toHaveLength(1);
   });
@@ -191,7 +192,7 @@ describe("record: hand-written files", () => {
   });
 
   it("updates front matter keys nested under `metadata:` in place instead of adding a second set: the auto-memory format wraps them", () => {
-    const nested = "---\nname: \"\"\nmetadata:\n  feature: demo\n  status: planned\n  issue: #5\n  updated: 2026-01-01\n---\n\n## Log\n- 2026-01-01 — began\n";
+    const nested = '---\nname: ""\nmetadata:\n  feature: demo\n  status: planned\n  issue: #5\n  updated: 2026-01-01\n---\n\n## Log\n- 2026-01-01 — began\n';
     const m = mergeRecord(nested, "demo", { status: ["done"], log: ["x"] }, "2026-11-22");
     expect(m.text).toContain("metadata:\n  feature: demo\n  status: done\n  issue: #5\n  updated: 2026-11-22\n---");
     expect(m.text.match(/status:/g)).toHaveLength(1);
@@ -214,7 +215,10 @@ describe("INDEX.md and MEMORY.md", () => {
     s.rec("d-stuck", "status: blocked\nlog: waiting");
     s.rec("e-live", "status: in-progress\nlog: also going");
     s.rec("c-live", "log: more");
-    const order = (s.fs.get(`${DIR}/INDEX.md`) ?? "").split("\n").filter((l) => l.startsWith("- [")).map((l) => l.slice(3, l.indexOf("]")));
+    const order = (s.fs.get(`${DIR}/INDEX.md`) ?? "")
+      .split("\n")
+      .filter((l) => l.startsWith("- ["))
+      .map((l) => l.slice(3, l.indexOf("]")));
     expect(order).toEqual(["c-live", "e-live", "d-stuck", "b-plan", "a-done"]);
   });
 

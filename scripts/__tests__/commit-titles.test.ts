@@ -78,8 +78,7 @@ describe("subjects the agent briefs dictate", () => {
   });
 });
 
-const envWithoutGit = (): NodeJS.ProcessEnv =>
-  Object.fromEntries(Object.entries(process.env).filter(([key]) => !key.startsWith(GIT_ENV_PREFIX)));
+const envWithoutGit = (): NodeJS.ProcessEnv => Object.fromEntries(Object.entries(process.env).filter(([key]) => !key.startsWith(GIT_ENV_PREFIX)));
 
 const runWorkflowCommand = (title: string) =>
   spawnSync("bunx", ["--no-install", "commitlint", "--config", ".commitlintrc.title.json"], {
@@ -115,7 +114,11 @@ describe("the header limit ship-feature cuts titles to", () => {
 });
 
 describe("the command line the PR title job runs", () => {
-  it("exits non-zero for a bad title, so the roll-up title that reads as a patch is stopped", () => {
-    expect(runWorkflowCommand("v3.0 wave 0: guardrails, trim and foundations").status).not.toBe(0);
-  }, SPAWN_TIMEOUT_MS);
+  it(
+    "exits non-zero for a bad title, so the roll-up title that reads as a patch is stopped",
+    () => {
+      expect(runWorkflowCommand("v3.0 wave 0: guardrails, trim and foundations").status).not.toBe(0);
+    },
+    SPAWN_TIMEOUT_MS,
+  );
 });

@@ -42,7 +42,8 @@ const ipv4Octets = (value: string): ReadonlyArray<number> | null => {
 
 const hextetPairOf = (octets: ReadonlyArray<number>): string => {
   const [a = 0, b = 0, c = 0, d = 0] = octets;
-  const hextet = (high: number, low: number) => ((high << IPV4_OCTET_BITS) | low).toString(HEX_RADIX);
+  const hextet = (high: number, low: number) =>
+    ((high << IPV4_OCTET_BITS) | low).toString(HEX_RADIX);
   return `${hextet(a, b)}${IPV6_SEPARATOR}${hextet(c, d)}`;
 };
 
@@ -79,9 +80,12 @@ const mappedIpv4 = (hextets: ReadonlyArray<number>): string | null => {
     hextets[IPV6_MAPPED_IPV4_MARKER_INDEX] === IPV6_MAPPED_IPV4_MARKER;
   if (!isMapped) return null;
   const [high = 0, low = 0] = hextets.slice(IPV6_MAPPED_IPV4_MARKER_INDEX + 1);
-  return [high >> IPV4_OCTET_BITS, high & IPV4_OCTET_MAX, low >> IPV4_OCTET_BITS, low & IPV4_OCTET_MAX].join(
-    IPV4_SEPARATOR
-  );
+  return [
+    high >> IPV4_OCTET_BITS,
+    high & IPV4_OCTET_MAX,
+    low >> IPV4_OCTET_BITS,
+    low & IPV4_OCTET_MAX,
+  ].join(IPV4_SEPARATOR);
 };
 
 export const addressKey = (raw: string): string => {
@@ -111,7 +115,9 @@ const normalizedPath = (request: Request): string => {
   const collapsed = decodeUnreserved(new URL(request.url).pathname)
     .toLowerCase()
     .replace(REPEATED_SLASHES, PATH_SEPARATOR);
-  return collapsed.length > 1 && collapsed.endsWith(PATH_SEPARATOR) ? collapsed.slice(0, -1) : collapsed;
+  return collapsed.length > 1 && collapsed.endsWith(PATH_SEPARATOR)
+    ? collapsed.slice(0, -1)
+    : collapsed;
 };
 
 export const authRuleFor = (request: Request): RateLimitRule | null => {
@@ -122,7 +128,9 @@ export const authRuleFor = (request: Request): RateLimitRule | null => {
   return path.startsWith(AUTH_API_PATH_PREFIX) ? "authApi" : null;
 };
 
-export const guardAuthRequest = (request: Request): Effect.Effect<void, RateLimitError, RateLimiter> => {
+export const guardAuthRequest = (
+  request: Request,
+): Effect.Effect<void, RateLimitError, RateLimiter> => {
   const rule = authRuleFor(request);
   return rule === null
     ? Effect.void
@@ -135,22 +143,25 @@ export const rateLimitedResponse = (error: RateLimitError): Response =>
     {
       status: HTTP_TOO_MANY_REQUESTS,
       headers: { [RETRY_AFTER_HEADER]: String(error.retryAfterSeconds) },
-    }
+    },
   );
 
-const warnWhenTurnstileOff = (rule: RateLimitRule | null, dev: boolean): Effect.Effect<void, never, AuthApi> =>
+const warnWhenTurnstileOff = (
+  rule: RateLimitRule | null,
+  dev: boolean,
+): Effect.Effect<void, never, AuthApi> =>
   dev || rule === null || !TURNSTILE_GUARDED_RULES.includes(rule)
     ? Effect.void
     : Effect.flatMap(AuthApi, ({ turnstileSiteKey }) =>
-        turnstileSiteKey === null ? Effect.logWarning(TURNSTILE_OFF_WARNING) : Effect.void
+        turnstileSiteKey === null ? Effect.logWarning(TURNSTILE_OFF_WARNING) : Effect.void,
       );
 
 export const authGate = (
   request: Request,
-  dev: boolean
+  dev: boolean,
 ): Effect.Effect<Response | null, never, RateLimiter | AuthApi> =>
   guardAuthRequest(request).pipe(
     Effect.zipRight(warnWhenTurnstileOff(authRuleFor(request), dev)),
     Effect.as(null),
-    Effect.catchTag("RateLimitError", (error) => Effect.succeed(rateLimitedResponse(error)))
+    Effect.catchTag("RateLimitError", (error) => Effect.succeed(rateLimitedResponse(error))),
   );

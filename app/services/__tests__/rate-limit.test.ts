@@ -41,16 +41,16 @@ const runCheck = (env: Partial<Env>, checks: ReadonlyArray<[RateLimitRule, strin
     Logger.defaultLogger,
     Logger.make(({ logLevel, message }) => {
       logs.push({ level: logLevel.label, message });
-    })
+    }),
   );
   const layer = RateLimiterLive.pipe(
     Layer.provide(Layer.succeed(CloudflareEnv, env as Env)),
-    Layer.merge(captureLogs)
+    Layer.merge(captureLogs),
   );
   return Effect.gen(function* () {
     const limiter = yield* RateLimiter;
     const results = yield* Effect.forEach(checks, ([rule, key]) =>
-      Effect.either(limiter.check(rule, key))
+      Effect.either(limiter.check(rule, key)),
     );
     return { results, logs };
   }).pipe(Effect.provide(layer), Logger.withMinimumLogLevel(LogLevel.All));
@@ -66,7 +66,7 @@ describe("RateLimiterLive", () => {
       ]);
       expect(results.every(Either.isRight)).toBe(true);
       expect(binding.calls).toEqual(["203.0.113.1", "203.0.113.1"]);
-    })
+    }),
   );
 
   it.effect("fails with RateLimitError naming the rule and the wait once the binding says no", () =>
@@ -86,19 +86,21 @@ describe("RateLimiterLive", () => {
           retryAfterSeconds: RATE_LIMIT_PERIOD_SECONDS,
         });
       }
-    })
+    }),
   );
 
-  it.effect("counts each key on its own, so one caller over the limit does not lock out another", () =>
-    Effect.gen(function* () {
-      const binding = countingLimiter(1);
-      const { results } = yield* runCheck({ [RATE_LIMIT_BINDINGS.upload]: binding }, [
-        ["upload", "user-a"],
-        ["upload", "user-a"],
-        ["upload", "user-b"],
-      ]);
-      expect(results.map(Either.isRight)).toEqual([true, false, true]);
-    })
+  it.effect(
+    "counts each key on its own, so one caller over the limit does not lock out another",
+    () =>
+      Effect.gen(function* () {
+        const binding = countingLimiter(1);
+        const { results } = yield* runCheck({ [RATE_LIMIT_BINDINGS.upload]: binding }, [
+          ["upload", "user-a"],
+          ["upload", "user-a"],
+          ["upload", "user-b"],
+        ]);
+        expect(results.map(Either.isRight)).toEqual([true, false, true]);
+      }),
   );
 
   it.effect("asks the binding of the rule it was given, not another rule's", () =>
@@ -107,11 +109,11 @@ describe("RateLimiterLive", () => {
       const authApi = countingLimiter(LIMIT);
       yield* runCheck(
         { [RATE_LIMIT_BINDINGS.signIn]: signIn, [RATE_LIMIT_BINDINGS.authApi]: authApi },
-        [["authApi", "203.0.113.3"]]
+        [["authApi", "203.0.113.3"]],
       );
       expect(signIn.calls).toEqual([]);
       expect(authApi.calls).toEqual(["203.0.113.3"]);
-    })
+    }),
   );
 
   it.effect("lets the request through and logs an error when the binding is missing", () =>
@@ -119,18 +121,22 @@ describe("RateLimiterLive", () => {
       const { results, logs } = yield* runCheck({}, [["signIn", "203.0.113.4"]]);
       expect(results.every(Either.isRight)).toBe(true);
       expect(logs).toContainEqual(
-        expect.objectContaining({ level: "ERROR", message: expect.arrayContaining([RATE_LIMITER_FAULT_MESSAGE]) })
+        expect.objectContaining({
+          level: "ERROR",
+          message: expect.arrayContaining([RATE_LIMITER_FAULT_MESSAGE]),
+        }),
       );
-    })
+    }),
   );
 
   it.effect("lets the request through and logs an error when the binding call rejects", () =>
     Effect.gen(function* () {
-      const { results, logs } = yield* runCheck({ [RATE_LIMIT_BINDINGS.signIn]: rejectingLimiter }, [
-        ["signIn", "203.0.113.5"],
-      ]);
+      const { results, logs } = yield* runCheck(
+        { [RATE_LIMIT_BINDINGS.signIn]: rejectingLimiter },
+        [["signIn", "203.0.113.5"]],
+      );
       expect(results.every(Either.isRight)).toBe(true);
       expect(logs.filter((line) => line.level === "ERROR")).toHaveLength(1);
-    })
+    }),
   );
 });

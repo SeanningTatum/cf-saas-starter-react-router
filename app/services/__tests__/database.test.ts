@@ -5,8 +5,7 @@ import { Database, DatabaseLive } from "../database";
 import { CloudflareEnv } from "../cloudflare";
 import { ConfigurationError } from "@/models/errors/repository";
 
-const envLayer = (env: Partial<Env>) =>
-  Layer.succeed(CloudflareEnv, env as Env);
+const envLayer = (env: Partial<Env>) => Layer.succeed(CloudflareEnv, env as Env);
 
 const fakeD1 = {} as D1Database;
 
@@ -15,11 +14,7 @@ describe("DatabaseLive", () => {
     Effect.gen(function* () {
       const { db } = yield* Database;
       expect(db).toBeDefined();
-    }).pipe(
-      Effect.provide(
-        DatabaseLive.pipe(Layer.provide(envLayer({ DATABASE: fakeD1 })))
-      )
-    )
+    }).pipe(Effect.provide(DatabaseLive.pipe(Layer.provide(envLayer({ DATABASE: fakeD1 }))))),
   );
 
   it.effect("fails with ConfigurationError when DATABASE binding missing", () =>
@@ -27,9 +22,9 @@ describe("DatabaseLive", () => {
       const program = Database.pipe(
         Effect.provide(
           DatabaseLive.pipe(
-            Layer.provide(envLayer({ DATABASE: undefined as unknown as D1Database }))
-          )
-        )
+            Layer.provide(envLayer({ DATABASE: undefined as unknown as D1Database })),
+          ),
+        ),
       );
       const exit = yield* Effect.exit(program);
       expect(Exit.isFailure(exit)).toBe(true);
@@ -42,6 +37,6 @@ describe("DatabaseLive", () => {
           expect((failure.value as ConfigurationError).field).toBe("DATABASE");
         }
       }
-    })
+    }),
   );
 });

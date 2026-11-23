@@ -1,9 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  BEARER_PATTERN,
-  EMAIL_PATTERN,
-  SECRET_PAIR_PATTERN,
-} from "../redaction";
+import { BEARER_PATTERN, EMAIL_PATTERN, SECRET_PAIR_PATTERN } from "../redaction";
 
 describe("redaction patterns", () => {
   it("are global, so String.replace masks every match and not just the first", () => {

@@ -33,9 +33,7 @@ export type AppServices =
   | BucketRepository
   | HealthRepository;
 
-const requestLayer = (
-  request: RequestContext
-): Layer.Layer<CurrentRequest | Tracer.ParentSpan> =>
+const requestLayer = (request: RequestContext): Layer.Layer<CurrentRequest | Tracer.ParentSpan> =>
   Layer.merge(
     Layer.succeed(CurrentRequest, request),
     Layer.span("http.request", {
@@ -51,19 +49,15 @@ const requestLayer = (
         "http.request.method": request.method,
         "url.path": redactPath(request.path),
       },
-    })
+    }),
   );
 
 export const observabilityLayer = (
   env: object,
   request?: RequestContext,
-  fetchFn?: FetchLike
+  fetchFn?: FetchLike,
 ): Layer.Layer<never> => {
-  const base = Layer.mergeAll(
-    LoggerLive,
-    MinLogLevelLive,
-    TracingLayer(env, fetchFn, request)
-  );
+  const base = Layer.mergeAll(LoggerLive, MinLogLevelLive, TracingLayer(env, fetchFn, request));
   return request ? requestLayer(request).pipe(Layer.provideMerge(base)) : base;
 };
 
@@ -71,7 +65,7 @@ export const makeAppRuntime = (
   env: Env,
   auth: AuthRuntimeOptions,
   request?: RequestContext,
-  errorReporter: ErrorReporterShape = requestErrorReporter(env, request)
+  errorReporter: ErrorReporterShape = requestErrorReporter(env, request),
 ) => {
   const baseLayer = Layer.mergeAll(
     DatabaseLive,
@@ -79,13 +73,13 @@ export const makeAppRuntime = (
     AuthApiLive(auth),
     AnalyticsLive,
     RateLimiterLive,
-    ErrorReporterFrom(errorReporter)
+    ErrorReporterFrom(errorReporter),
   );
   const reposLayer = Layer.mergeAll(
     UserRepository.Default,
     AnalyticsRepository.Default,
     BucketRepository.Default,
-    HealthRepository.Default
+    HealthRepository.Default,
   );
   const layer = reposLayer
     .pipe(Layer.provideMerge(baseLayer))

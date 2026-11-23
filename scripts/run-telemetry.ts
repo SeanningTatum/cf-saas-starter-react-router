@@ -20,14 +20,7 @@ import {
   VERB_SUMMARY,
   VERIFY_DIR,
 } from "./lib/run-telemetry-constants";
-import {
-  emptyRunFile,
-  isValidSlug,
-  mergeLedger,
-  parseLedger,
-  parseRunFile,
-  type RunFile,
-} from "./lib/run-telemetry";
+import { emptyRunFile, isValidSlug, mergeLedger, parseLedger, parseRunFile, type RunFile } from "./lib/run-telemetry";
 import { ingestJournals, type Journal } from "./lib/run-telemetry-ingest";
 import { statsLines, summaryLines } from "./lib/run-telemetry-report";
 

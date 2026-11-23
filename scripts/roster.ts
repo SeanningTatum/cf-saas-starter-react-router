@@ -80,7 +80,8 @@ export function validate(files: Record<string, string>): string[] {
     if (!fm.description) problems.push(`${where}: no \`description\``);
     if (!fm.tools) problems.push(`${where}: no \`tools\``);
     if (!MODELS.includes(fm.model ?? "")) problems.push(`${where}: \`model\` is ${fm.model ? `"${fm.model}"` : "missing"}; use one of ${MODELS.join(", ")}`);
-    if (!EFFORTS.includes(fm.effort ?? "")) problems.push(`${where}: \`effort\` is ${fm.effort ? `"${fm.effort}"` : "missing"}; use one of ${EFFORTS.join(", ")}`);
+    if (!EFFORTS.includes(fm.effort ?? ""))
+      problems.push(`${where}: \`effort\` is ${fm.effort ? `"${fm.effort}"` : "missing"}; use one of ${EFFORTS.join(", ")}`);
   }
   return problems;
 }
@@ -175,7 +176,8 @@ export function run(argv: string[], root: string, deps: Deps): Outcome {
     if (want !== readme) deps.writeFile(path, want);
     return { code: 0, stdout: [`roster: wrote ${n} agents to ${README}${want === readme ? " (no change)" : ""}`], stderr: [] };
   }
-  if (want !== readme) return fail(`roster: the table in ${README} is stale (it must match the agents' frontmatter)`, `fix: run \`${WRITE_CMD}\` and commit the result`);
+  if (want !== readme)
+    return fail(`roster: the table in ${README} is stale (it must match the agents' frontmatter)`, `fix: run \`${WRITE_CMD}\` and commit the result`);
   return { code: 0, stdout: [`roster: ${n} agents valid, table in ${README} is current`], stderr: [] };
 }
 

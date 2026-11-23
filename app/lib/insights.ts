@@ -13,15 +13,12 @@ export {
   VERIFICATION_RATE_MODERATE_THRESHOLD,
 };
 
-export type InsightsTranslator = (
-  key: string,
-  options?: Record<string, unknown>
-) => string;
+export type InsightsTranslator = (key: string, options?: Record<string, unknown>) => string;
 
 export function buildUserInsights(
   stats: UserStats,
   growthData: readonly UserGrowthPoint[],
-  t: InsightsTranslator
+  t: InsightsTranslator,
 ): Insight[] {
   const insights: Insight[] = [];
 
@@ -47,9 +44,7 @@ export function buildUserInsights(
   }
 
   if (stats.bannedUsers > 0) {
-    const bannedPercent = Math.round(
-      (stats.bannedUsers / stats.totalUsers) * 100
-    );
+    const bannedPercent = Math.round((stats.bannedUsers / stats.totalUsers) * 100);
     insights.push({
       text: t("insights.banned_users", {
         count: stats.bannedUsers,

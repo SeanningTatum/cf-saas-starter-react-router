@@ -132,7 +132,9 @@ describe("bun run lighthouse", () => {
   it("a /dashboard run that lands on /login fails the run instead of reporting the login page as the dashboard", async () => {
     const f = fake({ landOn: (url) => url.replace("/dashboard", "/login") });
     expect(await run([], f.deps)).toBe(1);
-    expect(f.err[0]).toBe("/dashboard, run 1: Lighthouse asked for http://localhost:4173/dashboard but ended on http://localhost:4173/login, so its numbers are not that page's");
+    expect(f.err[0]).toBe(
+      "/dashboard, run 1: Lighthouse asked for http://localhost:4173/dashboard but ended on http://localhost:4173/login, so its numbers are not that page's",
+    );
     expect(f.events).toContain("stop /tmp/lh-1");
   });
 

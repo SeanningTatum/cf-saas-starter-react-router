@@ -13,7 +13,7 @@ describe("applyBaseline: debt", () => {
     const found = applyBaseline(
       baseline({ debt: twoRuleDebt({ "app/a.ts": 2 }) }),
       ran([finding("no-bad", "app/a.ts", 1), finding("no-bad", "app/a.ts", 9)]),
-      ruleIds()
+      ruleIds(),
     );
 
     expect(found).toEqual([]);
@@ -23,7 +23,7 @@ describe("applyBaseline: debt", () => {
     const found = applyBaseline(
       baseline({ debt: twoRuleDebt({ "app/a.ts": 1 }) }),
       ran([finding("no-bad", "app/a.ts", 1), finding("no-bad", "app/a.ts", 9)]),
-      ruleIds()
+      ruleIds(),
     );
 
     expect(found.map((entry) => [entry.rule, entry.line])).toEqual([
@@ -37,7 +37,7 @@ describe("applyBaseline: debt", () => {
     const found = applyBaseline(
       baseline({ debt: twoRuleDebt({ "app/a.ts": 1 }) }),
       ran([finding("no-bad", "app/a.ts"), finding("no-bad", "app/b.ts"), finding("other", "app/a.ts")]),
-      ruleIds()
+      ruleIds(),
     );
 
     expect(found.map((entry) => [entry.rule, entry.file])).toEqual([
@@ -73,7 +73,7 @@ describe("applyBaseline: boundaries", () => {
         finding("other", "app/a.ts", 4),
         finding("no-bad", "app/b.ts", 5),
       ]),
-      ruleIds()
+      ruleIds(),
     );
 
     expect(found.map((entry) => [entry.rule, entry.file])).toEqual([
@@ -86,7 +86,7 @@ describe("applyBaseline: boundaries", () => {
     const found = applyBaseline(
       baseline({ boundaries: { "no-bad": { "app/a.ts": "framework contract" } }, debt: twoRuleDebt({}) }),
       ran([finding("other", "app/a.ts")]),
-      ruleIds()
+      ruleIds(),
     );
 
     expect(found.filter((entry) => entry.rule === "baseline-stale").map((entry) => entry.fix)).toEqual([
@@ -97,11 +97,7 @@ describe("applyBaseline: boundaries", () => {
 
 describe("applyBaseline: rule keys and suppressions", () => {
   it("reports baseline-shape for a debt key and a boundary key that name no rule", () => {
-    const found = applyBaseline(
-      baseline({ boundaries: { phantom: {} }, debt: { ...twoRuleDebt({}), ghost: {} } }),
-      ran([]),
-      ruleIds()
-    );
+    const found = applyBaseline(baseline({ boundaries: { phantom: {} }, debt: { ...twoRuleDebt({}), ghost: {} } }), ran([]), ruleIds());
 
     expect(rulesOf(found)).toEqual(["baseline-shape", "baseline-shape"]);
     expect(found.map((entry) => entry.message).join(" ")).toMatch(/"ghost".*"phantom"|"phantom".*"ghost"/);
@@ -141,7 +137,7 @@ describe("applyBaseline in file mode", () => {
       }),
       ran([]),
       ruleIds(),
-      new Set(["app/a.ts"])
+      new Set(["app/a.ts"]),
     );
 
     expect(found.map((entry) => entry.rule)).toEqual(["baseline-stale", "baseline-stale"]);
@@ -152,12 +148,7 @@ describe("applyBaseline in file mode", () => {
   });
 
   it("still keeps findings over the debt in a named file", () => {
-    const found = applyBaseline(
-      baseline({ debt: twoRuleDebt({}) }),
-      ran([finding("no-bad", "app/a.ts")]),
-      ruleIds(),
-      new Set(["app/a.ts"])
-    );
+    const found = applyBaseline(baseline({ debt: twoRuleDebt({}) }), ran([finding("no-bad", "app/a.ts")]), ruleIds(), new Set(["app/a.ts"]));
 
     expect(found).toEqual([finding("no-bad", "app/a.ts")]);
   });
@@ -175,7 +166,10 @@ describe("applyBaseline: a finding that weighs more than one", () => {
   });
 
   it("counts a weight below one as one, so no rule can cancel another finding with a zero or negative weight", () => {
-    const run = ran([{ ...finding("no-bad", "app/long.ts"), weight: -5 }, { ...finding("no-bad", "app/long.ts"), weight: 0 }]);
+    const run = ran([
+      { ...finding("no-bad", "app/long.ts"), weight: -5 },
+      { ...finding("no-bad", "app/long.ts"), weight: 0 },
+    ]);
 
     expect(rulesOf(applyBaseline(allows(1), run, ruleIds()))).toEqual(["no-bad", "no-bad"]);
   });

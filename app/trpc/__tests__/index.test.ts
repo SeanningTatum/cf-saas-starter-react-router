@@ -65,10 +65,7 @@ describe("stripStackOutsideDev (takes dev as an argument, since import.meta.env.
       customField: { nested: true },
     };
 
-    const result = stripStackOutsideDev(
-      { message: "m", data: { ...kept, stack: "trace" } },
-      false
-    );
+    const result = stripStackOutsideDev({ message: "m", data: { ...kept, stack: "trace" } }, false);
 
     expect(Object.keys(result.data).sort()).toEqual(Object.keys(kept).sort());
     expect(result.data).toEqual(kept);
@@ -87,9 +84,7 @@ describe("stripStackOutsideDev (takes dev as an argument, since import.meta.env.
     const result = stripStackOutsideDev(withSchemaError, false);
 
     expect(result.data).not.toHaveProperty("stack");
-    expect(result.data.schemaError).toEqual([
-      { path: ["email"], message: "Invalid email" },
-    ]);
+    expect(result.data.schemaError).toEqual([{ path: ["email"], message: "Invalid email" }]);
   });
 
   it("is a no-op when there is no stack to strip", () => {
@@ -122,25 +117,21 @@ describe("errorFormatter schemaError", () => {
   const schemaErrorFor = async (code: "BAD_REQUEST" | "INTERNAL_SERVER_ERROR") => {
     const router = createTRPCRouter({
       fails: publicProcedure.query(() =>
-        Promise.reject(new TRPCError({ code, cause: Option.getOrUndefined(parseError()) }))
+        Promise.reject(new TRPCError({ code, cause: Option.getOrUndefined(parseError()) })),
       ),
     });
     const response = await fetchRequestHandler({
       endpoint: "/api/trpc",
       router,
       req: new Request("https://app.example.com/api/trpc/fails"),
-      createContext: () =>
-        ({ headers: new Headers(), auth: null } as unknown as Context),
+      createContext: () => ({ headers: new Headers(), auth: null }) as unknown as Context,
     });
-    const body: { error: { json: { data: { schemaError: unknown } } } } =
-      await response.json();
+    const body: { error: { json: { data: { schemaError: unknown } } } } = await response.json();
     return body.error.json.data.schemaError;
   };
 
   it("shows the decode issues on a BAD_REQUEST, so a form can point at the bad field", async () => {
-    expect(await schemaErrorFor("BAD_REQUEST")).toEqual([
-      expect.objectContaining({ path: [] }),
-    ]);
+    expect(await schemaErrorFor("BAD_REQUEST")).toEqual([expect.objectContaining({ path: [] })]);
   });
 
   it("is null on a 500 caused by a ParseError, so internal decode details never reach the client", async () => {

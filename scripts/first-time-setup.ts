@@ -3,22 +3,9 @@ import { execSync, spawnSync } from "node:child_process";
 import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
-import {
-  intro,
-  outro,
-  select,
-  spinner,
-  text,
-  password,
-  confirm,
-  cancel,
-  isCancel,
-} from "@clack/prompts";
+import { intro, outro, select, spinner, text, password, confirm, cancel, isCancel } from "@clack/prompts";
 import { buildWranglerConfig, writeWranglerJsonc } from "./lib/wrangler-config";
-import {
-  run as runRepoRules,
-  type Outcome as RepoRulesOutcome,
-} from "./repo-rules";
+import { run as runRepoRules, type Outcome as RepoRulesOutcome } from "./repo-rules";
 
 function sanitizeResourceName(name: string): string {
   return name
@@ -27,11 +14,7 @@ function sanitizeResourceName(name: string): string {
     .replace(/[^a-z0-9-]/g, ""); // Remove non-alphanumeric chars except dashes
 }
 
-function executeCommand(
-  command: string,
-  silent = false,
-  env?: Record<string, string>
-) {
+function executeCommand(command: string, silent = false, env?: Record<string, string>) {
   if (!silent) {
     console.log(`\x1b[33m${command}\x1b[0m`);
   }
@@ -53,12 +36,7 @@ function executeCommand(
 // etc. Use this (never executeCommand) whenever any argument comes from user
 // input. Returns the same shape as executeCommand: stdout string on success,
 // or { error: true, message } on failure.
-export function executeArgv(
-  file: string,
-  args: string[],
-  silent = false,
-  env?: Record<string, string>
-) {
+export function executeArgv(file: string, args: string[], silent = false, env?: Record<string, string>) {
   if (!silent) {
     console.log(`\x1b[33m${file} ${args.join(" ")}\x1b[0m`);
   }
@@ -70,11 +48,7 @@ export function executeArgv(
   if (result.error || result.status !== 0) {
     return {
       error: true,
-      message:
-        result.stderr ||
-        result.stdout ||
-        result.error?.message ||
-        `${file} exited with status ${result.status ?? "unknown"}`,
+      message: result.stderr || result.stdout || result.error?.message || `${file} exited with status ${result.status ?? "unknown"}`,
     };
   }
   return result.stdout ?? "";
@@ -130,9 +104,7 @@ function removeWranglerFromGitignore() {
   const lines = content.split("\n");
 
   // Remove the line that contains only "wrangler.jsonc" (with optional whitespace)
-  const filteredLines = lines.filter(
-    (line) => line.trim() !== "wrangler.jsonc"
-  );
+  const filteredLines = lines.filter((line) => line.trim() !== "wrangler.jsonc");
 
   // Only write if something changed
   if (filteredLines.length !== lines.length) {
@@ -146,8 +118,7 @@ function extractAccountDetails(output: string): { name: string; id: string }[] {
   const accountDetails: { name: string; id: string }[] = [];
 
   for (const line of lines) {
-    const isValidLine =
-      line.trim().startsWith("│ ") && line.trim().endsWith(" │");
+    const isValidLine = line.trim().startsWith("│ ") && line.trim().endsWith(" │");
 
     if (isValidLine) {
       const regex = /\b[a-f0-9]{32}\b/g;
@@ -166,14 +137,10 @@ function extractAccountDetails(output: string): { name: string; id: string }[] {
   return accountDetails;
 }
 
-async function promptForAccountId(
-  accounts: { name: string; id: string }[]
-): Promise<string> {
+async function promptForAccountId(accounts: { name: string; id: string }[]): Promise<string> {
   if (accounts.length === 1) {
     if (!accounts[0]?.id) {
-      console.error(
-        "\x1b[31mNo accounts found. Please run `wrangler login`.\x1b[0m"
-      );
+      console.error("\x1b[31mNo accounts found. Please run `wrangler login`.\x1b[0m");
       cancel("Operation cancelled.");
       process.exit(1);
     }
@@ -190,52 +157,31 @@ async function promptForAccountId(
 
     return selectedAccountId as string;
   } else {
-    console.error(
-      "\x1b[31mNo accounts found. Please run `wrangler login`.\x1b[0m"
-    );
+    console.error("\x1b[31mNo accounts found. Please run `wrangler login`.\x1b[0m");
     cancel("Operation cancelled.");
     process.exit(1);
   }
 }
 
-async function createDatabase(
-  dbName: string,
-  accountId?: string
-): Promise<string> {
+async function createDatabase(dbName: string, accountId?: string): Promise<string> {
   const dbSpinner = spinner();
   dbSpinner.start(`Creating D1 database: ${dbName}...`);
 
   const env = accountId ? { CLOUDFLARE_ACCOUNT_ID: accountId } : undefined;
-  const creationOutput = executeCommand(
-    `bunx wrangler d1 create ${dbName}`,
-    true,
-    env
-  );
+  const creationOutput = executeCommand(`bunx wrangler d1 create ${dbName}`, true, env);
 
   if (creationOutput === undefined || typeof creationOutput !== "string") {
     // Log the creation error for debugging
-    if (
-      creationOutput &&
-      typeof creationOutput === "object" &&
-      "message" in creationOutput
-    ) {
+    if (creationOutput && typeof creationOutput === "object" && "message" in creationOutput) {
       console.log(`\x1b[33mCreate error: ${creationOutput.message}\x1b[0m`);
     }
 
-    dbSpinner.stop(
-      `\x1b[33m⚠ Database creation failed, maybe it already exists. Fetching info...\x1b[0m`
-    );
+    dbSpinner.stop(`\x1b[33m⚠ Database creation failed, maybe it already exists. Fetching info...\x1b[0m`);
 
-    const dbInfoOutput = executeCommand(
-      `bunx wrangler d1 info ${dbName}`,
-      true,
-      env
-    );
+    const dbInfoOutput = executeCommand(`bunx wrangler d1 info ${dbName}`, true, env);
 
     if (dbInfoOutput && typeof dbInfoOutput === "string") {
-      const getInfo = dbInfoOutput.match(
-        /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i
-      );
+      const getInfo = dbInfoOutput.match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i);
       if (getInfo && getInfo.length >= 1) {
         const databaseID = getInfo[0];
         dbSpinner.stop(`\x1b[32m✓ Found database ID: ${databaseID}\x1b[0m`);
@@ -244,11 +190,7 @@ async function createDatabase(
     }
 
     // Log the info error for debugging
-    if (
-      dbInfoOutput &&
-      typeof dbInfoOutput === "object" &&
-      "message" in dbInfoOutput
-    ) {
+    if (dbInfoOutput && typeof dbInfoOutput === "object" && "message" in dbInfoOutput) {
       console.log(`\x1b[31mInfo error: ${dbInfoOutput.message}\x1b[0m`);
     }
 
@@ -274,19 +216,12 @@ async function createDatabase(
   process.exit(1);
 }
 
-async function createBucket(
-  bucketName: string,
-  accountId?: string
-): Promise<void> {
+async function createBucket(bucketName: string, accountId?: string): Promise<void> {
   const bucketSpinner = spinner();
   bucketSpinner.start(`Creating R2 bucket: ${bucketName}...`);
 
   const env = accountId ? { CLOUDFLARE_ACCOUNT_ID: accountId } : undefined;
-  const result = executeCommand(
-    `wrangler r2 bucket create ${bucketName}`,
-    true,
-    env
-  );
+  const result = executeCommand(`wrangler r2 bucket create ${bucketName}`, true, env);
 
   if (result && typeof result === "object" && result.error) {
     if (result.message.includes("already exists")) {
@@ -341,29 +276,17 @@ async function runDatabaseMigrations(accountId?: string) {
 
   const localSpinner = spinner();
   localSpinner.start("Applying local migrations...");
-  executeCommand(
-    `bunx wrangler d1 migrations apply DATABASE --local`,
-    true,
-    env
-  );
+  executeCommand(`bunx wrangler d1 migrations apply DATABASE --local`, true, env);
   localSpinner.stop("\x1b[32m✓ Local migrations applied\x1b[0m");
 
   const remoteSpinner = spinner();
   remoteSpinner.start("Applying remote migrations (production)...");
-  executeCommand(
-    `bunx wrangler d1 migrations apply DATABASE --remote`,
-    true,
-    env
-  );
+  executeCommand(`bunx wrangler d1 migrations apply DATABASE --remote`, true, env);
   remoteSpinner.stop("\x1b[32m✓ Production migrations applied\x1b[0m");
 
   const previewSpinner = spinner();
   previewSpinner.start("Applying remote migrations (preview)...");
-  executeCommand(
-    `bunx wrangler d1 migrations apply DATABASE --env preview --remote`,
-    true,
-    env
-  );
+  executeCommand(`bunx wrangler d1 migrations apply DATABASE --env preview --remote`, true, env);
   previewSpinner.stop("\x1b[32m✓ Preview migrations applied\x1b[0m");
 }
 
@@ -393,14 +316,8 @@ function updateLocalEnv(key: string, value: string) {
 // stays out of the process list. `name` and `environment` are constants in this
 // file, so the command string holds no user input. Returns an error message,
 // or undefined on success.
-function setGhSecret(
-  name: string,
-  value: string,
-  environment?: string
-): string | undefined {
-  const command = environment
-    ? `gh secret set ${name} --env ${environment}`
-    : `gh secret set ${name}`;
+function setGhSecret(name: string, value: string, environment?: string): string | undefined {
+  const command = environment ? `gh secret set ${name} --env ${environment}` : `gh secret set ${name}`;
   try {
     execSync(command, {
       input: value,
@@ -436,10 +353,7 @@ function ensureProductionEnvironment(): string | undefined {
 // read it. Uses the GitHub CLI (`gh`). No-ops with
 // guidance if gh is missing, not authenticated, or the repo has no GitHub
 // remote — never blocks setup. Secret values never print and never touch argv.
-export async function setupGitHubCiCredentials(
-  accountId?: string,
-  saveLocalEnv: (key: string, value: string) => void = updateLocalEnv
-) {
+export async function setupGitHubCiCredentials(accountId?: string, saveLocalEnv: (key: string, value: string) => void = updateLocalEnv) {
   console.log("\n\x1b[36m🤖 Step 11: GitHub Actions CI/CD credentials\x1b[0m");
 
   const manualHint = () => {
@@ -449,7 +363,7 @@ export async function setupGitHubCiCredentials(
         "    • Variable CLOUDFLARE_ACCOUNT_ID\n" +
         "    • Secret   CLOUDFLARE_API_TOKEN (in the 'production' environment)\n" +
         "    • Secret   CLOUDFLARE_PREVIEW_API_TOKEN and PREVIEW_SEED_SECRET (for previews)\n" +
-        "  Details: docs/ci/pipelines.md\x1b[0m"
+        "  Details: docs/ci/pipelines.md\x1b[0m",
     );
   };
 
@@ -461,16 +375,13 @@ export async function setupGitHubCiCredentials(
     // repo has a GitHub remote gh can resolve?
     typeof executeCommand("gh repo view --json nameWithOwner", true) === "object"
   ) {
-    console.log(
-      "\x1b[33mGitHub CLI unavailable, not authenticated, or no GitHub remote detected.\x1b[0m"
-    );
+    console.log("\x1b[33mGitHub CLI unavailable, not authenticated, or no GitHub remote detected.\x1b[0m");
     manualHint();
     return;
   }
 
   const wire = await confirm({
-    message:
-      "Set CI/CD credentials on GitHub now (enables the deploy after a merge into production + PR previews)?",
+    message: "Set CI/CD credentials on GitHub now (enables the deploy after a merge into production + PR previews)?",
     initialValue: true,
   });
   if (isCancel(wire) || !wire) {
@@ -496,11 +407,7 @@ export async function setupGitHubCiCredentials(
   // Pass the account ID as a discrete argv entry via spawnSync (no shell) so a
   // crafted value can't inject commands into the developer's shell. See
   // buildAccountIdVariableArgs / executeArgv.
-  const varResult = executeArgv(
-    "gh",
-    buildAccountIdVariableArgs(resolvedAccountId),
-    true
-  );
+  const varResult = executeArgv("gh", buildAccountIdVariableArgs(resolvedAccountId), true);
   if (varResult && typeof varResult === "object" && varResult.error) {
     varSpinner.stop("\x1b[31m✗ Failed to set CLOUDFLARE_ACCOUNT_ID\x1b[0m");
     console.error(`\x1b[31m${varResult.message}\x1b[0m`);
@@ -518,35 +425,25 @@ export async function setupGitHubCiCredentials(
       "  added by #67).\x1b[0m\n" +
       "\x1b[2mCreate a token at https://dash.cloudflare.com/profile/api-tokens\n" +
       "  from the 'Edit Cloudflare Workers' template, then add Account → D1 → Edit\n" +
-      "  (needed to run migrations in CI). Leave blank to skip.\x1b[0m"
+      "  (needed to run migrations in CI). Leave blank to skip.\x1b[0m",
   );
   const token = await password({
     message: "Cloudflare API token for production (input hidden):",
   });
   if (isCancel(token) || !token) {
-    console.log(
-      "\x1b[33mSkipped the production token. Set it later with:\n" +
-        "  gh secret set CLOUDFLARE_API_TOKEN --env production\x1b[0m"
-    );
+    console.log("\x1b[33mSkipped the production token. Set it later with:\n" + "  gh secret set CLOUDFLARE_API_TOKEN --env production\x1b[0m");
   } else {
     const secretSpinner = spinner();
     secretSpinner.start("Setting CLOUDFLARE_API_TOKEN (production environment)...");
     const envFailed = ensureProductionEnvironment();
-    const secretError =
-      envFailed ?? setGhSecret("CLOUDFLARE_API_TOKEN", token as string, "production");
+    const secretError = envFailed ?? setGhSecret("CLOUDFLARE_API_TOKEN", token as string, "production");
     if (secretError) {
       secretSpinner.stop("\x1b[31m✗ Failed to set CLOUDFLARE_API_TOKEN\x1b[0m");
       console.error(`\x1b[31m${secretError}\x1b[0m`);
-      console.log(
-        "\x1b[33mSet it later with: gh secret set CLOUDFLARE_API_TOKEN --env production\x1b[0m"
-      );
+      console.log("\x1b[33mSet it later with: gh secret set CLOUDFLARE_API_TOKEN --env production\x1b[0m");
     } else {
-      secretSpinner.stop(
-        "\x1b[32m✓ CLOUDFLARE_API_TOKEN set in the production environment\x1b[0m"
-      );
-      console.log(
-        "\x1b[32m🚀 A merge into production will now auto-deploy it.\x1b[0m"
-      );
+      secretSpinner.stop("\x1b[32m✓ CLOUDFLARE_API_TOKEN set in the production environment\x1b[0m");
+      console.log("\x1b[32m🚀 A merge into production will now auto-deploy it.\x1b[0m");
     }
   }
 
@@ -554,32 +451,25 @@ export async function setupGitHubCiCredentials(
   // never holds the production one. Blank skips previews.
   console.log(
     "\x1b[2mFor PR previews, create a second token the same way (ideally in a\n" +
-      "  separate Cloudflare account; see docs/ci/pipelines.md). Leave blank to skip previews.\x1b[0m"
+      "  separate Cloudflare account; see docs/ci/pipelines.md). Leave blank to skip previews.\x1b[0m",
   );
   const previewToken = await password({
     message: "Cloudflare API token for previews (input hidden):",
   });
   if (isCancel(previewToken) || !previewToken) {
     console.log(
-      "\x1b[33mSkipped previews. Turn them on later with:\n" +
-        "  gh secret set CLOUDFLARE_PREVIEW_API_TOKEN\n" +
-        "  gh secret set PREVIEW_SEED_SECRET\x1b[0m"
+      "\x1b[33mSkipped previews. Turn them on later with:\n" + "  gh secret set CLOUDFLARE_PREVIEW_API_TOKEN\n" + "  gh secret set PREVIEW_SEED_SECRET\x1b[0m",
     );
     return;
   }
 
   const previewSpinner = spinner();
   previewSpinner.start("Setting CLOUDFLARE_PREVIEW_API_TOKEN secret...");
-  const previewError = setGhSecret(
-    "CLOUDFLARE_PREVIEW_API_TOKEN",
-    previewToken as string
-  );
+  const previewError = setGhSecret("CLOUDFLARE_PREVIEW_API_TOKEN", previewToken as string);
   if (previewError) {
     previewSpinner.stop("\x1b[31m✗ Failed to set CLOUDFLARE_PREVIEW_API_TOKEN\x1b[0m");
     console.error(`\x1b[31m${previewError}\x1b[0m`);
-    console.log(
-      "\x1b[33mSet it later with: gh secret set CLOUDFLARE_PREVIEW_API_TOKEN\x1b[0m"
-    );
+    console.log("\x1b[33mSet it later with: gh secret set CLOUDFLARE_PREVIEW_API_TOKEN\x1b[0m");
     return;
   }
   previewSpinner.stop("\x1b[32m✓ CLOUDFLARE_PREVIEW_API_TOKEN secret set\x1b[0m");
@@ -597,25 +487,20 @@ export async function setupGitHubCiCredentials(
   saveLocalEnv("PREVIEW_SEED_SECRET", seedSecret);
   console.log(
     "\x1b[32m✓ PREVIEW_SEED_SECRET set (also saved to .env). Print a preview's password with:\n" +
-      "  bun scripts/seed-preview.ts --print-password --pr <N>\x1b[0m"
+      "  bun scripts/seed-preview.ts --print-password --pr <N>\x1b[0m",
   );
 }
 
 // Off unless the user says yes: the rules stop direct pushes to the default branch.
 // `apply` is injected so the test can watch the call without touching GitHub.
-export async function offerRepoRules(
-  apply: (argv: string[]) => RepoRulesOutcome = runRepoRules
-) {
+export async function offerRepoRules(apply: (argv: string[]) => RepoRulesOutcome = runRepoRules) {
   console.log("\n\x1b[36m🛡️  Step 12: Repo rules (branch protection)\x1b[0m");
   const wanted = await confirm({
-    message:
-      "Apply the repo rules now (pull requests only on the default branch, CI required, a reviewer on production deploys)?",
+    message: "Apply the repo rules now (pull requests only on the default branch, CI required, a reviewer on production deploys)?",
     initialValue: false,
   });
   if (isCancel(wanted) || !wanted) {
-    console.log(
-      "\x1b[33mSkipped. Apply them later with: bun run scripts/repo-rules.ts --apply\x1b[0m"
-    );
+    console.log("\x1b[33mSkipped. Apply them later with: bun run scripts/repo-rules.ts --apply\x1b[0m");
     return;
   }
   const outcome = apply(["--apply"]);
@@ -623,7 +508,7 @@ export async function offerRepoRules(
   console.log(
     outcome.code === 0
       ? "\x1b[32m✓ Repo rules applied\x1b[0m"
-      : "\x1b[33mRepo rules not applied. Fix the error above, then run: bun run scripts/repo-rules.ts --apply\x1b[0m"
+      : "\x1b[33mRepo rules not applied. Fix the error above, then run: bun run scripts/repo-rules.ts --apply\x1b[0m",
   );
 }
 
@@ -635,14 +520,8 @@ async function main() {
   console.log("\n\x1b[36mChecking Wrangler authentication...\x1b[0m");
   const whoamiOutput = executeCommand("wrangler whoami", true);
 
-  if (
-    !whoamiOutput ||
-    typeof whoamiOutput !== "string" ||
-    whoamiOutput.includes("not authenticated")
-  ) {
-    console.error(
-      "\x1b[31m✗ Not logged in. Please run `wrangler login` first.\x1b[0m"
-    );
+  if (!whoamiOutput || typeof whoamiOutput !== "string" || whoamiOutput.includes("not authenticated")) {
+    console.error("\x1b[31m✗ Not logged in. Please run `wrangler login` first.\x1b[0m");
     cancel("Operation cancelled.");
     process.exit(1);
   }
@@ -653,9 +532,7 @@ async function main() {
   let accountId: string | undefined;
 
   if (accounts.length > 1) {
-    console.log(
-      `\n\x1b[33m⚠ Multiple Cloudflare accounts detected (${accounts.length} accounts)\x1b[0m`
-    );
+    console.log(`\n\x1b[33m⚠ Multiple Cloudflare accounts detected (${accounts.length} accounts)\x1b[0m`);
     accountId = await promptForAccountId(accounts);
     console.log(`\x1b[32m✓ Using account: ${accountId}\x1b[0m`);
   } else if (accounts.length === 1 && accounts[0]?.id) {
@@ -665,9 +542,7 @@ async function main() {
   // Step 1: Get project name
   console.log("\n\x1b[36m📝 Step 1: Project Configuration\x1b[0m");
   const defaultProjectName = sanitizeResourceName(path.basename(process.cwd()));
-  const projectName = sanitizeResourceName(
-    await prompt("Enter your project name", defaultProjectName)
-  );
+  const projectName = sanitizeResourceName(await prompt("Enter your project name", defaultProjectName));
 
   // Ask whether to provision R2 file storage. When disabled, no buckets are
   // created and the generated wrangler.jsonc omits the R2 bindings.
@@ -776,9 +651,7 @@ async function main() {
   if (typegenResult && typeof typegenResult === "object" && typegenResult.error) {
     typegenSpinner.stop("\x1b[31m✗ Failed to generate types\x1b[0m");
     console.error(`\x1b[31m${typegenResult.message}\x1b[0m`);
-    console.log(
-      "\x1b[33mYou can generate types manually later with: bun run cf-typegen\x1b[0m"
-    );
+    console.log("\x1b[33mYou can generate types manually later with: bun run cf-typegen\x1b[0m");
   } else {
     typegenSpinner.stop("\x1b[32m✓ Cloudflare types generated\x1b[0m");
   }
@@ -791,18 +664,12 @@ async function main() {
   console.log("\n\x1b[36m🚀 Step 8: Deploy to Cloudflare (production)\x1b[0m");
   const deploySpinner = spinner();
   deploySpinner.start("Building and deploying to Cloudflare Workers...");
-  const deployResult = executeCommand(
-    "bun run deploy",
-    true,
-    accountId ? { CLOUDFLARE_ACCOUNT_ID: accountId } : undefined
-  );
+  const deployResult = executeCommand("bun run deploy", true, accountId ? { CLOUDFLARE_ACCOUNT_ID: accountId } : undefined);
 
   if (deployResult && typeof deployResult === "object" && deployResult.error) {
     deploySpinner.stop("\x1b[31m✗ Deployment failed\x1b[0m");
     console.error(`\x1b[31m${deployResult.message}\x1b[0m`);
-    console.log(
-      "\x1b[33mYou can deploy manually later with: bun run deploy\x1b[0m"
-    );
+    console.log("\x1b[33mYou can deploy manually later with: bun run deploy\x1b[0m");
   } else {
     deploySpinner.stop("\x1b[32m✓ Deployed successfully! 🎉\x1b[0m");
   }
@@ -811,22 +678,12 @@ async function main() {
   console.log("\n\x1b[36m🚀 Step 9: Deploy to Cloudflare (preview)\x1b[0m");
   const deployPreviewSpinner = spinner();
   deployPreviewSpinner.start("Building and deploying the preview worker...");
-  const deployPreviewResult = executeCommand(
-    "bun run deploy:preview",
-    true,
-    accountId ? { CLOUDFLARE_ACCOUNT_ID: accountId } : undefined
-  );
+  const deployPreviewResult = executeCommand("bun run deploy:preview", true, accountId ? { CLOUDFLARE_ACCOUNT_ID: accountId } : undefined);
 
-  if (
-    deployPreviewResult &&
-    typeof deployPreviewResult === "object" &&
-    deployPreviewResult.error
-  ) {
+  if (deployPreviewResult && typeof deployPreviewResult === "object" && deployPreviewResult.error) {
     deployPreviewSpinner.stop("\x1b[31m✗ Preview deployment failed\x1b[0m");
     console.error(`\x1b[31m${deployPreviewResult.message}\x1b[0m`);
-    console.log(
-      "\x1b[33mYou can deploy it manually later with: bun run deploy:preview\x1b[0m"
-    );
+    console.log("\x1b[33mYou can deploy it manually later with: bun run deploy:preview\x1b[0m");
   } else {
     deployPreviewSpinner.stop("\x1b[32m✓ Preview worker deployed! 🎉\x1b[0m");
   }
@@ -839,47 +696,26 @@ async function main() {
   function uploadSecret(label: string, envFlag: string) {
     const secretSpinner = spinner();
     secretSpinner.start(`Uploading BETTER_AUTH_SECRET (${label})...`);
-    const execEnv = accountId
-      ? { CLOUDFLARE_ACCOUNT_ID: accountId }
-      : undefined;
+    const execEnv = accountId ? { CLOUDFLARE_ACCOUNT_ID: accountId } : undefined;
 
-    let result = executeCommand(
-      `echo "${betterAuthSecret}" | wrangler secret put BETTER_AUTH_SECRET${envFlag}`,
-      true,
-      execEnv
-    );
+    let result = executeCommand(`echo "${betterAuthSecret}" | wrangler secret put BETTER_AUTH_SECRET${envFlag}`, true, execEnv);
 
     // `wrangler secret put` refuses when the worker's latest *uploaded*
     // version isn't the *deployed* one (happens once PR previews have run
     // `wrangler versions upload`). `versions secret put` handles that case:
     // it creates a new version with the secret, which subsequent version
     // uploads inherit.
-    if (
-      result &&
-      typeof result === "object" &&
-      result.error &&
-      String(result.message).includes("isn't currently deployed")
-    ) {
-      secretSpinner.message(
-        `Uploading BETTER_AUTH_SECRET (${label}) via versions secret put...`
-      );
-      result = executeCommand(
-        `echo "${betterAuthSecret}" | wrangler versions secret put BETTER_AUTH_SECRET${envFlag}`,
-        true,
-        execEnv
-      );
+    if (result && typeof result === "object" && result.error && String(result.message).includes("isn't currently deployed")) {
+      secretSpinner.message(`Uploading BETTER_AUTH_SECRET (${label}) via versions secret put...`);
+      result = executeCommand(`echo "${betterAuthSecret}" | wrangler versions secret put BETTER_AUTH_SECRET${envFlag}`, true, execEnv);
     }
 
     if (result && typeof result === "object" && result.error) {
       secretSpinner.stop(`\x1b[31m✗ Failed to upload secret (${label})\x1b[0m`);
       console.error(`\x1b[31m${result.message}\x1b[0m`);
-      console.log(
-        `\x1b[33mYou can upload it manually later with: wrangler secret put BETTER_AUTH_SECRET${envFlag}\x1b[0m`
-      );
+      console.log(`\x1b[33mYou can upload it manually later with: wrangler secret put BETTER_AUTH_SECRET${envFlag}\x1b[0m`);
     } else {
-      secretSpinner.stop(
-        `\x1b[32m✓ BETTER_AUTH_SECRET uploaded (${label})\x1b[0m`
-      );
+      secretSpinner.stop(`\x1b[32m✓ BETTER_AUTH_SECRET uploaded (${label})\x1b[0m`);
     }
   }
 
@@ -902,18 +738,12 @@ async function main() {
   console.log("  1. For local development:");
   console.log("     \x1b[33mbun run dev\x1b[0m\n");
   console.log("  2. Your production site is live at:");
-  console.log(
-    `     \x1b[33mhttps://${projectName}.<subdomain>.workers.dev\x1b[0m\n`
-  );
+  console.log(`     \x1b[33mhttps://${projectName}.<subdomain>.workers.dev\x1b[0m\n`);
   console.log("  3. CI/CD (GitHub Actions):");
+  console.log("     \x1b[33m.github/workflows/deploy.yml\x1b[0m — a merge into production auto-deploys it (after CI passes)");
+  console.log("     \x1b[33m.github/workflows/preview.yml\x1b[0m — every PR gets its own preview deployment");
   console.log(
-    "     \x1b[33m.github/workflows/deploy.yml\x1b[0m — a merge into production auto-deploys it (after CI passes)"
-  );
-  console.log(
-    "     \x1b[33m.github/workflows/preview.yml\x1b[0m — every PR gets its own preview deployment"
-  );
-  console.log(
-    "     (deploy needs the repo variable \x1b[33mCLOUDFLARE_ACCOUNT_ID\x1b[0m and the \x1b[33mproduction\x1b[0m environment secret \x1b[33mCLOUDFLARE_API_TOKEN\x1b[0m; previews need \x1b[33mCLOUDFLARE_PREVIEW_API_TOKEN\x1b[0m and \x1b[33mPREVIEW_SEED_SECRET\x1b[0m. Step 11 above sets these if the GitHub CLI is available. Details: docs/ci/pipelines.md)\n"
+    "     (deploy needs the repo variable \x1b[33mCLOUDFLARE_ACCOUNT_ID\x1b[0m and the \x1b[33mproduction\x1b[0m environment secret \x1b[33mCLOUDFLARE_API_TOKEN\x1b[0m; previews need \x1b[33mCLOUDFLARE_PREVIEW_API_TOKEN\x1b[0m and \x1b[33mPREVIEW_SEED_SECRET\x1b[0m. Step 11 above sets these if the GitHub CLI is available. Details: docs/ci/pipelines.md)\n",
   );
 
   outro("✨ Happy building! 🎉");

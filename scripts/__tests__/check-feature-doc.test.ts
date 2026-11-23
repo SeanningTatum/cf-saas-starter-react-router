@@ -6,18 +6,7 @@ import { checkFeatureDoc } from "../check-feature-doc";
 const dir = join(__dirname, "fixtures", "feature-doc");
 const load = (name: string) => readFileSync(join(dir, `${name}.md`), "utf8");
 
-const RULES = [
-  "frontmatter",
-  "sections",
-  "empty-section",
-  "context-source",
-  "decisions",
-  "mermaid",
-  "ux-states",
-  "stack",
-  "fence-overlap",
-  "prototypes",
-];
+const RULES = ["frontmatter", "sections", "empty-section", "context-source", "decisions", "mermaid", "ux-states", "stack", "fence-overlap", "prototypes"];
 
 describe("checkFeatureDoc fixtures", () => {
   it("a complete record passes: a checker that rejects good input blocks every plan", () => {
@@ -120,7 +109,10 @@ describe("checkFeatureDoc edge cases", () => {
   });
 
   it("a PR stack table without the Greptile focus column fails 'stack'", () => {
-    const doc = good.replace("| Size | Greptile focus |", "| Size |").replace(/\| (S|M|L) \| [^|\n]+ \|\n/g, "| $1 |\n").replace("|------|----------------|", "|------|");
+    const doc = good
+      .replace("| Size | Greptile focus |", "| Size |")
+      .replace(/\| (S|M|L) \| [^|\n]+ \|\n/g, "| $1 |\n")
+      .replace("|------|----------------|", "|------|");
     expect(checkFeatureDoc(doc).map((f) => f.rule)).toContain("stack");
   });
 

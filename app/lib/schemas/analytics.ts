@@ -11,7 +11,7 @@ export const GetRecentSignupsCountInput = Schema.Struct({
     Schema.int(),
     Schema.greaterThanOrEqualTo(1),
     Schema.lessThanOrEqualTo(365),
-    Schema.optionalWith({ default: () => 7 })
+    Schema.optionalWith({ default: () => 7 }),
   ),
 });
 export type GetRecentSignupsCountInput = typeof GetRecentSignupsCountInput.Type;

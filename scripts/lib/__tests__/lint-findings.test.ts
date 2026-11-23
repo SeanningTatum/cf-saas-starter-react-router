@@ -1,14 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { Either } from "effect";
 import { FORMAT_FIX } from "../lint-constants";
-import {
-  type Finding,
-  formatFinding,
-  parseBiome,
-  parseHouse,
-  parseKnip,
-  sortFindings,
-} from "../lint-findings";
+import { type Finding, formatFinding, parseBiome, parseHouse, parseKnip, sortFindings } from "../lint-findings";
 
 const BIOME_FORMAT =
   '{"summary":{"changed":0,"unchanged":1,"matches":0,"duration":87897208,"errors":1,"warnings":0,"infos":0,"skipped":0,"suggestedFixesSkipped":0,"diagnosticsNotPrinted":0,"scannerDuration":2361579625},"diagnostics":[{"severity":"error","message":"Formatter would have printed the following content:","category":"format","location":{"path":"scripts/lint-all.ts","start":{"line":0,"column":0},"end":{"line":0,"column":0}},"advices":[]}],"command":"check"}';
@@ -24,8 +17,7 @@ const biomeDiagnostic = (over: { category?: string; message?: string; start?: { 
   },
   advices: [],
 });
-const biomeReport = (diagnostics: readonly unknown[]): string =>
-  JSON.stringify({ summary: { errors: diagnostics.length }, diagnostics, command: "check" });
+const biomeReport = (diagnostics: readonly unknown[]): string => JSON.stringify({ summary: { errors: diagnostics.length }, diagnostics, command: "check" });
 
 const knipReport = (issues: readonly Record<string, unknown>[]): string => JSON.stringify({ issues });
 
@@ -101,15 +93,18 @@ describe("parseKnip", () => {
       { path: "app/lib/a.ts", line: 4, column: 17, rule: "knip/exports", message: "" },
       "`helper`",
     ],
-    [
-      "an unlisted import",
-      { file: "app/lib/b.ts", unlisted: [{ name: "lodash" }] },
-      { path: "app/lib/b.ts", rule: "knip/unlisted", message: "" },
-      "`lodash`",
-    ],
+    ["an unlisted import", { file: "app/lib/b.ts", unlisted: [{ name: "lodash" }] }, { path: "app/lib/b.ts", rule: "knip/unlisted", message: "" }, "`lodash`"],
     [
       "a duplicate export",
-      { file: "app/lib/c.ts", duplicates: [[{ name: "a", line: 2, col: 1 }, { name: "b", line: 3, col: 1 }]] },
+      {
+        file: "app/lib/c.ts",
+        duplicates: [
+          [
+            { name: "a", line: 2, col: 1 },
+            { name: "b", line: 3, col: 1 },
+          ],
+        ],
+      },
       { path: "app/lib/c.ts", line: 2, column: 1, rule: "knip/duplicates", message: "" },
       "`a, b`",
     ],
@@ -208,13 +203,7 @@ describe("sortFindings", () => {
       { path: "a.ts", rule: "format", message: "m" },
     ];
     const before = structuredClone(input);
-    expect(sortFindings(input).map(formatFinding)).toEqual([
-      "a.ts format: m",
-      "a.ts:2:9 r: m",
-      "a.ts:10:1 r: m",
-      "a.ts:10:2 r: m",
-      "b.ts:1 r: m",
-    ]);
+    expect(sortFindings(input).map(formatFinding)).toEqual(["a.ts format: m", "a.ts:2:9 r: m", "a.ts:10:1 r: m", "a.ts:10:2 r: m", "b.ts:1 r: m"]);
     expect(input).toEqual(before);
   });
 });

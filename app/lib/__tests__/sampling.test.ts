@@ -1,9 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { decideSampling, readSampling } from "../sampling";
-import {
-  PRODUCTION_SAMPLING,
-  SAMPLING_BY_ENVIRONMENT,
-} from "@/lib/constants/sampling";
+import { PRODUCTION_SAMPLING, SAMPLING_BY_ENVIRONMENT } from "@/lib/constants/sampling";
 
 const DRAWS = [0, 0.5, 0.999999];
 
@@ -42,9 +39,9 @@ describe("readSampling", () => {
 
   it("falls back to the preset for a rate outside 0 to 1 or not a number, so a typo cannot drop every log line", () => {
     for (const raw of ["2", "-1", "abc", "", "  ", "NaN", "Infinity"]) {
-      expect(
-        readSampling({ LOG_SAMPLE_RATE: raw, TRACE_SAMPLE_RATE: raw }, "production")
-      ).toEqual(PRODUCTION_SAMPLING);
+      expect(readSampling({ LOG_SAMPLE_RATE: raw, TRACE_SAMPLE_RATE: raw }, "production")).toEqual(
+        PRODUCTION_SAMPLING,
+      );
     }
   });
 });

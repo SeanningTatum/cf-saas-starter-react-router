@@ -4,8 +4,7 @@ import { sourceOf } from "./fixtures";
 
 type Placed = Array<[number, string]>;
 
-const placed = (code: string, path = "app/a.ts"): Placed =>
-  commentsIn(sourceOf(code, path)).map((comment) => [comment.line, comment.text]);
+const placed = (code: string, path = "app/a.ts"): Placed => commentsIn(sourceOf(code, path)).map((comment) => [comment.line, comment.text]);
 
 const inTsx = (code: string): Placed => placed(code, "app/a.tsx");
 
@@ -21,16 +20,8 @@ describe("commentsIn", () => {
     ["a comment after code on the same line", "export const a = 1; // one\n", [[1, "// one"]]],
     ["a comment after the last statement, before the end of the file", "export const a = 1;\n// the end\n", [[2, "// the end"]]],
     ["a comment that is the whole file", "// alone\n", [[1, "// alone"]]],
-    [
-      "a comment between a function's parameters",
-      "export function f(a: number, /* b next */ b: number) {\n  return a + b;\n}\n",
-      [[1, "/* b next */"]],
-    ],
-    [
-      "a comment inside a type literal",
-      'type T = {\n  // the id\n  id: string;\n};\nexport const t: T = { id: "x" };\n',
-      [[2, "// the id"]],
-    ],
+    ["a comment between a function's parameters", "export function f(a: number, /* b next */ b: number) {\n  return a + b;\n}\n", [[1, "/* b next */"]]],
+    ["a comment inside a type literal", 'type T = {\n  // the id\n  id: string;\n};\nexport const t: T = { id: "x" };\n', [[2, "// the id"]]],
     ["a comment in an empty function body", "export function f() {\n  /* nothing */\n}\n", [[2, "/* nothing */"]]],
     [
       "a block comment over several lines, on the line it opens",
@@ -113,11 +104,7 @@ describe("commentsIn", () => {
 describe("commentsIn on JSX", () => {
   it.each<[string, string, Placed]>([
     ["on one line", "export const a = <div>{/* note */}</div>;\n", [[1, "/* note */"]]],
-    [
-      "spread over lines",
-      "export const a = (\n  <div>\n    {/*\n      note\n    */}\n  </div>\n);\n",
-      [[3, "/*\n      note\n    */"]],
-    ],
+    ["spread over lines", "export const a = (\n  <div>\n    {/*\n      note\n    */}\n  </div>\n);\n", [[3, "/*\n      note\n    */"]]],
   ])("finds a {/* */} comment %s", (_shape, code, expected) => {
     expect(inTsx(code)).toEqual(expected);
   });
@@ -138,22 +125,10 @@ describe("commentsIn on JSX", () => {
 
   it.each<[string, string, Placed]>([
     ["inside an attribute expression", "export const a = <a href={/* x */ url}>link</a>;\n", [[1, "/* x */"]]],
-    [
-      "between attributes",
-      "export const a = (\n  <a\n    // the target\n    href={url}\n  >\n    link\n  </a>\n);\n",
-      [[3, "// the target"]],
-    ],
-    [
-      "after a self-closing element that is not inside another",
-      "export function F() {\n  return <div />; // done\n}\n",
-      [[2, "// done"]],
-    ],
+    ["between attributes", "export const a = (\n  <a\n    // the target\n    href={url}\n  >\n    link\n  </a>\n);\n", [[3, "// the target"]]],
+    ["after a self-closing element that is not inside another", "export function F() {\n  return <div />; // done\n}\n", [[2, "// done"]]],
     ["right after a closing tag that is not inside another", "export const a = <p>x</p> // done\n", [[1, "// done"]]],
-    [
-      "after an element inside a {} child",
-      "export const a = <p>{ok && <b>x</b> /* only when ok */}</p>;\n",
-      [[1, "/* only when ok */"]],
-    ],
+    ["after an element inside a {} child", "export const a = <p>{ok && <b>x</b> /* only when ok */}</p>;\n", [[1, "/* only when ok */"]]],
   ])("finds a comment %s", (_where, code, expected) => {
     expect(inTsx(code)).toEqual(expected);
   });

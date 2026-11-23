@@ -39,8 +39,7 @@ const WORKFLOW_NAMES: Record<Target, string> = {
 const DOC = "docs/ci/pipelines.md";
 const REPO_TOKEN_WARNING =
   "a repo-level CLOUDFLARE_API_TOKEN secret is readable by pull-request jobs; move it to the production environment and delete the repo-level one";
-const PATCH_HEADER =
-  "// Patched by scripts/ci/deploy-gate.ts — production D1 id (CI checkout only, never committed).";
+const PATCH_HEADER = "// Patched by scripts/ci/deploy-gate.ts — production D1 id (CI checkout only, never committed).";
 
 export interface Facts {
   hasAccountId: boolean;
@@ -69,9 +68,7 @@ export function isRealD1Id(id: string | undefined): boolean {
 export function decide(target: Target, facts: Facts): Decision {
   const warnings = facts.prodTokenAtRepoLevel ? [REPO_TOKEN_WARNING] : [];
   const missing = firstMissing(target, facts);
-  return missing
-    ? { ready: false, reason: missing, warnings }
-    : { ready: true, reason: "ready", warnings };
+  return missing ? { ready: false, reason: missing, warnings } : { ready: true, reason: "ready", warnings };
 }
 
 function firstMissing(target: Target, facts: Facts): string | undefined {
@@ -83,9 +80,7 @@ function firstMissing(target: Target, facts: Facts): string | undefined {
 
   if (target === "production") {
     const hasRealId = isRealD1Id(facts.committedD1Id) || isRealD1Id(facts.d1Override);
-    return hasRealId
-      ? undefined
-      : 'wrangler.jsonc still has the placeholder D1 id; run "bun run setup" or set the CLOUDFLARE_D1_DATABASE_ID variable';
+    return hasRealId ? undefined : 'wrangler.jsonc still has the placeholder D1 id; run "bun run setup" or set the CLOUDFLARE_D1_DATABASE_ID variable';
   }
   if (!facts.hasToken) return "the CLOUDFLARE_PREVIEW_API_TOKEN secret is not set";
   if (target === "preview" && !facts.hasSeedSecret) {
@@ -107,19 +102,13 @@ const RawJson = Schema.parseJson(Schema.Unknown);
 
 /** wrangler.jsonc keeps its comments on whole lines; strip those and parse. */
 function parseJsonc(text: string): Either.Either<unknown, string> {
-  return Either.mapLeft(
-    Schema.decodeUnknownEither(RawJson)(stripJsonc(text)),
-    () => "wrangler.jsonc is not valid JSON",
-  );
+  return Either.mapLeft(Schema.decodeUnknownEither(RawJson)(stripJsonc(text)), () => "wrangler.jsonc is not valid JSON");
 }
 
 /** The Worker's `name` from wrangler.jsonc. */
 export function readProjectName(text: string): Either.Either<string, string> {
   return Either.flatMap(parseJsonc(text), (raw) =>
-    Either.mapLeft(
-      Schema.decodeUnknownEither(Schema.Struct({ name: Schema.NonEmptyString }))(raw),
-      () => "wrangler.jsonc has no name",
-    ),
+    Either.mapLeft(Schema.decodeUnknownEither(Schema.Struct({ name: Schema.NonEmptyString }))(raw), () => "wrangler.jsonc has no name"),
   ).pipe(Either.map((found) => found.name));
 }
 
@@ -141,9 +130,7 @@ function findTopLevelDatabase(raw: unknown): Either.Either<Found, string> {
 
 /** The id of the top-level DATABASE binding, or an error when the file is unreadable. */
 export function readCommittedD1Id(text: string): Either.Either<string | undefined, string> {
-  return Either.flatMap(parseJsonc(text), (raw) =>
-    Either.map(findTopLevelDatabase(raw), (found) => found.id),
-  );
+  return Either.flatMap(parseJsonc(text), (raw) => Either.map(findTopLevelDatabase(raw), (found) => found.id));
 }
 
 /** wrangler.jsonc text with the top-level DATABASE binding pointed at `id`. */
@@ -174,10 +161,7 @@ export interface Deps {
 
 const isTrue = (value: string | undefined) => value === "true";
 
-export function factsFromEnv(
-  env: Deps["env"],
-  committedD1Id: string | undefined,
-): Facts {
+export function factsFromEnv(env: Deps["env"], committedD1Id: string | undefined): Facts {
   return {
     hasAccountId: isTrue(env.HAS_ACCOUNT_ID),
     hasToken: isTrue(env.HAS_TOKEN),
@@ -203,11 +187,7 @@ function report(target: Target, decision: Decision, deps: Deps): void {
 }
 
 /** Read wrangler.jsonc and apply `step` to its text; log `::error::` and return 1 on failure. */
-function withWrangler<T>(
-  deps: Deps,
-  step: (text: string) => Either.Either<T, string>,
-  done: (value: T) => void,
-): number {
+function withWrangler<T>(deps: Deps, step: (text: string) => Either.Either<T, string>, done: (value: T) => void): number {
   const text = deps.readFile(deps.wranglerPath);
   const result = text === undefined ? Either.left(`cannot read ${deps.wranglerPath}`) : step(text);
   if (Either.isLeft(result)) {
@@ -219,9 +199,7 @@ function withWrangler<T>(
 }
 
 function ready(target: Target, deps: Deps): number {
-  return withWrangler(deps, readCommittedD1Id, (committed) =>
-    report(target, decide(target, factsFromEnv(deps.env, committed)), deps),
-  );
+  return withWrangler(deps, readCommittedD1Id, (committed) => report(target, decide(target, factsFromEnv(deps.env, committed)), deps));
 }
 
 function useD1(deps: Deps): number {

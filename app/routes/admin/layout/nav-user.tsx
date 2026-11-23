@@ -1,18 +1,14 @@
-import { IconDotsVertical, IconLogout } from "@tabler/icons-react"
-import { Sun, Moon } from "lucide-react"
-import { useTheme } from "next-themes"
-import { useNavigate } from "react-router"
-import { useTranslation } from "react-i18next"
+import { IconDotsVertical, IconLogout } from "@tabler/icons-react";
+import { Sun, Moon } from "lucide-react";
+import { useTheme } from "next-themes";
+import { useNavigate } from "react-router";
+import { useTranslation } from "react-i18next";
 
-import { authClient } from "@/auth/client"
-import { getInitials } from "@/lib/utils"
-import { themeItems } from "@/components/theme-toggle"
-import { ROUTES } from "@/lib/constants/routes"
-import {
-  Avatar,
-  AvatarFallback,
-  AvatarImage,
-} from "@/components/ui/avatar"
+import { authClient } from "@/auth/client";
+import { getInitials } from "@/lib/utils";
+import { themeItems } from "@/components/theme-toggle";
+import { ROUTES } from "@/lib/constants/routes";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -23,33 +19,33 @@ import {
   DropdownMenuSubContent,
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
+} from "@/components/ui/dropdown-menu";
 import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
   useSidebar,
-} from "@/components/ui/sidebar"
+} from "@/components/ui/sidebar";
 
 export function NavUser({
   user,
 }: {
   user: {
-    name: string
-    email: string
-    image?: string | null
-  }
+    name: string;
+    email: string;
+    image?: string | null;
+  };
 }) {
-  const { isMobile } = useSidebar()
-  const { setTheme } = useTheme()
-  const navigate = useNavigate()
-  const { t } = useTranslation("admin")
-  const { t: tc } = useTranslation("common")
+  const { isMobile } = useSidebar();
+  const { setTheme } = useTheme();
+  const navigate = useNavigate();
+  const { t } = useTranslation("admin");
+  const { t: tc } = useTranslation("common");
 
   const handleLogout = async () => {
-    await authClient.signOut()
-    navigate(ROUTES.login)
-  }
+    await authClient.signOut();
+    navigate(ROUTES.login);
+  };
 
   return (
     <SidebarMenu>
@@ -62,15 +58,11 @@ export function NavUser({
             >
               <Avatar className="h-8 w-8 rounded-lg grayscale">
                 <AvatarImage src={user.image ?? undefined} alt={user.name} />
-                <AvatarFallback className="rounded-lg">
-                  {getInitials(user.name)}
-                </AvatarFallback>
+                <AvatarFallback className="rounded-lg">{getInitials(user.name)}</AvatarFallback>
               </Avatar>
               <div className="grid flex-1 text-left text-sm leading-tight">
                 <span className="truncate font-medium">{user.name}</span>
-                <span className="text-muted-foreground truncate text-xs">
-                  {user.email}
-                </span>
+                <span className="text-muted-foreground truncate text-xs">{user.email}</span>
               </div>
               <IconDotsVertical className="ml-auto size-4" />
             </SidebarMenuButton>
@@ -85,15 +77,11 @@ export function NavUser({
               <div className="flex items-center gap-2 px-1 py-1.5 text-left text-sm">
                 <Avatar className="h-8 w-8 rounded-lg">
                   <AvatarImage src={user.image ?? undefined} alt={user.name} />
-                  <AvatarFallback className="rounded-lg">
-                    {getInitials(user.name)}
-                  </AvatarFallback>
+                  <AvatarFallback className="rounded-lg">{getInitials(user.name)}</AvatarFallback>
                 </Avatar>
                 <div className="grid flex-1 text-left text-sm leading-tight">
                   <span className="truncate font-medium">{user.name}</span>
-                  <span className="text-muted-foreground truncate text-xs">
-                    {user.email}
-                  </span>
+                  <span className="text-muted-foreground truncate text-xs">{user.email}</span>
                 </div>
               </div>
             </DropdownMenuLabel>
@@ -122,5 +110,5 @@ export function NavUser({
         </DropdownMenu>
       </SidebarMenuItem>
     </SidebarMenu>
-  )
+  );
 }

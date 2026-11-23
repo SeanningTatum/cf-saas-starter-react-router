@@ -87,10 +87,7 @@ export interface DriftProbe {
   output: string;
 }
 
-export type DriftVerdict =
-  | { kind: "clean" }
-  | { kind: "drift"; files: NewMigration[] }
-  | { kind: "unclear"; output: string };
+export type DriftVerdict = { kind: "clean" } | { kind: "drift"; files: NewMigration[] } | { kind: "unclear"; output: string };
 
 export interface Deps {
   env: Record<string, string | undefined>;
@@ -206,11 +203,12 @@ export function decideDrift(probe: DriftProbe): DriftVerdict {
 function generateIn(repoRoot: string, schemaPath: string, tempDir: string): DriftProbe {
   fs.cpSync(path.join(repoRoot, DRIZZLE_DIR), tempDir, { recursive: true });
   const before = new Set(fs.readdirSync(tempDir));
-  const result = spawnSync(
-    path.join(repoRoot, DRIZZLE_KIT_BIN),
-    drizzleKitArgs(schemaPath, path.relative(repoRoot, tempDir)),
-    { cwd: repoRoot, input: "", encoding: "utf-8", timeout: DRIZZLE_KIT_TIMEOUT_MS },
-  );
+  const result = spawnSync(path.join(repoRoot, DRIZZLE_KIT_BIN), drizzleKitArgs(schemaPath, path.relative(repoRoot, tempDir)), {
+    cwd: repoRoot,
+    input: "",
+    encoding: "utf-8",
+    timeout: DRIZZLE_KIT_TIMEOUT_MS,
+  });
   const output = `${result.stdout ?? ""}${result.stderr ?? ""}${result.error?.message ?? ""}`;
   const newFiles = fs
     .readdirSync(tempDir)
@@ -225,11 +223,7 @@ const failedProbe = (error: unknown): DriftProbe => ({
   output: error instanceof Error ? error.message : String(error),
 });
 
-export function generateInTempCopy(
-  repoRoot: string,
-  schemaPath: string,
-  tempRoot: string = os.tmpdir(),
-): DriftProbe {
+export function generateInTempCopy(repoRoot: string, schemaPath: string, tempRoot: string = os.tmpdir()): DriftProbe {
   return Effect.runSync(
     Effect.acquireUseRelease(
       Effect.try(() => fs.mkdtempSync(path.join(tempRoot, TEMP_PREFIX))),

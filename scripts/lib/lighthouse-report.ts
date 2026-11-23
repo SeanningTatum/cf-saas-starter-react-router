@@ -69,7 +69,10 @@ export const summarize = (page: string, runs: Metrics[]): PageResult => ({
 });
 
 export const widestSpread = (pages: readonly PageResult[]): Metrics =>
-  perMetric(pages.map((page) => page.spread), (values) => (values.length === 0 ? 0 : Math.max(...values)));
+  perMetric(
+    pages.map((page) => page.spread),
+    (values) => (values.length === 0 ? 0 : Math.max(...values)),
+  );
 
 const ms = (value: number): string => `${Math.round(value).toLocaleString(NUMBER_LOCALE)} ms`;
 const cls = (value: number): string => value.toFixed(3);

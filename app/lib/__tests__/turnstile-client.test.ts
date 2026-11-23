@@ -22,8 +22,10 @@ import {
   type TurnstileState,
 } from "../turnstile-client";
 
-const run = (events: ReadonlyArray<TurnstileEvent>, from: TurnstileState = initialTurnstileState()) =>
-  events.reduce(turnstileReducer, from);
+const run = (
+  events: ReadonlyArray<TurnstileEvent>,
+  from: TurnstileState = initialTurnstileState(),
+) => events.reduce(turnstileReducer, from);
 
 const fakeScript = () => {
   const listeners = new Map<string, () => void>();
@@ -92,17 +94,22 @@ describe("turnstileReducer", () => {
   });
 
   it("drops a spent token on reset, keeps the widget on screen and says the check runs again", () => {
-    expect(run([{ type: "rendered" }, { type: "solved", token: "t1" }, { type: "reset" }])).toEqual({
-      status: "loading",
-      token: null,
-      failure: null,
-      rendered: true,
-      rechecking: true,
-    });
+    expect(run([{ type: "rendered" }, { type: "solved", token: "t1" }, { type: "reset" }])).toEqual(
+      {
+        status: "loading",
+        token: null,
+        failure: null,
+        rendered: true,
+        rechecking: true,
+      },
+    );
   });
 
   it("says loading, not running again, on the first load even after the widget renders", () => {
-    expect(run([{ type: "load" }, { type: "rendered" }])).toMatchObject({ status: "loading", rechecking: false });
+    expect(run([{ type: "load" }, { type: "rendered" }])).toMatchObject({
+      status: "loading",
+      rechecking: false,
+    });
   });
 
   it("asks the user to act and drops the token when an unsolved check times out", () => {
@@ -111,7 +118,10 @@ describe("turnstileReducer", () => {
   });
 
   it("drops the token and records why when the widget fails", () => {
-    const state = run([{ type: "solved", token: "t1" }, { type: "failed", failure: "challenge" }]);
+    const state = run([
+      { type: "solved", token: "t1" },
+      { type: "failed", failure: "challenge" },
+    ]);
     expect(state).toMatchObject({ status: "error", token: null, failure: "challenge" });
   });
 
@@ -121,7 +131,11 @@ describe("turnstileReducer", () => {
   });
 
   it("gets a new token after a timeout without a reload", () => {
-    const state = run([{ type: "solved", token: "t1" }, { type: "timedOut" }, { type: "solved", token: "t2" }]);
+    const state = run([
+      { type: "solved", token: "t1" },
+      { type: "timedOut" },
+      { type: "solved", token: "t2" },
+    ]);
     expect(state).toMatchObject({ status: "ready", token: "t2", rechecking: false });
   });
 });
@@ -157,7 +171,13 @@ describe("widget options", () => {
 
   it("treats an expired token as a check running again and a timed-out check as one the user must rerun", () => {
     const dispatch = vi.fn();
-    const options = turnstileRenderOptions({ sitekey: "k", theme: "dark", size: "compact", language: "en", dispatch });
+    const options = turnstileRenderOptions({
+      sitekey: "k",
+      theme: "dark",
+      size: "compact",
+      language: "en",
+      dispatch,
+    });
     expect(options).toMatchObject({
       sitekey: "k",
       theme: "dark",
@@ -242,7 +262,13 @@ describe("loadTurnstileScript", () => {
 });
 
 describe("mountTurnstile", () => {
-  const options = { sitekey: "k", theme: "light" as const, size: "flexible" as const, language: "en", dispatch: vi.fn() };
+  const options = {
+    sitekey: "k",
+    theme: "light" as const,
+    size: "flexible" as const,
+    language: "en",
+    dispatch: vi.fn(),
+  };
 
   it("renders into the given container and resets and removes that same widget", () => {
     const { api, calls } = fakeApi("w9");

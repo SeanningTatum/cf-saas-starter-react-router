@@ -29,12 +29,7 @@ describe("summary", () => {
   });
 
   it("counts retries by attempt and failures by outcome: a threw and an empty are both failed", () => {
-    const calls = [
-      full(0, "Audit"),
-      full(1, "Audit", { attempt: 2 }),
-      full(2, "Audit", { outcome: "threw" }),
-      full(3, "Audit", { outcome: "empty" }),
-    ];
+    const calls = [full(0, "Audit"), full(1, "Audit", { attempt: 2 }), full(2, "Audit", { outcome: "threw" }), full(3, "Audit", { outcome: "empty" })];
     const { deps } = memory({ [RUN_PATH]: runFile({ w: calls }) });
     const row = run(["summary", "demo"], deps).stdout.find((l) => l.startsWith("Audit")) ?? "";
     expect(row.split(/\s+/).slice(0, 4)).toEqual(["Audit", "4", "1", "2"]);
@@ -90,7 +85,13 @@ describe("stats", () => {
 
   const files = () => ({
     "/repo/.verify/alpha/run.json": runFile(
-      { "ship-feature": [fullCall("a", "runner"), fullCall("b", "ui-builder", { phase: "UI", seconds: 100, outcome: "threw" }), fullCall("c", "runner", { outcome: "threw" })] },
+      {
+        "ship-feature": [
+          fullCall("a", "runner"),
+          fullCall("b", "ui-builder", { phase: "UI", seconds: 100, outcome: "threw" }),
+          fullCall("c", "runner", { outcome: "threw" }),
+        ],
+      },
       "alpha",
     ),
     "/repo/.verify/beta/run.json": runFile({ "ship-feature": [fullCall("d", "ui-builder", { outcome: "empty", seconds: 5 })] }, "beta"),
@@ -158,4 +159,3 @@ describe("stats", () => {
     expect(text(o)).toBe("run-telemetry: no run.json files in .verify");
   });
 });
-

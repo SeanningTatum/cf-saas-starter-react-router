@@ -81,7 +81,9 @@ describe("fullRunReasons", () => {
   it("every script verify.sh, the gate list and the harness gate run forces the full run (catches the trigger list drifting from the gates)", () => {
     const read = (file: string) => readFileSync(join(__dirname, "..", "..", "..", file), "utf-8");
     const named = (text: string) => text.match(/scripts\/[\w./-]+\.(?:ts|sh)/g) ?? [];
-    const looped = [...read("scripts/harness-check.sh").matchAll(/for t in ([\w -]+); do/g)].flatMap((m) => (m[1] ?? "").split(" ").map((t) => `scripts/${t}.sh`));
+    const looped = [...read("scripts/harness-check.sh").matchAll(/for t in ([\w -]+); do/g)].flatMap((m) =>
+      (m[1] ?? "").split(" ").map((t) => `scripts/${t}.sh`),
+    );
     const gateRuns = (JSON.parse(read("harness.config.json")) as { gates: { run: string }[] }).gates.map((gate) => gate.run).join("\n");
     const scannedNotRun = /N_CANDIDATES=\([^)]*\)/;
     const sources = [read("scripts/verify.sh"), gateRuns, read("scripts/harness-check.sh").replace(scannedNotRun, "")];

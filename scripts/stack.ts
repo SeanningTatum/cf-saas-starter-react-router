@@ -73,8 +73,7 @@ const bad = (code: number, kind: string, error: string, help: string): Outcome =
   code,
   err: { error, code: kind, help },
 });
-const usage = (error: string): Outcome =>
-  bad(1, "USAGE", error, "verbs: assign --plan <f> | split --plan <f> | restack --plan <f> --from <n>");
+const usage = (error: string): Outcome => bad(1, "USAGE", error, "verbs: assign --plan <f> | split --plan <f> | restack --plan <f> --from <n>");
 const gitFailure = (r: GitResult, what: string): Outcome =>
   bad(2, "GIT", `${what}: ${r.stderr.trim() || r.stdout.trim() || `git exited ${r.code}`}`, "run the same git command by hand to see why");
 
@@ -166,7 +165,8 @@ function loadPlan(path: string | undefined, deps: Deps): Plan | Outcome {
   }
   const ns = p.prs.map((x) => x.n);
   if (new Set(ns).size !== ns.length) return usage("plan.prs has a duplicate n");
-  if (p.exclude !== undefined && (!Array.isArray(p.exclude) || p.exclude.some((e) => typeof e !== "string"))) return usage("plan.exclude must be an array of strings");
+  if (p.exclude !== undefined && (!Array.isArray(p.exclude) || p.exclude.some((e) => typeof e !== "string")))
+    return usage("plan.exclude must be an array of strings");
   if (p.rest !== undefined && !ns.includes(p.rest)) return usage(`plan.rest ${p.rest} is not a PR in plan.prs`);
   return { ...(p as Plan), exclude: p.exclude ?? deps.scratchDirs, prs: [...p.prs].sort((a, b) => a.n - b.n) };
 }
@@ -197,8 +197,7 @@ function split(plan: Plan, deps: Deps): Outcome {
       "narrow the fences so each path belongs to one PR",
     );
   const empty = a.assignments.filter((x) => x.paths.length === 0);
-  if (empty.length)
-    return bad(3, "EMPTY_PR", `PR ${empty.map((e) => e.n).join(", ")} has no changed paths`, "drop the PR from the plan or widen its fence");
+  if (empty.length) return bad(3, "EMPTY_PR", `PR ${empty.map((e) => e.n).join(", ")} has no changed paths`, "drop the PR from the plan or widen its fence");
   const ahead = deps.git(["rev-list", "--count", `${plan.base}..HEAD`]);
   if (ahead.code !== 0) return gitFailure(ahead, "git rev-list");
   if (Number(ahead.stdout.trim()) > 0)
@@ -248,7 +247,10 @@ function restack(plan: Plan, from: string | undefined, deps: Deps): Outcome {
   const rb = deps.git(["rebase", "--update-refs", target.branch]);
   if (rb.code !== 0) {
     const u = deps.git(["diff", "--name-only", "--diff-filter=U"]);
-    const paths = u.stdout.split("\n").map((l) => l.trim()).filter(Boolean);
+    const paths = u.stdout
+      .split("\n")
+      .map((l) => l.trim())
+      .filter(Boolean);
     const ab = deps.git(["rebase", "--abort"]);
     if (!paths.length) return gitFailure(rb, "git rebase");
     const e = bad(

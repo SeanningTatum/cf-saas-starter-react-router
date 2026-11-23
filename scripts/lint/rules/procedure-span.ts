@@ -11,11 +11,9 @@ const SPAN_OPTION = "span";
 const SPAN_PREFIX = "trpc.";
 
 const inRoutes = (code: string): Record<string, string> => ({ "app/trpc/routes/x.ts": code });
-const procedure = (body: string): Record<string, string> =>
-  inRoutes(`export const r = { p: publicProcedure.query(({ ctx }) => ${body}) };`);
+const procedure = (body: string): Record<string, string> => inRoutes(`export const r = { p: publicProcedure.query(({ ctx }) => ${body}) };`);
 
-const isProcedureBuilder = (receiver: ts.Expression): boolean =>
-  contains(receiver, (node) => ts.isIdentifier(node) && PROCEDURE_BUILDER.test(node.text));
+const isProcedureBuilder = (receiver: ts.Expression): boolean => contains(receiver, (node) => ts.isIdentifier(node) && PROCEDURE_BUILDER.test(node.text));
 
 function spanOptionProblem(call: ts.CallExpression): string | undefined {
   const options = call.arguments[2];
@@ -25,20 +23,18 @@ function spanOptionProblem(call: ts.CallExpression): string | undefined {
     (property) =>
       (ts.isPropertyAssignment(property) || ts.isShorthandPropertyAssignment(property)) &&
       (ts.isIdentifier(property.name) || ts.isStringLiteralLike(property.name)) &&
-      property.name.text === SPAN_OPTION
+      property.name.text === SPAN_OPTION,
   );
   if (!span) return "`runProcedure` options with no `span`";
   const literal = ts.isPropertyAssignment(span) && ts.isStringLiteralLike(span.initializer) ? span.initializer.text : undefined;
-  return literal !== undefined && !literal.startsWith(SPAN_PREFIX)
-    ? `span "${literal}" does not start with "${SPAN_PREFIX}"`
-    : undefined;
+  return literal !== undefined && !literal.startsWith(SPAN_PREFIX) ? `span "${literal}" does not start with "${SPAN_PREFIX}"` : undefined;
 }
 
 export const rule: FileRule = {
   id: "procedure-span",
   scope: "file",
   matches:
-"A tRPC `.query`, `.mutation` or `.subscription` on a `…Procedure` builder whose handler never reaches `runProcedure` or is passed by reference, " +
+    "A tRPC `.query`, `.mutation` or `.subscription` on a `…Procedure` builder whose handler never reaches `runProcedure` or is passed by reference, " +
     'a `runProcedure` call whose third argument is not an object literal with `span`, or a literal span name that does not start with "trpc.". ' +
     "A builder kept in a variable with another name is not seen.",
   covers: "`app/trpc/routes/`, subfolders included, except tests.",
@@ -119,7 +115,7 @@ export const rule: FileRule = {
       name: "a procedure that runs through a local helper that calls runProcedure is clean",
       files: inRoutes(
         "const run = (ctx: any, span: string) => runProcedure(ctx.runtime, e, { span });\n" +
-          'export const r = { p: publicProcedure.input(s).mutation(({ ctx }) => run(ctx, "trpc.x.p")) };'
+          'export const r = { p: publicProcedure.input(s).mutation(({ ctx }) => run(ctx, "trpc.x.p")) };',
       ),
       expect: "clean",
     },

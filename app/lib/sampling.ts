@@ -17,7 +17,7 @@ const rateFrom = (raw: string | undefined, fallback: number): number => {
 
 export const readSampling = (
   env: { readonly LOG_SAMPLE_RATE?: string; readonly TRACE_SAMPLE_RATE?: string },
-  environment: string
+  environment: string,
 ): SamplingRates => {
   const preset = SAMPLING_BY_ENVIRONMENT[environment] ?? PRODUCTION_SAMPLING;
   return {
@@ -28,7 +28,7 @@ export const readSampling = (
 
 export const decideSampling = (
   rates: SamplingRates,
-  random: () => number = Math.random
+  random: () => number = Math.random,
 ): SamplingDecision => ({
   logs: random() < rates.logs,
   traces: random() < rates.traces,

@@ -3,24 +3,8 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { Either } from "effect";
-import {
-  BIOME_BIN,
-  EXIT,
-  HOUSE_SCRIPT,
-  IMPORT_CYCLE_RULE,
-  KNIP_BIN,
-  LINTABLE_FILE,
-  STAGED_FILES_ARGS,
-  TOOL,
-} from "./lib/lint-constants";
-import {
-  type Finding,
-  formatFinding,
-  parseBiome,
-  parseHouse,
-  parseKnip,
-  sortFindings,
-} from "./lib/lint-findings";
+import { BIOME_BIN, EXIT, HOUSE_SCRIPT, IMPORT_CYCLE_RULE, KNIP_BIN, LINTABLE_FILE, STAGED_FILES_ARGS, TOOL } from "./lib/lint-constants";
+import { type Finding, formatFinding, parseBiome, parseHouse, parseKnip, sortFindings } from "./lib/lint-findings";
 import { type RunResult, realShell } from "./lib/shell";
 
 export interface Deps {
@@ -88,14 +72,7 @@ function runBiome(deps: Deps, request: Request, files: readonly string[]): ToolO
 function runImportCycles(deps: Deps): ToolOutcome {
   return biomeOutcome(
     TOOL.importCycles,
-    deps.run(BIOME_BIN, [
-      "lint",
-      `--only=${IMPORT_CYCLE_RULE}`,
-      "--reporter=json",
-      "--max-diagnostics=none",
-      "--error-on-warnings",
-      ".",
-    ]),
+    deps.run(BIOME_BIN, ["lint", `--only=${IMPORT_CYCLE_RULE}`, "--reporter=json", "--max-diagnostics=none", "--error-on-warnings", "."]),
   );
 }
 

@@ -3,11 +3,7 @@ import { transition } from "xstate";
 import { getShortestPaths } from "xstate/graph";
 import { BucketValidationError } from "@/models/errors/bucket";
 import { ExternalServiceError } from "@/models/errors/repository";
-import {
-  fileUploadMachine,
-  type FileUploadEvent,
-  type UploadResult,
-} from "./file-upload.machine";
+import { fileUploadMachine, type FileUploadEvent, type UploadResult } from "./file-upload.machine";
 
 type UploadDoneEvent = { readonly type: "xstate.done.actor.upload"; readonly output: UploadResult };
 
@@ -15,10 +11,13 @@ export type ModelEvent = FileUploadEvent | UploadDoneEvent;
 
 const UPLOAD_OK: UploadResult = Either.right({ key: "uploads/model-test.txt" });
 const UPLOAD_REFUSED: UploadResult = Either.left(
-  new BucketValidationError({ message: "File content does not match its declared type", field: "file" })
+  new BucketValidationError({
+    message: "File content does not match its declared type",
+    field: "file",
+  }),
 );
 const UPLOAD_UNREACHABLE: UploadResult = Either.left(
-  new ExternalServiceError({ service: "upload-file", cause: "connection dropped" })
+  new ExternalServiceError({ service: "upload-file", cause: "connection dropped" }),
 );
 
 type FileUploadSnapshot = ReturnType<typeof fileUploadMachine.transition>;
@@ -45,7 +44,7 @@ export const fileUploadTraversal = (opts: {
 
 export const fileUploadPaths = (
   opts: Parameters<typeof fileUploadTraversal>[0],
-  extra: { fromState?: FileUploadSnapshot; toState?: (s: FileUploadSnapshot) => boolean } = {}
+  extra: { fromState?: FileUploadSnapshot; toState?: (s: FileUploadSnapshot) => boolean } = {},
 ) => getShortestPaths(fileUploadMachine, { ...fileUploadTraversal(opts), ...extra });
 
 export const fileUploadEdgePaths = (opts: Parameters<typeof fileUploadTraversal>[0]) => {
@@ -56,13 +55,13 @@ export const fileUploadEdgePaths = (opts: Parameters<typeof fileUploadTraversal>
       .map((event) => {
         const [next] = transition(fileUploadMachine, path.state, event);
         return { state: next, steps: [...path.steps, { event, state: next }] };
-      })
+      }),
   );
 };
 
 export const describePath = (
   steps: ReadonlyArray<{ readonly event: ModelEvent }>,
-  end: string
+  end: string,
 ): string => {
   const label = (e: ModelEvent) =>
     e.type === "PICK"

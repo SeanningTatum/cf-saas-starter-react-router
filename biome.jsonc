@@ -1,6 +1,11 @@
 {
   "$schema": "./node_modules/@biomejs/biome/configuration_schema.json",
-  "vcs": { "enabled": true, "clientKind": "git", "useIgnoreFile": true, "defaultBranch": "staging" },
+  "vcs": {
+    "enabled": true,
+    "clientKind": "git",
+    "useIgnoreFile": true,
+    "defaultBranch": "staging"
+  },
   "files": {
     "ignoreUnknown": true,
     "includes": [
@@ -72,12 +77,20 @@
               "posthog-js": "A provider SDK stays inside its adapter: app/lib/analytics/adapters/.",
               "posthog-node": "A provider SDK stays inside its adapter: app/lib/analytics/adapters/."
             },
-            "patterns": [{ "group": ["zod/**"], "message": "Use Effect Schema: import { Schema } from \"effect\"." }]
+            "patterns": [
+              {
+                "group": ["zod/**"],
+                "message": "Use Effect Schema: import { Schema } from \"effect\"."
+              }
+            ]
           }
         }
       },
       "complexity": {
-        "noExcessiveCognitiveComplexity": { "level": "error", "options": { "maxAllowedComplexity": 15 } }
+        "noExcessiveCognitiveComplexity": {
+          "level": "error",
+          "options": { "maxAllowedComplexity": 15 }
+        }
       },
       "suspicious": {
         "noExplicitAny": "error"
@@ -164,7 +177,12 @@
                   "zod": "Use Effect Schema: import { Schema } from \"effect\".",
                   "@tabler/icons-react": "One icon set: import the icon from lucide-react."
                 },
-                "patterns": [{ "group": ["zod/**"], "message": "Use Effect Schema: import { Schema } from \"effect\"." }]
+                "patterns": [
+                  {
+                    "group": ["zod/**"],
+                    "message": "Use Effect Schema: import { Schema } from \"effect\"."
+                  }
+                ]
               }
             }
           }
@@ -197,7 +215,12 @@
                   "posthog-js": "A provider SDK stays inside its adapter: app/lib/analytics/adapters/.",
                   "posthog-node": "A provider SDK stays inside its adapter: app/lib/analytics/adapters/."
                 },
-                "patterns": [{ "group": ["zod/**"], "message": "Use Effect Schema: import { Schema } from \"effect\"." }]
+                "patterns": [
+                  {
+                    "group": ["zod/**"],
+                    "message": "Use Effect Schema: import { Schema } from \"effect\"."
+                  }
+                ]
               }
             }
           }
@@ -300,7 +323,10 @@
                   "drizzle-orm": "A primitive takes data as props; it never reads the data layer."
                 },
                 "patterns": [
-                  { "group": ["zod/**"], "message": "Use Effect Schema: import { Schema } from \"effect\"." },
+                  {
+                    "group": ["zod/**"],
+                    "message": "Use Effect Schema: import { Schema } from \"effect\"."
+                  },
                   {
                     "group": [
                       "@/db",

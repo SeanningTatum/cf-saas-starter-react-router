@@ -1,8 +1,5 @@
 import { Effect, Exit, Option } from "effect";
-import {
-  FIRST_SERVER_ERROR_STATUS,
-  HTTP_STATUS_ATTRIBUTE,
-} from "@/lib/constants/error-reporting";
+import { FIRST_SERVER_ERROR_STATUS, HTTP_STATUS_ATTRIBUTE } from "@/lib/constants/error-reporting";
 import {
   MAX_LOG_TEXT_LENGTH,
   MAX_SPAN_TEXT_LENGTH,
@@ -23,8 +20,8 @@ type OtlpValue =
 const printable = (value: unknown): string =>
   Effect.runSync(
     Effect.try(() => JSON.stringify(redactDeep(value)) ?? "undefined").pipe(
-      Effect.orElseSucceed(() => UNPRINTABLE_ATTRIBUTE)
-    )
+      Effect.orElseSucceed(() => UNPRINTABLE_ATTRIBUTE),
+    ),
   );
 
 export const toOtlpValue = (value: unknown): OtlpValue => {
@@ -36,22 +33,18 @@ export const toOtlpValue = (value: unknown): OtlpValue => {
     case "bigint":
       return { intValue: value.toString() };
     case "number":
-      return Number.isInteger(value)
-        ? { intValue: value.toString() }
-        : { doubleValue: value };
+      return Number.isInteger(value) ? { intValue: value.toString() } : { doubleValue: value };
     default:
       return { stringValue: printable(value).slice(0, MAX_LOG_TEXT_LENGTH) };
   }
 };
 
 const toOtlpAttributes = (
-  attributes: Iterable<readonly [string, unknown]>
+  attributes: Iterable<readonly [string, unknown]>,
 ): Array<{ key: string; value: OtlpValue }> =>
   Array.from(attributes, ([key, value]) => ({
     key,
-    value: SENSITIVE_KEY_PATTERN.test(key)
-      ? { stringValue: REDACTED }
-      : toOtlpValue(value),
+    value: SENSITIVE_KEY_PATTERN.test(key) ? { stringValue: REDACTED } : toOtlpValue(value),
   }));
 
 const spanToOtlp = (span: OtlpSpan) => {
@@ -61,9 +54,7 @@ const spanToOtlp = (span: OtlpSpan) => {
   return {
     traceId: span.traceId,
     spanId: span.spanId,
-    ...(Option.isSome(span.parent)
-      ? { parentSpanId: span.parent.value.spanId }
-      : {}),
+    ...(Option.isSome(span.parent) ? { parentSpanId: span.parent.value.spanId } : {}),
     name: span.name,
     kind: OTLP_SPAN_KIND[span.kind],
     startTimeUnixNano: status.startTime.toString(),
@@ -84,11 +75,9 @@ const isServerErrorStatus = (httpStatus: unknown): httpStatus is number =>
   typeof httpStatus === "number" && httpStatus >= FIRST_SERVER_ERROR_STATUS;
 
 export const otlpStatusForResponse = (
-  httpStatus: unknown
+  httpStatus: unknown,
 ): { code: 1 } | { code: 2; message: string } =>
-  isServerErrorStatus(httpStatus)
-    ? { code: 2, message: `HTTP ${httpStatus}` }
-    : { code: 1 };
+  isServerErrorStatus(httpStatus) ? { code: 2, message: `HTTP ${httpStatus}` } : { code: 1 };
 
 const exitMessage = (exit: Exit.Exit<unknown, unknown>): string =>
   Exit.match(exit, {
@@ -96,16 +85,11 @@ const exitMessage = (exit: Exit.Exit<unknown, unknown>): string =>
     onFailure: (cause) => redactWithin(String(cause), MAX_SPAN_TEXT_LENGTH),
   });
 
-export const buildOtlpPayload = (
-  spans: ReadonlyArray<OtlpSpan>,
-  serviceName: string
-) => ({
+export const buildOtlpPayload = (spans: ReadonlyArray<OtlpSpan>, serviceName: string) => ({
   resourceSpans: [
     {
       resource: {
-        attributes: [
-          { key: "service.name", value: { stringValue: serviceName } },
-        ],
+        attributes: [{ key: "service.name", value: { stringValue: serviceName } }],
       },
       scopeSpans: [
         {

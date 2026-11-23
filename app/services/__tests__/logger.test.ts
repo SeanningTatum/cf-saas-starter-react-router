@@ -8,11 +8,7 @@ import {
   currentRequestLogSampled,
   LoggerLive,
 } from "../logger";
-import {
-  CurrentRequest,
-  runWithRequestContext,
-  type RequestContext,
-} from "@/lib/request-context";
+import { CurrentRequest, runWithRequestContext, type RequestContext } from "@/lib/request-context";
 
 describe("toAppLevel", () => {
   it("maps Trace to trace", () => {
@@ -62,9 +58,7 @@ describe("stringify", () => {
   });
 
   it("joins a mixed array, JSON-stringifying non-string entries", () => {
-    expect(stringify(["msg", { count: 3 }, 42])).toBe(
-      'msg {"count":3} 42'
-    );
+    expect(stringify(["msg", { count: 3 }, 42])).toBe('msg {"count":3} 42');
   });
 });
 
@@ -80,7 +74,7 @@ describe("currentSpanAnnotations", () => {
           refs: yield* Effect.getFiberRefs,
           span: yield* Effect.currentSpan,
         };
-      }).pipe(Effect.withSpan("unit.span"))
+      }).pipe(Effect.withSpan("unit.span")),
     );
 
     expect(currentSpanAnnotations(refs)).toEqual({
@@ -98,7 +92,7 @@ describe("LoggerLive", () => {
         Effect.gen(function* () {
           yield* Effect.logInfo("inside span");
           return (yield* Effect.currentSpan).traceId;
-        }).pipe(Effect.withSpan("unit.span"), Effect.provide(LoggerLive))
+        }).pipe(Effect.withSpan("unit.span"), Effect.provide(LoggerLive)),
       );
 
       const output = spy.mock.calls.map((args) => String(args[0])).join("\n");
@@ -116,8 +110,8 @@ describe("LoggerLive", () => {
         Effect.logInfo("annotated").pipe(
           Effect.annotateLogs({ layer: "trpc", requestId: "req-1" }),
           Effect.withSpan("unit.span"),
-          Effect.provide(LoggerLive)
-        )
+          Effect.provide(LoggerLive),
+        ),
       );
 
       const output = spy.mock.calls.map((args) => String(args[0])).join("\n");
@@ -130,11 +124,16 @@ describe("LoggerLive", () => {
 });
 
 describe("currentRequestAnnotations", () => {
-  const request: RequestContext = { requestId: "req-fiber", method: "GET", path: "/", userId: "u1" };
+  const request: RequestContext = {
+    requestId: "req-fiber",
+    method: "GET",
+    path: "/",
+    userId: "u1",
+  };
 
   it("returns the request and user ids when CurrentRequest is in the fiber context, so every Effect log line keeps its request id", () => {
     const refs = Effect.runSync(
-      Effect.getFiberRefs.pipe(Effect.provide(Layer.succeed(CurrentRequest, request)))
+      Effect.getFiberRefs.pipe(Effect.provide(Layer.succeed(CurrentRequest, request))),
     );
     expect(currentRequestAnnotations(refs)).toStrictEqual({
       requestId: "req-fiber",
@@ -157,13 +156,12 @@ describe("LoggerLive with a request (Effect's scheduler is shared across request
           requestId: "fiber-request-id",
           method: "GET",
           path: "/",
-        })
-      )
+        }),
+      ),
     );
     try {
-      await runWithRequestContext(
-        { requestId: "other-request-id", method: "GET", path: "/" },
-        () => runtime.runPromise(Effect.logInfo("through runtime"))
+      await runWithRequestContext({ requestId: "other-request-id", method: "GET", path: "/" }, () =>
+        runtime.runPromise(Effect.logInfo("through runtime")),
       );
 
       const output = spy.mock.calls.map((args) => String(args[0])).join("\n");
@@ -182,35 +180,32 @@ const baseRequest: RequestContext = { requestId: "fiber-request-id", method: "GE
 describe("currentRequestLogSampled", () => {
   const refsWith = (request: RequestContext) =>
     Effect.runSync(
-      Effect.getFiberRefs.pipe(Effect.provide(Layer.succeed(CurrentRequest, request)))
+      Effect.getFiberRefs.pipe(Effect.provide(Layer.succeed(CurrentRequest, request))),
     );
 
   it("reads the fiber request's log decision, keeps a request with no decision, and is undefined with no request, so the sink falls back to the async store only outside the runtime", () => {
     expect(
       currentRequestLogSampled(
-        refsWith({ ...baseRequest, sampling: { logs: false, traces: true } })
-      )
+        refsWith({ ...baseRequest, sampling: { logs: false, traces: true } }),
+      ),
     ).toBe(false);
-    expect(
-      currentRequestLogSampled(refsWith({ requestId: "r", method: "GET", path: "/" }))
-    ).toBe(true);
+    expect(currentRequestLogSampled(refsWith({ requestId: "r", method: "GET", path: "/" }))).toBe(
+      true,
+    );
     expect(currentRequestLogSampled(Effect.runSync(Effect.getFiberRefs))).toBeUndefined();
   });
 });
 
 describe("LoggerLive with a sampled request", () => {
-  const runLogs = async (
-    layer: Layer.Layer<never>,
-    store: RequestContext
-  ) => {
+  const runLogs = async (layer: Layer.Layer<never>, store: RequestContext) => {
     const infoSpy = vi.spyOn(console, "info").mockImplementation(() => {});
     const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
     const runtime = ManagedRuntime.make(Layer.merge(LoggerLive, layer));
     try {
       await runWithRequestContext(store, () =>
         runtime.runPromise(
-          Effect.logInfo("info line").pipe(Effect.zipRight(Effect.logWarning("warn line")))
-        )
+          Effect.logInfo("info line").pipe(Effect.zipRight(Effect.logWarning("warn line"))),
+        ),
       );
       return {
         info: infoSpy.mock.calls.map(([line]) => String(line)).join("\n"),
@@ -226,7 +221,7 @@ describe("LoggerLive with a sampled request", () => {
   it("drops Effect.logInfo and keeps Effect.logWarning of a fiber request sampled out, even while the async store holds a sampled request", async () => {
     const out = await runLogs(
       Layer.succeed(CurrentRequest, { ...baseRequest, sampling: { logs: false, traces: true } }),
-      { ...baseRequest, requestId: "other-request-id", sampling: { logs: true, traces: true } }
+      { ...baseRequest, requestId: "other-request-id", sampling: { logs: true, traces: true } },
     );
 
     expect(out.info).not.toContain("info line");

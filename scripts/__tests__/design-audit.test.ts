@@ -3,14 +3,7 @@ import { join } from "node:path";
 import { describe, it, expect } from "vitest";
 import { resolveLogin } from "../lib/audit-login";
 import { HARNESS_ROOT } from "../lib/harness-config";
-import {
-  parseColour,
-  composite,
-  resolveBackground,
-  contrastRatio,
-  luminance,
-  type Rgba,
-} from "../lib/colour";
+import { parseColour, composite, resolveBackground, contrastRatio, luminance, type Rgba } from "../lib/colour";
 
 const WHITE: Rgba = [255, 255, 255, 1];
 const BLACK: Rgba = [0, 0, 0, 1];

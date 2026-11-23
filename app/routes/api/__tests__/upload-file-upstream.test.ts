@@ -25,8 +25,8 @@ const upload = async (getSession: () => Promise<unknown>) => {
       Layer.succeed(RateLimiter, { check: () => Effect.void }),
       Layer.succeed(BucketRepository, {
         upload: () => Effect.succeed("uploads/fake"),
-      } as unknown as BucketRepository)
-    )
+      } as unknown as BucketRepository),
+    ),
   );
   const form = new FormData();
   form.set("file", new File(["hello"], "a.txt", { type: "text/plain" }));
@@ -48,9 +48,7 @@ const upload = async (getSession: () => Promise<unknown>) => {
 
 describe("upload-file action, upstream failures", () => {
   it("reports a failed session lookup before it answers 503, so an auth outage is not hidden behind a retry message", async () => {
-    const { captures, result } = await upload(() =>
-      Promise.reject(new Error("auth backend down"))
-    );
+    const { captures, result } = await upload(() => Promise.reject(new Error("auth backend down")));
 
     expect(result.init?.status).toBe(503);
     expect(captures).toHaveLength(1);

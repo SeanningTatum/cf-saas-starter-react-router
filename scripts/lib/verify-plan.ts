@@ -36,8 +36,7 @@ export type Plan = { kind: "full"; reasons: string[] } | { kind: "lean"; run: St
 
 const triggers = FULL_RUN_TRIGGERS.map((trigger) => ({ ...trigger, pattern: globToRegExp(trigger.match) }));
 
-export const shellQuote = (word: string): string =>
-  `${SHELL_QUOTE}${word.split(SHELL_QUOTE).join(SHELL_QUOTE_ESCAPED)}${SHELL_QUOTE}`;
+export const shellQuote = (word: string): string => `${SHELL_QUOTE}${word.split(SHELL_QUOTE).join(SHELL_QUOTE_ESCAPED)}${SHELL_QUOTE}`;
 
 const withArgs = (command: string, paths: readonly string[]): string => [command, ...paths.map(shellQuote)].join(" ");
 

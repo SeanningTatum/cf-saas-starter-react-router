@@ -166,7 +166,11 @@ describe("pr-review-wait", () => {
   it("reads confidence from the LAST summary comment: a retrigger posts a newer summary", async () => {
     const { deps } = harness({
       reviews: [[review()]],
-      issueComments: [{ user: bot, body: summaryBody(2) }, { user: bot, body: "unrelated 5/5" }, { user: bot, body: summaryBody(4) }],
+      issueComments: [
+        { user: bot, body: summaryBody(2) },
+        { user: bot, body: "unrelated 5/5" },
+        { user: bot, body: summaryBody(4) },
+      ],
     });
     const o = await run(["5"], deps);
     expect((o.out as Waited).confidence).toBe(4);
@@ -183,7 +187,10 @@ describe("pr-review-wait", () => {
   it("ignores a marker comment from a human or tied to another commit: no score beats a wrong one", async () => {
     const { deps } = harness({
       reviews: [[review()]],
-      issueComments: [{ user: { login: "someone" }, body: summaryBody(1) }, { user: bot, body: summaryBody(2, "old999") }],
+      issueComments: [
+        { user: { login: "someone" }, body: summaryBody(1) },
+        { user: bot, body: summaryBody(2, "old999") },
+      ],
     });
     const o = await run(["5"], deps);
     expect((o.out as Waited).confidence).toBeNull();
@@ -191,10 +198,19 @@ describe("pr-review-wait", () => {
   });
 
   describe("a clean review: no inline comments, so Greptile submits no PR review", () => {
-    const check = (status: string) => ({ name: "Greptile Review", status, conclusion: status === "completed" ? "success" : null, app: { slug: "greptile-apps" } });
+    const check = (status: string) => ({
+      name: "Greptile Review",
+      status,
+      conclusion: status === "completed" ? "success" : null,
+      app: { slug: "greptile-apps" },
+    });
 
     it("a completed Greptile check plus a summary naming the head is reviewed, with no review and no comments", async () => {
-      const { deps, calls } = harness({ reviews: [[]], checkRuns: [[check("in_progress")], [check("completed")]], issueComments: [{ user: bot, body: summaryBody(5) }] });
+      const { deps, calls } = harness({
+        reviews: [[]],
+        checkRuns: [[check("in_progress")], [check("completed")]],
+        issueComments: [{ user: bot, body: summaryBody(5) }],
+      });
       const o = await run(["5"], deps);
       expect(o.code).toBe(0);
       expect(o.out).toMatchObject({ status: "reviewed", review: null, confidence: 5, comments: [], retriggered: false });
@@ -208,7 +224,11 @@ describe("pr-review-wait", () => {
       h.deps.gh = (args) => {
         if (args.join(" ").endsWith("/issues/5/comments")) {
           n++;
-          return { code: 0, stdout: JSON.stringify(n < 3 ? [{ user: bot, body: summaryBody(3, "old999") }] : [{ user: bot, body: summaryBody(4) }]), stderr: "" };
+          return {
+            code: 0,
+            stdout: JSON.stringify(n < 3 ? [{ user: bot, body: summaryBody(3, "old999") }] : [{ user: bot, body: summaryBody(4) }]),
+            stderr: "",
+          };
         }
         return gh(args);
       };

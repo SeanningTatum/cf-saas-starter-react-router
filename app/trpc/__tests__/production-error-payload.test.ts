@@ -49,7 +49,7 @@ describe("outside dev, a tRPC 500 tells the client nothing about the failure", (
       expect(body).not.toContain(SECRET);
       expect(body).not.toContain("stack");
       expect(body).not.toContain("cause");
-    }
+    },
   );
 
   it("builds the router with isDev false from the build flag, so tRPC never falls back to process.env, which a Worker lacks", () => {

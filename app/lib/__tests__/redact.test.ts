@@ -1,19 +1,15 @@
 import { describe, expect, it } from "vitest";
 import { hashEmail, redactPath, redactText, redactWithin } from "../redact";
-import {
-  EMAIL_HASH_LENGTH,
-  EMAIL_HASH_PREFIX,
-  REDACTED,
-} from "@/lib/constants/redaction";
+import { EMAIL_HASH_LENGTH, EMAIL_HASH_PREFIX, REDACTED } from "@/lib/constants/redaction";
 
 const webCryptoHash = async (email: string): Promise<string> => {
   const digest = await crypto.subtle.digest(
     "SHA-256",
-    new TextEncoder().encode(email.trim().toLowerCase())
+    new TextEncoder().encode(email.trim().toLowerCase()),
   );
-  const hex = Array.from(new Uint8Array(digest), (byte) =>
-    byte.toString(16).padStart(2, "0")
-  ).join("");
+  const hex = Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join(
+    "",
+  );
   return EMAIL_HASH_PREFIX + hex.slice(0, EMAIL_HASH_LENGTH);
 };
 
@@ -25,11 +21,9 @@ const timeOf = (run: () => void): number => {
 
 describe("hashEmail", () => {
   it("matches the Web Crypto SHA-256 of the trimmed lower-case address, so a sync hash cannot drift from the one Workers computes", async () => {
-    expect(hashEmail("user@example.com")).toBe(
-      await webCryptoHash("user@example.com")
-    );
+    expect(hashEmail("user@example.com")).toBe(await webCryptoHash("user@example.com"));
     expect(hashEmail("user@example.com")).toMatch(
-      new RegExp(`^${EMAIL_HASH_PREFIX}[0-9a-f]{${EMAIL_HASH_LENGTH}}$`)
+      new RegExp(`^${EMAIL_HASH_PREFIX}[0-9a-f]{${EMAIL_HASH_LENGTH}}$`),
     );
   });
 
@@ -43,9 +37,7 @@ describe("redactText", () => {
     const out = redactText("from user@example.com to admin@example.org");
 
     expect(out).not.toContain("@");
-    expect(out).toBe(
-      `from ${hashEmail("user@example.com")} to ${hashEmail("admin@example.org")}`
-    );
+    expect(out).toBe(`from ${hashEmail("user@example.com")} to ${hashEmail("admin@example.org")}`);
   });
 
   it("masks a bearer token, so a logged auth header cannot hand out a session", () => {
@@ -54,9 +46,7 @@ describe("redactText", () => {
 
   it("masks password, access_token and secret values, so a form or query dump cannot leak them", () => {
     expect(redactText("password=hunter2 next")).toBe(`password=${REDACTED} next`);
-    expect(redactText("?access_token=xyz789&page=2")).toBe(
-      `?access_token=${REDACTED}&page=2`
-    );
+    expect(redactText("?access_token=xyz789&page=2")).toBe(`?access_token=${REDACTED}&page=2`);
     expect(redactText("secret: s3cr3t")).toBe(`secret: ${REDACTED}`);
   });
 
@@ -82,24 +72,22 @@ describe("redactText", () => {
 describe("redactText, credential shapes", () => {
   it("masks a JSON-quoted password with a space in it, so an error that embeds a request body cannot leak its tail", () => {
     expect(redactText('{"password":"hunter two","page":2}')).toBe(
-      `{"password":${REDACTED},"page":2}`
+      `{"password":${REDACTED},"page":2}`,
     );
   });
 
   it("masks api key, session and credential values, so keys named other than token cannot leak", () => {
     expect(redactText("x-api-key=abc123 api_key: def456")).toBe(
-      `x-api-key=${REDACTED} api_key: ${REDACTED}`
+      `x-api-key=${REDACTED} api_key: ${REDACTED}`,
     );
     expect(redactText("session=s3ss10n")).toBe(`session=${REDACTED}`);
   });
 
   it("masks the whole value of an authorization or cookie header, so a basic credential or a second cookie cannot leak", () => {
     expect(redactText("Authorization: Basic dXNlcjpwYXNz\nnext line")).toBe(
-      `Authorization: ${REDACTED}\nnext line`
+      `Authorization: ${REDACTED}\nnext line`,
     );
-    expect(redactText("cookie: theme=dark; sid=abc123")).toBe(
-      `cookie: ${REDACTED}`
-    );
+    expect(redactText("cookie: theme=dark; sid=abc123")).toBe(`cookie: ${REDACTED}`);
   });
 
   it("masks a bare JWT, so a token pasted into a message cannot leak", () => {
@@ -116,7 +104,7 @@ describe("redactText, credential shapes", () => {
 
     expect(out).not.toContain("fake-row-value");
     expect(out).toBe(
-      `Error: Failed query: select * from user where email = ?\nparams: ${REDACTED}`
+      `Error: Failed query: select * from user where email = ?\nparams: ${REDACTED}`,
     );
   });
 });
@@ -124,14 +112,14 @@ describe("redactText, credential shapes", () => {
 describe("redactPath", () => {
   it("masks a long opaque segment, so a reset token in a path cannot reach a report", () => {
     expect(redactPath("/reset/9f8e7d6c5b4a39281706f5e4d3c2b1a0/confirm")).toBe(
-      `/reset/${REDACTED}/confirm`
+      `/reset/${REDACTED}/confirm`,
     );
   });
 
   it("keeps short ids and long word slugs, so a report still says which page failed", () => {
     expect(redactPath("/admin/users/42")).toBe("/admin/users/42");
     expect(redactPath("/blog/how-to-build-a-starter-kit-fast")).toBe(
-      "/blog/how-to-build-a-starter-kit-fast"
+      "/blog/how-to-build-a-starter-kit-fast",
     );
   });
 });
@@ -153,8 +141,7 @@ describe("redactWithin", () => {
 
 describe("redactText, cost and edge shapes", () => {
   it("masks every bound value even when one holds a line that looks like a stack frame, so a crafted value cannot cut the mask short", () => {
-    const text =
-      "Failed query: select 1\nparams: first\n    at fake (x.ts:1:1),second-fake-value";
+    const text = "Failed query: select 1\nparams: first\n    at fake (x.ts:1:1),second-fake-value";
 
     expect(redactText(text)).toBe(`Failed query: select 1\nparams: ${REDACTED}`);
   });
@@ -167,7 +154,7 @@ describe("redactText, cost and edge shapes", () => {
 
   it("masks the password in a connection string, so a database URL in an error cannot leak it", () => {
     expect(redactText("connect postgres://app:fake-pw@db.example.com/main")).toBe(
-      `connect postgres://app:${REDACTED}@db.example.com/main`
+      `connect postgres://app:${REDACTED}@db.example.com/main`,
     );
   });
 

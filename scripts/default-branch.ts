@@ -1,17 +1,7 @@
 #!/usr/bin/env bun
 import { Either } from "effect";
 import { spawnSync } from "node:child_process";
-import {
-  EXIT_FAIL,
-  EXIT_OK,
-  FIX_LINE,
-  GH_ARGS,
-  GIT_ARGS,
-  GIT_BIN,
-  PARENT_SEGMENT,
-  SAFE_BRANCH_PATTERN,
-  unsafeLine,
-} from "./lib/default-branch-constants";
+import { EXIT_FAIL, EXIT_OK, FIX_LINE, GH_ARGS, GIT_ARGS, GIT_BIN, PARENT_SEGMENT, SAFE_BRANCH_PATTERN, unsafeLine } from "./lib/default-branch-constants";
 import { ghSpawn, type GhResult, type GhRunner } from "./lib/gh";
 import { ORIGIN_PREFIX } from "./lib/migration-constants";
 
@@ -26,8 +16,7 @@ type Found = { kind: "none" } | { kind: "name"; name: string };
 
 const NONE: Found = { kind: "none" };
 
-export const isSafeBranch = (name: string): boolean =>
-  SAFE_BRANCH_PATTERN.test(name) && !name.includes(PARENT_SEGMENT);
+export const isSafeBranch = (name: string): boolean => SAFE_BRANCH_PATTERN.test(name) && !name.includes(PARENT_SEGMENT);
 
 const answer = (result: GhResult, strip: (text: string) => string): Found => {
   if (result.code !== EXIT_OK) return NONE;

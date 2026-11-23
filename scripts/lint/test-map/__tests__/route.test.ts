@@ -10,7 +10,7 @@ const spec = (body: string) => `import { test, expect } from "@playwright/test";
 const tagged = (target: string, assertion = "expect(1).toBe(1);") =>
   spec(
     `test("works", { tag: "@golden" }, async ({ page }) => { await page.goto("${target}"); ${assertion} });\n` +
-      `test("fails well", { tag: "@error" }, async ({ page }) => { await page.goto("${target}"); ${assertion} });`
+      `test("fails well", { tag: "@error" }, async ({ page }) => { await page.goto("${target}"); ${assertion} });`,
   );
 
 const repoWith = (specs: Record<string, string>) =>

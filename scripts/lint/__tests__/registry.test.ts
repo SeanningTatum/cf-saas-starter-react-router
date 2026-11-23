@@ -12,11 +12,15 @@ const ruleFileNames = (): string[] =>
     .sort();
 
 describe("loadRules", () => {
-  it("loads one rule per file in scripts/lint/rules, sorted by id, each id equal to its file name, with no problems", async () => {
-    const { rules, problems } = await loadRules();
+  it(
+    "loads one rule per file in scripts/lint/rules, sorted by id, each id equal to its file name, with no problems",
+    async () => {
+      const { rules, problems } = await loadRules();
 
-    expect(problems).toEqual([]);
-    expect(ruleFileNames().length).toBeGreaterThan(0);
-    expect(rules.map((rule) => rule.id)).toEqual(ruleFileNames());
-  }, loadsEveryRuleTimeoutMs);
+      expect(problems).toEqual([]);
+      expect(ruleFileNames().length).toBeGreaterThan(0);
+      expect(rules.map((rule) => rule.id)).toEqual(ruleFileNames());
+    },
+    loadsEveryRuleTimeoutMs,
+  );
 });

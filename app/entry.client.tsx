@@ -18,6 +18,6 @@ startTransition(() => {
         <HydratedRouter />
       </StrictMode>
     </I18nextProvider>,
-    { onRecoverableError: reportRecoverableError }
+    { onRecoverableError: reportRecoverableError },
   );
 });

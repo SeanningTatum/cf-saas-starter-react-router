@@ -26,17 +26,12 @@ import {
 
 export const hashEmail = (email: string): string =>
   EMAIL_HASH_PREFIX +
-  bytesToHex(sha256(utf8ToBytes(email.trim().toLowerCase()))).slice(
-    0,
-    EMAIL_HASH_LENGTH
-  );
+  bytesToHex(sha256(utf8ToBytes(email.trim().toLowerCase()))).slice(0, EMAIL_HASH_LENGTH);
 
 const withoutQueryParams = (text: string): string => {
   const failure = text.indexOf(QUERY_FAILURE_MARKER);
   const params = failure < 0 ? -1 : text.indexOf(QUERY_PARAMS_MARKER, failure);
-  return params < 0
-    ? text
-    : `${text.slice(0, params + QUERY_PARAMS_MARKER.length)} ${REDACTED}`;
+  return params < 0 ? text : `${text.slice(0, params + QUERY_PARAMS_MARKER.length)} ${REDACTED}`;
 };
 
 const withoutEmails = (text: string): string =>
@@ -49,7 +44,7 @@ export const redactText = (text: string): string =>
       .replace(BEARER_PATTERN, `$1${REDACTED}`)
       .replace(JWT_PATTERN, REDACTED)
       .replace(SECRET_PAIR_PATTERN, `$1${REDACTED}`)
-      .replace(URL_USERINFO_PATTERN, `$1${REDACTED}@`)
+      .replace(URL_USERINFO_PATTERN, `$1${REDACTED}@`),
   );
 
 export const redactPath = (path: string): string =>
@@ -58,17 +53,14 @@ export const redactPath = (path: string): string =>
 export const redactWithin = (text: string, max: number): string =>
   redactText(text.slice(0, max * REDACTION_INPUT_SLACK)).slice(0, max);
 
-const redactEntries = (
-  value: object,
-  ancestors: ReadonlyArray<object>
-): Record<string, unknown> =>
+const redactEntries = (value: object, ancestors: ReadonlyArray<object>): Record<string, unknown> =>
   Object.fromEntries(
     Object.entries(value)
       .slice(0, MAX_REDACTION_ITEMS)
       .map(([key, item]) => [
         redactText(key),
         SENSITIVE_KEY_PATTERN.test(key) ? REDACTED : redactValue(item, ancestors),
-      ])
+      ]),
   );
 
 const redactValue = (value: unknown, ancestors: ReadonlyArray<object>): unknown => {
@@ -82,21 +74,15 @@ const redactValue = (value: unknown, ancestors: ReadonlyArray<object>): unknown 
   if (ancestors.length >= MAX_REDACTION_DEPTH) return TOO_DEEP;
   const within = [...ancestors, value];
   if (Array.isArray(value)) {
-    return value
-      .slice(0, MAX_REDACTION_ITEMS)
-      .map((item) => redactValue(item, within));
+    return value.slice(0, MAX_REDACTION_ITEMS).map((item) => redactValue(item, within));
   }
   if (value instanceof Error) {
-    return redactEntries(
-      { name: value.name, message: value.message, stack: value.stack },
-      within
-    );
+    return redactEntries({ name: value.name, message: value.message, stack: value.stack }, within);
   }
   return redactEntries(value, within);
 };
 
-export const redactFields = (
-  fields: Readonly<Record<string, unknown>>
-): Record<string, unknown> => redactEntries(fields, [fields]);
+export const redactFields = (fields: Readonly<Record<string, unknown>>): Record<string, unknown> =>
+  redactEntries(fields, [fields]);
 
 export const redactDeep = (value: unknown): unknown => redactValue(value, []);

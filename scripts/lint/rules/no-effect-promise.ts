@@ -53,7 +53,7 @@ export const rule: FileRule = {
     {
       name: "the marker does not excuse a call five lines away",
       files: inApp(
-        `// ${MARKER} cannot reject\nexport const a = Effect.promise(() => p());\nconst x = 1;\nconst y = 2;\nexport const b = Effect.promise(() => q());`
+        `// ${MARKER} cannot reject\nexport const a = Effect.promise(() => p());\nconst x = 1;\nconst y = 2;\nexport const b = Effect.promise(() => q());`,
       ),
       expect: "finding",
     },

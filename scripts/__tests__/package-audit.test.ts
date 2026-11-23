@@ -2,17 +2,7 @@ import { describe, it, expect } from "vitest";
 import { Either } from "effect";
 import fs from "node:fs";
 import path from "node:path";
-import {
-  ALLOW_FILE,
-  advisoryId,
-  judge,
-  parseAllow,
-  parseAudit,
-  run,
-  type AllowEntry,
-  type Deps,
-  type Finding,
-} from "../package-audit";
+import { ALLOW_FILE, advisoryId, judge, parseAllow, parseAudit, run, type AllowEntry, type Deps, type Finding } from "../package-audit";
 
 const TODAY = "2026-11-22";
 const finding = (over: Partial<Finding> = {}): Finding => ({
@@ -60,31 +50,33 @@ describe("advisoryId", () => {
 describe("parseAudit", () => {
   it("reads the bun audit --json shape and ignores fields it does not use", () => {
     const parsed = parseAudit(auditJson([{ pkg: "a", severity: "high", ghsa: "GHSA-1111-2222-3333", title: "T" }]));
-    expect(parsed).toEqual(
-      Either.right([{ package: "a", severity: "high", id: "GHSA-1111-2222-3333", title: "T" }]),
-    );
+    expect(parsed).toEqual(Either.right([{ package: "a", severity: "high", id: "GHSA-1111-2222-3333", title: "T" }]));
   });
   it("an empty object is a clean audit, not an error", () => {
     expect(parseAudit("{}")).toEqual(Either.right([]));
   });
-  it.each([["empty stdout", ""], ["plain text", "error: registry unreachable"], ["an array", "[]"], ["wrong value type", '{"a":1}']])(
-    "%s is left, so an audit that did not run cannot pass",
-    (_name, stdout) => {
-      expect(Either.isLeft(parseAudit(stdout))).toBe(true);
-    },
-  );
+  it.each([
+    ["empty stdout", ""],
+    ["plain text", "error: registry unreachable"],
+    ["an array", "[]"],
+    ["wrong value type", '{"a":1}'],
+  ])("%s is left, so an audit that did not run cannot pass", (_name, stdout) => {
+    expect(Either.isLeft(parseAudit(stdout))).toBe(true);
+  });
 });
 
 describe("parseAllow", () => {
   it("decodes a well-formed file", () => {
     expect(parseAllow(JSON.stringify({ allow: [entry()] }))).toEqual(Either.right([entry()]));
   });
-  it.each([["bad json", "{"], ["no allow key", "{}"], ["entry without a reason", '{"allow":[{"id":"x","package":"y"}]}'], ["empty reason", '{"allow":[{"id":"x","package":"y","reason":""}]}']])(
-    "%s is left: a typo in the file must not silently allow nothing or everything",
-    (_name, text) => {
-      expect(Either.isLeft(parseAllow(text))).toBe(true);
-    },
-  );
+  it.each([
+    ["bad json", "{"],
+    ["no allow key", "{}"],
+    ["entry without a reason", '{"allow":[{"id":"x","package":"y"}]}'],
+    ["empty reason", '{"allow":[{"id":"x","package":"y","reason":""}]}'],
+  ])("%s is left: a typo in the file must not silently allow nothing or everything", (_name, text) => {
+    expect(Either.isLeft(parseAllow(text))).toBe(true);
+  });
 });
 
 describe("judge", () => {
@@ -153,10 +145,7 @@ describe("run", () => {
   it("an allowed finding exits 0 and prints the allowed count as a notice", () => {
     const { deps, lines } = depsFor({ stdout: high, allow: JSON.stringify({ allow: [entry()] }) });
     expect(run(deps)).toBe(0);
-    expect(lines).toEqual([
-      `notice: 1 known high or critical findings are allowed in ${ALLOW_FILE}`,
-      "ok: no new high or critical findings",
-    ]);
+    expect(lines).toEqual([`notice: 1 known high or critical findings are allowed in ${ALLOW_FILE}`, "ok: no new high or critical findings"]);
   });
 
   it("a stale entry is a notice with exit 0: upgrading a package must not break the gate", () => {
@@ -195,14 +184,16 @@ describe("run", () => {
     expect(run(deps)).toBe(0);
   });
 
-  it.each([["missing", `{"allow":[{"id":"x","package":"y","reason":"z"}]}`], ["not a date", `{"allow":[{"id":"x","package":"y","reason":"z","expires":"soon"}]}`], ["an impossible date", `{"allow":[{"id":"x","package":"y","reason":"z","expires":"2026-13-45"}]}`], ["a day that month does not have", `{"allow":[{"id":"x","package":"y","reason":"z","expires":"2026-02-30"}]}`]])(
-    "an expires that is %s is a config error, so no entry can allow forever by accident",
-    (_name, allow) => {
-      const { deps, lines } = depsFor({ stdout: "{}", allow });
-      expect(run(deps)).toBe(1);
-      expect(lines[0]).toMatch(/^error: .*malformed/);
-    },
-  );
+  it.each([
+    ["missing", `{"allow":[{"id":"x","package":"y","reason":"z"}]}`],
+    ["not a date", `{"allow":[{"id":"x","package":"y","reason":"z","expires":"soon"}]}`],
+    ["an impossible date", `{"allow":[{"id":"x","package":"y","reason":"z","expires":"2026-13-45"}]}`],
+    ["a day that month does not have", `{"allow":[{"id":"x","package":"y","reason":"z","expires":"2026-02-30"}]}`],
+  ])("an expires that is %s is a config error, so no entry can allow forever by accident", (_name, allow) => {
+    const { deps, lines } = depsFor({ stdout: "{}", allow });
+    expect(run(deps)).toBe(1);
+    expect(lines[0]).toMatch(/^error: .*malformed/);
+  });
 
   it("a severity in capitals still blocks", () => {
     const { deps, lines } = depsFor({ stdout: auditJson([{ pkg: "a", severity: "HIGH", ghsa: "GHSA-1111-2222-3333" }]) });

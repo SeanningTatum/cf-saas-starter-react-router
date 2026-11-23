@@ -90,7 +90,7 @@ describe("makeRequestContext", () => {
 
   it("uses a random id with neither header, and keeps the path without its query, so the query string, which can carry tokens, is never logged", () => {
     const ctx = makeRequestContext(
-      new Request("https://app.test/reset?token=secret", { method: "POST" })
+      new Request("https://app.test/reset?token=secret", { method: "POST" }),
     );
     expect(ctx.requestId).toMatch(/^[0-9a-f]{32}$/);
     expect(ctx.method).toBe("POST");
@@ -166,10 +166,7 @@ describe("setRequestUser", () => {
       Effect.gen(function* () {
         yield* setRequestUser("u1");
         return yield* Effect.currentSpan;
-      }).pipe(
-        Effect.withSpan("unit.span"),
-        Effect.provide(Layer.succeed(CurrentRequest, ctx))
-      )
+      }).pipe(Effect.withSpan("unit.span"), Effect.provide(Layer.succeed(CurrentRequest, ctx))),
     );
 
     expect(ctx.userId).toBe("u1");
@@ -179,15 +176,12 @@ describe("setRequestUser", () => {
   it("is a no-op without a CurrentRequest or without an id", () => {
     const ctx = context();
     const spanWithout = Effect.runSync(
-      setRequestUser("u1").pipe(
-        Effect.zipRight(Effect.currentSpan),
-        Effect.withSpan("unit.span")
-      )
+      setRequestUser("u1").pipe(Effect.zipRight(Effect.currentSpan), Effect.withSpan("unit.span")),
     );
     expect(spanWithout.attributes.has("user.id")).toBe(false);
 
     Effect.runSync(
-      setRequestUser(undefined).pipe(Effect.provide(Layer.succeed(CurrentRequest, ctx)))
+      setRequestUser(undefined).pipe(Effect.provide(Layer.succeed(CurrentRequest, ctx))),
     );
     expect(ctx).not.toHaveProperty("userId");
   });

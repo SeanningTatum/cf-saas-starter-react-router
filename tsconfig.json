@@ -1,9 +1,6 @@
 {
   "files": [],
-  "references": [
-    { "path": "./tsconfig.node.json" },
-    { "path": "./tsconfig.cloudflare.json" }
-  ],
+  "references": [{ "path": "./tsconfig.node.json" }, { "path": "./tsconfig.cloudflare.json" }],
   "compilerOptions": {
     "checkJs": true,
     "verbatimModuleSyntax": true,
@@ -15,9 +12,7 @@
     "noImplicitOverride": true,
     "noFallthroughCasesInSwitch": true,
     "noEmit": true,
-    "types": [
-        "./worker-configuration.d.ts"
-    ],
+    "types": ["./worker-configuration.d.ts"],
     "paths": {
       "@/*": ["./app/*"]
     }

@@ -5,7 +5,10 @@ import { evaluate, jobsOf, jobsThatRun } from "./helpers/workflow-jobs";
 
 const DIR = path.join(__dirname, "..", "..", ".github", "workflows");
 const read = (f: string) => fs.readFileSync(path.join(DIR, f), "utf-8");
-const codeLines = (f: string) => read(f).split("\n").filter((l) => !/^\s*#/.test(l));
+const codeLines = (f: string) =>
+  read(f)
+    .split("\n")
+    .filter((l) => !/^\s*#/.test(l));
 
 describe("size and Lighthouse on PRs (#159)", () => {
   const ci = jobsOf(read("ci.yml"));

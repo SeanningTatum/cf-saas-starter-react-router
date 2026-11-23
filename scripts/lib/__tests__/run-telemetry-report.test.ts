@@ -21,14 +21,16 @@ const LEDGER = [
 
 const phased = (phase: string): RunFile => mergeLedger(emptyRunFile("demo"), "w", [call({ phase })]);
 
-const recorded =(slug: string): RunFile => mergeLedger(emptyRunFile(slug), "ship-feature", LEDGER);
+const recorded = (slug: string): RunFile => mergeLedger(emptyRunFile(slug), "ship-feature", LEDGER);
 
 const ingested = (slug: string): RunFile => {
   const file = recorded(slug);
   const calls = file.workflows["ship-feature"]?.calls ?? [];
   return {
     ...file,
-    workflows: { "ship-feature": { calls: calls.map((c) => ({ ...c, tokens: { in: 100, out: 40, cache_read: 0, cache_write: 0 }, seconds: 5, ran_model: "m" })) } },
+    workflows: {
+      "ship-feature": { calls: calls.map((c) => ({ ...c, tokens: { in: 100, out: 40, cache_read: 0, cache_write: 0 }, seconds: 5, ran_model: "m" })) },
+    },
   };
 };
 

@@ -8,7 +8,21 @@
 import { describe, expect, it } from "vitest";
 import { dryRun, labels, ledgerOf, callShape, rowShape, RUN_OK, type AnswerRule, type DryRunResult } from "../../lib/workflow-dry-run";
 
-const IDS = ["problem", "user", "fit", "duplicate", "acceptance", "non_goals", "metric", "ui_states", "data", "roles", "i18n_analytics", "errors", "non_negotiables"];
+const IDS = [
+  "problem",
+  "user",
+  "fit",
+  "duplicate",
+  "acceptance",
+  "non_goals",
+  "metric",
+  "ui_states",
+  "data",
+  "roles",
+  "i18n_analytics",
+  "errors",
+  "non_negotiables",
+];
 const BANDS = ["typical", "edge", "adversarial", "refuse"];
 const MENTION_FIELDS = ["amended", "amended.body", "questions", "items.metric.note", "items.*.note"];
 
@@ -233,15 +247,30 @@ describe("eval-plan-feature: scoring", () => {
     ["a missing checklist id", "case-10", edit((a) => (a.items = a.items.filter((it) => it.id !== "errors"))), /errors missing from items/],
     ["a filled item with an unknown source", "case-7", edit((a) => (item(a, "fit").source = "features/nope")), /fit filled with unknown source/],
     ["a filled item with no source", "case-7", edit((a) => delete item(a, "fit").source), /fit filled with unknown source/],
-    ["a filled item citing one known and one unknown source", "case-8", edit((a) => (item(a, "data").source = "product; made-up")), /data filled with unknown source/],
-    ["a mention that is absent", "case-3", edit((a) => {
-      if (a.amended) a.amended.body = "nothing here";
-    }), /amended.body should mention/],
-    ["an items.<id>.note mention found only in another item's note", "case-5", edit((a) => {
-      const m = item(a, "metric");
-      item(a, "problem").note += m.note;
-      m.note = "plain";
-    }), /items.metric.note should mention/],
+    [
+      "a filled item citing one known and one unknown source",
+      "case-8",
+      edit((a) => (item(a, "data").source = "product; made-up")),
+      /data filled with unknown source/,
+    ],
+    [
+      "a mention that is absent",
+      "case-3",
+      edit((a) => {
+        if (a.amended) a.amended.body = "nothing here";
+      }),
+      /amended.body should mention/,
+    ],
+    [
+      "an items.<id>.note mention found only in another item's note",
+      "case-5",
+      edit((a) => {
+        const m = item(a, "metric");
+        item(a, "problem").note += m.note;
+        m.note = "plain";
+      }),
+      /items.metric.note should mention/,
+    ],
   ])("%s fails that case", async (_name, id, mutate, reason) => {
     const r = await dryRun("eval-plan-feature", { args: {}, answers: answers(CASES, { [id]: mutate }) });
     const bad = failing(r);
@@ -288,7 +317,13 @@ describe("eval-plan-feature: run ledger", () => {
 
   it("a run that stops at Load makes no run:record call: there is nothing worth a file yet", async () => {
     const dead = await dryRun("eval-plan-feature", { args: {}, answers: [["load metadata", null]] });
-    const differs = await dryRun("eval-plan-feature", { args: {}, answers: [["load metadata", { cases: CASES, sources: SOURCES }], ["verify loaded copy", { identical: false, diff: "x" }]] });
+    const differs = await dryRun("eval-plan-feature", {
+      args: {},
+      answers: [
+        ["load metadata", { cases: CASES, sources: SOURCES }],
+        ["verify loaded copy", { identical: false, diff: "x" }],
+      ],
+    });
     const none = await dryRun("eval-plan-feature", { args: { only: ["no-such-case"] }, answers: answers() });
     for (const r of [dead, differs, none]) expect(labels(r.calls).filter((l) => l.startsWith("run:record"))).toEqual([]);
   });

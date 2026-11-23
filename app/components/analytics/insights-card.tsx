@@ -1,12 +1,6 @@
 import { Lightbulb } from "lucide-react";
 
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 
 export interface Insight {
@@ -20,11 +14,7 @@ export interface InsightsCardProps {
   insights: Insight[];
 }
 
-export function InsightsCard({
-  title = "Insights",
-  description,
-  insights,
-}: InsightsCardProps) {
+export function InsightsCard({ title = "Insights", description, insights }: InsightsCardProps) {
   const getInsightStyle = (type: Insight["type"]) => {
     switch (type) {
       case "positive":

@@ -20,14 +20,9 @@ export const loader = async ({ context, request }: Route.LoaderArgs) => {
   const roleParam = url.searchParams.get("role");
   const statusParam = url.searchParams.get("status");
 
-  const role =
-    roleParam && roleParam !== "all" && isRole(roleParam)
-      ? roleParam
-      : undefined;
+  const role = roleParam && roleParam !== "all" && isRole(roleParam) ? roleParam : undefined;
   const status =
-    statusParam && statusParam !== "all" && isStatus(statusParam)
-      ? statusParam
-      : undefined;
+    statusParam && statusParam !== "all" && isStatus(statusParam) ? statusParam : undefined;
 
   const response = await context.trpc.admin.getUsers({
     page: page - 1,

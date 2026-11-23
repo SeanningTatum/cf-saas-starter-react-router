@@ -22,8 +22,7 @@ export const DEAD_CODE_FIX = {
   duplicates: "The same value is exported under two names. Do this instead: keep one.",
   enumMembers: "Nothing reads this enum member. Do this instead: delete it.",
   namespaceMembers: "Nothing reads this namespace member. Do this instead: delete it.",
-  optionalPeerDependencies:
-    "This optional peer package is imported but not in package.json. Do this instead: `bun add` it, or guard the import.",
+  optionalPeerDependencies: "This optional peer package is imported but not in package.json. Do this instead: `bun add` it, or guard the import.",
   subpaths: "This package.json `imports` entry points at nothing that is used. Do this instead: delete the entry.",
   catalog: "No package uses this catalog entry. Do this instead: delete the entry.",
   catalogReferences: "This catalog reference names an entry that does not exist. Do this instead: add the entry, or pin a version.",

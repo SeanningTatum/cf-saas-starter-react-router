@@ -15,7 +15,14 @@ const report: Report = {
       suites: [
         {
           specs: [
-            spec("signup → dashboard", ["golden"], [{ status: "failed", video: "/r/try1.webm" }, { status: "passed", video: "/r/try2.webm" }]),
+            spec(
+              "signup → dashboard",
+              ["golden"],
+              [
+                { status: "failed", video: "/r/try1.webm" },
+                { status: "passed", video: "/r/try2.webm" },
+              ],
+            ),
             spec("login rejects bad credentials", ["error"], [{ status: "passed", video: "/r/err.webm" }]),
             spec("pillars render", [], [{ status: "passed", video: "/r/home.webm" }]),
           ],
@@ -97,8 +104,18 @@ describe("run", () => {
     const long = "a".repeat(60);
     const twins: Report = {
       suites: [
-        { specs: [spec("signup", ["golden"], [{ status: "passed", video: "/a.webm" }]), spec(`${long} one`, ["golden"], [{ status: "passed", video: "/c.webm" }])] },
-        { specs: [spec("signup", ["golden"], [{ status: "passed", video: "/b.webm" }]), spec(`${long} two`, ["golden"], [{ status: "passed", video: "/d.webm" }])] },
+        {
+          specs: [
+            spec("signup", ["golden"], [{ status: "passed", video: "/a.webm" }]),
+            spec(`${long} one`, ["golden"], [{ status: "passed", video: "/c.webm" }]),
+          ],
+        },
+        {
+          specs: [
+            spec("signup", ["golden"], [{ status: "passed", video: "/b.webm" }]),
+            spec(`${long} two`, ["golden"], [{ status: "passed", video: "/d.webm" }]),
+          ],
+        },
       ],
     };
     const { deps, copies } = stub(0, JSON.stringify(twins));

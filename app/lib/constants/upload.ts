@@ -34,16 +34,13 @@ export const ALLOWED_UPLOAD_CONTENT_TYPES = [
   "application/pdf",
 ] as const;
 
-export type AllowedUploadContentType =
-  (typeof ALLOWED_UPLOAD_CONTENT_TYPES)[number];
+export type AllowedUploadContentType = (typeof ALLOWED_UPLOAD_CONTENT_TYPES)[number];
 
 export const UPLOAD_TYPE_AND_SIZE_MESSAGE = `File must be one of [${ALLOWED_UPLOAD_CONTENT_TYPES.join(
-  ", "
+  ", ",
 )}] and at most ${MAX_UPLOAD_SIZE_BYTES / BYTES_PER_MEGABYTE}MB`;
 
-export const isAllowedUploadContentType = (
-  value: string
-): value is AllowedUploadContentType =>
+export const isAllowedUploadContentType = (value: string): value is AllowedUploadContentType =>
   (ALLOWED_UPLOAD_CONTENT_TYPES as readonly string[]).includes(value);
 
 export const MAGIC_BYTES_SNIFF_LENGTH = 16;
@@ -59,10 +56,7 @@ const PDF_SIGNATURE_PERCENT_PDF = [0x25, 0x50, 0x44, 0x46];
 const startsWith = (bytes: Uint8Array, signature: number[], offset = 0) =>
   signature.every((b, i) => bytes[offset + i] === b);
 
-export const matchesMagicBytes = (
-  type: AllowedUploadContentType,
-  bytes: Uint8Array
-): boolean => {
+export const matchesMagicBytes = (type: AllowedUploadContentType, bytes: Uint8Array): boolean => {
   switch (type) {
     case "image/png":
       return startsWith(bytes, PNG_SIGNATURE);
@@ -85,5 +79,9 @@ export const UPLOAD_FAILURE_UNREACHABLE = { reason: "unreachable" } as const;
 
 export const declaresOversizedUpload = (headers: Headers): boolean => {
   const declared = headers.get(CONTENT_LENGTH_HEADER)?.trim();
-  return declared !== undefined && DECIMAL_DIGITS.test(declared) && Number(declared) > MAX_UPLOAD_REQUEST_BYTES;
+  return (
+    declared !== undefined &&
+    DECIMAL_DIGITS.test(declared) &&
+    Number(declared) > MAX_UPLOAD_REQUEST_BYTES
+  );
 };

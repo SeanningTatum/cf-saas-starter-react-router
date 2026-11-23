@@ -25,51 +25,55 @@ describe("Analytics service", () => {
     return { batches, adapter };
   };
 
-  it.effect("buffers captures and flushes them as one batch when the scope closes, with the injected clock: never one request per event, never before dispose, never Date.now()", () =>
-    Effect.gen(function* () {
-      const { batches, adapter } = recording();
-      yield* TestClock.setTime(Date.parse("2026-03-04T05:06:07.000Z"));
-      yield* Effect.scoped(
-        Effect.gen(function* () {
-          const a = yield* Analytics;
-          yield* a.capture(banned);
-          yield* a.identify("admin-1", { plan: "pro" });
-          expect(batches).toHaveLength(0);
-        }).pipe(Effect.provide(AnalyticsFrom(adapter)))
-      );
-      expect(batches).toHaveLength(1);
-      expect(batches[0]?.map((e) => e.event)).toEqual(["user_banned", "$identify"]);
-      expect(batches[0]?.[0]?.timestamp).toBe("2026-03-04T05:06:07.000Z");
-      expect(batches[0]?.[1]?.properties).toEqual({ $set: { plan: "pro" } });
-    })
-  );
-
-  it.effect("sends nothing when no event was captured, so a request never makes an empty POST to the provider", () =>
-    Effect.gen(function* () {
-      const { batches, adapter } = recording();
-      yield* Effect.scoped(
-        Analytics.pipe(Effect.provide(AnalyticsFrom(adapter)))
-      );
-      expect(batches).toHaveLength(0);
-    })
-  );
-
-  it.effect("swallows a delivery failure or an adapter defect: the scope still closes cleanly, so a provider outage fails neither the request nor the dispose", () =>
-    Effect.gen(function* () {
-      for (const send of [
-        () => Effect.fail(new AnalyticsDeliveryError({ provider: "bad", status: 500 })),
-        () => Effect.die("boom"),
-      ]) {
-        const exit = yield* Effect.exit(
-          Effect.scoped(
-            Effect.gen(function* () {
-              yield* (yield* Analytics).capture(banned);
-            }).pipe(Effect.provide(AnalyticsFrom({ name: "bad", send })))
-          )
+  it.effect(
+    "buffers captures and flushes them as one batch when the scope closes, with the injected clock: never one request per event, never before dispose, never Date.now()",
+    () =>
+      Effect.gen(function* () {
+        const { batches, adapter } = recording();
+        yield* TestClock.setTime(Date.parse("2026-03-04T05:06:07.000Z"));
+        yield* Effect.scoped(
+          Effect.gen(function* () {
+            const a = yield* Analytics;
+            yield* a.capture(banned);
+            yield* a.identify("admin-1", { plan: "pro" });
+            expect(batches).toHaveLength(0);
+          }).pipe(Effect.provide(AnalyticsFrom(adapter))),
         );
-        expect(Exit.isSuccess(exit)).toBe(true);
-      }
-    })
+        expect(batches).toHaveLength(1);
+        expect(batches[0]?.map((e) => e.event)).toEqual(["user_banned", "$identify"]);
+        expect(batches[0]?.[0]?.timestamp).toBe("2026-03-04T05:06:07.000Z");
+        expect(batches[0]?.[1]?.properties).toEqual({ $set: { plan: "pro" } });
+      }),
+  );
+
+  it.effect(
+    "sends nothing when no event was captured, so a request never makes an empty POST to the provider",
+    () =>
+      Effect.gen(function* () {
+        const { batches, adapter } = recording();
+        yield* Effect.scoped(Analytics.pipe(Effect.provide(AnalyticsFrom(adapter))));
+        expect(batches).toHaveLength(0);
+      }),
+  );
+
+  it.effect(
+    "swallows a delivery failure or an adapter defect: the scope still closes cleanly, so a provider outage fails neither the request nor the dispose",
+    () =>
+      Effect.gen(function* () {
+        for (const send of [
+          () => Effect.fail(new AnalyticsDeliveryError({ provider: "bad", status: 500 })),
+          () => Effect.die("boom"),
+        ]) {
+          const exit = yield* Effect.exit(
+            Effect.scoped(
+              Effect.gen(function* () {
+                yield* (yield* Analytics).capture(banned);
+              }).pipe(Effect.provide(AnalyticsFrom({ name: "bad", send }))),
+            ),
+          );
+          expect(Exit.isSuccess(exit)).toBe(true);
+        }
+      }),
   );
 });
 
@@ -78,8 +82,8 @@ describe("selectAdapter", () => {
     expect(selectAdapter({})).toBe(noopAdapter);
     expect(selectAdapter({ ANALYTICS_PROVIDER: "posthog" })).toBe(noopAdapter);
     expect(selectAdapter({ ANALYTICS_PROVIDER: "console" })).toBe(consoleAdapter);
-    expect(
-      selectAdapter({ ANALYTICS_PROVIDER: "posthog", POSTHOG_API_KEY: "k" }).name
-    ).toBe("posthog");
+    expect(selectAdapter({ ANALYTICS_PROVIDER: "posthog", POSTHOG_API_KEY: "k" }).name).toBe(
+      "posthog",
+    );
   });
 });

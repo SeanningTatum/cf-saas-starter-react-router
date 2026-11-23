@@ -33,8 +33,8 @@ const exportFrom = async (url: string, program: Effect.Effect<unknown, unknown>)
     observabilityLayer(
       { OTEL_EXPORTER_OTLP_ENDPOINT: "http://localhost:4318" },
       makeRequestContext(new Request(url)),
-      fetchFn
-    )
+      fetchFn,
+    ),
   );
   await runtime.runPromiseExit(program);
   await runtime.dispose();
@@ -60,8 +60,8 @@ describe("exported spans", () => {
     const spans = await exportFrom(
       "https://app.test/admin",
       Effect.fail(new Error("Failed query: select 1\nparams: fake-row-value")).pipe(
-        Effect.withSpan("db.query user")
-      )
+        Effect.withSpan("db.query user"),
+      ),
     );
 
     const failed = spans.find((span) => span.name === "db.query user");
@@ -73,7 +73,7 @@ describe("exported spans", () => {
   it("mask an opaque segment in url.path, so a token in a path cannot reach the trace backend", async () => {
     const spans = await exportFrom(
       "https://app.test/reset/9f8e7d6c5b4a39281706f5e4d3c2b1a0",
-      Effect.void
+      Effect.void,
     );
 
     const request = spans.find((span) => span.name === "http.request");
@@ -87,8 +87,8 @@ describe("span attributes that text patterns cannot judge", () => {
     const spans = await exportFrom(
       "https://app.test/",
       Effect.annotateCurrentSpan("upload.token", "plain-value").pipe(
-        Effect.withSpan("upload.store_file")
-      )
+        Effect.withSpan("upload.store_file"),
+      ),
     );
 
     expect(JSON.stringify(spans)).not.toContain("plain-value");
@@ -115,7 +115,10 @@ describe("span attributes that text patterns cannot judge", () => {
 
 describe("object attributes", () => {
   it("mask a nested key before the value is printed, so a session inside an object attribute cannot reach the trace backend", () => {
-    const printed = toOtlpValue({ session: { id: "plain-value" }, user: { email: "user@example.com" } });
+    const printed = toOtlpValue({
+      session: { id: "plain-value" },
+      user: { email: "user@example.com" },
+    });
 
     expect(printed).toEqual({
       stringValue: `{"session":"${REDACTED}","user":{"email":"${hashEmail("user@example.com")}"}}`,
@@ -127,8 +130,8 @@ describe("object attributes", () => {
       "https://app.test/",
       Effect.logInfo("event").pipe(
         Effect.annotateLogs("details", { token: "plain-value" }),
-        Effect.withSpan("upload.store_file")
-      )
+        Effect.withSpan("upload.store_file"),
+      ),
     );
 
     expect(JSON.stringify(spans)).not.toContain("plain-value");

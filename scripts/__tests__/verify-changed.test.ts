@@ -38,7 +38,10 @@ describe("baseFor", () => {
   });
 
   it("with no name it follows the linter's order, GITHUB_BASE_REF first in CI", () => {
-    const { deps } = fake({ "rev-parse --verify --quiet origin/v3/wave-1^{commit}": SHA, "merge-base HEAD origin/v3/wave-1": SHA }, { GITHUB_BASE_REF: "v3/wave-1" });
+    const { deps } = fake(
+      { "rev-parse --verify --quiet origin/v3/wave-1^{commit}": SHA, "merge-base HEAD origin/v3/wave-1": SHA },
+      { GITHUB_BASE_REF: "v3/wave-1" },
+    );
     expect(baseFor(deps, undefined)).toEqual({ found: true, sha: SHA, from: "GITHUB_BASE_REF, v3/wave-1" });
   });
 });

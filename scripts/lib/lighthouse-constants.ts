@@ -35,8 +35,7 @@ export const lighthouseArgs = (cli: string, url: string, outputPath: string, coo
 ];
 export const REPORT_JSON_SUFFIX = ".report.json";
 export const DEV_VARS_FILE = ".dev.vars";
-export const devVars = (port: number, secret: string): string =>
-  `BETTER_AUTH_URL=${LOCAL_HOST}:${port}\nBETTER_AUTH_SECRET=${secret}\n`;
+export const devVars = (port: number, secret: string): string => `BETTER_AUTH_URL=${LOCAL_HOST}:${port}\nBETTER_AUTH_SECRET=${secret}\n`;
 export const SECRET_BYTES = 32;
 export const SERVER_WAIT_MS = 120000;
 export const SERVER_POLL_MS = 1000;

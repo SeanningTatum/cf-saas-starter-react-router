@@ -87,21 +87,28 @@ describe("browser report route", () => {
   });
 
   it.each([
-    [413, JSON.stringify({ ...goodReport(), message: "m".repeat(MAX_REPORT_BODY_BYTES) }), "application/json"],
+    [
+      413,
+      JSON.stringify({ ...goodReport(), message: "m".repeat(MAX_REPORT_BODY_BYTES) }),
+      "application/json",
+    ],
     [415, JSON.stringify(goodReport()), "text/plain"],
     [400, "{not json", "application/json"],
-  ])("passes a %i through with an empty body and no capture, so that a bad post is never reported as an error", async (status, body, contentType) => {
-    const { send, captures } = await freshRoute();
-    const response = await send(post(body, contentType));
-    expect(response.status).toBe(status);
-    expect(await response.text()).toBe("");
-    expect(captures).toEqual([]);
-  });
+  ])(
+    "passes a %i through with an empty body and no capture, so that a bad post is never reported as an error",
+    async (status, body, contentType) => {
+      const { send, captures } = await freshRoute();
+      const response = await send(post(body, contentType));
+      expect(response.status).toBe(status);
+      expect(await response.text()).toBe("");
+      expect(captures).toEqual([]);
+    },
+  );
 
   it("logs only the status and reason of a rejected body, so that personal data in a bad post never reaches a log line", async () => {
     const { send, loggers } = await freshRoute();
     const spies = (["trace", "debug", "info", "warn", "error", "fatal"] as const).map((level) =>
-      vi.spyOn(loggers.server, level)
+      vi.spyOn(loggers.server, level),
     );
     const marker = "user@example.com";
     await send(post(`{"message": "${marker}"`, "application/json"));

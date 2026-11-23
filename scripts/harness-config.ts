@@ -13,15 +13,7 @@ import {
   VERB_GET,
   VERB_SHOW,
 } from "./lib/harness-config-constants";
-import {
-  configChecksum,
-  HARNESS_ROOT,
-  loadHarnessConfig,
-  readDiskFile,
-  shownConfig,
-  type HarnessConfig,
-  type LoadDeps,
-} from "./lib/harness-config";
+import { configChecksum, HARNESS_ROOT, loadHarnessConfig, readDiskFile, shownConfig, type HarnessConfig, type LoadDeps } from "./lib/harness-config";
 
 export type Deps = LoadDeps;
 
@@ -46,8 +38,7 @@ function lookup(config: HarnessConfig, dotted: string): { found: true; value: un
   return { found: true, value: current };
 }
 
-const isTextList = (value: unknown): value is string[] =>
-  Array.isArray(value) && value.every((item) => typeof item === "string");
+const isTextList = (value: unknown): value is string[] => Array.isArray(value) && value.every((item) => typeof item === "string");
 
 function printValue(value: unknown): string[] {
   if (typeof value === "string" || typeof value === "number") return [String(value)];

@@ -10,10 +10,7 @@ export interface AuthApiShape {
   readonly turnstileSiteKey: string | null;
 }
 
-export class AuthApi extends Context.Tag("app/AuthApi")<
-  AuthApi,
-  AuthApiShape
->() {}
+export class AuthApi extends Context.Tag("app/AuthApi")<AuthApi, AuthApiShape>() {}
 
 export const AuthApiLive = (options: AuthRuntimeOptions) =>
   Layer.effect(
@@ -23,9 +20,8 @@ export const AuthApiLive = (options: AuthRuntimeOptions) =>
       const config = yield* resolveAuthConfig(env, options);
       const auth = yield* Effect.try({
         try: () => createAuth(env.DATABASE, config),
-        catch: (cause) =>
-          new ExternalServiceError({ service: "BetterAuth", cause }),
+        catch: (cause) => new ExternalServiceError({ service: "BetterAuth", cause }),
       });
       return { auth, api: auth.api, turnstileSiteKey: config.turnstile?.siteKey ?? null };
-    })
+    }),
   );

@@ -41,9 +41,9 @@ describe("redactFields, sensitive keys", () => {
   });
 
   it("masks the whole value of a sensitive key even when it is an object, so the parts of a credential cannot leak one by one", () => {
-    expect(
-      redactFields({ authorization: { scheme: "Basic", value: "plain-value" } })
-    ).toEqual({ authorization: REDACTED });
+    expect(redactFields({ authorization: { scheme: "Basic", value: "plain-value" } })).toEqual({
+      authorization: REDACTED,
+    });
   });
 
   it("masks sensitive keys three levels down, so a credential inside a nested request dump cannot leak", () => {
@@ -53,17 +53,15 @@ describe("redactFields, sensitive keys", () => {
   });
 
   it("masks sensitive keys in each object of an array, so a list of headers cannot leak", () => {
-    expect(
-      redactFields({ list: [plainValues(), { name: "kept" }] })
-    ).toEqual({ list: [maskedValues(), { name: "kept" }] });
+    expect(redactFields({ list: [plainValues(), { name: "kept" }] })).toEqual({
+      list: [maskedValues(), { name: "kept" }],
+    });
   });
 });
 
 describe("redactFields, values", () => {
   it("hashes an email and masks a bearer token under an innocent key, so a value that names no secret still cannot leak one", () => {
-    expect(
-      redactFields({ note: "from user@example.com", header: "Bearer abc" })
-    ).toEqual({
+    expect(redactFields({ note: "from user@example.com", header: "Bearer abc" })).toEqual({
       note: `from ${hashEmail("user@example.com")}`,
       header: `Bearer ${REDACTED}`,
     });
@@ -149,7 +147,9 @@ describe("redactFields, shapes", () => {
 
 describe("redactFields, size and odd values", () => {
   it("writes at most the capped number of items of an array, so a huge list in a log call cannot spend the request's memory", () => {
-    const out = redactFields({ ids: Array.from({ length: MAX_REDACTION_ITEMS + 50 }, (_, i) => i) });
+    const out = redactFields({
+      ids: Array.from({ length: MAX_REDACTION_ITEMS + 50 }, (_, i) => i),
+    });
 
     expect(out.ids).toHaveLength(MAX_REDACTION_ITEMS);
   });
@@ -211,10 +211,8 @@ describe("redactFields, property names", () => {
   });
 
   it("leaves an ordinary key as it is, so log search by field name still works", () => {
-    expect(Object.keys(redactFields({ requestId: "r1", durationMs: 4, "db.entity": "user" }))).toEqual([
-      "requestId",
-      "durationMs",
-      "db.entity",
-    ]);
+    expect(
+      Object.keys(redactFields({ requestId: "r1", durationMs: 4, "db.entity": "user" })),
+    ).toEqual(["requestId", "durationMs", "db.entity"]);
   });
 });

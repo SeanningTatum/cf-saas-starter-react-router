@@ -16,8 +16,7 @@ export const i18nServer = new RemixI18Next({
   },
   plugins: [
     resourcesToBackend(
-      (language: string, namespace: string) =>
-        import(`../locales/${language}/${namespace}.json`)
+      (language: string, namespace: string) => import(`../locales/${language}/${namespace}.json`),
     ),
   ],
 });

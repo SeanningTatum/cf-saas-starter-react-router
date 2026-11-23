@@ -1,10 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { run } from "../run-telemetry";
 import { ledgerChecksum } from "../lib/run-telemetry";
-import {
-  ledgerChecksum as workflowChecksum,
-  runRecordCommand,
-} from "../../.claude/workflow-src/lib.js";
+import { ledgerChecksum as workflowChecksum, runRecordCommand } from "../../.claude/workflow-src/lib.js";
 import { RUN_PATH, call, err, ledgerText, memory, runFile, stored, tokens } from "./fixtures/run-telemetry/helpers";
 
 describe("record", () => {
@@ -186,4 +183,3 @@ describe("workflow library cross-check", () => {
     expect(calls[1]).toMatchObject({ attempt: 2, outcome: "empty", model: "sonnet" });
   });
 });
-

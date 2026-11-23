@@ -23,7 +23,7 @@ describe("turnstile constants", () => {
         TURNSTILE_TEST_SECRET_KEY,
         TURNSTILE_TEST_ALWAYS_FAIL_SITE_KEY,
         TURNSTILE_TEST_ALWAYS_FAIL_SECRET_KEY,
-      ])
+      ]),
     );
   });
 });

@@ -25,6 +25,6 @@ export const dbHealth = adminProcedure.query(({ ctx }) =>
       };
       return health;
     }),
-    { span: "trpc.admin.dbHealth" }
-  )
+    { span: "trpc.admin.dbHealth" },
+  ),
 );

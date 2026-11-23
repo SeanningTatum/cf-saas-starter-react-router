@@ -27,7 +27,7 @@ const callAuth = (path: string, headers: Headers, body: unknown): Promise<Respon
         "content-type": "application/json",
       },
       body: JSON.stringify(body),
-    })
+    }),
   );
 
 const rowOf = (userId: string) =>
@@ -36,13 +36,12 @@ const rowOf = (userId: string) =>
       `SELECT u.role, u.banned, u.name, u.email, u.email_verified AS emailVerified,
               (SELECT count(*) FROM session s WHERE s.user_id = u.id) AS sessions,
               (SELECT a.password FROM account a WHERE a.user_id = u.id) AS password
-         FROM user u WHERE u.id = ?`
+         FROM user u WHERE u.id = ?`,
     )
     .bind(userId)
     .first();
 
-const sessionRows = async (userId: string) =>
-  (await rowOf(userId))?.sessions;
+const sessionRows = async (userId: string) => (await rowOf(userId))?.sessions;
 
 type Action = { readonly path: string; readonly body: (userId: string) => unknown };
 
@@ -74,15 +73,18 @@ afterAll(async () => {
 });
 
 describe("Better Auth's admin endpoints follow the repository's rule", { timeout: 60_000 }, () => {
-  it.each(ACTIONS)("$path on another admin is refused with 403 and the admin's row stays as it was", async ({ path, body }) => {
-    const target = await freshAdmin();
-    const before = await rowOf(target.userId);
+  it.each(ACTIONS)(
+    "$path on another admin is refused with 403 and the admin's row stays as it was",
+    async ({ path, body }) => {
+      const target = await freshAdmin();
+      const before = await rowOf(target.userId);
 
-    const res = await callAuth(path, admin.headers, body(target.userId));
+      const res = await callAuth(path, admin.headers, body(target.userId));
 
-    expect(await refusalOf(res)).toEqual(PROTECTED);
-    expect(await rowOf(target.userId)).toEqual(before);
-  });
+      expect(await refusalOf(res)).toEqual(PROTECTED);
+      expect(await rowOf(target.userId)).toEqual(before);
+    },
+  );
 
   it("/admin/ban-user on the caller themself is refused with 403 and their row stays as it was", async () => {
     const self = await freshAdmin();
@@ -118,7 +120,9 @@ describe("Better Auth's admin endpoints follow the repository's rule", { timeout
     )?.token;
     const before = await sessionRows(target.userId);
 
-    const res = await callAuth("/admin/revoke-user-session", admin.headers, { sessionToken: token });
+    const res = await callAuth("/admin/revoke-user-session", admin.headers, {
+      sessionToken: token,
+    });
 
     expect(await refusalOf(res)).toEqual(PROTECTED);
     expect(await sessionRows(target.userId)).toBe(before);
@@ -126,7 +130,10 @@ describe("Better Auth's admin endpoints follow the repository's rule", { timeout
 
   it("a user whose role list includes admin is protected too", async () => {
     const target = await freshUser();
-    await app.db.prepare("UPDATE user SET role = 'user,admin' WHERE id = ?").bind(target.userId).run();
+    await app.db
+      .prepare("UPDATE user SET role = 'user,admin' WHERE id = ?")
+      .bind(target.userId)
+      .run();
 
     const res = await callAuth("/admin/ban-user", admin.headers, { userId: target.userId });
 
@@ -139,8 +146,12 @@ describe("Better Auth's admin endpoints follow the repository's rule", { timeout
     const adminTarget = await freshAdmin();
     const plainTarget = await freshUser();
 
-    const forAdmin = await callAuth("/admin/ban-user", caller.headers, { userId: adminTarget.userId });
-    const forPlain = await callAuth("/admin/ban-user", caller.headers, { userId: plainTarget.userId });
+    const forAdmin = await callAuth("/admin/ban-user", caller.headers, {
+      userId: adminTarget.userId,
+    });
+    const forPlain = await callAuth("/admin/ban-user", caller.headers, {
+      userId: plainTarget.userId,
+    });
 
     const refusal = { status: forAdmin.status, body: await forAdmin.json() };
     expect(refusal.status).toBe(403);
@@ -169,7 +180,9 @@ describe("Better Auth's admin endpoints follow the repository's rule", { timeout
     const bannedAdmin = await freshAdmin();
     await app.db.prepare("UPDATE user SET banned = 1 WHERE id = ?").bind(bannedAdmin.userId).run();
 
-    const res = await callAuth("/admin/unban-user", bannedAdmin.headers, { userId: bannedAdmin.userId });
+    const res = await callAuth("/admin/unban-user", bannedAdmin.headers, {
+      userId: bannedAdmin.userId,
+    });
 
     expect(await refusalOf(res)).toEqual({ status: 401, code: "BANNED_USER" });
     expect((await rowOf(bannedAdmin.userId))?.banned).toBe(1);
@@ -188,26 +201,36 @@ describe("Better Auth's admin endpoints follow the repository's rule", { timeout
     });
 
     expect(await refusalOf(res)).toEqual({ status: 401, code: "BANNED_USER" });
-    expect(await app.db.prepare("SELECT id FROM user WHERE email = ?").bind(email).first()).toBeNull();
+    expect(
+      await app.db.prepare("SELECT id FROM user WHERE email = ?").bind(email).first(),
+    ).toBeNull();
   });
 });
 
-describe("tRPC admin procedures read the role list the way the guard does", { timeout: 60_000 }, () => {
+describe("tRPC admin procedures read the role list the way the guard does", {
+  timeout: 60_000,
+}, () => {
   const adminCallOutcome = async (headers: Headers) =>
     (await app.callerFor(headers)).admin.getUsers({ page: 0, limit: 1 }).then(
       () => "ok",
-      (e: unknown) => (e instanceof TRPCError ? e.code : `not a TRPCError: ${String(e)}`)
+      (e: unknown) => (e instanceof TRPCError ? e.code : `not a TRPCError: ${String(e)}`),
     );
 
   it("a user whose role list includes admin passes adminProcedure", async () => {
     const listed = await freshUser();
-    await app.db.prepare("UPDATE user SET role = 'user,admin' WHERE id = ?").bind(listed.userId).run();
+    await app.db
+      .prepare("UPDATE user SET role = 'user,admin' WHERE id = ?")
+      .bind(listed.userId)
+      .run();
     expect(await adminCallOutcome(listed.headers)).toBe("ok");
   });
 
   it("a role that only starts with admin is refused by adminProcedure", async () => {
     const lookalike = await freshUser();
-    await app.db.prepare("UPDATE user SET role = 'administrator' WHERE id = ?").bind(lookalike.userId).run();
+    await app.db
+      .prepare("UPDATE user SET role = 'administrator' WHERE id = ?")
+      .bind(lookalike.userId)
+      .run();
     expect(await adminCallOutcome(lookalike.headers)).toBe("FORBIDDEN");
   });
 });

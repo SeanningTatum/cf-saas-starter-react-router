@@ -36,7 +36,9 @@ describe("buildWorkflow", () => {
 
   it("replaces the `// @lib` line with banner, library and end marker, in that order, and leaves no marker behind", () => {
     expect(out).not.toMatch(/^\/\/ @lib$/m);
-    const banner = lines.findIndex((l) => l.startsWith("// ---- generated from .claude/workflow-src/lib.js by scripts/workflows.ts; edit the source, then run `bun scripts/workflows.ts build`"));
+    const banner = lines.findIndex((l) =>
+      l.startsWith("// ---- generated from .claude/workflow-src/lib.js by scripts/workflows.ts; edit the source, then run `bun scripts/workflows.ts build`"),
+    );
     const end = lines.indexOf("// ---- end of .claude/workflow-src/lib.js ----");
     expect(banner).toBeGreaterThan(lines.indexOf("// header comment"));
     expect(end).toBeGreaterThan(banner);
@@ -44,7 +46,7 @@ describe("buildWorkflow", () => {
   });
 
   it("strips `export ` from every library declaration: a script body with `export function` does not parse", () => {
-    expect(out).toContain("const STR = { type: \"string\" };");
+    expect(out).toContain('const STR = { type: "string" };');
     expect(out).toContain("function twice(fn) {");
     expect(out).toContain("async function asyncHelper() {}");
     expect(out.split("\n").filter((l) => /^export /.test(l))).toEqual(["export const meta = {"]);
@@ -135,7 +137,13 @@ function memfs(files: Record<string, string>) {
     },
     listDir: (p) => {
       const prefix = p.endsWith("/") ? p : `${p}/`;
-      return [...new Set([...Object.keys(files), ...Object.keys(written)].filter((k) => k.startsWith(prefix) && !k.slice(prefix.length).includes("/")).map((k) => k.slice(prefix.length)))];
+      return [
+        ...new Set(
+          [...Object.keys(files), ...Object.keys(written)]
+            .filter((k) => k.startsWith(prefix) && !k.slice(prefix.length).includes("/"))
+            .map((k) => k.slice(prefix.length)),
+        ),
+      ];
     },
     mkdirp: (p) => void made.push(p),
   };

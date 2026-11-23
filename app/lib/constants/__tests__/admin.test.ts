@@ -37,13 +37,13 @@ describe("admin guard path lists", () => {
     "%s takes its target as body.userId, the field the guard reads",
     (path) => {
       expect(bodyKeysOf(path)).toContain("userId");
-    }
+    },
   );
 
   it.each(ADMIN_PATHS_TARGETING_SESSION_TOKEN.map((p) => [p]))(
     "%s takes its target as body.sessionToken, the field the guard reads",
     (path) => {
       expect(bodyKeysOf(path)).toContain("sessionToken");
-    }
+    },
   );
 });

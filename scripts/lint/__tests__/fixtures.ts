@@ -10,8 +10,7 @@ export function badWordRule(overrides: Partial<FileRule> = {}): FileRule {
     covers: "Every source file.",
     fix: "write GOOD",
     applies: () => true,
-    check: ({ text }) =>
-      text.split("\n").flatMap((line, index) => (line.includes("BAD") ? [{ line: index + 1, message: "BAD found" }] : [])),
+    check: ({ text }) => text.split("\n").flatMap((line, index) => (line.includes("BAD") ? [{ line: index + 1, message: "BAD found" }] : [])),
     cases: [
       { name: "BAD is caught", files: { "app/a.ts": "const BAD = 1;" }, expect: "finding" },
       { name: "GOOD is clean", files: { "app/a.ts": "const GOOD = 1;" }, expect: "clean" },

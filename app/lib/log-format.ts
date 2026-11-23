@@ -1,8 +1,5 @@
 import { Effect } from "effect";
-import {
-  ALWAYS_KEPT_ANNOTATION,
-  UNWRITABLE_LOG_LINE,
-} from "./constants/redaction";
+import { ALWAYS_KEPT_ANNOTATION, UNWRITABLE_LOG_LINE } from "./constants/redaction";
 import {
   ANSI_RESET,
   LOG_LEVEL_COLORS,
@@ -18,8 +15,7 @@ export const isDev = import.meta.env.DEV;
 export const isLevelEnabled = (level: LogLevel, min: LogLevel): boolean =>
   LOG_LEVEL_VALUE[level] >= LOG_LEVEL_VALUE[min];
 
-export const shouldLog = (level: LogLevel) =>
-  isLevelEnabled(level, isDev ? "trace" : "info");
+export const shouldLog = (level: LogLevel) => isLevelEnabled(level, isDev ? "trace" : "info");
 
 type LogContextProvider = () => Record<string, unknown>;
 
@@ -37,28 +33,25 @@ export const setLogSampler = (sampler: LogSampler): void => {
   logSampler = sampler;
 };
 
-const isKeptWhenUnsampled = (
-  level: LogLevel,
-  annotations: Record<string, unknown>
-): boolean =>
+const isKeptWhenUnsampled = (level: LogLevel, annotations: Record<string, unknown>): boolean =>
   isLevelEnabled(level, "warn") || annotations[ALWAYS_KEPT_ANNOTATION] === true;
 
 const redactedLine = (
   fields: () => Record<string, unknown>,
   level: LogLevel,
-  time: string
+  time: string,
 ): Record<string, unknown> =>
   Effect.runSync(
     Effect.try(() => redactFields(fields())).pipe(
-      Effect.orElseSucceed(() => ({ level, time, msg: UNWRITABLE_LOG_LINE }))
-    )
+      Effect.orElseSucceed(() => ({ level, time, msg: UNWRITABLE_LOG_LINE })),
+    ),
   );
 
 export function emitLog(
   level: LogLevel,
   message: string,
   annotations: Record<string, unknown> = {},
-  sampled: boolean = logSampler()
+  sampled: boolean = logSampler(),
 ): void {
   if (!shouldLog(level)) return;
   if (!sampled && !isKeptWhenUnsampled(level, annotations)) return;
@@ -70,7 +63,7 @@ export function emitLog(
       return Object.assign({ ...required }, logContext(), annotations, required);
     },
     level,
-    time
+    time,
   );
 
   if (isDev) {
@@ -80,21 +73,13 @@ export function emitLog(
         ? requestId.slice(0, SHORT_REQUEST_ID_LENGTH)
         : undefined;
     const id = shortRequestId ?? traceId;
-    const rest =
-      shortRequestId && traceId !== undefined ? { ...others, traceId } : others;
-    const prefix = [
-      layer ? `[${layer}]` : "",
-      id ? `(${id})` : "",
-    ]
-      .filter(Boolean)
-      .join(" ");
-    const ctx =
-      Object.keys(rest).length > 3 ? ` ${JSON.stringify(rest)}` : "";
-    const fn =
-      level === "fatal" ? "error" : level === "trace" ? "debug" : level;
+    const rest = shortRequestId && traceId !== undefined ? { ...others, traceId } : others;
+    const prefix = [layer ? `[${layer}]` : "", id ? `(${id})` : ""].filter(Boolean).join(" ");
+    const ctx = Object.keys(rest).length > 3 ? ` ${JSON.stringify(rest)}` : "";
+    const fn = level === "fatal" ? "error" : level === "trace" ? "debug" : level;
     // biome-ignore lint/suspicious/noConsole: this function is the one log sink
     console[fn](
-      `${LOG_LEVEL_COLORS[level]}${level.toUpperCase().padEnd(5)}${ANSI_RESET} ${prefix} ${data.msg}${ctx}`
+      `${LOG_LEVEL_COLORS[level]}${level.toUpperCase().padEnd(5)}${ANSI_RESET} ${prefix} ${data.msg}${ctx}`,
     );
   } else {
     // biome-ignore lint/suspicious/noConsole: this function is the one log sink

@@ -1,9 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { buildReport, withoutQuery, type ReportStamp } from "../report";
-import {
-  MAX_ERROR_MESSAGE_LENGTH,
-  MAX_ERROR_STACK_LENGTH,
-} from "@/lib/constants/error-reporting";
+import { MAX_ERROR_MESSAGE_LENGTH, MAX_ERROR_STACK_LENGTH } from "@/lib/constants/error-reporting";
 import { REDACTED } from "@/lib/constants/redaction";
 import { hashEmail } from "@/lib/redact";
 
@@ -27,9 +24,7 @@ const bareStamp = (): ReportStamp => ({
 
 describe("buildReport", () => {
   it("stamps id, time, release, environment, request, user, method and path, so a report can be traced to its request", () => {
-    expect(
-      buildReport({ error: new Error("boom"), source: "loader" }, fullStamp())
-    ).toMatchObject({
+    expect(buildReport({ error: new Error("boom"), source: "loader" }, fullStamp())).toMatchObject({
       id: "report-1",
       timestamp: "2026-01-02T03:04:05.000Z",
       release: "v1.2.3",
@@ -45,7 +40,7 @@ describe("buildReport", () => {
   it("keeps the capture's own request id over the stamp's, so a browser report names the page's request", () => {
     const report = buildReport(
       { error: new Error("boom"), source: "window", requestId: "req-page" },
-      fullStamp()
+      fullStamp(),
     );
 
     expect(report.requestId).toBe("req-page");
@@ -54,7 +49,7 @@ describe("buildReport", () => {
   it("lets a capture set its level, so a caller can lower a known-noisy error to a warning", () => {
     const report = buildReport(
       { error: new Error("boom"), source: "window", level: "warning" },
-      bareStamp()
+      bareStamp(),
     );
 
     expect(report.level).toBe("warning");
@@ -76,9 +71,7 @@ describe("buildReport", () => {
 
     const report = buildReport({ error, source: "action" }, bareStamp());
 
-    expect(report.message).toBe(
-      `no account for ${hashEmail("user@example.com")}`
-    );
+    expect(report.message).toBe(`no account for ${hashEmail("user@example.com")}`);
     expect(report.stack).toContain(`Bearer ${REDACTED}`);
     expect(report.stack).not.toContain("abc.def-123");
   });
@@ -99,7 +92,7 @@ describe("buildReport", () => {
         source: "window",
         url: "https://app.example.com/reset?token=abc#top",
       },
-      bareStamp()
+      bareStamp(),
     );
 
     expect(report.url).toBe("https://app.example.com/reset");
@@ -108,9 +101,7 @@ describe("buildReport", () => {
 
 describe("withoutQuery", () => {
   it("drops query and hash, and gives undefined for a non-URL, so junk is not stored as a url", () => {
-    expect(withoutQuery("https://app.example.com/a/b?x=1#h")).toBe(
-      "https://app.example.com/a/b"
-    );
+    expect(withoutQuery("https://app.example.com/a/b?x=1#h")).toBe("https://app.example.com/a/b");
     expect(withoutQuery("not a url")).toBeUndefined();
   });
 });
@@ -119,7 +110,7 @@ describe("buildReport, redaction of every text field", () => {
   it("hashes an email in the error name, so a browser cannot put an address in the one field left raw", () => {
     const report = buildReport(
       { error: { name: "user@example.com", message: "x" }, source: "window" },
-      bareStamp()
+      bareStamp(),
     );
 
     expect(report.name).toBe(hashEmail("user@example.com"));
@@ -132,7 +123,7 @@ describe("buildReport, redaction of every text field", () => {
         source: "boundary",
         url: "https://app.example.com/verify/9f8e7d6c5b4a39281706f5e4d3c2b1a0?next=1",
       },
-      { ...bareStamp(), path: "/verify/9f8e7d6c5b4a39281706f5e4d3c2b1a0" }
+      { ...bareStamp(), path: "/verify/9f8e7d6c5b4a39281706f5e4d3c2b1a0" },
     );
 
     expect(report.path).toBe(`/verify/${REDACTED}`);
@@ -148,7 +139,7 @@ describe("buildReport, redaction of every text field", () => {
         },
         source: "trpc",
       },
-      bareStamp()
+      bareStamp(),
     );
 
     expect(report.message).toContain("Failed query: select 1");

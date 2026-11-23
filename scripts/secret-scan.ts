@@ -35,8 +35,7 @@ const PLACEHOLDER = /xxx|your|example|placeholder|changeme|replace/i;
 const HASH_NAME = /hash|sha|checksum|integrity/i;
 const HEX_LENGTHS = new Set([32, 40, 64]);
 
-const CLOUDFLARE_ASSIGNMENT =
-  /\b[A-Z0-9_]{0,40}(?:CLOUDFLARE|CF)[A-Z0-9_]{0,40}TOKEN[A-Z0-9_]{0,40}["']?\s*[:=]\s*["']?([A-Za-z0-9_-]{40,})/;
+const CLOUDFLARE_ASSIGNMENT = /\b[A-Z0-9_]{0,40}(?:CLOUDFLARE|CF)[A-Z0-9_]{0,40}TOKEN[A-Z0-9_]{0,40}["']?\s*[:=]\s*["']?([A-Za-z0-9_-]{40,})/;
 
 /** A literal of 40 or more characters assigned to a Cloudflare token name. */
 function cloudflareAssignment(line: string): boolean {
@@ -44,8 +43,7 @@ function cloudflareAssignment(line: string): boolean {
   return value !== undefined && !PLACEHOLDER.test(value);
 }
 
-const ENV_ASSIGNMENT =
-  /^\s*(?:export\s+)?([A-Z][A-Z0-9_]*(?:SECRET|TOKEN|API_KEY|PASSWORD)[A-Z0-9_]*)\s*=\s*["']?([A-Za-z0-9+/_=-]{32,})["']?\s*(?:#.*)?$/;
+const ENV_ASSIGNMENT = /^\s*(?:export\s+)?([A-Z][A-Z0-9_]*(?:SECRET|TOKEN|API_KEY|PASSWORD)[A-Z0-9_]*)\s*=\s*["']?([A-Za-z0-9+/_=-]{32,})["']?\s*(?:#.*)?$/;
 
 /** An env-style `NAME=value` line with a long literal, any case mix (64 hex from openssl counts). */
 function envSecretAssignment(line: string): boolean {

@@ -55,10 +55,7 @@ export function planRuleset(decl: Ruleset, found: FoundRuleset | null, base: str
   if (found.live.bypass_actors === undefined)
     findings.push({ level: "notice", text: `ruleset "${name}" bypass list cannot be read without admin rights; not checked` });
   else if (!diffs.length) findings.push({ level: "ok", text: `ruleset "${name}" matches ${CONFIG_PATH}` });
-  findings.push(
-    ...absent.map((p) => notYetApplied(checkSubject(name, p), p.reason)),
-    ...present.map((p) => markCanGo(checkSubject(name, p))),
-  );
+  findings.push(...absent.map((p) => notYetApplied(checkSubject(name, p), p.reason)), ...present.map((p) => markCanGo(checkSubject(name, p))));
   const needsWrite = diffs.length > 0 || absent.length > 0;
   return {
     findings,
@@ -79,10 +76,7 @@ export function planRepository(decl: DeclaredRepositoryT, liveTitle: string | un
     };
   if (liveTitle === declared)
     return {
-      findings: [
-        { level: "ok", text: `${subject} matches ${CONFIG_PATH}` },
-        ...(decl.pending === undefined ? [] : [markCanGo(subject)]),
-      ],
+      findings: [{ level: "ok", text: `${subject} matches ${CONFIG_PATH}` }, ...(decl.pending === undefined ? [] : [markCanGo(subject)])],
       actions: [],
       applied: false,
     };

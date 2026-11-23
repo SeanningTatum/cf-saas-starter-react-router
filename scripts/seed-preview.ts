@@ -86,10 +86,7 @@ export interface Target {
   local: boolean;
 }
 
-export type Plan =
-  | { kind: "describe" }
-  | { kind: "print-password"; password: string }
-  | { kind: "seed"; target: Target; password: string };
+export type Plan = { kind: "describe" } | { kind: "print-password"; password: string } | { kind: "seed"; target: Target; password: string };
 
 const MIN_SECRET_LENGTH = 16;
 const SLUG = /^[a-z0-9][a-z0-9-]*$/i;
@@ -114,10 +111,7 @@ function hmac24(secret: string, message: string): string {
 
 const bad = (message: string): Either.Either<never, string> => Either.left(message);
 
-function readSecret(
-  env: Record<string, string | undefined>,
-  name: "PREVIEW_SEED_SECRET" | "PRODUCTION_SEED_SECRET",
-): Either.Either<string, string> {
+function readSecret(env: Record<string, string | undefined>, name: "PREVIEW_SEED_SECRET" | "PRODUCTION_SEED_SECRET"): Either.Either<string, string> {
   const secret = env[name] ?? "";
   return secret.length >= MIN_SECRET_LENGTH
     ? Either.right(secret)
@@ -132,9 +126,7 @@ function readSlug(argv: string[], fallback: string): Either.Either<string, strin
   const at = argv.indexOf("--pr");
   if (at < 0) return Either.right(fallback);
   const slug = argv[at + 1] ?? "";
-  return SLUG.test(slug)
-    ? Either.right(slug)
-    : bad(`--pr needs a slug of letters, digits and dashes, got "${slug}"`);
+  return SLUG.test(slug) ? Either.right(slug) : bad(`--pr needs a slug of letters, digits and dashes, got "${slug}"`);
 }
 
 function productionRefusal(): string {
@@ -152,10 +144,7 @@ function productionRefusal(): string {
 }
 
 /** Turn argv + env into a plan, or a message saying why not. Never exits. */
-export function parseArgs(
-  argv: string[],
-  env: Record<string, string | undefined>,
-): Either.Either<Plan, string> {
+export function parseArgs(argv: string[], env: Record<string, string | undefined>): Either.Either<Plan, string> {
   const has = (flag: string) => argv.includes(flag);
 
   if (has("--describe")) return Either.right({ kind: "describe" });
@@ -163,10 +152,7 @@ export function parseArgs(
   if (has("--print-password")) {
     if (!has("--pr")) return bad("--print-password needs --pr <slug>");
     return Either.flatMap(readSecret(env, "PREVIEW_SEED_SECRET"), (secret) =>
-      Either.map(
-        readSlug(argv, "shared"),
-        (slug): Plan => ({ kind: "print-password", password: derivePreviewPassword(secret, slug) }),
-      ),
+      Either.map(readSlug(argv, "shared"), (slug): Plan => ({ kind: "print-password", password: derivePreviewPassword(secret, slug) })),
     );
   }
 
@@ -189,10 +175,7 @@ export function parseArgs(
   if (has("--preview")) {
     const target: Target = { flags: ["--env", "preview", "--remote"], label: "preview", local: false };
     return Either.flatMap(readSecret(env, "PREVIEW_SEED_SECRET"), (secret) =>
-      Either.map(
-        readSlug(argv, "shared"),
-        (slug): Plan => ({ kind: "seed", target, password: derivePreviewPassword(secret, slug) }),
-      ),
+      Either.map(readSlug(argv, "shared"), (slug): Plan => ({ kind: "seed", target, password: derivePreviewPassword(secret, slug) })),
     );
   }
 
@@ -236,22 +219,12 @@ export async function buildSql(
 
     lines.push(
       `INSERT OR IGNORE INTO account (id, account_id, provider_id, user_id, password, created_at, updated_at) VALUES (` +
-        [
-          sqlString(accountId),
-          sqlString(fixture.id),
-          sqlString("credential"),
-          sqlString(fixture.id),
-          sqlString(passwordHash),
-          now,
-          now,
-        ].join(", ") +
+        [sqlString(accountId), sqlString(fixture.id), sqlString("credential"), sqlString(fixture.id), sqlString(passwordHash), now, now].join(", ") +
         `);`,
     );
 
     if (!target.local) {
-      lines.push(
-        `UPDATE account SET password = ${sqlString(passwordHash)} WHERE id = ${sqlString(accountId)};`,
-      );
+      lines.push(`UPDATE account SET password = ${sqlString(passwordHash)} WHERE id = ${sqlString(accountId)};`);
     }
   }
 
@@ -300,11 +273,7 @@ export function describeMarkdown(): string {
   lines.push("| Email | Role | State |");
   lines.push("|-------|------|-------|");
   for (const f of FIXTURES) {
-    const state = f.banned
-      ? `banned (${f.banReason ?? "no reason"})`
-      : f.emailVerified
-        ? "active, email verified"
-        : "active";
+    const state = f.banned ? `banned (${f.banReason ?? "no reason"})` : f.emailVerified ? "active, email verified" : "active";
     lines.push(`| \`${f.email}\` | ${f.role} | ${state} |`);
   }
   lines.push("");
@@ -328,16 +297,7 @@ async function seed(target: Target, password: string): Promise<void> {
   let failure: string | undefined;
   try {
     console.log(`Seeding ${target.label} D1 (DATABASE binding)...`);
-    const command = [
-      "bunx",
-      "wrangler",
-      "d1",
-      "execute",
-      "DATABASE",
-      ...target.flags,
-      "--file",
-      tmpFile,
-    ].join(" ");
+    const command = ["bunx", "wrangler", "d1", "execute", "DATABASE", ...target.flags, "--file", tmpFile].join(" ");
 
     execSync(command, { stdio: "inherit", env: process.env });
 

@@ -20,7 +20,7 @@ export function renderRules(rules: Rule[]): string {
       rule.covers,
       rule.fix,
       rule.example ? `\`${rule.example}\`` : "",
-    ])
+    ]),
   );
   const checkRows = Object.values(BASELINE_CHECKS).map((check) => row([`\`${check.id}\``, check.matches, check.fix]));
   return [
@@ -46,9 +46,15 @@ export function applyRules(page: string, table: string): string | undefined {
 export type PageCheck = { fresh: true } | { fresh: false; problem: string };
 
 export function checkPage(page: string | undefined, table: string): PageCheck {
-  if (page === undefined) return { fresh: false, problem: `${RULES_PAGE} is missing. Create it with the two markers ${RULES_START} and ${RULES_END}, then run \`${WRITE_DOCS_COMMAND}\`.` };
+  if (page === undefined)
+    return {
+      fresh: false,
+      problem: `${RULES_PAGE} is missing. Create it with the two markers ${RULES_START} and ${RULES_END}, then run \`${WRITE_DOCS_COMMAND}\`.`,
+    };
   const next = applyRules(page, table);
-  if (next === undefined) return { fresh: false, problem: `${RULES_PAGE} has no ${RULES_START} … ${RULES_END} block. Add the two markers, then run \`${WRITE_DOCS_COMMAND}\`.` };
-  if (next !== page) return { fresh: false, problem: `${RULES_PAGE} is stale: the table differs from the rules in scripts/lint/rules/. Run \`${WRITE_DOCS_COMMAND}\`.` };
+  if (next === undefined)
+    return { fresh: false, problem: `${RULES_PAGE} has no ${RULES_START} … ${RULES_END} block. Add the two markers, then run \`${WRITE_DOCS_COMMAND}\`.` };
+  if (next !== page)
+    return { fresh: false, problem: `${RULES_PAGE} is stale: the table differs from the rules in scripts/lint/rules/. Run \`${WRITE_DOCS_COMMAND}\`.` };
   return { fresh: true };
 }

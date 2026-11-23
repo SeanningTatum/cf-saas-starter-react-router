@@ -42,9 +42,7 @@ describe("emitLog redaction", () => {
 
     format.emitLog("warn", "sign-in failed for user@example.com");
 
-    expect(lines()[0]?.msg).toBe(
-      `sign-in failed for ${hashEmail("user@example.com")}`
-    );
+    expect(lines()[0]?.msg).toBe(`sign-in failed for ${hashEmail("user@example.com")}`);
   });
 
   it("redacts the fields from the context provider too, so a field set by the request store cannot skip the mask", async () => {
@@ -155,7 +153,9 @@ describe("emitLog, lines that must always be written", () => {
 describe("emitLog, a line with more fields than the cap", () => {
   it("still carries level, time and msg, so a huge field bag cannot produce a line that search and alerts miss", async () => {
     const { format, lines } = await loadJsonFormat();
-    const many = Object.fromEntries(Array.from({ length: 150 }, (_, index) => [`field${index}`, index]));
+    const many = Object.fromEntries(
+      Array.from({ length: 150 }, (_, index) => [`field${index}`, index]),
+    );
 
     format.emitLog("error", "too many fields", many);
 

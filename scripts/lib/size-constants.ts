@@ -6,8 +6,7 @@ export const WORKER_LABEL = "Worker upload, gzip";
 export const ENTRY_LABEL = "entry.client chunk, gzip";
 export const ROOT_LABEL = "root chunk, gzip";
 export const routeKey = (id: string, kind: "js" | "css"): string => `route:${id}:${kind}`;
-export const routeLabel = (path: string, kind: "js" | "css"): string =>
-  `\`${path}\` first-load ${kind === "js" ? "JS" : "CSS"}, gzip`;
+export const routeLabel = (path: string, kind: "js" | "css"): string => `\`${path}\` first-load ${kind === "js" ? "JS" : "CSS"}, gzip`;
 
 export const MANIFEST_PREFIX = "manifest-";
 export const CLIENT_ASSETS_DIR = "build/client/assets";
@@ -45,4 +44,4 @@ export const DRY_RUN_ARGS = ["x", "wrangler", "deploy", "--dry-run"];
 
 export const USAGE =
   "usage: bun run size [--base <ref | saved.json>] [--json <file>] [--markdown <file>] [--pr-body]\n" +
-  "  --pr-body  print the PR body section: the table and the load-time line, or \"No shipped code changed.\" (needs --base)";
+  '  --pr-body  print the PR body section: the table and the load-time line, or "No shipped code changed." (needs --base)';

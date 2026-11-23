@@ -13,11 +13,15 @@ describe("authRefusalFor", () => {
 
   it("asks for the check again when the token is missing or rejected", () => {
     expect(authRefusalFor({ status: 400, code: "MISSING_RESPONSE" }, true)).toBe("captcha_failed");
-    expect(authRefusalFor({ status: 403, code: "VERIFICATION_FAILED" }, true)).toBe("captcha_failed");
+    expect(authRefusalFor({ status: 403, code: "VERIFICATION_FAILED" }, true)).toBe(
+      "captcha_failed",
+    );
   });
 
   it("says the check is unavailable on the captcha plugin's 500", () => {
-    expect(authRefusalFor({ status: 500, code: "UNKNOWN_ERROR" }, true)).toBe("captcha_unavailable");
+    expect(authRefusalFor({ status: 500, code: "UNKNOWN_ERROR" }, true)).toBe(
+      "captcha_unavailable",
+    );
   });
 
   it("does not blame the check when Turnstile is off on this page", () => {

@@ -23,7 +23,7 @@ describe("tryQuery", () => {
     Effect.gen(function* () {
       const result = yield* tryQuery("widget", async () => 42);
       expect(result).toBe(42);
-    })
+    }),
   );
 
   it.effect("wraps thrown error as QueryError", () =>
@@ -31,7 +31,7 @@ describe("tryQuery", () => {
       const exit = yield* Effect.exit(
         tryQuery("widget", async () => {
           throw new Error("boom");
-        })
+        }),
       );
       expect(Exit.isFailure(exit)).toBe(true);
       if (Exit.isFailure(exit)) {
@@ -41,7 +41,7 @@ describe("tryQuery", () => {
           expect((failure.value as QueryError).entity).toBe("widget");
         }
       }
-    })
+    }),
   );
 });
 
@@ -51,7 +51,7 @@ describe("tryUpdate", () => {
       const exit = yield* Effect.exit(
         tryUpdate("widget", async () => {
           throw new Error("boom");
-        })
+        }),
       );
       if (Exit.isFailure(exit)) {
         const failure = Cause.failureOption(exit.cause);
@@ -59,7 +59,7 @@ describe("tryUpdate", () => {
           expect(failure.value).toBeInstanceOf(UpdateError);
         }
       }
-    })
+    }),
   );
 });
 
@@ -69,7 +69,7 @@ describe("tryCreate", () => {
       const exit = yield* Effect.exit(
         tryCreate("widget", async () => {
           throw new Error("boom");
-        })
+        }),
       );
       if (Exit.isFailure(exit)) {
         const failure = Cause.failureOption(exit.cause);
@@ -77,7 +77,7 @@ describe("tryCreate", () => {
           expect(failure.value).toBeInstanceOf(CreationError);
         }
       }
-    })
+    }),
   );
 });
 
@@ -87,7 +87,7 @@ describe("tryDelete", () => {
       const exit = yield* Effect.exit(
         tryDelete("widget", async () => {
           throw new Error("boom");
-        })
+        }),
       );
       if (Exit.isFailure(exit)) {
         const failure = Cause.failureOption(exit.cause);
@@ -95,7 +95,7 @@ describe("tryDelete", () => {
           expect(failure.value).toBeInstanceOf(DeletionError);
         }
       }
-    })
+    }),
   );
 });
 
@@ -121,16 +121,11 @@ describe("db spans", () => {
           "db.update widget",
           "db.delete widget",
         ]);
-        expect(buffer.spans.map((s) => s.kind)).toEqual([
-          "client",
-          "client",
-          "client",
-          "client",
-        ]);
+        expect(buffer.spans.map((s) => s.kind)).toEqual(["client", "client", "client", "client"]);
         expect(buffer.spans[0]?.attributes.get("db.operation")).toBe("query");
         expect(buffer.spans[0]?.attributes.get("db.entity")).toBe("widget");
       }).pipe(Effect.provide(layer));
-    }
+    },
   );
 
   it.effect(
@@ -141,7 +136,7 @@ describe("db spans", () => {
         const exit = yield* Effect.exit(
           tryQuery("widget", async () => {
             throw new Error("boom");
-          })
+          }),
         );
 
         expect(Exit.isFailure(exit)).toBe(true);
@@ -159,7 +154,7 @@ describe("db spans", () => {
           expect(Exit.isFailure(status.exit)).toBe(true);
         }
       }).pipe(Effect.provide(layer));
-    }
+    },
   );
 });
 
@@ -168,7 +163,7 @@ describe("requireFound", () => {
     Effect.gen(function* () {
       const v = yield* requireFound("widget", "id-1", { id: "id-1" });
       expect(v).toEqual({ id: "id-1" });
-    })
+    }),
   );
 
   it.effect("fails with NotFoundError on null", () =>
@@ -181,14 +176,14 @@ describe("requireFound", () => {
           expect((failure.value as NotFoundError).identifier).toBe("id-1");
         }
       }
-    })
+    }),
   );
 
   it.effect("fails with NotFoundError on undefined", () =>
     Effect.gen(function* () {
       const exit = yield* Effect.exit(requireFound("widget", "id-1", undefined));
       expect(Exit.isFailure(exit)).toBe(true);
-    })
+    }),
   );
 });
 
@@ -197,7 +192,7 @@ describe("requireFoundOrFail", () => {
     Effect.gen(function* () {
       const v = yield* requireFoundOrFail({ id: "id-1" }, () => new Error("unused"));
       expect(v).toEqual({ id: "id-1" });
-    })
+    }),
   );
 
   it.effect("fails with the caller-provided error on null", () =>
@@ -205,9 +200,7 @@ describe("requireFoundOrFail", () => {
       class CustomError {
         readonly _tag = "CustomError";
       }
-      const exit = yield* Effect.exit(
-        requireFoundOrFail(null, () => new CustomError())
-      );
+      const exit = yield* Effect.exit(requireFoundOrFail(null, () => new CustomError()));
       expect(Exit.isFailure(exit)).toBe(true);
       if (Exit.isFailure(exit)) {
         const failure = Cause.failureOption(exit.cause);
@@ -215,14 +208,12 @@ describe("requireFoundOrFail", () => {
           expect(failure.value).toBeInstanceOf(CustomError);
         }
       }
-    })
+    }),
   );
 
   it.effect("fails with the caller-provided error on undefined", () =>
     Effect.gen(function* () {
-      const exit = yield* Effect.exit(
-        requireFoundOrFail(undefined, () => "missing")
-      );
+      const exit = yield* Effect.exit(requireFoundOrFail(undefined, () => "missing"));
       expect(Exit.isFailure(exit)).toBe(true);
       if (Exit.isFailure(exit)) {
         const failure = Cause.failureOption(exit.cause);
@@ -230,6 +221,6 @@ describe("requireFoundOrFail", () => {
           expect(failure.value).toBe("missing");
         }
       }
-    })
+    }),
   );
 });

@@ -61,8 +61,7 @@ const liveRuleset = (s: Setup) => ({
   ],
 });
 
-const workflow = (names: string[]) =>
-  ["name: CI", "jobs:", ...names.flatMap((n, i) => [`  j${i}:`, `    name: ${n}`])].join("\n");
+const workflow = (names: string[]) => ["name: CI", "jobs:", ...names.flatMap((n, i) => [`  j${i}:`, `    name: ${n}`])].join("\n");
 
 interface Call {
   args: string[];
@@ -97,7 +96,9 @@ function harness(s: Setup, config: unknown = declared(s)) {
     },
     readFile: (p) => (p in files ? Either.right(files[p] ?? "") : Either.left("ENOENT")),
     listDir: (dir) => {
-      const names = Object.keys(files).filter((f) => f.startsWith(`${dir}/`)).map((f) => f.slice(dir.length + 1));
+      const names = Object.keys(files)
+        .filter((f) => f.startsWith(`${dir}/`))
+        .map((f) => f.slice(dir.length + 1));
       return names.length ? Either.right(names) : Either.left("ENOENT");
     },
     env: { GITHUB_REPOSITORY: REPO },
@@ -174,7 +175,7 @@ describe("--check: the repository section", () => {
     const { o } = go({ noRuleset: true, liveTitle: "COMMIT_OR_PR_TITLE" }, ["--check"], declared({ repository: { squash_merge_commit_title: "PR_TITLE" } }));
     expect(o.code).toBe(0);
     expect(lines(o.stdout, "drift")).toEqual([]);
-    expect(lines(o.stdout, "notice").join("\n")).toContain("declared \"PR_TITLE\", live \"COMMIT_OR_PR_TITLE\"");
+    expect(lines(o.stdout, "notice").join("\n")).toContain('declared "PR_TITLE", live "COMMIT_OR_PR_TITLE"');
   });
 });
 
@@ -240,17 +241,20 @@ describe("config errors for pending", () => {
     ["a string", "Build"],
     ["an object", { context: "Build" }],
     ["null", null],
-  ])("required_status_checks set to %s is an error that names the ruleset, with no gh call, in --check and --apply: it must never apply as an empty check list", (_n, value) => {
-    const config = declared({});
-    const params = config.rulesets[0]?.rules[1]?.parameters as Record<string, unknown>;
-    params.required_status_checks = value;
-    for (const argv of [["--check"], ["--apply"]]) {
-      const { o, calls } = go({}, argv, config);
-      expect(o.code).toBe(1);
-      expect(lines(o.stdout, "error")).toEqual(['error: ruleset "default-branch" required_status_checks must be a list of checks']);
-      expect(calls).toEqual([]);
-    }
-  });
+  ])(
+    "required_status_checks set to %s is an error that names the ruleset, with no gh call, in --check and --apply: it must never apply as an empty check list",
+    (_n, value) => {
+      const config = declared({});
+      const params = config.rulesets[0]?.rules[1]?.parameters as Record<string, unknown>;
+      params.required_status_checks = value;
+      for (const argv of [["--check"], ["--apply"]]) {
+        const { o, calls } = go({}, argv, config);
+        expect(o.code).toBe(1);
+        expect(lines(o.stdout, "error")).toEqual(['error: ruleset "default-branch" required_status_checks must be a list of checks']);
+        expect(calls).toEqual([]);
+      }
+    },
+  );
 
   it("a required_status_checks rule with no checks parameter is not an error and its body is sent as written", () => {
     const config = declared({});
@@ -273,9 +277,7 @@ describe("config errors for pending", () => {
   it("a pending check that is no job in any workflow fails the offline check: the check would never report and would hang every pull request", () => {
     const { o, calls } = go({ jobs: [OLD_CHECK] });
     expect(o.code).toBe(1);
-    expect(lines(o.stdout, "error")).toEqual([
-      `error: required check "${NEW_CHECK}" is not a job name in any workflow under .github/workflows`,
-    ]);
+    expect(lines(o.stdout, "error")).toEqual([`error: required check "${NEW_CHECK}" is not a job name in any workflow under .github/workflows`]);
     expect(calls).toEqual([]);
   });
 });

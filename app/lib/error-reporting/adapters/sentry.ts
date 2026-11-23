@@ -66,9 +66,7 @@ export const toSentryEnvelope = (report: ErrorReport, dsn: string): string =>
     .map((part) => JSON.stringify(part))
     .join("\n");
 
-export const sentryAdapter = (config: {
-  readonly dsn: SentryDsn;
-}): ErrorReporterAdapter => {
+export const sentryAdapter = (config: { readonly dsn: SentryDsn }): ErrorReporterAdapter => {
   const sendOne = (report: ErrorReport) =>
     Effect.tryPromise({
       try: () =>
@@ -89,9 +87,9 @@ export const sentryAdapter = (config: {
           new ExternalServiceError({
             service: "sentry",
             cause: `status ${response.status}`,
-          })
+          }),
       ),
-      Effect.asVoid
+      Effect.asVoid,
     );
 
   return {

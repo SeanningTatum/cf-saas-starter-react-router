@@ -47,8 +47,7 @@ const bad = (code: number, kind: string, error: string, help: string): Outcome =
   code,
   err: { error, code: kind, help },
 });
-const usage = (error: string): Outcome =>
-  bad(1, "USAGE", error, "usage: pr-review-wait <pr> [--timeout 900] [--interval 30] [--retrigger-after 300]");
+const usage = (error: string): Outcome => bad(1, "USAGE", error, "usage: pr-review-wait <pr> [--timeout 900] [--interval 30] [--retrigger-after 300]");
 const ghFailure = (r: GhResult, what: string): Outcome =>
   bad(
     2,
@@ -154,13 +153,13 @@ export async function run(argv: string[], deps: Deps = defaultDeps): Promise<Out
   const readSummary = (): string | Outcome => {
     const ir = deps.gh(["api", "--paginate", `repos/${repo}/issues/${pr}/comments`]);
     if (ir.code !== 0) return ghFailure(ir, "gh api issue comments");
-    return parseItems(ir.stdout)
-      .flatMap((c) =>
-        isBot(c?.user?.login) && typeof c?.body === "string" && c.body.includes(deps.reviewBot.summaryMarker) && c.body.includes(sha)
-          ? [c.body]
-          : [],
-      )
-      .pop() ?? "";
+    return (
+      parseItems(ir.stdout)
+        .flatMap((c) =>
+          isBot(c?.user?.login) && typeof c?.body === "string" && c.body.includes(deps.reviewBot.summaryMarker) && c.body.includes(sha) ? [c.body] : [],
+        )
+        .pop() ?? ""
+    );
   };
   const start = deps.now();
   let retriggered = false;
@@ -202,7 +201,11 @@ export async function run(argv: string[], deps: Deps = defaultDeps): Promise<Out
   if (!review && summary === null) {
     return {
       ...ok({ status: "timeout", pr, sha, review: null, confidence: null, summary: "", comments: [], retriggered }, 5),
-      err: { error: `no ${deps.reviewBot.login} review of ${sha} within ${timeout}s`, code: "TIMEOUT", help: "check the PR on GitHub, or run again with a longer --timeout" },
+      err: {
+        error: `no ${deps.reviewBot.login} review of ${sha} within ${timeout}s`,
+        code: "TIMEOUT",
+        help: "check the PR on GitHub, or run again with a longer --timeout",
+      },
     };
   }
 

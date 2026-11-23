@@ -19,10 +19,7 @@ describe("lint constants", () => {
     expect(LINTABLE_FILE.test(file)).toBe(true);
   });
 
-  it.each(["README.md", "scripts/setup.sh", ".github/workflows/ci.yml", "app/a.ts.orig", "tsconfig.json.bak"])(
-    "does not pass %s to the linters",
-    (file) => {
-      expect(LINTABLE_FILE.test(file)).toBe(false);
-    },
-  );
+  it.each(["README.md", "scripts/setup.sh", ".github/workflows/ci.yml", "app/a.ts.orig", "tsconfig.json.bak"])("does not pass %s to the linters", (file) => {
+    expect(LINTABLE_FILE.test(file)).toBe(false);
+  });
 });

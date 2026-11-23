@@ -54,8 +54,8 @@ describe("resolveAuthConfig outside dev", () => {
     expect(
       failedField(
         { BETTER_AUTH_SECRET: SECRET },
-        { dev: false, requestOrigin: "https://app.example.test" }
-      )
+        { dev: false, requestOrigin: "https://app.example.test" },
+      ),
     ).toBe("BETTER_AUTH_URL");
   });
 
@@ -81,11 +81,14 @@ describe("resolveAuthConfig outside dev", () => {
     ["blank", "  "],
     ["one character under the minimum", "s".repeat(AUTH_SECRET_MIN_LENGTH - 1)],
     ["the placeholder left in from .dev.vars.example", "paste-openssl-rand-hex-32"],
-  ])("fails when BETTER_AUTH_SECRET is %s, rather than signing with a weak secret", (_label, value) => {
-    expect(failedField({ ...prodEnv, BETTER_AUTH_SECRET: value }, prod)).toBe(
-      "BETTER_AUTH_SECRET"
-    );
-  });
+  ])(
+    "fails when BETTER_AUTH_SECRET is %s, rather than signing with a weak secret",
+    (_label, value) => {
+      expect(failedField({ ...prodEnv, BETTER_AUTH_SECRET: value }, prod)).toBe(
+        "BETTER_AUTH_SECRET",
+      );
+    },
+  );
 
   it("accepts a secret of exactly the minimum length", () => {
     const secret = "s".repeat(AUTH_SECRET_MIN_LENGTH);
@@ -94,15 +97,15 @@ describe("resolveAuthConfig outside dev", () => {
 
   it("never accepts the dev-only secret outside dev, even when the env holds it", () => {
     expect(failedField({ ...prodEnv, BETTER_AUTH_SECRET: DEV_ONLY_AUTH_SECRET }, prod)).toBe(
-      "BETTER_AUTH_SECRET"
+      "BETTER_AUTH_SECRET",
     );
   });
 
   it("never accepts Better Auth's own published fallback secret outside dev, though it is long enough", () => {
     expect(BETTER_AUTH_BUILT_IN_SECRET.length).toBeGreaterThanOrEqual(AUTH_SECRET_MIN_LENGTH);
-    expect(
-      failedField({ ...prodEnv, BETTER_AUTH_SECRET: BETTER_AUTH_BUILT_IN_SECRET }, prod)
-    ).toBe("BETTER_AUTH_SECRET");
+    expect(failedField({ ...prodEnv, BETTER_AUTH_SECRET: BETTER_AUTH_BUILT_IN_SECRET }, prod)).toBe(
+      "BETTER_AUTH_SECRET",
+    );
   });
 
   it.each([
@@ -111,16 +114,21 @@ describe("resolveAuthConfig outside dev", () => {
     ["http on localhost with a port", "http://localhost:4173"],
     ["http on 127.0.0.1 with a port", "http://127.0.0.1:8787"],
   ])("accepts %s as BETTER_AUTH_URL", (_label, value) => {
-    expect(config({ ...prodEnv, BETTER_AUTH_URL: value }, prod).baseURL).toBe(new URL(value).origin);
+    expect(config({ ...prodEnv, BETTER_AUTH_URL: value }, prod).baseURL).toBe(
+      new URL(value).origin,
+    );
   });
 
   it.each([
     ["a public host", "http://app.example.test"],
     ["a host that only starts with localhost", "http://localhost.example.test"],
     ["a private address", "http://10.0.0.5"],
-  ])("refuses an http BETTER_AUTH_URL on %s, which would turn Secure cookies off", (_label, value) => {
-    expect(failedField({ ...prodEnv, BETTER_AUTH_URL: value }, prod)).toBe("BETTER_AUTH_URL");
-  });
+  ])(
+    "refuses an http BETTER_AUTH_URL on %s, which would turn Secure cookies off",
+    (_label, value) => {
+      expect(failedField({ ...prodEnv, BETTER_AUTH_URL: value }, prod)).toBe("BETTER_AUTH_URL");
+    },
+  );
 });
 
 describe("resolveAuthConfig in dev", () => {
@@ -225,9 +233,9 @@ describe("resolveAuthConfig secure cookies", () => {
   });
 
   it("leaves secure cookies off for an http base URL, so local dev can sign in", () => {
-    expect(config({ ...prodEnv, BETTER_AUTH_URL: "http://localhost:8787" }, prod).secureCookies).toBe(
-      false
-    );
+    expect(
+      config({ ...prodEnv, BETTER_AUTH_URL: "http://localhost:8787" }, prod).secureCookies,
+    ).toBe(false);
     expect(config({}, dev).secureCookies).toBe(false);
   });
 });
@@ -249,16 +257,22 @@ describe("resolveAuthConfig Turnstile keys", () => {
 
   it("trims the keys, so a stray space from a pasted secret does not fail every sign-in", () => {
     expect(
-      config({ ...prodEnv, TURNSTILE_SITE_KEY: ` ${SITE_KEY} `, TURNSTILE_SECRET_KEY: `${SECRET_KEY}\n` }, prod)
-        .turnstile
+      config(
+        {
+          ...prodEnv,
+          TURNSTILE_SITE_KEY: ` ${SITE_KEY} `,
+          TURNSTILE_SECRET_KEY: `${SECRET_KEY}\n`,
+        },
+        prod,
+      ).turnstile,
     ).toEqual({ siteKey: SITE_KEY, secretKey: SECRET_KEY });
   });
 
   it("uses Cloudflare's always-pass test pair in dev when neither key is set, so local sign-in works offline of a real widget", () => {
     expect(config(prodEnv, dev).turnstile).toEqual(TURNSTILE_ALWAYS_PASS_TEST_KEYS);
-    expect(config({ ...prodEnv, TURNSTILE_SITE_KEY: "", TURNSTILE_SECRET_KEY: " " }, dev).turnstile).toEqual(
-      TURNSTILE_ALWAYS_PASS_TEST_KEYS
-    );
+    expect(
+      config({ ...prodEnv, TURNSTILE_SITE_KEY: "", TURNSTILE_SECRET_KEY: " " }, dev).turnstile,
+    ).toEqual(TURNSTILE_ALWAYS_PASS_TEST_KEYS);
   });
 
   it("leaves Turnstile off outside dev when neither key is set, so a fresh deploy still lets people sign in", () => {
@@ -269,28 +283,40 @@ describe("resolveAuthConfig Turnstile keys", () => {
     ["outside dev", prod],
     ["in dev", dev],
   ])("fails naming the secret key when only the site key is set %s", (_label, options) => {
-    expect(failedField({ ...prodEnv, TURNSTILE_SITE_KEY: SITE_KEY }, options)).toBe("TURNSTILE_SECRET_KEY");
+    expect(failedField({ ...prodEnv, TURNSTILE_SITE_KEY: SITE_KEY }, options)).toBe(
+      "TURNSTILE_SECRET_KEY",
+    );
   });
 
   it.each([
     ["outside dev", prod],
     ["in dev", dev],
   ])("fails naming the site key when only the secret key is set %s", (_label, options) => {
-    expect(failedField({ ...prodEnv, TURNSTILE_SECRET_KEY: SECRET_KEY }, options)).toBe("TURNSTILE_SITE_KEY");
+    expect(failedField({ ...prodEnv, TURNSTILE_SECRET_KEY: SECRET_KEY }, options)).toBe(
+      "TURNSTILE_SITE_KEY",
+    );
   });
 
-  it.each(TURNSTILE_PUBLISHED_TEST_KEYS.filter((key) => key.length === TURNSTILE_TEST_SITE_KEY.length))(
+  it.each(
+    TURNSTILE_PUBLISHED_TEST_KEYS.filter((key) => key.length === TURNSTILE_TEST_SITE_KEY.length),
+  )(
     "refuses the published test site key %s outside dev, since it lets every bot through",
     (testKey) => {
-      expect(failedField({ ...prodEnv, ...keys, TURNSTILE_SITE_KEY: testKey }, prod)).toBe("TURNSTILE_SITE_KEY");
-    }
+      expect(failedField({ ...prodEnv, ...keys, TURNSTILE_SITE_KEY: testKey }, prod)).toBe(
+        "TURNSTILE_SITE_KEY",
+      );
+    },
   );
 
-  it.each(TURNSTILE_PUBLISHED_TEST_KEYS.filter((key) => key.length === TURNSTILE_TEST_SECRET_KEY.length))(
+  it.each(
+    TURNSTILE_PUBLISHED_TEST_KEYS.filter((key) => key.length === TURNSTILE_TEST_SECRET_KEY.length),
+  )(
     "refuses the published test secret %s outside dev, since it passes any dummy token",
     (testKey) => {
-      expect(failedField({ ...prodEnv, ...keys, TURNSTILE_SECRET_KEY: testKey }, prod)).toBe("TURNSTILE_SECRET_KEY");
-    }
+      expect(failedField({ ...prodEnv, ...keys, TURNSTILE_SECRET_KEY: testKey }, prod)).toBe(
+        "TURNSTILE_SECRET_KEY",
+      );
+    },
   );
 
   it("accepts the always-fail test pair in dev, so a developer can see the refusal locally", () => {
@@ -301,8 +327,8 @@ describe("resolveAuthConfig Turnstile keys", () => {
           TURNSTILE_SITE_KEY: TURNSTILE_TEST_ALWAYS_FAIL_SITE_KEY,
           TURNSTILE_SECRET_KEY: TURNSTILE_TEST_ALWAYS_FAIL_SECRET_KEY,
         },
-        dev
-      ).turnstile
+        dev,
+      ).turnstile,
     ).toEqual({
       siteKey: TURNSTILE_TEST_ALWAYS_FAIL_SITE_KEY,
       secretKey: TURNSTILE_TEST_ALWAYS_FAIL_SECRET_KEY,

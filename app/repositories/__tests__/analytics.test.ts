@@ -8,7 +8,11 @@ import { QueryError } from "@/models/errors/repository";
 const provideStub = (stub: unknown) =>
   AnalyticsRepository.Default.pipe(Layer.provide(makeTestDatabase(stub)));
 
-const throwingStub = { select: () => { throw new Error("boom"); } };
+const throwingStub = {
+  select: () => {
+    throw new Error("boom");
+  },
+};
 
 const expectQueryError = (exit: Exit.Exit<unknown, unknown>) => {
   expect(Exit.isFailure(exit)).toBe(true);
@@ -45,22 +49,17 @@ describe("AnalyticsRepository.getUserGrowth", () => {
         repo.getUserGrowth({
           startDate: new Date("2024-01-01"),
           endDate: new Date("2024-01-31"),
-        })
+        }),
       );
       expectQueryError(exit);
-    }).pipe(Effect.provide(provideStub(throwingStub)))
+    }).pipe(Effect.provide(provideStub(throwingStub))),
   );
 });
 
 describe("AnalyticsRepository.getUserStats", () => {
   it.effect("computes verificationRate as percent of total", () => {
     let call = 0;
-    const counts = [
-      [{ count: 100 }],
-      [{ count: 75 }],
-      [{ count: 5 }],
-      [{ count: 2 }],
-    ];
+    const counts = [[{ count: 100 }], [{ count: 75 }], [{ count: 5 }], [{ count: 2 }]];
     const stub = {
       select: () => chainable(counts[call++]),
     };
@@ -91,7 +90,7 @@ describe("AnalyticsRepository.getUserStats", () => {
       const repo = yield* AnalyticsRepository;
       const exit = yield* Effect.exit(repo.getUserStats);
       expectQueryError(exit);
-    }).pipe(Effect.provide(provideStub(throwingStub)))
+    }).pipe(Effect.provide(provideStub(throwingStub))),
   );
 });
 
@@ -119,7 +118,7 @@ describe("AnalyticsRepository.getRoleDistribution", () => {
       const repo = yield* AnalyticsRepository;
       const exit = yield* Effect.exit(repo.getRoleDistribution);
       expectQueryError(exit);
-    }).pipe(Effect.provide(provideStub(throwingStub)))
+    }).pipe(Effect.provide(provideStub(throwingStub))),
   );
 });
 
@@ -143,7 +142,7 @@ describe("AnalyticsRepository.getVerificationDistribution", () => {
       const repo = yield* AnalyticsRepository;
       const exit = yield* Effect.exit(repo.getVerificationDistribution);
       expectQueryError(exit);
-    }).pipe(Effect.provide(provideStub(throwingStub)))
+    }).pipe(Effect.provide(provideStub(throwingStub))),
   );
 });
 
@@ -169,10 +168,8 @@ describe("AnalyticsRepository.getRecentSignupsCount", () => {
   it.effect("fails with QueryError when select throws", () =>
     Effect.gen(function* () {
       const repo = yield* AnalyticsRepository;
-      const exit = yield* Effect.exit(
-        repo.getRecentSignupsCount({ days: 7 })
-      );
+      const exit = yield* Effect.exit(repo.getRecentSignupsCount({ days: 7 }));
       expectQueryError(exit);
-    }).pipe(Effect.provide(provideStub(throwingStub)))
+    }).pipe(Effect.provide(provideStub(throwingStub))),
   );
 });

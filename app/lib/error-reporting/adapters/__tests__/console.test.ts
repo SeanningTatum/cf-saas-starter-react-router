@@ -39,30 +39,34 @@ afterAll(() => {
 });
 
 describe("consoleAdapter", () => {
-  it.effect("writes one line per report at the report's level, so a warning never shows as an error", () =>
-    Effect.gen(function* () {
-      yield* consoleAdapter.send([
-        report({ id: "r1", level: "error", message: "first" }),
-        report({ id: "r2", level: "warning", message: "second" }),
-      ]);
+  it.effect(
+    "writes one line per report at the report's level, so a warning never shows as an error",
+    () =>
+      Effect.gen(function* () {
+        yield* consoleAdapter.send([
+          report({ id: "r1", level: "error", message: "first" }),
+          report({ id: "r2", level: "warning", message: "second" }),
+        ]);
 
-      expect(lines.map((line) => [line.level, line.msg])).toEqual([
-        ["error", "first"],
-        ["warn", "second"],
-      ]);
-    })
+        expect(lines.map((line) => [line.level, line.msg])).toEqual([
+          ["error", "first"],
+          ["warn", "second"],
+        ]);
+      }),
   );
 
-  it.effect("puts the report under errorReport, so log search finds it by id, source and request", () =>
-    Effect.gen(function* () {
-      yield* consoleAdapter.send([report({ id: "r9", source: "trpc" })]);
+  it.effect(
+    "puts the report under errorReport, so log search finds it by id, source and request",
+    () =>
+      Effect.gen(function* () {
+        yield* consoleAdapter.send([report({ id: "r9", source: "trpc" })]);
 
-      expect(lines[0]?.errorReport).toMatchObject({
-        id: "r9",
-        source: "trpc",
-        requestId: "req-1",
-        kind: "defect",
-      });
-    })
+        expect(lines[0]?.errorReport).toMatchObject({
+          id: "r9",
+          source: "trpc",
+          requestId: "req-1",
+          kind: "defect",
+        });
+      }),
   );
 });

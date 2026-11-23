@@ -45,9 +45,7 @@ const TranscriptLine = Schema.Struct({
     Schema.Struct({
       id: Schema.optional(Schema.String),
       model: Schema.optional(Schema.String),
-      usage: Schema.optional(
-        Schema.Struct({ input_tokens: Count, output_tokens: Count, cache_creation_input_tokens: Count, cache_read_input_tokens: Count }),
-      ),
+      usage: Schema.optional(Schema.Struct({ input_tokens: Count, output_tokens: Count, cache_creation_input_tokens: Count, cache_read_input_tokens: Count })),
     }),
   ),
 });
@@ -159,11 +157,7 @@ function callFromEntry(entry: ReturnType<typeof readJournal>[number], n: number,
   };
 }
 
-export function ingestJournals(
-  existing: ReadonlyArray<Call> | null,
-  journals: Journal[],
-  read: Reader,
-): { calls: Call[]; withTokens: number; added: number } {
+export function ingestJournals(existing: ReadonlyArray<Call> | null, journals: Journal[], read: Reader): { calls: Call[]; withTokens: number; added: number } {
   const calls: Call[] = [...(existing ?? [])];
   const claimed = new Set<number>();
   let added = 0;

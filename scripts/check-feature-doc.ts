@@ -38,16 +38,7 @@ const SECTIONS = [
 
 const MUST_HAVE_TEXT = ["Summary", "User and job", "Fit", "Success metric", "Architecture"];
 
-const DIAGRAM_TYPES = [
-  "flowchart",
-  "graph",
-  "sequenceDiagram",
-  "stateDiagram-v2",
-  "stateDiagram",
-  "journey",
-  "erDiagram",
-  "gitGraph",
-];
+const DIAGRAM_TYPES = ["flowchart", "graph", "sequenceDiagram", "stateDiagram-v2", "stateDiagram", "journey", "erDiagram", "gitGraph"];
 
 interface Parsed {
   front: Record<string, string> | null;
@@ -66,7 +57,10 @@ function parseFrontmatter(markdown: string): Parsed {
     const [, key, raw] = m ?? [];
     if (key === undefined || raw === undefined) continue;
     // Drop a trailing ` # comment`, then surrounding quotes.
-    const value = raw.replace(/\s+#.*$/, "").trim().replace(/^["']|["']$/g, "");
+    const value = raw
+      .replace(/\s+#.*$/, "")
+      .trim()
+      .replace(/^["']|["']$/g, "");
     front[key] = value;
   }
   return { front, body: lines.slice(end + 1) };
@@ -170,19 +164,15 @@ function checkDecisions(s: Section, fail: (rule: string, detail: string) => void
   for (const d of decisions) {
     const id = d.title.split(" ")[0];
     const field = (name: string) =>
-      d.lines
-        .map((l) => new RegExp(`^\\s*-\\s+\\*\\*${name}:\\*\\*\\s*(.*)$`).exec(l)?.[1]?.trim())
-        .filter((v): v is string => v !== undefined);
+      d.lines.map((l) => new RegExp(`^\\s*-\\s+\\*\\*${name}:\\*\\*\\s*(.*)$`).exec(l)?.[1]?.trim()).filter((v): v is string => v !== undefined);
     const area = field("Area")[0];
-    if (!area || !["product", "ux", "backend"].includes(area))
-      fail("decisions", `${id}: Area must be product, ux or backend`);
+    if (!area || !["product", "ux", "backend"].includes(area)) fail("decisions", `${id}: Area must be product, ux or backend`);
     if (!field("Chosen")[0]) fail("decisions", `${id}: Chosen is missing`);
     if (!field("Why")[0]) fail("decisions", `${id}: Why is missing`);
     const by = field("Decided by")[0];
     if (!by || !["user", "agent"].includes(by)) fail("decisions", `${id}: Decided by must be user or agent`);
     const rejected = field("Rejected");
-    if (!rejected.some((r) => /\s—\s+\S/.test(r)))
-      fail("decisions", `${id}: needs a Rejected line with a reason after " — "`);
+    if (!rejected.some((r) => /\s—\s+\S/.test(r))) fail("decisions", `${id}: needs a Rejected line with a reason after " — "`);
   }
 }
 
@@ -216,7 +206,10 @@ function checkPrototypes(s: Section, slug: string, fail: (rule: string, detail: 
 
 /** Normalise a fence path: drop leading ./, collapse //. Returns null for absolute paths or `..`. */
 function normPath(p: string): string | null {
-  const q = p.trim().replace(/\/+/g, "/").replace(/^(\.\/)+/, "");
+  const q = p
+    .trim()
+    .replace(/\/+/g, "/")
+    .replace(/^(\.\/)+/, "");
   if (q.startsWith("/") || q.split("/").includes("..")) return null;
   return q;
 }
@@ -234,8 +227,7 @@ function checkStack(s: Section, base: string | undefined, fail: (rule: string, d
     return;
   }
   const want = ["#", "Branch", "Base", "Fence", "Size", "Greptile focus"];
-  if (table.header.length !== want.length || want.some((h, i) => table.header[i] !== h))
-    fail("stack", `PR stack header must be exactly: ${want.join(" | ")}`);
+  if (table.header.length !== want.length || want.some((h, i) => table.header[i] !== h)) fail("stack", `PR stack header must be exactly: ${want.join(" | ")}`);
   const seen = new Set<string>();
   const fences: { n: number; path: string }[] = [];
   table.rows.forEach((row, i) => {
@@ -246,7 +238,7 @@ function checkStack(s: Section, base: string | undefined, fail: (rule: string, d
     if (num !== String(n)) fail("stack", `row ${n}: # is "${num}", expected ${n}`);
     if (seen.has(branch)) fail("stack", `row ${n}: branch "${branch}" is repeated`);
     seen.add(branch);
-    const wantBase = i === 0 ? base ?? rowBase : table.rows[i - 1]?.[1];
+    const wantBase = i === 0 ? (base ?? rowBase) : table.rows[i - 1]?.[1];
     if (rowBase !== wantBase) fail("stack", `row ${n}: base is "${rowBase}", expected "${wantBase}"`);
     const paths = [...(fence ?? "").matchAll(/`([^`]+)`/g)].map((m) => m[1] ?? "");
     if (paths.length === 0) fail("stack", `row ${n}: fence has no backticked path`);
@@ -261,8 +253,7 @@ function checkStack(s: Section, base: string | undefined, fail: (rule: string, d
     for (let j = i + 1; j < fences.length; j++) {
       const a = fences[i];
       const b = fences[j];
-      if (a && b && a.n !== b.n && overlaps(a.path, b.path))
-        fail("fence-overlap", `PR ${a.n} \`${a.path}\` overlaps PR ${b.n} \`${b.path}\``);
+      if (a && b && a.n !== b.n && overlaps(a.path, b.path)) fail("fence-overlap", `PR ${a.n} \`${a.path}\` overlaps PR ${b.n} \`${b.path}\``);
     }
 }
 
@@ -275,10 +266,8 @@ export function checkFeatureDoc(markdown: string, defaultBase?: () => string | u
   if (!front) {
     fail("frontmatter", "no frontmatter block");
   } else {
-    for (const k of ["slug", "title", "ticket", "date"])
-      if (!front[k]) fail("frontmatter", `${k} is missing`);
-    if (front.slug && !/^[a-z0-9]+(-[a-z0-9]+)*$/.test(front.slug))
-      fail("frontmatter", `slug "${front.slug}" is not kebab-case`);
+    for (const k of ["slug", "title", "ticket", "date"]) if (!front[k]) fail("frontmatter", `${k} is missing`);
+    if (front.slug && !/^[a-z0-9]+(-[a-z0-9]+)*$/.test(front.slug)) fail("frontmatter", `slug "${front.slug}" is not kebab-case`);
     if (front.ticket && front.ticket !== "none" && !/^https?:\/\/\S+$/.test(front.ticket))
       fail("frontmatter", `ticket "${front.ticket}" is neither an http(s) URL nor "none"`);
   }
@@ -305,8 +294,7 @@ export function checkFeatureDoc(markdown: string, defaultBase?: () => string | u
 
   // context-source
   for (const line of byName.get("Context")?.lines ?? []) {
-    if (/^\s*[-*]\s+/.test(line) && !/ [—-] source: \S/.test(line))
-      fail("context-source", `bullet has no " — source: " suffix: ${line.trim().slice(0, 60)}`);
+    if (/^\s*[-*]\s+/.test(line) && !/ [—-] source: \S/.test(line)) fail("context-source", `bullet has no " — source: " suffix: ${line.trim().slice(0, 60)}`);
   }
 
   // decisions

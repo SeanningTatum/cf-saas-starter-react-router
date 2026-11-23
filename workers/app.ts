@@ -40,7 +40,7 @@ declare module "react-router" {
 
 const requestHandler = createRequestHandler(
   () => import("virtual:react-router/server-build"),
-  import.meta.env.MODE
+  import.meta.env.MODE,
 );
 
 const internalError = (requestId: string) =>
@@ -54,18 +54,18 @@ async function handle(
   ctx: ExecutionContext,
   cspNonce: string,
   requestContext: RequestContext,
-  errorReporter: ErrorReporterShape
+  errorReporter: ErrorReporterShape,
 ): Promise<Response> {
   const runtime = makeAppRuntime(
     env,
     { dev: import.meta.env.DEV, requestOrigin: new URL(request.url).origin },
     requestContext,
-    errorReporter
+    errorReporter,
   );
   const report = (capture: ErrorCapture) => reportError(errorReporter, capture);
   const withStatusOnSpan = async (response: Response): Promise<Response> => {
     await runtime.runPromiseExit(
-      Effect.annotateCurrentSpan(HTTP_STATUS_ATTRIBUTE, response.status)
+      Effect.annotateCurrentSpan(HTTP_STATUS_ATTRIBUTE, response.status),
     );
     return response;
   };
@@ -95,7 +95,7 @@ async function handle(
         cspNonce,
         requestId: requestContext.requestId,
         reportError: report,
-      })
+      }),
     );
   } catch (err) {
     report({ error: err, source: "fetch" });
@@ -110,13 +110,13 @@ export default {
     const nonce = makeNonce();
     const requestContext = makeRequestContext(
       request,
-      decideSampling(readSampling(env, readEnvironment(env)))
+      decideSampling(readSampling(env, readEnvironment(env))),
     );
     const errorReporter = requestErrorReporter(env, requestContext, (delivery) =>
-      ctx.waitUntil(delivery)
+      ctx.waitUntil(delivery),
     );
     const response = await runWithRequestContext(requestContext, () =>
-      handle(request, env, ctx, nonce, requestContext, errorReporter)
+      handle(request, env, ctx, nonce, requestContext, errorReporter),
     );
     const secured = withSecurityHeaders(response, {
       nonce,

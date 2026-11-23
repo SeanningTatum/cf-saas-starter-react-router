@@ -97,7 +97,9 @@ export const rule: RepoRule = {
     const used = new Set(files.map((path) => map.classify(path)));
     const stale = map.entries
       .filter((entry) => !used.has(entry))
-      .map((entry) => mapHit(`the entry for "${entry.match}" matches no file`, "delete the entry, or fix its glob; an earlier entry may match the same files first"));
+      .map((entry) =>
+        mapHit(`the entry for "${entry.match}" matches no file`, "delete the entry, or fix its glob; an earlier entry may match the same files first"),
+      );
     return [...files.flatMap((path) => fileHits(repo, map, path)), ...stale];
   },
   cases: testMapCases,

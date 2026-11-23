@@ -11,7 +11,7 @@ export interface TrackedUploadOptions {
 
 export const trackedUpload = async (
   url: string,
-  { form = new FormData(), headers, contentLength }: TrackedUploadOptions = {}
+  { form = new FormData(), headers, contentLength }: TrackedUploadOptions = {},
 ): Promise<TrackedUpload> => {
   const encoded = new Request(url, { method: "POST", body: form });
   const bytes = new Uint8Array(await encoded.arrayBuffer());
@@ -24,11 +24,16 @@ export const trackedUpload = async (
         controller.close();
       },
     },
-    { highWaterMark: 0 }
+    { highWaterMark: 0 },
   );
   const sent = new Headers(headers);
   sent.set("content-type", encoded.headers.get("content-type") ?? "");
   if (contentLength !== undefined) sent.set("content-length", String(contentLength));
-  const init: RequestInit & { duplex: "half" } = { method: "POST", headers: sent, body, duplex: "half" };
+  const init: RequestInit & { duplex: "half" } = {
+    method: "POST",
+    headers: sent,
+    body,
+    duplex: "half",
+  };
   return { request: new Request(url, init), bodyRead: () => pulled };
 };

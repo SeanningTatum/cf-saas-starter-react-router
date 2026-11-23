@@ -38,7 +38,7 @@ export async function record(
   { out, name, slowMo = 250 }: RecordOptions,
   steps: (page: Page) => Promise<void>,
   launch: (slowMo: number) => Promise<Browser> = (ms) => chromium.launch({ args: ["--disable-extensions"], slowMo: ms }),
-  mkdir: (dir: string) => void = (dir) => mkdirSync(dir, { recursive: true })
+  mkdir: (dir: string) => void = (dir) => mkdirSync(dir, { recursive: true }),
 ): Promise<Recording> {
   if (!/^[a-z0-9]+(-[a-z0-9]+)*$/.test(name)) return { path: "", ok: false, error: `name must be kebab-case: ${name}` };
   mkdir(out);

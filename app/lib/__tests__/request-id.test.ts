@@ -10,7 +10,7 @@ describe("useDocumentRequestId", () => {
 
   it("returns the provided id on the server (catches a 404 page rendered with no id)", () => {
     const html = renderToStaticMarkup(
-      createElement(RequestIdContext.Provider, { value: "req-1" }, createElement(ShowId))
+      createElement(RequestIdContext.Provider, { value: "req-1" }, createElement(ShowId)),
     );
     expect(html).toBe("<span>req-1</span>");
   });

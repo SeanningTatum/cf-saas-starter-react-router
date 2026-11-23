@@ -17,7 +17,13 @@ const field = (lines: string[], key: string): string | undefined =>
   lines.map((line) => line.match(new RegExp(`^ {4}${key}:\\s*(.*)$`))?.[1]).find((value) => value !== undefined);
 
 const listOf = (value: string | undefined): string[] =>
-  value === undefined ? [] : value.replace(/^\[|\]$/g, "").split(",").map((part) => part.trim()).filter(Boolean);
+  value === undefined
+    ? []
+    : value
+        .replace(/^\[|\]$/g, "")
+        .split(",")
+        .map((part) => part.trim())
+        .filter(Boolean);
 
 export function jobsOf(text: string): Job[] {
   const lines = text.split("\n").filter((line) => !/^\s*#/.test(line));
@@ -103,10 +109,12 @@ export function jobsThatRun(jobs: Job[], context: Context): string[] {
     const known = runs.get(job.id);
     if (known !== undefined) return known;
     const runsAnyway = job.condition?.trimStart().startsWith("always()") ?? false;
-    const parents = runsAnyway || job.needs.every((id) => {
-      const parent = jobs.find((other) => other.id === id);
-      return parent !== undefined && decide(parent);
-    });
+    const parents =
+      runsAnyway ||
+      job.needs.every((id) => {
+        const parent = jobs.find((other) => other.id === id);
+        return parent !== undefined && decide(parent);
+      });
     const value = parents && (job.condition === undefined || evaluate(job.condition, context));
     runs.set(job.id, value);
     return value;

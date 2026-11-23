@@ -30,14 +30,11 @@ export interface SessionShape {
   readonly user: SessionUser | null;
 }
 
-export class Session extends Context.Tag("app/Session")<
-  Session,
-  SessionShape
->() {}
+export class Session extends Context.Tag("app/Session")<Session, SessionShape>() {}
 
 export const getSession = <A>(
   api: { readonly getSession: (input: { headers: Headers }) => Promise<A> },
-  headers: Headers
+  headers: Headers,
 ): Effect.Effect<A, ExternalServiceError> =>
   Effect.tryPromise({
     try: () => api.getSession({ headers }),
@@ -58,5 +55,5 @@ export const SessionLive = (headers: Headers) =>
         session: live.session as SessionInfo,
         user: live.user as SessionUser,
       };
-    })
+    }),
   );

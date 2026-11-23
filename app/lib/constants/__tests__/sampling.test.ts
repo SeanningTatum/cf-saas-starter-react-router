@@ -1,9 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  KEEP_ALL,
-  PRODUCTION_SAMPLING,
-  SAMPLING_BY_ENVIRONMENT,
-} from "../sampling";
+import { KEEP_ALL, PRODUCTION_SAMPLING, SAMPLING_BY_ENVIRONMENT } from "../sampling";
 
 describe("sampling presets", () => {
   it("keeps every rate between 0 and 1, so no preset can keep nothing by accident or read as more than always", () => {

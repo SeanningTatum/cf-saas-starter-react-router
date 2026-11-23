@@ -10,7 +10,9 @@ const agent = (over: Record<string, string | null> = {}, name = "alpha"): string
     effort: "medium",
     ...over,
   };
-  const body = Object.entries(fm).filter(([, v]) => v !== null).map(([k, v]) => `${k}: ${v}`);
+  const body = Object.entries(fm)
+    .filter(([, v]) => v !== null)
+    .map(([k, v]) => `${k}: ${v}`);
   return ["---", ...body, "---", "", "Body."].join("\n");
 };
 
@@ -40,7 +42,9 @@ function memDeps(files: Record<string, string>) {
     },
     listDir: (p) => {
       const pre = `${p}/`;
-      return Object.keys(disk).filter((k) => k.startsWith(pre) && !k.slice(pre.length).includes("/")).map((k) => k.slice(pre.length));
+      return Object.keys(disk)
+        .filter((k) => k.startsWith(pre) && !k.slice(pre.length).includes("/"))
+        .map((k) => k.slice(pre.length));
     },
   };
   return { disk, writes, deps };

@@ -31,25 +31,19 @@ export interface ReportStamp {
 export const withoutQuery = (url: string): string | undefined => {
   if (!URL.canParse(url)) return undefined;
   const parsed = new URL(url);
-  return clip(
-    `${parsed.origin}${redactPath(parsed.pathname)}`,
-    MAX_REPORT_URL_LENGTH
-  );
+  return clip(`${parsed.origin}${redactPath(parsed.pathname)}`, MAX_REPORT_URL_LENGTH);
 };
 
 const present = <K extends string>(
   key: K,
-  value: string | undefined
+  value: string | undefined,
 ): { readonly [P in K]?: string } =>
   value === undefined ? {} : ({ [key]: value } as { readonly [P in K]: string });
 
 const redacted = (text: string | undefined, max: number): string | undefined =>
   text === undefined ? undefined : redactWithin(text, max);
 
-export const buildReport = (
-  capture: ErrorCapture,
-  stamp: ReportStamp
-): ErrorReport => {
+export const buildReport = (capture: ErrorCapture, stamp: ReportStamp): ErrorReport => {
   const classified = classifyError(capture.error);
   return {
     id: stamp.id,
@@ -68,13 +62,8 @@ export const buildReport = (
     ...present("method", stamp.method),
     ...present(
       "path",
-      stamp.path === undefined
-        ? undefined
-        : clip(redactPath(stamp.path), MAX_REPORT_URL_LENGTH)
+      stamp.path === undefined ? undefined : clip(redactPath(stamp.path), MAX_REPORT_URL_LENGTH),
     ),
-    ...present(
-      "url",
-      capture.url === undefined ? undefined : withoutQuery(capture.url)
-    ),
+    ...present("url", capture.url === undefined ? undefined : withoutQuery(capture.url)),
   };
 };

@@ -133,8 +133,7 @@ describe("tracker create", () => {
 });
 
 describe("tracker edit", () => {
-  const reply = (updatedAt: string) => (args: string[]) =>
-    args[1] === "view" ? { stdout: JSON.stringify({ url: issue.url, updatedAt }) } : {};
+  const reply = (updatedAt: string) => (args: string[]) => (args[1] === "view" ? { stdout: JSON.stringify({ url: issue.url, updatedAt }) } : {});
 
   it("writes the body and reports the new updatedAt", async () => {
     const { deps, calls } = stub(reply("2026-10-24T11:00:00Z"));
@@ -155,8 +154,7 @@ describe("tracker edit", () => {
   const guarded = (opts: { updatedAt?: string; edits?: object[] } = {}) => {
     return stub((args) => {
       if (args[0] === "api" && args[1] === "user") return { stdout: "sean\n" };
-      if (args[0] === "api" && args[1] === "graphql")
-        return { stdout: JSON.stringify({ data: { node: { userContentEdits: { nodes: opts.edits ?? [] } } } }) };
+      if (args[0] === "api" && args[1] === "graphql") return { stdout: JSON.stringify({ data: { node: { userContentEdits: { nodes: opts.edits ?? [] } } } }) };
       if (args[1] === "view") {
         const f = args[args.indexOf("--json") + 1];
         if (f === "id") return { stdout: JSON.stringify({ id: "I_node" }) };
@@ -282,9 +280,7 @@ describe("tracker upsert-comment", () => {
   });
 
   it("a PATCH refused with 403 falls back to a new comment: the update must not abort the run", async () => {
-    const { deps } = stub(
-      reply(line({ id: 55, html_url: "u", body: marker, author: "sean" }), { code: 1, stderr: "gh: Forbidden (HTTP 403)" }),
-    );
+    const { deps } = stub(reply(line({ id: 55, html_url: "u", body: marker, author: "sean" }), { code: 1, stderr: "gh: Forbidden (HTTP 403)" }));
     const o = await run(args, deps);
     expect(o.out).toEqual({ id: "77", url: `${url}#issuecomment-77`, action: "created", superseded: ["55"] });
   });

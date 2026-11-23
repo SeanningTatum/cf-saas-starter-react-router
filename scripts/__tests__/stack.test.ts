@@ -74,12 +74,7 @@ describe("exclude", () => {
 
   it("an excluded untracked file is neither unassigned nor staged: split must not commit a prototype that predates the run", () => {
     const { deps, calls } = stub(
-      (a) =>
-        a[0] === "status"
-          ? { stdout: "?? plans/proto.html\0?? notes.md\0 M app/db/schema.ts\0" }
-          : a[0] === "rev-list"
-            ? { stdout: "0\n" }
-            : {},
+      (a) => (a[0] === "status" ? { stdout: "?? plans/proto.html\0?? notes.md\0 M app/db/schema.ts\0" } : a[0] === "rev-list" ? { stdout: "0\n" } : {}),
       { ...ex, prs: ex.prs.slice(0, 1) },
     );
     const o = run(["split", "--plan", "p.json"], deps);
@@ -96,8 +91,7 @@ describe("exclude", () => {
 });
 
 describe("scratchDirs from the config", () => {
-  const status = (a: string[]) =>
-    a[0] === "status" ? { stdout: "?? scratch/a.txt\0?? app/repositories/x.ts\0" } : { stdout: "" };
+  const status = (a: string[]) => (a[0] === "status" ? { stdout: "?? scratch/a.txt\0?? app/repositories/x.ts\0" } : { stdout: "" });
   const excludedBy = (p: Plan, scratchDirs: string[]) => {
     const { deps } = stub(status, p);
     const o = run(["assign", "--plan", "p.json"], { ...deps, scratchDirs });
@@ -115,7 +109,9 @@ describe("scratchDirs from the config", () => {
 
 describe("stack assign", () => {
   it("a rename counts as the new path and carries the old path, so the deletion is staged with it", () => {
-    const { deps } = stub((a) => (a[0] === "status" ? { stdout: "R  app/repositories/new.ts\0app/old.ts\0" } : { stdout: "app/old.ts\0app/repositories/new.ts\0" }));
+    const { deps } = stub((a) =>
+      a[0] === "status" ? { stdout: "R  app/repositories/new.ts\0app/old.ts\0" } : { stdout: "app/old.ts\0app/repositories/new.ts\0" },
+    );
     const o = run(["assign", "--plan", "p.json"], deps);
     expect((o.out as Assigned).assignments[0]?.paths).toEqual(["app/repositories/new.ts", "app/old.ts"]);
     expect((o.out as Assigned).assignments[2]?.paths).toEqual([]);
@@ -179,7 +175,11 @@ describe("stack split", () => {
       "commit -m feat: ui",
       "rev-parse HEAD",
     ]);
-    expect((o.out as { branches: { n: number; sha: string }[] }).branches.map((b) => [b.n, b.sha])).toEqual([[1, "abc123"], [2, "abc123"], [3, "abc123"]]);
+    expect((o.out as { branches: { n: number; sha: string }[] }).branches.map((b) => [b.n, b.sha])).toEqual([
+      [1, "abc123"],
+      [2, "abc123"],
+      [3, "abc123"],
+    ]);
   });
 
   it("commits each PR with the plan's message and invents no subject of its own: the subjects pass commitlint", async () => {
@@ -257,11 +257,7 @@ describe("stack restack", () => {
 
   it("on conflict lists the conflicting paths, aborts the rebase and exits 4: never leaves the tree mid-rebase", () => {
     const { deps, calls } = stub((a) =>
-      a[0] === "rebase" && a[1] === "--update-refs"
-        ? { code: 1, stderr: "CONFLICT" }
-        : a[0] === "diff"
-          ? { stdout: "app/db/schema.ts\napp/a.ts\n" }
-          : {},
+      a[0] === "rebase" && a[1] === "--update-refs" ? { code: 1, stderr: "CONFLICT" } : a[0] === "diff" ? { stdout: "app/db/schema.ts\napp/a.ts\n" } : {},
     );
     const o = run(["restack", "--plan", "p.json", "--from", "1"], deps);
     expect(o.code).toBe(4);

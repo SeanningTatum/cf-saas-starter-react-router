@@ -29,9 +29,7 @@ export const splitPath = (path: string): { dir: string; name: string } => {
 };
 
 const isDeclared = (node: ts.Node): boolean =>
-  (ts.canHaveModifiers(node) ? ts.getModifiers(node) : undefined)?.some(
-    (modifier) => modifier.kind === ts.SyntaxKind.DeclareKeyword
-  ) ?? false;
+  (ts.canHaveModifiers(node) ? ts.getModifiers(node) : undefined)?.some((modifier) => modifier.kind === ts.SyntaxKind.DeclareKeyword) ?? false;
 
 const isTypeOnly = (node: ts.Statement): boolean =>
   ts.isImportDeclaration(node) ||
@@ -41,8 +39,7 @@ const isTypeOnly = (node: ts.Statement): boolean =>
   ts.isEmptyStatement(node) ||
   isDeclared(node);
 
-export const firstRuntimeStatement = (ast: ts.SourceFile): ts.Statement | undefined =>
-  ast.statements.find((statement) => !isTypeOnly(statement));
+export const firstRuntimeStatement = (ast: ts.SourceFile): ts.Statement | undefined => ast.statements.find((statement) => !isTypeOnly(statement));
 
 const firstLogicStatement = (ast: ts.SourceFile): ts.Statement | undefined =>
   ast.statements.find((statement) => !isTypeOnly(statement) && !isLiteralConstant(statement));
@@ -104,7 +101,9 @@ export function unitProblems(repo: Repo, path: string): Problem[] {
   const empty = emptyTest(test);
   if (empty) return [empty];
   if (importsFile(test, path)) return [];
-  return [{ file: test.path, message: `this test never imports ${path}, the file it is named after`, fix: `import ${path} here and assert on what it exports` }];
+  return [
+    { file: test.path, message: `this test never imports ${path}, the file it is named after`, fix: `import ${path} here and assert on what it exports` },
+  ];
 }
 
 export function machineProblems(repo: Repo, path: string): Problem[] {

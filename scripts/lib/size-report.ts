@@ -100,10 +100,7 @@ export const pathOf = (chain: ManifestRoute[]): string =>
 
 export const pages = (manifest: Manifest): ManifestRoute[] =>
   Object.values(manifest.routes).filter(
-    (route) =>
-      route.id !== ROOT_ROUTE_ID &&
-      route.hasDefaultExport === true &&
-      !Object.values(manifest.routes).some((other) => other.parentId === route.id),
+    (route) => route.id !== ROOT_ROUTE_ID && route.hasDefaultExport === true && !Object.values(manifest.routes).some((other) => other.parentId === route.id),
   );
 
 export function firstLoad(manifest: Manifest, id: string): { js: string[]; css: string[] } {
@@ -113,8 +110,7 @@ export function firstLoad(manifest: Manifest, id: string): { js: string[]; css: 
   return { js: [...new Set(js)], css: [...new Set(css)] };
 }
 
-const total = (files: string[], gzipSizes: Record<string, number>): number =>
-  files.reduce((sum, file) => sum + (gzipSizes[file] ?? 0), 0);
+const total = (files: string[], gzipSizes: Record<string, number>): number => files.reduce((sum, file) => sum + (gzipSizes[file] ?? 0), 0);
 
 export function measure(manifest: Manifest, gzipSizes: Record<string, number>, workerGzip: number): SizeReport {
   const root = manifest.routes[ROOT_ROUTE_ID];
@@ -206,9 +202,7 @@ export function loadTimeLine(rows: ComparedRow[]): string {
 }
 
 export const touchesShippedCode = (paths: string[]): string[] =>
-  paths.filter(
-    (path) => SHIPPED_FILES.includes(path) || (SHIPPED_PREFIXES.some((prefix) => path.startsWith(prefix)) && !TEST_PATH_PATTERN.test(path)),
-  );
+  paths.filter((path) => SHIPPED_FILES.includes(path) || (SHIPPED_PREFIXES.some((prefix) => path.startsWith(prefix)) && !TEST_PATH_PATTERN.test(path)));
 
 const carriesTable = (body: string): boolean => {
   const prose = body.replace(FENCED_BLOCK_PATTERN, "");

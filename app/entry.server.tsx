@@ -1,24 +1,13 @@
-import type {
-  AppLoadContext,
-  EntryContext,
-  HandleErrorFunction,
-} from "react-router";
+import type { AppLoadContext, EntryContext, HandleErrorFunction } from "react-router";
 import { ServerRouter } from "react-router";
 import { isbot } from "isbot";
 import { renderToReadableStream } from "react-dom/server";
 import { createInstance } from "i18next";
 import { I18nextProvider, initReactI18next } from "react-i18next";
 import { i18nServer } from "./i18n/i18n.server";
-import {
-  supportedLngs,
-  fallbackLng,
-  defaultNS,
-} from "@/lib/constants/i18n";
+import { supportedLngs, fallbackLng, defaultNS } from "@/lib/constants/i18n";
 import resourcesToBackend from "i18next-resources-to-backend";
-import {
-  FIRST_SERVER_ERROR_STATUS,
-  READ_METHODS,
-} from "@/lib/constants/error-reporting";
+import { FIRST_SERVER_ERROR_STATUS, READ_METHODS } from "@/lib/constants/error-reporting";
 import { NonceContext } from "@/lib/csp-nonce";
 import { RequestIdContext } from "@/lib/request-id";
 
@@ -32,7 +21,7 @@ export const handleError: HandleErrorFunction = (error, { request, context }) =>
 
 export const reportRenderError = (
   loadContext: Pick<AppLoadContext, "reportError">,
-  error: unknown
+  error: unknown,
 ): void => loadContext.reportError({ error, source: "render" });
 
 export default async function handleRequest(
@@ -40,7 +29,7 @@ export default async function handleRequest(
   responseStatusCode: number,
   responseHeaders: Headers,
   routerContext: EntryContext,
-  loadContext: AppLoadContext
+  loadContext: AppLoadContext,
 ) {
   const nonce = loadContext.cspNonce;
   const userAgent = request.headers.get("user-agent");
@@ -53,9 +42,8 @@ export default async function handleRequest(
     .use(initReactI18next)
     .use(
       resourcesToBackend(
-        (language: string, namespace: string) =>
-          import(`./locales/${language}/${namespace}.json`)
-      )
+        (language: string, namespace: string) => import(`./locales/${language}/${namespace}.json`),
+      ),
     )
     .init({
       supportedLngs: [...supportedLngs],
@@ -69,11 +57,7 @@ export default async function handleRequest(
     <NonceContext.Provider value={nonce}>
       <RequestIdContext.Provider value={loadContext.requestId}>
         <I18nextProvider i18n={instance}>
-          <ServerRouter
-            context={routerContext}
-            url={request.url}
-            nonce={nonce}
-          />
+          <ServerRouter context={routerContext} url={request.url} nonce={nonce} />
         </I18nextProvider>
       </RequestIdContext.Provider>
     </NonceContext.Provider>,
@@ -83,7 +67,7 @@ export default async function handleRequest(
         responseStatusCode = FIRST_SERVER_ERROR_STATUS;
         reportRenderError(loadContext, error);
       },
-    }
+    },
   );
 
   if ((userAgent && isbot(userAgent)) || routerContext.isSpaMode) {

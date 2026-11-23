@@ -6,11 +6,7 @@ export interface ProtectionTarget {
 }
 
 export const hasAdminRole = (role: string | null | undefined): boolean =>
-  (role ?? "")
-    .split(ROLE_LIST_SEPARATOR)
-    .some((one) => one.trim() === ADMIN_ROLE);
+  (role ?? "").split(ROLE_LIST_SEPARATOR).some((one) => one.trim() === ADMIN_ROLE);
 
-export const isProtectedUser = (
-  target: ProtectionTarget,
-  currentUserId: string
-): boolean => hasAdminRole(target.role) || target.id === currentUserId;
+export const isProtectedUser = (target: ProtectionTarget, currentUserId: string): boolean =>
+  hasAdminRole(target.role) || target.id === currentUserId;

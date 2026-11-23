@@ -81,7 +81,10 @@ export const measureRef = (deps: Deps, ref: string): Either.Either<SizeReport, s
 
 const changedPaths = (deps: Deps, base: string): Either.Either<string[], string> =>
   Either.map(step(deps, GIT_BIN, ["diff", "--name-only", `${base}...HEAD`], deps.cwd), (result) =>
-    result.stdout.split("\n").map((line) => line.trim()).filter(Boolean),
+    result.stdout
+      .split("\n")
+      .map((line) => line.trim())
+      .filter(Boolean),
   );
 
 export const report = (deps: Deps, options: Options): Either.Either<{ head: SizeReport; markdown: string }, string> =>

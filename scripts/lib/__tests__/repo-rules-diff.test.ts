@@ -1,9 +1,5 @@
 import { describe, it, expect } from "vitest";
-import {
-  differ,
-  rulesetDiffs,
-  stable,
-} from "../repo-rules-diff";
+import { differ, rulesetDiffs, stable } from "../repo-rules-diff";
 import type { LiveRulesetT, Ruleset } from "../repo-rules-schemas";
 
 const declared: Ruleset = {

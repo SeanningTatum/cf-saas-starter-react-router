@@ -7,10 +7,7 @@ export interface ReportBudget {
   readonly take: (nowMs: number) => boolean;
 }
 
-export const makeReportBudget = ({
-  limit,
-  windowMs,
-}: ReportBudgetOptions): ReportBudget => {
+export const makeReportBudget = ({ limit, windowMs }: ReportBudgetOptions): ReportBudget => {
   let windowStart = Number.NEGATIVE_INFINITY;
   let taken = 0;
   return {

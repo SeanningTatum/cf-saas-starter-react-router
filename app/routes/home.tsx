@@ -17,13 +17,7 @@ import {
 } from "@tabler/icons-react";
 
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { StackBadge } from "@/components/stack-badge";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { LanguageSwitcher } from "@/components/language-switcher";
@@ -65,8 +59,7 @@ export default function Home() {
           </span>
 
           <h1 className="text-balance text-4xl font-semibold tracking-tight sm:text-5xl md:text-6xl">
-            {t("hero.title_lead")}{" "}
-            <span className="text-primary">{t("hero.title_accent")}</span>
+            {t("hero.title_lead")} <span className="text-primary">{t("hero.title_accent")}</span>
             {t("hero.title_trail")}
           </h1>
 
@@ -95,12 +88,8 @@ export default function Home() {
 
         <section className="border-t border-border pt-16">
           <div className="mb-8 flex flex-col gap-2">
-            <h2 className="text-xl font-semibold tracking-tight sm:text-2xl">
-              {t("wired.title")}
-            </h2>
-            <p className="max-w-2xl text-sm text-muted-foreground">
-              {t("wired.subtitle")}
-            </p>
+            <h2 className="text-xl font-semibold tracking-tight sm:text-2xl">{t("wired.title")}</h2>
+            <p className="max-w-2xl text-sm text-muted-foreground">{t("wired.subtitle")}</p>
           </div>
 
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
@@ -170,9 +159,7 @@ export default function Home() {
             <h2 className="text-xl font-semibold tracking-tight sm:text-2xl">
               {t("harness.title")}
             </h2>
-            <p className="max-w-2xl text-sm text-muted-foreground">
-              {t("harness.subtitle")}
-            </p>
+            <p className="max-w-2xl text-sm text-muted-foreground">{t("harness.subtitle")}</p>
           </div>
 
           <div className="grid gap-4 md:grid-cols-3">
@@ -224,17 +211,11 @@ export default function Home() {
               <h2 className="text-xl font-semibold tracking-tight sm:text-2xl">
                 {t("quickstart.title")}
               </h2>
-              <p className="max-w-xl text-sm text-muted-foreground">
-                {t("quickstart.subtitle")}
-              </p>
+              <p className="max-w-xl text-sm text-muted-foreground">{t("quickstart.subtitle")}</p>
             </div>
             <div className="flex flex-wrap gap-2">
               <Button asChild variant="outline" data-testid="quickstart-github">
-                <a
-                  href="https://github.com/"
-                  target="_blank"
-                  rel="noreferrer"
-                >
+                <a href="https://github.com/" target="_blank" rel="noreferrer">
                   <IconBrandGithub className="size-4" />
                   {t("quickstart.repo")}
                 </a>
@@ -279,23 +260,14 @@ function TopBar() {
   return (
     <header className="border-b border-border">
       <div className="mx-auto flex h-14 max-w-6xl items-center justify-between px-6">
-        <Link
-          to="/"
-          className="flex items-center gap-2 font-medium"
-          data-testid="brand-link"
-        >
+        <Link to="/" className="flex items-center gap-2 font-medium" data-testid="brand-link">
           <span className="flex size-6 items-center justify-center rounded-md bg-primary text-primary-foreground font-mono text-[10px] font-bold">
             CF
           </span>
           <span className="text-sm">{t("brand")}</span>
         </Link>
         <div className="flex items-center gap-1">
-          <Button
-            asChild
-            variant="ghost"
-            size="sm"
-            className="hidden sm:inline-flex"
-          >
+          <Button asChild variant="ghost" size="sm" className="hidden sm:inline-flex">
             <a
               href="https://github.com/"
               target="_blank"
@@ -336,9 +308,7 @@ function HarnessPillar({ icon, title, description, path }: HarnessPillarProps) {
         </span>
         <div className="space-y-1.5">
           <CardTitle className="text-base">{title}</CardTitle>
-          <CardDescription className="leading-relaxed">
-            {description}
-          </CardDescription>
+          <CardDescription className="leading-relaxed">{description}</CardDescription>
         </div>
       </CardHeader>
       <CardContent>
@@ -357,9 +327,7 @@ function Footer() {
     <footer className="border-t border-border">
       <div className="mx-auto flex max-w-6xl flex-col gap-2 px-6 py-8 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
         <p>{t("footer.tagline")}</p>
-        <p className="font-mono text-xs uppercase tracking-wider">
-          {HOME_STACK.join(" · ")}
-        </p>
+        <p className="font-mono text-xs uppercase tracking-wider">{HOME_STACK.join(" · ")}</p>
       </div>
     </footer>
   );

@@ -44,7 +44,12 @@ describe("parseTestMap classify", () => {
 
 describe("parseTestMap problems", () => {
   it("an unknown kind is one short problem that names the entry by its match and lists the kinds, so the reader can fix it without the schema", () => {
-    const problems = problemsOf(mapText([{ match: "app/lib/**", kind: "unit" }, { match: "app/x/**", kind: "vibes" }]));
+    const problems = problemsOf(
+      mapText([
+        { match: "app/lib/**", kind: "unit" },
+        { match: "app/x/**", kind: "vibes" },
+      ]),
+    );
 
     expect(problems).toEqual([
       'the entry for "app/x/**" has the kind "vibes"; the kinds are unit, machine, procedure, route, component, primitive, declaration, spec-helper, covered-by',
@@ -66,18 +71,14 @@ describe("parseTestMap problems", () => {
     ["no test", { match: "app/routes.ts", kind: "covered-by", reason: "The route table." }],
     ["no reason", { match: "app/routes.ts", kind: "covered-by", test: "e2e/auth.spec.ts" }],
   ])("a covered-by entry with %s is a problem that names the entry by its match", (_label, entry) => {
-    expect(problemsOf(mapText([entry]))).toEqual([
-      'the entry for "app/routes.ts" is "covered-by" and needs both `test` (a test file\'s path) and `reason`',
-    ]);
+    expect(problemsOf(mapText([entry]))).toEqual(['the entry for "app/routes.ts" is "covered-by" and needs both `test` (a test file\'s path) and `reason`']);
   });
 
   it.each([
     ["test", { match: "app/lib/**", kind: "unit", test: "app/lib/__tests__/x.test.ts" }],
     ["reason", { match: "app/lib/**", kind: "unit", reason: "Because." }],
   ])("an entry that is not covered-by and carries a %s is a problem that names the entry", (_label, entry) => {
-    expect(problemsOf(mapText([entry]))).toEqual([
-      'the entry for "app/lib/**" is "unit", so it takes no `test` or `reason`; only "covered-by" does',
-    ]);
+    expect(problemsOf(mapText([entry]))).toEqual(['the entry for "app/lib/**" is "unit", so it takes no `test` or `reason`; only "covered-by" does']);
   });
 
   it("reports every bad entry, not only the first", () => {
@@ -86,7 +87,7 @@ describe("parseTestMap problems", () => {
         { match: "app/a/**", kind: "covered-by" },
         { match: "app/b/**", kind: "unit" },
         { match: "app/c/**", kind: "unit", test: "x.test.ts" },
-      ])
+      ]),
     );
 
     expect(problems).toHaveLength(2);

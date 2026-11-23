@@ -21,7 +21,7 @@ describe("importedModules", () => {
     "a package import (%s) resolves to nothing, so a scoped package is not read as the @/ alias",
     (text) => {
       expect(modulesOf(text)).toEqual([]);
-    }
+    },
   );
 
   it("a re-export, an export-all and a dynamic import each count as an import", () => {
@@ -42,7 +42,6 @@ describe("importedModules", () => {
   ])("a code extension on %s is dropped, and a dotted name keeps its dots", (text, expected) => {
     expect(modulesOf(text)).toEqual([expected]);
   });
-
 });
 
 describe("withoutExtension", () => {
@@ -82,8 +81,6 @@ describe("importsFile", () => {
   });
 
   it("matches a .tsx target imported with no extension", () => {
-    expect(importsFile(sourceOf('import { Button } from "../button";', "app/components/__tests__/button.test.tsx"), "app/components/button.tsx")).toBe(
-      true
-    );
+    expect(importsFile(sourceOf('import { Button } from "../button";', "app/components/__tests__/button.test.tsx"), "app/components/button.tsx")).toBe(true);
   });
 });

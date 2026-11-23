@@ -11,6 +11,6 @@ export interface CapturedEvent {
 export interface AnalyticsAdapter {
   readonly name: string;
   readonly send: (
-    batch: ReadonlyArray<CapturedEvent>
+    batch: ReadonlyArray<CapturedEvent>,
   ) => Effect.Effect<void, AnalyticsDeliveryError>;
 }

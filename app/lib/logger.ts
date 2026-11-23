@@ -16,11 +16,7 @@ interface Logger {
 }
 
 function createLogger(bindings: LogContext = {}): Logger {
-  const log = (
-    level: LogLevel,
-    context: LogContext | string,
-    message?: string
-  ) => {
+  const log = (level: LogLevel, context: LogContext | string, message?: string) => {
     if (typeof context === "string") {
       emitLog(level, context, bindings);
     } else {

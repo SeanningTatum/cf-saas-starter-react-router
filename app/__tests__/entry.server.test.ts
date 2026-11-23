@@ -4,10 +4,7 @@ import type { AppLoadContext, HandleErrorFunction } from "react-router";
 import { handleError, reportRenderError } from "../entry.server";
 import type { ErrorReport } from "@/lib/error-reporting/adapter";
 import type { ErrorCapture } from "@/lib/error-reporting/report";
-import {
-  makeErrorReporter,
-  reportError as reportErrorWith,
-} from "@/services/error-reporter";
+import { makeErrorReporter, reportError as reportErrorWith } from "@/services/error-reporter";
 
 type HandleErrorArgs = Parameters<HandleErrorFunction>[1];
 
@@ -33,9 +30,7 @@ describe("handleError", () => {
   it("reports a GET as a loader error and a POST as an action error, so the report says which half failed", () => {
     const error = new Error("boom");
     const get = argsFor(new Request("https://app.example.com/dashboard"));
-    const post = argsFor(
-      new Request("https://app.example.com/dashboard", { method: "POST" })
-    );
+    const post = argsFor(new Request("https://app.example.com/dashboard", { method: "POST" }));
 
     handleError(error, get.args);
     handleError(error, post.args);

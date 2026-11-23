@@ -28,7 +28,10 @@ const ORIGIN = "http://localhost";
 const request = (path: string, method = "POST", headers: HeadersInit = {}) =>
   new Request(`${ORIGIN}${path}`, { method, headers });
 
-const overLimit = new RateLimitError({ rule: "signIn", retryAfterSeconds: RATE_LIMIT_PERIOD_SECONDS });
+const overLimit = new RateLimitError({
+  rule: "signIn",
+  retryAfterSeconds: RATE_LIMIT_PERIOD_SECONDS,
+});
 
 describe("authRuleFor", () => {
   it.each([
@@ -47,7 +50,7 @@ describe("authRuleFor", () => {
     (method) => {
       expect(authRuleFor(request("/api/auth/sign-in/email", method))).toBeNull();
       expect(authRuleFor(request("/api/auth/get-session", method))).toBeNull();
-    }
+    },
   );
 
   it.each(["PUT", "PATCH", "DELETE"])("limits a %s like a POST", (method) => {
@@ -80,9 +83,12 @@ describe("authRuleFor", () => {
     ["/api/auth/sign%2Din/email", "signIn"],
     ["/api/auth/sign%2din/email", "signIn"],
     ["/api/auth/SIGN%2DUP/email", "signUp"],
-  ])("puts %s under the %s rule, so a doubled slash, trailing slash or encoded dash cannot reach the looser bucket", (path, rule) => {
-    expect(authRuleFor(request(path))).toBe(rule);
-  });
+  ])(
+    "puts %s under the %s rule, so a doubled slash, trailing slash or encoded dash cannot reach the looser bucket",
+    (path, rule) => {
+      expect(authRuleFor(request(path))).toBe(rule);
+    },
+  );
 
   it("keeps an encoded slash encoded, so it does not open a new path segment", () => {
     expect(authRuleFor(request("/api/auth/sign-in%2Femail"))).toBe("authApi");
@@ -97,7 +103,7 @@ describe("authRuleFor", () => {
     "gives no auth rule to %s, which is not under /api/auth/",
     (path) => {
       expect(authRuleFor(request(path))).toBeNull();
-    }
+    },
   );
 });
 
@@ -147,20 +153,24 @@ describe("addressKey", () => {
 
 describe("clientKey", () => {
   it("keys on the cf-connecting-ip header", () => {
-    expect(clientKey(request("/api/auth/sign-in/email", "POST", { [CLIENT_IP_HEADER]: "203.0.113.9" }))).toBe(
-      "203.0.113.9"
-    );
+    expect(
+      clientKey(request("/api/auth/sign-in/email", "POST", { [CLIENT_IP_HEADER]: "203.0.113.9" })),
+    ).toBe("203.0.113.9");
   });
 
   it("keys an IPv6 header on its /64, so one subscriber's block shares one count", () => {
     expect(
-      clientKey(request("/api/auth/sign-in/email", "POST", { [CLIENT_IP_HEADER]: " 2001:db8:1:2:3:4:5:6 " }))
+      clientKey(
+        request("/api/auth/sign-in/email", "POST", {
+          [CLIENT_IP_HEADER]: " 2001:db8:1:2:3:4:5:6 ",
+        }),
+      ),
     ).toBe("2001:db8:1:2::/64");
   });
 
   it("ignores a client-set x-forwarded-for, which anyone can change per request", () => {
     expect(
-      clientKey(request("/api/auth/sign-in/email", "POST", { "x-forwarded-for": "198.51.100.1" }))
+      clientKey(request("/api/auth/sign-in/email", "POST", { "x-forwarded-for": "198.51.100.1" })),
     ).toBe(SHARED_CLIENT_KEY);
   });
 
@@ -173,7 +183,10 @@ describe("clientKey", () => {
 });
 
 describe("authGate", () => {
-  const gate = (req: Request, { dev, siteKey, allow = true }: { dev: boolean; siteKey: string | null; allow?: boolean }) => {
+  const gate = (
+    req: Request,
+    { dev, siteKey, allow = true }: { dev: boolean; siteKey: string | null; allow?: boolean },
+  ) => {
     const warnings: unknown[] = [];
     const layer = Layer.mergeAll(
       Layer.succeed(RateLimiter, { check: () => (allow ? Effect.void : Effect.fail(overLimit)) }),
@@ -182,8 +195,8 @@ describe("authGate", () => {
         Logger.defaultLogger,
         Logger.make(({ logLevel, message }) => {
           if (logLevel.label === "WARN") warnings.push(message);
-        })
-      )
+        }),
+      ),
     );
     const refusal = Effect.runSync(authGate(req, dev).pipe(Effect.provide(layer)));
     return { refusal, warnings: warnings.flat() };
@@ -197,16 +210,19 @@ describe("authGate", () => {
       expect(warnings).toEqual([TURNSTILE_OFF_WARNING]);
       expect(TURNSTILE_OFF_WARNING).toContain("TURNSTILE_SITE_KEY");
       expect(TURNSTILE_OFF_WARNING).toContain("TURNSTILE_SECRET_KEY");
-    }
+    },
   );
 
   it("stays quiet in a dev build, where Turnstile off is the developer's choice", () => {
-    expect(gate(request("/api/auth/sign-in/email"), { dev: true, siteKey: null }).warnings).toEqual([]);
+    expect(gate(request("/api/auth/sign-in/email"), { dev: true, siteKey: null }).warnings).toEqual(
+      [],
+    );
   });
 
   it("stays quiet when Turnstile is on", () => {
     expect(
-      gate(request("/api/auth/sign-in/email"), { dev: false, siteKey: TURNSTILE_TEST_SITE_KEY }).warnings
+      gate(request("/api/auth/sign-in/email"), { dev: false, siteKey: TURNSTILE_TEST_SITE_KEY })
+        .warnings,
     ).toEqual([]);
   });
 
@@ -237,14 +253,16 @@ describe("guardAuthRequest", () => {
         return allow ? Effect.void : Effect.fail(overLimit);
       },
     });
-    const result = Effect.runSync(Effect.either(guardAuthRequest(req).pipe(Effect.provide(limiter))));
+    const result = Effect.runSync(
+      Effect.either(guardAuthRequest(req).pipe(Effect.provide(limiter))),
+    );
     return { result, seen };
   };
 
   it("checks the request's rule with the client's key", () => {
     const { result, seen } = run(
       request("/api/auth/sign-up/email", "POST", { [CLIENT_IP_HEADER]: "203.0.113.10" }),
-      true
+      true,
     );
     expect(Either.isRight(result)).toBe(true);
     expect(seen).toEqual([["signUp", "203.0.113.10"]]);
@@ -268,7 +286,10 @@ describe("rateLimitedResponse", () => {
     expect(response.status).toBe(HTTP_TOO_MANY_REQUESTS);
     expect(response.headers.get(RETRY_AFTER_HEADER)).toBe(String(RATE_LIMIT_PERIOD_SECONDS));
     expect(response.headers.get("content-type")).toContain("application/json");
-    expect(await response.json()).toEqual({ code: RATE_LIMITED_CODE, message: RATE_LIMITED_MESSAGE });
+    expect(await response.json()).toEqual({
+      code: RATE_LIMITED_CODE,
+      message: RATE_LIMITED_MESSAGE,
+    });
   });
 
   it("reads as error.code and error.message in Better Auth's client, so the form can show it", async () => {
@@ -276,7 +297,10 @@ describe("rateLimitedResponse", () => {
       baseURL: ORIGIN,
       fetchOptions: { customFetchImpl: async () => rateLimitedResponse(overLimit) },
     });
-    const { data, error } = await client.signIn.email({ email: "someone@example.test", password: "not-a-real-password" });
+    const { data, error } = await client.signIn.email({
+      email: "someone@example.test",
+      password: "not-a-real-password",
+    });
     expect(data).toBeNull();
     expect(error).toMatchObject({
       status: HTTP_TOO_MANY_REQUESTS,

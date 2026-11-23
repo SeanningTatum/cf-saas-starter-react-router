@@ -1,15 +1,5 @@
 import { describe, it, expect } from "vitest";
-import {
-  ALLOW_MARKER,
-  MAX_BYTES,
-  listFiles,
-  looksBinary,
-  realDeps,
-  run,
-  scanPath,
-  scanText,
-  type Deps,
-} from "../secret-scan";
+import { ALLOW_MARKER, MAX_BYTES, listFiles, looksBinary, realDeps, run, scanPath, scanText, type Deps } from "../secret-scan";
 
 // Every fake token is built at run time so this file holds no literal a real scanner would flag.
 const alnum = (n: number, seed = "aB3dE5gH7jK9mN1pQ2sT4vW6yZ8") => seed.repeat(Math.ceil(n / seed.length)).slice(0, n);
@@ -202,10 +192,7 @@ describe("run", () => {
       files: { "img.png": binary, "big.txt": big, "bun.lock": secret, "ok.ts": "const x = 1;" },
     });
     expect(run(deps)).toBe(0);
-    expect(lines).toEqual([
-      "notice: skipped 2 binary or large files (not scanned)",
-      "ok: scanned 1 files, no secrets found",
-    ]);
+    expect(lines).toEqual(["notice: skipped 2 binary or large files (not scanned)", "ok: scanned 1 files, no secrets found"]);
   });
 
   it("a clean tree with nothing skipped prints no notice", () => {

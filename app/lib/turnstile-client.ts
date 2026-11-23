@@ -27,7 +27,10 @@ export interface TurnstileRenderOptions {
 }
 
 export interface TurnstileApi<Container = HTMLElement> {
-  readonly render: (container: Container, options: TurnstileRenderOptions) => string | null | undefined;
+  readonly render: (
+    container: Container,
+    options: TurnstileRenderOptions,
+  ) => string | null | undefined;
   readonly reset: (widgetId: string) => void;
   readonly remove: (widgetId: string) => void;
 }
@@ -106,7 +109,7 @@ export interface TurnstileScriptHost<Container = HTMLElement> {
 }
 
 export const loadTurnstileScript = <Container>(
-  host: TurnstileScriptHost<Container>
+  host: TurnstileScriptHost<Container>,
 ): Promise<TurnstileApi<Container> | null> => {
   const loaded = host.api();
   if (loaded) return Promise.resolve(loaded);
@@ -155,7 +158,7 @@ export const turnstileRenderOptions = ({
 export const mountTurnstile = <Container>(
   api: TurnstileApi<Container>,
   container: Container,
-  options: TurnstileMountOptions
+  options: TurnstileMountOptions,
 ): TurnstileHandle | null => {
   const rendered = Either.try(() => api.render(container, turnstileRenderOptions(options)));
   if (Either.isLeft(rendered) || !rendered.right) return null;

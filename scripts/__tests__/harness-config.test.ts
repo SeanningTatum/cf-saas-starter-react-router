@@ -140,7 +140,10 @@ describe("the real harness.config.json", () => {
   it("holds the gates that verify.sh --list prints, in order: a gate added in one place only would run in neither", () => {
     const listed = spawnSync("./scripts/verify.sh", ["--list"], { cwd: HARNESS_ROOT, encoding: "utf8" });
     expect(listed.status).toBe(0);
-    const rows = listed.stdout.trim().split("\n").map((line) => /^(\S+)\s+(lean|baseline|full)\s+(\d+)s\s+(.*)$/.exec(line));
+    const rows = listed.stdout
+      .trim()
+      .split("\n")
+      .map((line) => /^(\S+)\s+(lean|baseline|full)\s+(\d+)s\s+(.*)$/.exec(line));
     const fromList = rows.map((row) => ({ name: row?.[1], tier: row?.[2], limitSeconds: Number(row?.[3]), run: row?.[4] }));
     expect(fromList).toEqual(realConfig.gates);
   });

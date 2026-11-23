@@ -8,7 +8,9 @@ import { TIMEOUTS_MS } from "./lib/values";
 
 const KITCHEN_SINK_MAX_SIZE = 1024 * 1024;
 const small = new File(["hello"], "small.txt", { type: "text/plain" });
-const big = new File([new Uint8Array(KITCHEN_SINK_MAX_SIZE + 1)], "big.bin", { type: "application/octet-stream" });
+const big = new File([new Uint8Array(KITCHEN_SINK_MAX_SIZE + 1)], "big.bin", {
+  type: "application/octet-stream",
+});
 
 const WIRING = [
   "DRAG_ENTER → DRAG_LEAVE → idle",
@@ -20,11 +22,13 @@ const WIRING = [
   "PICK big.bin → failed",
 ] as const;
 
-const named = fileUploadEdgePaths({ maxSize: KITCHEN_SINK_MAX_SIZE, small, big }).map((statePath) => {
-  const end = String(statePath.state.value);
-  const name = describePath(statePath.steps as ReadonlyArray<{ event: ModelEvent }>, end);
-  return { statePath, end, name };
-});
+const named = fileUploadEdgePaths({ maxSize: KITCHEN_SINK_MAX_SIZE, small, big }).map(
+  (statePath) => {
+    const end = String(statePath.state.value);
+    const name = describePath(statePath.steps as ReadonlyArray<{ event: ModelEvent }>, end);
+    return { statePath, end, name };
+  },
+);
 const paths = named.filter((p) => (WIRING as ReadonlyArray<string>).includes(p.name));
 
 test.describe("FileUpload paths (wiring only, since the machine unit tests own every transition: each DOM event reaches the machine, each state renders what it should, and a path with no upload step sends no request; see docs/features/file-upload-wiring.md)", () => {
@@ -51,13 +55,21 @@ test.describe("FileUpload paths (wiring only, since the machine unit tests own e
       const root = page.getByTestId("file-upload");
       const dropzone = page.getByTestId("file-upload-dropzone");
       allowForAColdFirstLoad();
-      await reloadWhileViteReoptimizesDeps(page, await page.goto("/admin/kitchen-sink#upload"), () => dropzone);
+      await reloadWhileViteReoptimizesDeps(
+        page,
+        await page.goto("/admin/kitchen-sink#upload"),
+        () => dropzone,
+      );
       await expect(root).toHaveAttribute("data-state", "idle");
       await expect(async () => {
         await dropzone.dispatchEvent("dragover");
-        await expect(root, "the hydrated dropzone did not reach the machine").toHaveAttribute("data-state", "dragging", {
-          timeout: TIMEOUTS_MS.oneLook,
-        });
+        await expect(root, "the hydrated dropzone did not reach the machine").toHaveAttribute(
+          "data-state",
+          "dragging",
+          {
+            timeout: TIMEOUTS_MS.oneLook,
+          },
+        );
       }).toPass();
       await dropzone.dispatchEvent("dragleave");
       await expect(root).toHaveAttribute("data-state", "idle");
@@ -115,7 +127,7 @@ test.describe("FileUpload paths (wiring only, since the machine unit tests own e
         await expect(dropzone).toBeVisible();
       }
       const uploads = (statePath.steps as ReadonlyArray<{ event: ModelEvent }>).filter(
-        (s) => s.event.type === "xstate.done.actor.upload"
+        (s) => s.event.type === "xstate.done.actor.upload",
       );
       if (uploads.length === 0) expect(heldUploads).toHaveLength(0);
     });

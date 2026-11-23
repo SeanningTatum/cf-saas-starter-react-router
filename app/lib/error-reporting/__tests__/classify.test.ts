@@ -7,8 +7,7 @@ import { RateLimitError } from "@/models/errors/rate-limit";
 import { RATE_LIMIT_PERIOD_SECONDS } from "@/lib/constants/rate-limit";
 import { tagToTRPC } from "@/lib/effect-trpc";
 
-const queryError = () =>
-  new QueryError({ entity: "user", cause: new Error("D1 timed out") });
+const queryError = () => new QueryError({ entity: "user", cause: new Error("D1 timed out") });
 
 describe("classifyError, plain values", () => {
   it("treats a raw Error as a defect with its stack, so a crash is never filed as expected", () => {
@@ -63,10 +62,10 @@ describe("classifyError, tagged errors and causes", () => {
 
   it("classifies the FiberFailure that runPromise rejects with by its cause, so a failed lookup in a loader keeps its tag and a die stays a defect", async () => {
     const failed = await Effect.runPromise(Effect.fail(queryError())).catch(
-      (error: unknown) => error
+      (error: unknown) => error,
     );
     const died = await Effect.runPromise(Effect.die(new Error("x"))).catch(
-      (error: unknown) => error
+      (error: unknown) => error,
     );
 
     expect(classifyError(failed)).toMatchObject({
@@ -92,7 +91,7 @@ describe("classifyError, tagged errors and causes", () => {
 describe("classifyError, tRPC errors", () => {
   it("files a NOT_FOUND TRPCError as an expected warning tagged with its code, so 4xx noise does not page anyone", () => {
     expect(
-      classifyError(new TRPCError({ code: "NOT_FOUND", message: "user not found" }))
+      classifyError(new TRPCError({ code: "NOT_FOUND", message: "user not found" })),
     ).toMatchObject({
       kind: "expected",
       level: "warning",
@@ -102,16 +101,15 @@ describe("classifyError, tRPC errors", () => {
   });
 
   it("treats an INTERNAL_SERVER_ERROR with no cause as a defect, so a bare 500 is never filed as expected", () => {
-    expect(
-      classifyError(new TRPCError({ code: "INTERNAL_SERVER_ERROR" }))
-    ).toMatchObject({ kind: "defect", level: "error" });
+    expect(classifyError(new TRPCError({ code: "INTERNAL_SERVER_ERROR" }))).toMatchObject({
+      kind: "defect",
+      level: "error",
+    });
   });
 
   it("classifies a 500 by its tagged cause, so a mapped QueryError stays expected at level error", () => {
     expect(
-      classifyError(
-        new TRPCError({ code: "INTERNAL_SERVER_ERROR", cause: queryError() })
-      )
+      classifyError(new TRPCError({ code: "INTERNAL_SERVER_ERROR", cause: queryError() })),
     ).toMatchObject({ kind: "expected", level: "error", tag: "QueryError" });
   });
 
@@ -119,7 +117,7 @@ describe("classifyError, tRPC errors", () => {
     const raw = new Error("db down");
 
     expect(
-      classifyError(new TRPCError({ code: "INTERNAL_SERVER_ERROR", cause: raw }))
+      classifyError(new TRPCError({ code: "INTERNAL_SERVER_ERROR", cause: raw })),
     ).toMatchObject({
       kind: "defect",
       level: "error",
@@ -161,9 +159,11 @@ describe("classifyError, route error responses", () => {
       level: "warning",
       tag: "404",
     });
-    expect(
-      classifyError({ status: 503, statusText: "Service Unavailable" })
-    ).toMatchObject({ kind: "defect", level: "error", tag: "503" });
+    expect(classifyError({ status: 503, statusText: "Service Unavailable" })).toMatchObject({
+      kind: "defect",
+      level: "error",
+      tag: "503",
+    });
   });
 });
 

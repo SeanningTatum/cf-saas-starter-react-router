@@ -5,8 +5,22 @@ export const SLUG = "demo-widget";
 export const BASE_SHA = "a".repeat(40);
 export const REVIEWED_SHA = "c".repeat(40);
 export const ISSUE_URL = "https://github.com/o/r/issues/76";
-export const PR1 = { n: 1, branch: `feat/${SLUG}/1-data`, base: "staging", title: "Widget data", fence: ["app/repositories/widget.ts", "app/repositories/__tests__/widget.test.ts"], greptile_focus: "authorization" };
-export const PR2 = { n: 2, branch: `feat/${SLUG}/2-ui`, base: PR1.branch, title: "Widget screen", fence: ["app/routes/widget.tsx"], greptile_focus: "empty and error states" };
+export const PR1 = {
+  n: 1,
+  branch: `feat/${SLUG}/1-data`,
+  base: "staging",
+  title: "Widget data",
+  fence: ["app/repositories/widget.ts", "app/repositories/__tests__/widget.test.ts"],
+  greptile_focus: "authorization",
+};
+export const PR2 = {
+  n: 2,
+  branch: `feat/${SLUG}/2-ui`,
+  base: PR1.branch,
+  title: "Widget screen",
+  fence: ["app/routes/widget.tsx"],
+  greptile_focus: "empty and error states",
+};
 export const CONTRACT = "export type Widget = { id: string; name: string }";
 export const ARGS = { ticket: "76" };
 
@@ -73,15 +87,57 @@ export function happy(over: AnswerRule[] = []): AnswerRule[] {
     ["review:paths", { files: ["app/repositories/widget.ts", "app/routes/widget.tsx"] }],
     [/^review:gates:/, { gates: GATES }],
     [/^review:(effect|security|scale|lean|walk|critique):/, PASS],
-    ["docs", { files: ["GLOSSARY.md"], pr_bodies: [{ n: 1, path: "pr-1.md" }, { n: 2, path: "pr-2.md" }], adr: null }],
-    [/^ship:assign:/, { assignments: [{ n: 1, branch: PR1.branch, paths: PR1.fence }, { n: 2, branch: PR2.branch, paths: PR2.fence }], unassigned: [], overlaps: [], excluded: [] }],
+    [
+      "docs",
+      {
+        files: ["GLOSSARY.md"],
+        pr_bodies: [
+          { n: 1, path: "pr-1.md" },
+          { n: 2, path: "pr-2.md" },
+        ],
+        adr: null,
+      },
+    ],
+    [
+      /^ship:assign:/,
+      {
+        assignments: [
+          { n: 1, branch: PR1.branch, paths: PR1.fence },
+          { n: 2, branch: PR2.branch, paths: PR2.fence },
+        ],
+        unassigned: [],
+        overlaps: [],
+        excluded: [],
+      },
+    ],
     [/^ship:videos:/, { passed: true, videos: [{ kind: "golden", title: "adds a widget", path: "video/golden-1.webm", status: "passed" }], unrecorded: [] }],
     [/^run:record/, RUN_OK],
     [/^memory:/, "recorded"],
-    ["split", { ok: true, failed_command: "", branches: [{ n: 1, branch: PR1.branch, sha: "b1" }, { n: 2, branch: PR2.branch, sha: "b2" }], checks: [] }],
+    [
+      "split",
+      {
+        ok: true,
+        failed_command: "",
+        branches: [
+          { n: 1, branch: PR1.branch, sha: "b1" },
+          { n: 2, branch: PR2.branch, sha: "b2" },
+        ],
+        checks: [],
+      },
+    ],
     [/^local:code-review:/, { method: "code-review skill", findings: [] }],
     ["local:home", "switched"],
-    ["open:prs", { ok: true, failed_command: "", prs: [{ n: 2, number: 102, url: "https://github.com/o/r/pull/102", branch: PR2.branch }, { n: 1, number: 101, url: "https://github.com/o/r/pull/101", branch: PR1.branch }] }],
+    [
+      "open:prs",
+      {
+        ok: true,
+        failed_command: "",
+        prs: [
+          { n: 2, number: 102, url: "https://github.com/o/r/pull/102", branch: PR2.branch },
+          { n: 1, number: 101, url: "https://github.com/o/r/pull/101", branch: PR1.branch },
+        ],
+      },
+    ],
     [/:checks$/, { prs: [{ number: 101, checks: [{ name: "ci", state: "SUCCESS" }] }], preview_url: "" }],
     ["rollup:pr", { ok: true, failed_command: "", merged: [101, 102], number: 103, url: "https://github.com/o/r/pull/103" }],
     ["rollup-greptile:trigger", { ok: true, failed_command: "" }],

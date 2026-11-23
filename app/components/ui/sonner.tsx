@@ -40,14 +40,9 @@ function Toaster(props: ToasterProps) {
         success: <CircleCheckIcon className="size-4" aria-hidden />,
         info: <InfoIcon className="size-4" aria-hidden />,
         warning: <TriangleAlertIcon className="size-4" aria-hidden />,
-        error: (
-          <OctagonXIcon className="size-4 text-destructive" aria-hidden />
-        ),
+        error: <OctagonXIcon className="size-4 text-destructive" aria-hidden />,
         loading: (
-          <Loader2Icon
-            className="size-4 animate-spin motion-reduce:animate-none"
-            aria-hidden
-          />
+          <Loader2Icon className="size-4 animate-spin motion-reduce:animate-none" aria-hidden />
         ),
       }}
       style={tokenStyle}

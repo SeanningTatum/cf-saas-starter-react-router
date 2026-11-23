@@ -18,7 +18,10 @@ export function run(deps: Deps): number {
     deps.log(`::error::cannot list the files this PR changes (git diff ${base}...${head}); the checkout needs fetch-depth: 0`);
     return EXIT_FAIL;
   }
-  const paths = diff.stdout.split("\n").map((line) => line.trim()).filter(Boolean);
+  const paths = diff.stdout
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
   return Either.match(checkBody(deps.env.PR_BODY ?? "", paths), {
     onLeft: (message) => {
       deps.log(`::error::${message}`);

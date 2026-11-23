@@ -32,9 +32,7 @@ export class CurrentRequest extends Context.Tag("app/CurrentRequest")<
   RequestContext
 >() {}
 
-export const parseTraceparent = (
-  header: string | null | undefined
-): TraceParent | undefined => {
+export const parseTraceparent = (header: string | null | undefined): TraceParent | undefined => {
   if (!header) return undefined;
   const match = TRACEPARENT_PATTERN.exec(header);
   if (!match) return undefined;
@@ -60,7 +58,7 @@ export const randomHex = (bytes: number): string => {
 
 export const makeRequestContext = (
   request: Request,
-  sampling?: SamplingDecision
+  sampling?: SamplingDecision,
 ): RequestContext => {
   const parent = parseTraceparent(request.headers.get("traceparent"));
   const cfRay = request.headers.get("cf-ray");
@@ -80,16 +78,13 @@ export const makeRequestContext = (
 
 const storage = new AsyncLocalStorage<RequestContext>();
 
-export const runWithRequestContext = <A>(
-  context: RequestContext,
-  fn: () => A
-): A => storage.run(context, fn);
+export const runWithRequestContext = <A>(context: RequestContext, fn: () => A): A =>
+  storage.run(context, fn);
 
-export const currentRequestContext = (): RequestContext | undefined =>
-  storage.getStore();
+export const currentRequestContext = (): RequestContext | undefined => storage.getStore();
 
 export const requestLogFields = (
-  context: RequestContext | undefined
+  context: RequestContext | undefined,
 ): { requestId?: string; userId?: string } => {
   if (!context) return {};
   return context.userId === undefined
@@ -97,15 +92,13 @@ export const requestLogFields = (
     : { requestId: context.requestId, userId: context.userId };
 };
 
-export const setRequestUser = (
-  userId: string | undefined
-): Effect.Effect<void> =>
+export const setRequestUser = (userId: string | undefined): Effect.Effect<void> =>
   Effect.serviceOption(CurrentRequest).pipe(
     Effect.flatMap((request) => {
       if (userId === undefined || Option.isNone(request)) return Effect.void;
       request.value.userId = userId;
       return Effect.annotateCurrentSpan("user.id", userId);
-    })
+    }),
   );
 
 setLogContext(() => requestLogFields(currentRequestContext()));

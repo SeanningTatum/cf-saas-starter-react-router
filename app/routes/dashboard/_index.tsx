@@ -10,13 +10,7 @@ import {
   IconBrandGithub,
 } from "@tabler/icons-react";
 
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { StackBadge } from "@/components/stack-badge";
 import { LanguageSwitcher } from "@/components/language-switcher";
@@ -42,9 +36,7 @@ export default function DashboardIndex() {
           <h1 className="text-3xl font-semibold tracking-tight">
             {t("welcome", { name: user.name })}
           </h1>
-          <p className="max-w-xl text-sm text-muted-foreground">
-            {t("subtitle")}
-          </p>
+          <p className="max-w-xl text-sm text-muted-foreground">{t("subtitle")}</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {isAdmin && (
@@ -71,9 +63,7 @@ export default function DashboardIndex() {
           <h2 className="text-sm font-medium uppercase tracking-wider text-muted-foreground">
             {t("explore.title")}
           </h2>
-          <span className="font-mono text-[11px] text-muted-foreground">
-            {t("explore.count")}
-          </span>
+          <span className="font-mono text-[11px] text-muted-foreground">{t("explore.count")}</span>
         </div>
 
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-2">

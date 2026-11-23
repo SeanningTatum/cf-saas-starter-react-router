@@ -17,12 +17,7 @@ export const EXTENSION_ON_ANSWER = "true";
 export const GIT_ENV_PREFIX = "GIT_";
 export const GIT_SHOW_TOPLEVEL: readonly string[] = ["rev-parse", "--show-toplevel"];
 export const GIT_INSIDE_WORK_TREE: readonly string[] = ["rev-parse", "--is-inside-work-tree"];
-export const GIT_WORKTREE_EXTENSION: readonly string[] = [
-  "config",
-  "--type=bool",
-  "--get",
-  "extensions.worktreeConfig",
-];
+export const GIT_WORKTREE_EXTENSION: readonly string[] = ["config", "--type=bool", "--get", "extensions.worktreeConfig"];
 export const GIT_READ_WORKTREE: readonly string[] = ["config", "--worktree", "--get", "core.hooksPath"];
 export const GIT_READ_LOCAL: readonly string[] = ["config", "--local", "--get", "core.hooksPath"];
 export const GIT_WRITE_WORKTREE: readonly string[] = ["config", "--worktree", "core.hooksPath", HOOKS_PATH];

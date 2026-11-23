@@ -43,8 +43,18 @@ describe("readConfig", () => {
 
   it("names the key a workflow needs and the file lacks: a missing path must not turn into the word undefined in a prompt", () => {
     expect(readConfig(configLine(), ["paths.tokens"]).error).toBeUndefined();
-    expect(readConfig(configLine((config) => ({ ...config, paths: {} })), ["paths.tokens"]).error).toBe("harness-config: set paths.tokens in harness.config.json");
-    expect(readConfig(configLine((config) => ({ ...config, ship: {} })), ["ship.sharedFiles"]).error).toBe("harness-config: set ship.sharedFiles in harness.config.json");
+    expect(
+      readConfig(
+        configLine((config) => ({ ...config, paths: {} })),
+        ["paths.tokens"],
+      ).error,
+    ).toBe("harness-config: set paths.tokens in harness.config.json");
+    expect(
+      readConfig(
+        configLine((config) => ({ ...config, ship: {} })),
+        ["ship.sharedFiles"],
+      ).error,
+    ).toBe("harness-config: set ship.sharedFiles in harness.config.json");
   });
 });
 
@@ -135,7 +145,9 @@ describe("a config with other paths, docs, base branch and co-author", () => {
   it("brand-init takes its lanes from the config: a primitive dropped from a lane leaves that lane's fence, and the tokens path moves", async () => {
     const lanes = configLine((config) => {
       const custom = customize(config);
-      const primitiveLanes = (custom.brandInit.primitiveLanes ?? []).map((lane, i) => (i === 0 ? { ...lane, files: lane.files.filter((f) => f !== "switch") } : lane));
+      const primitiveLanes = (custom.brandInit.primitiveLanes ?? []).map((lane, i) =>
+        i === 0 ? { ...lane, files: lane.files.filter((f) => f !== "switch") } : lane,
+      );
       return { ...custom, brandInit: { ...custom.brandInit, contractFence: ["src/styles.css", "src/root.tsx"], primitiveLanes } };
     });
     const answers = brand.rules([["config", { ...brand.CONFIG_OK, config_json: lanes }]]);
@@ -256,20 +268,38 @@ describe("regression: a fork that moves the analytics events file", () => {
       .filter((line) => line.startsWith("  · "))
       .map((line) => line.slice(4));
 
-  it.each(["src/events.ts", "events.ts"])("with the events file at %s, only that file leaves the build lanes: every other source fence keeps its builder", async (events) => {
-    const run = await stop(events);
-    expect(labels(run.calls)).toEqual(expect.arrayContaining(["build:pr1-backend", "build:pr2-backend", "build:pr2-ui"]));
-    expect(owned(one(run.calls, "build:pr1-backend").prompt)).toEqual(["src/trpc/widget.ts"]);
-    expect(owned(one(run.calls, "build:pr2-backend").prompt)).toEqual(["src/lib/format.ts"]);
-    expect(owned(one(run.calls, "build:pr2-ui").prompt)).toEqual(["src/routes/widget.tsx"]);
-  });
+  it.each(["src/events.ts", "events.ts"])(
+    "with the events file at %s, only that file leaves the build lanes: every other source fence keeps its builder",
+    async (events) => {
+      const run = await stop(events);
+      expect(labels(run.calls)).toEqual(expect.arrayContaining(["build:pr1-backend", "build:pr2-backend", "build:pr2-ui"]));
+      expect(owned(one(run.calls, "build:pr1-backend").prompt)).toEqual(["src/trpc/widget.ts"]);
+      expect(owned(one(run.calls, "build:pr2-backend").prompt)).toEqual(["src/lib/format.ts"]);
+      expect(owned(one(run.calls, "build:pr2-ui").prompt)).toEqual(["src/routes/widget.tsx"]);
+    },
+  );
 });
 
 describe("regression: empty lists are values", () => {
   it("readConfig accepts an empty list for a needed key and still refuses an empty string and a missing key", () => {
-    expect(readConfig(configLine((c) => ({ ...c, ship: { sharedFiles: [] } })), ["ship.sharedFiles"]).error).toBeUndefined();
-    expect(readConfig(configLine((c) => ({ ...c, paths: { ...c.paths, tokens: "" } })), ["paths.tokens"]).error).toBe("harness-config: set paths.tokens in harness.config.json");
-    expect(readConfig(configLine((c) => ({ ...c, ship: {} })), ["ship.sharedFiles"]).error).toBe("harness-config: set ship.sharedFiles in harness.config.json");
+    expect(
+      readConfig(
+        configLine((c) => ({ ...c, ship: { sharedFiles: [] } })),
+        ["ship.sharedFiles"],
+      ).error,
+    ).toBeUndefined();
+    expect(
+      readConfig(
+        configLine((c) => ({ ...c, paths: { ...c.paths, tokens: "" } })),
+        ["paths.tokens"],
+      ).error,
+    ).toBe("harness-config: set paths.tokens in harness.config.json");
+    expect(
+      readConfig(
+        configLine((c) => ({ ...c, ship: {} })),
+        ["ship.sharedFiles"],
+      ).error,
+    ).toBe("harness-config: set ship.sharedFiles in harness.config.json");
   });
 
   it("ship-feature with ship.sharedFiles: [] passes Preflight and goes on to the build", async () => {
@@ -298,7 +328,10 @@ describe("regression: the spelling of a folder does not change who owns a file",
   const route = async (routes: string) => {
     const config_json = configLineFromFile({ paths: { routes }, ship: { sharedFiles: [] } });
     const plan1 = { ...ship.PLAN, prs: [{ ...ship.PR1, fence: ["src/pages/widget.tsx"] }] };
-    const answers = ship.happy([["config", { ...ship.CONFIG_OK, config_json }], ["intake:record", plan1]]);
+    const answers = ship.happy([
+      ["config", { ...ship.CONFIG_OK, config_json }],
+      ["intake:record", plan1],
+    ]);
     const run = await dryRun("ship-feature", { args: ship.ARGS, answers });
     return labels(run.calls).filter((l) => /^build:pr\d+-/.test(l));
   };

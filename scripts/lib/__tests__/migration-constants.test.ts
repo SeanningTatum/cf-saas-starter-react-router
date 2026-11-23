@@ -1,13 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  drizzleKitArgs,
-  fixApplied,
-  fixStatement,
-  mergeBaseArgs,
-  nameStatusArgs,
-  reasonPathFor,
-  verifyRefArgs,
-} from "../migration-constants";
+import { drizzleKitArgs, fixApplied, fixStatement, mergeBaseArgs, nameStatusArgs, reasonPathFor, verifyRefArgs } from "../migration-constants";
 
 describe("migration-constants builders", () => {
   it("names the reason file beside its migration: a reason at another path would never clear a finding", () => {

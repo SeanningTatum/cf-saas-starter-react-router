@@ -32,14 +32,13 @@ const stubFetch = () => {
 
 const exportedNames = (body: string | undefined): string[] =>
   JSON.parse(body ?? "{}").resourceSpans[0].scopeSpans[0].spans.map(
-    (span: { name: string }) => span.name
+    (span: { name: string }) => span.name,
   );
 
 const startSpan = (name: string, buffer: SpanBuffer = makeSpanBuffer()) =>
   new OtlpSpan(name, Option.none(), [], 100n, "internal", buffer);
 
-const okSpan = (name: string, buffer: SpanBuffer) =>
-  startSpan(name, buffer).end(200n, Exit.void);
+const okSpan = (name: string, buffer: SpanBuffer) => startSpan(name, buffer).end(200n, Exit.void);
 
 const failedSpan = (name: string, buffer: SpanBuffer) =>
   startSpan(name, buffer).end(200n, Exit.fail("boom"));
@@ -68,20 +67,22 @@ describe("isErrorSpan", () => {
 });
 
 describe("flushSpans for an unsampled request", () => {
-  it.effect("exports nothing and empties the buffer when every span is ok, so a sampled-out request costs no export", () =>
-    Effect.gen(function* () {
-      const { bodies, fetchFn } = stubFetch();
-      const buffer = makeSpanBuffer();
-      okSpan("a", buffer);
-      okSpan("b", buffer);
-      buffer.dropped = 2;
+  it.effect(
+    "exports nothing and empties the buffer when every span is ok, so a sampled-out request costs no export",
+    () =>
+      Effect.gen(function* () {
+        const { bodies, fetchFn } = stubFetch();
+        const buffer = makeSpanBuffer();
+        okSpan("a", buffer);
+        okSpan("b", buffer);
+        buffer.dropped = 2;
 
-      yield* flushSpans(config, buffer, fetchFn, false);
+        yield* flushSpans(config, buffer, fetchFn, false);
 
-      expect(bodies).toHaveLength(0);
-      expect(buffer.spans).toHaveLength(0);
-      expect(buffer.dropped).toBe(0);
-    })
+        expect(bodies).toHaveLength(0);
+        expect(buffer.spans).toHaveLength(0);
+        expect(buffer.dropped).toBe(0);
+      }),
   );
 
   it.effect("exports every span when one failed, so the trace of a failed request is whole", () =>
@@ -94,7 +95,7 @@ describe("flushSpans for an unsampled request", () => {
       yield* flushSpans(config, buffer, fetchFn, false);
 
       expect(exportedNames(bodies[0])).toEqual(["fine", "broken"]);
-    })
+    }),
   );
 
   it.effect("exports when a span answered 500, so a caught server error is still traced", () =>
@@ -107,7 +108,7 @@ describe("flushSpans for an unsampled request", () => {
       yield* flushSpans(config, buffer, fetchFn, false);
 
       expect(exportedNames(bodies[0])).toEqual(["fine", "http.request"]);
-    })
+    }),
   );
 });
 
@@ -121,7 +122,7 @@ describe("flushSpans for a sampled request", () => {
       yield* flushSpans(config, buffer, fetchFn, true);
 
       expect(exportedNames(bodies[0])).toEqual(["fine"]);
-    })
+    }),
   );
 });
 
@@ -139,8 +140,8 @@ describe("TracingLayer with a sampling decision", () => {
       TracingLayer(
         { OTEL_EXPORTER_OTLP_ENDPOINT: "http://localhost:4318" },
         fetchFn,
-        request(traces)
-      )
+        request(traces),
+      ),
     );
     await runtime.runPromiseExit(program);
     await runtime.dispose();
@@ -158,21 +159,23 @@ describe("TracingLayer with a sampling decision", () => {
 });
 
 describe("flushSpans, forced exports under an outage", () => {
-  it.effect("stops exporting failed unsampled requests once the isolate's budget is spent, so an outage cannot send one export per request", () =>
-    Effect.gen(function* () {
-      const { bodies, fetchFn } = stubFetch();
-      const budget = makeReportBudget({ limit: 1, windowMs: 60_000 });
-      const failedRequest = () => {
-        const buffer = makeSpanBuffer();
-        startSpan("failed", buffer).end(200n, Exit.fail("boom"));
-        return buffer;
-      };
+  it.effect(
+    "stops exporting failed unsampled requests once the isolate's budget is spent, so an outage cannot send one export per request",
+    () =>
+      Effect.gen(function* () {
+        const { bodies, fetchFn } = stubFetch();
+        const budget = makeReportBudget({ limit: 1, windowMs: 60_000 });
+        const failedRequest = () => {
+          const buffer = makeSpanBuffer();
+          startSpan("failed", buffer).end(200n, Exit.fail("boom"));
+          return buffer;
+        };
 
-      yield* flushSpans(config, failedRequest(), fetchFn, false, budget);
-      yield* flushSpans(config, failedRequest(), fetchFn, false, budget);
-      yield* flushSpans(config, failedRequest(), fetchFn, true, budget);
+        yield* flushSpans(config, failedRequest(), fetchFn, false, budget);
+        yield* flushSpans(config, failedRequest(), fetchFn, false, budget);
+        yield* flushSpans(config, failedRequest(), fetchFn, true, budget);
 
-      expect(bodies).toHaveLength(2);
-    })
+        expect(bodies).toHaveLength(2);
+      }),
   );
 });

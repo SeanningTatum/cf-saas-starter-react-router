@@ -32,7 +32,7 @@ describe("report caps", () => {
         MAX_ERROR_MESSAGE_LENGTH +
         MAX_ERROR_NAME_LENGTH +
         MAX_REPORT_URL_LENGTH) *
-        MAX_UTF8_BYTES_PER_CODE_UNIT
+        MAX_UTF8_BYTES_PER_CODE_UNIT,
     ).toBeLessThan(MAX_REPORT_BODY_BYTES);
   });
 });

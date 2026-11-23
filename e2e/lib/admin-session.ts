@@ -26,7 +26,11 @@ export const useAdminSessionSignedInOncePerFile = (file: SpecFile) => {
   test.use({ storageState });
   test.beforeAll(async ({ browser, baseURL }) => {
     const context = await browser.newContext({ storageState: undefined, baseURL });
-    await signInThroughApiSinceTheFormCanSubmitBeforeHydration(context, appOrigin(baseURL), clientIp);
+    await signInThroughApiSinceTheFormCanSubmitBeforeHydration(
+      context,
+      appOrigin(baseURL),
+      clientIp,
+    );
     await context.storageState({ path: storageState });
     await context.close();
   });

@@ -34,7 +34,7 @@ const serve = async (env: Env = fakeEnv()) => {
   const response = await worker.fetch(
     new Request("https://app.example.com/dashboard") as Parameters<typeof worker.fetch>[0],
     env,
-    ctx
+    ctx,
   );
   await Promise.all(waitUntil.mock.calls.map(([promise]) => promise));
   return response;
@@ -62,7 +62,9 @@ afterAll(() => {
 
 describe("every response out of the worker carries the security headers", () => {
   it("a page the handler renders", async () => {
-    mocks.handle.mockResolvedValue(new Response("ok", { headers: { "X-Frame-Options": "ALLOWALL" } }));
+    mocks.handle.mockResolvedValue(
+      new Response("ok", { headers: { "X-Frame-Options": "ALLOWALL" } }),
+    );
     const response = await serve();
     expect(response.status).toBe(200);
     expectSecurityHeaders(response);

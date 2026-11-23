@@ -84,8 +84,7 @@ function parseRef(raw: string | undefined): Ref | null {
 function ghFailure(r: GhResult): Outcome {
   const text = r.stderr.trim() || r.stdout.trim() || `gh exited ${r.code}`;
   if (r.code === 127) return bad(2, "AUTH", text, "install the GitHub CLI and run: gh auth login");
-  if (/auth login|not logged in|authentication|GH_TOKEN|HTTP 401/i.test(text))
-    return bad(2, "AUTH", text, "run: gh auth login");
+  if (/auth login|not logged in|authentication|GH_TOKEN|HTTP 401/i.test(text)) return bad(2, "AUTH", text, "run: gh auth login");
   if (/could not resolve|not found|HTTP 404|no issue|no pull request/i.test(text))
     return bad(2, "NOT_FOUND", text, "check the issue number and the repository");
   return bad(2, "NOT_FOUND", text, "gh failed; run the same gh command by hand to see why");
@@ -260,9 +259,7 @@ async function edit(ref: Ref, p: Parsed, deps: Deps): Promise<Outcome> {
     // record (an unchanged body creates none), fall back to the pre-write clock. GitHub stamps edits
     // to the second, so an edit in the same second as the bound is a conflict too: one of the two
     // writes overwrote the other.
-    const ours = nodes
-      .filter((n) => n.editor?.login === me && n.editedAt > expect)
-      .sort((a, b) => (a.editedAt < b.editedAt ? 1 : -1))[0];
+    const ours = nodes.filter((n) => n.editor?.login === me && n.editedAt > expect).sort((a, b) => (a.editedAt < b.editedAt ? 1 : -1))[0];
     const bound = ours && ours.editedAt > writeAt ? ours.editedAt : writeAt;
     const other = nodes
       .filter((n) => n.editor?.login !== me && n.editedAt > expect && n.editedAt <= bound)
@@ -310,13 +307,7 @@ function upsertComment(ref: Ref, p: Parsed, deps: Deps): Outcome {
   const me = u.stdout.trim();
 
   // --jq makes gh print one JSON object per line.
-  const list = deps.gh([
-    "api",
-    "--paginate",
-    `repos/${repo.repo}/issues/${ref.number}/comments`,
-    "--jq",
-    ".[] | {id, html_url, body, author: .user.login}",
-  ]);
+  const list = deps.gh(["api", "--paginate", `repos/${repo.repo}/issues/${ref.number}/comments`, "--jq", ".[] | {id, html_url, body, author: .user.login}"]);
   if (list.code !== 0) return ghFailure(list);
   const marked = list.stdout
     .split("\n")
@@ -358,8 +349,7 @@ function upsertComment(ref: Ref, p: Parsed, deps: Deps): Outcome {
 export async function run(argv: string[], deps: Deps = defaultDeps): Promise<Outcome> {
   const p = parseArgs(argv);
   if (typeof p === "string") return usage(p);
-  if (p.backend === "linear")
-    return bad(4, "BACKEND", "the linear backend is not built", "Linear backend is task t1: the run asks the user which CLI to use");
+  if (p.backend === "linear") return bad(4, "BACKEND", "the linear backend is not built", "Linear backend is task t1: the run asks the user which CLI to use");
   if (p.backend !== "gh") return usage(`unknown backend "${p.backend}"`);
 
   if (!(p.verb in FLAGS)) return usage(p.verb ? `unknown verb "${p.verb}"` : "a verb is required");

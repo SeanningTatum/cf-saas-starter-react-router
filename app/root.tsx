@@ -75,12 +75,7 @@ export default function App({ loaderData }: Route.ComponentProps) {
   const nonce = useNonce();
 
   return (
-    <ThemeProvider
-      attribute="class"
-      defaultTheme="system"
-      enableSystem
-      nonce={nonce}
-    >
+    <ThemeProvider attribute="class" defaultTheme="system" enableSystem nonce={nonce}>
       <TRPCProvider>
         <Outlet />
       </TRPCProvider>
@@ -100,10 +95,7 @@ export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {
 
   if (isRouteErrorResponse(error)) {
     message = error.status === 404 ? t("errors.404") : t("errors.error");
-    details =
-      error.status === 404
-        ? t("errors.not_found")
-        : error.statusText || details;
+    details = error.status === 404 ? t("errors.not_found") : error.statusText || details;
   } else if (import.meta.env.DEV && error && error instanceof Error) {
     details = error.message;
     stack = error.stack;
@@ -114,10 +106,7 @@ export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {
       <h1>{message}</h1>
       <p>{details}</p>
       {requestId && (
-        <p
-          className="text-sm text-muted-foreground"
-          data-testid="error-request-id"
-        >
+        <p className="text-sm text-muted-foreground" data-testid="error-request-id">
           {t("errors.request_id", { id: requestId })}
         </p>
       )}

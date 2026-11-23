@@ -1,10 +1,4 @@
-import {
-  type RouteConfig,
-  index,
-  route,
-  prefix,
-  layout,
-} from "@react-router/dev/routes";
+import { type RouteConfig, index, route, prefix, layout } from "@react-router/dev/routes";
 import { BROWSER_REPORT_PATH } from "./lib/constants/error-reporting";
 
 export default [
@@ -25,9 +19,7 @@ export default [
   ]),
 
   ...prefix("dashboard", [
-    layout("routes/dashboard/_layout.tsx", [
-      route("/", "routes/dashboard/_index.tsx"),
-    ]),
+    layout("routes/dashboard/_layout.tsx", [route("/", "routes/dashboard/_index.tsx")]),
   ]),
 
   ...prefix("admin", [

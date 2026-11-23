@@ -14,7 +14,10 @@ import { BASE_URL, startRealApp, type RealApp } from "@/trpc/__tests__/real-d1";
 const PASSWORD = "correct-horse-battery-staple";
 const SERVICE_UNAVAILABLE = 503;
 const CLIENT_IP = "192.0.2.44";
-const TEST_KEYS: TurnstileKeys = { siteKey: TURNSTILE_TEST_SITE_KEY, secretKey: TURNSTILE_TEST_SECRET_KEY };
+const TEST_KEYS: TurnstileKeys = {
+  siteKey: TURNSTILE_TEST_SITE_KEY,
+  secretKey: TURNSTILE_TEST_SECRET_KEY,
+};
 
 type Siteverify = "pass" | "fail" | "unreachable" | "unavailable";
 
@@ -40,9 +43,11 @@ const stubSiteverify = (answer: Siteverify): SiteverifyCall[] => {
       if (answer === "unreachable") throw new TypeError("network down");
       if (answer === "unavailable") return new Response("down", { status: SERVICE_UNAVAILABLE });
       return Response.json(
-        answer === "pass" ? { success: true } : { success: false, "error-codes": ["invalid-input-response"] }
+        answer === "pass"
+          ? { success: true }
+          : { success: false, "error-codes": ["invalid-input-response"] },
       );
-    })
+    }),
   );
   return calls;
 };
@@ -62,15 +67,26 @@ const post = (path: string, body: unknown, token?: string) =>
   });
 
 const sessionCount = async (userId: string) =>
-  (await app.db.prepare("SELECT count(*) AS n FROM session WHERE user_id = ?").bind(userId).first<{ n: number }>())
-    ?.n;
+  (
+    await app.db
+      .prepare("SELECT count(*) AS n FROM session WHERE user_id = ?")
+      .bind(userId)
+      .first<{ n: number }>()
+  )?.n;
 
 const userCount = async (email: string) =>
-  (await app.db.prepare("SELECT count(*) AS n FROM user WHERE email = ?").bind(email).first<{ n: number }>())?.n;
+  (
+    await app.db
+      .prepare("SELECT count(*) AS n FROM user WHERE email = ?")
+      .bind(email)
+      .first<{ n: number }>()
+  )?.n;
 
 const existingUser = async () => {
   const email = nextEmail();
-  const { user } = await app.auth.api.signUpEmail({ body: { name: "Turnstile Test", email, password: PASSWORD } });
+  const { user } = await app.auth.api.signUpEmail({
+    body: { name: "Turnstile Test", email, password: PASSWORD },
+  });
   return { email, userId: user.id, sessionsBefore: await sessionCount(user.id) };
 };
 
@@ -78,7 +94,9 @@ const signIn = (auth: ReturnType<typeof createAuth>, email: string, token?: stri
   auth.handler(post("/sign-in/email", { email, password: PASSWORD }, token));
 
 const signUp = (auth: ReturnType<typeof createAuth>, email: string, token?: string) =>
-  auth.handler(post("/sign-up/email", { name: "Turnstile Test", email, password: PASSWORD }, token));
+  auth.handler(
+    post("/sign-up/email", { name: "Turnstile Test", email, password: PASSWORD }, token),
+  );
 
 beforeAll(async () => {
   app = await startRealApp();
@@ -127,7 +145,11 @@ describe("Turnstile on sign-in and sign-up", { timeout: 60_000 }, () => {
     expect(calls).toEqual([
       {
         url: TURNSTILE_SITEVERIFY_URL,
-        body: { secret: TURNSTILE_TEST_SECRET_KEY, response: TURNSTILE_TEST_TOKEN, remoteip: CLIENT_IP },
+        body: {
+          secret: TURNSTILE_TEST_SECRET_KEY,
+          response: TURNSTILE_TEST_TOKEN,
+          remoteip: CLIENT_IP,
+        },
       },
     ]);
   });
@@ -163,16 +185,19 @@ describe("Turnstile on sign-in and sign-up", { timeout: 60_000 }, () => {
     expect(await userCount(email)).toBe(0);
   });
 
-  it.each<Siteverify>(["unreachable", "unavailable"])("refuses the sign-in when siteverify is %s, so an outage does not open the door", async (outage) => {
-    stubSiteverify(outage);
-    const { email, userId, sessionsBefore } = await existingUser();
+  it.each<Siteverify>(["unreachable", "unavailable"])(
+    "refuses the sign-in when siteverify is %s, so an outage does not open the door",
+    async (outage) => {
+      stubSiteverify(outage);
+      const { email, userId, sessionsBefore } = await existingUser();
 
-    const response = await signIn(turnstileOn(), email, TURNSTILE_TEST_TOKEN);
+      const response = await signIn(turnstileOn(), email, TURNSTILE_TEST_TOKEN);
 
-    expect(response.status).toBe(500);
-    expect(await response.json()).toMatchObject({ code: "UNKNOWN_ERROR" });
-    expect(await sessionCount(userId)).toBe(sessionsBefore);
-  });
+      expect(response.status).toBe(500);
+      expect(await response.json()).toMatchObject({ code: "UNKNOWN_ERROR" });
+      expect(await sessionCount(userId)).toBe(sessionsBefore);
+    },
+  );
 
   it("leaves other auth endpoints alone, so signing out needs no token", async () => {
     const calls = stubSiteverify("fail");

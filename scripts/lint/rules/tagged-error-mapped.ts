@@ -21,11 +21,7 @@ function mapperNodes(ast: ts.SourceFile): ts.Node[] {
 
 function readsTag(node: ts.Expression): boolean {
   if (ts.isPropertyAccessExpression(node)) return node.name.text === TAG_PROPERTY;
-  return (
-    ts.isElementAccessExpression(node) &&
-    ts.isStringLiteralLike(node.argumentExpression) &&
-    node.argumentExpression.text === TAG_PROPERTY
-  );
+  return ts.isElementAccessExpression(node) && ts.isStringLiteralLike(node.argumentExpression) && node.argumentExpression.text === TAG_PROPERTY;
 }
 
 function branchedTags(mappers: ts.Node[]): Set<string> {
@@ -54,7 +50,7 @@ function taggedErrorTag(node: ts.ClassDeclaration, ast: ts.SourceFile): { tagged
         const first = ts.isCallExpression(type.expression) ? type.expression.arguments[0] : undefined;
         if (first && ts.isStringLiteralLike(first)) tag = first.text;
         return true;
-      })
+      }),
     ) ?? false;
   return { tagged, tag };
 }
@@ -82,8 +78,7 @@ function unmappedErrors(source: Source, mapped: Set<string>): Hit[] {
   return hits;
 }
 
-const error = (name: string, tag = name): string =>
-  `import { Data } from "effect";\nexport class ${name} extends Data.TaggedError("${tag}")<{}> {}\n`;
+const error = (name: string, tag = name): string => `import { Data } from "effect";\nexport class ${name} extends Data.TaggedError("${tag}")<{}> {}\n`;
 
 const tree = (mapper: string, errorFile = error("BoomError")): Record<string, string> => ({
   [`${ERRORS_DIR}/boom.ts`]: errorFile,
@@ -137,16 +132,12 @@ export const rule: RepoRule = {
     },
     {
       name: "a case branch in a nested function nobody calls is not a mapping",
-      files: tree(
-        'export function tagToTRPC(t: string) {\n  function unused(x: string) { switch (x) { case "BoomError": return 9; } }\n  return 0;\n}'
-      ),
+      files: tree('export function tagToTRPC(t: string) {\n  function unused(x: string) { switch (x) { case "BoomError": return 9; } }\n  return 0;\n}'),
       expect: "finding",
     },
     {
       name: "a case branch outside the mapper is not a mapping",
-      files: tree(
-        'export function other(x: string) { switch (x) { case "BoomError": return 9; } }\nexport function tagToTRPC(t: string) { return 0; }'
-      ),
+      files: tree('export function other(x: string) { switch (x) { case "BoomError": return 9; } }\nexport function tagToTRPC(t: string) { return 0; }'),
       expect: "finding",
     },
     {

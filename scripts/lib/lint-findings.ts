@@ -1,11 +1,5 @@
 import { Either, Schema } from "effect";
-import {
-  DEAD_CODE_FIX,
-  FORMAT_CATEGORY,
-  FORMAT_FIX,
-  HOUSE_FINDING,
-  HOUSE_RULE_PREFIX,
-} from "./lint-constants";
+import { DEAD_CODE_FIX, FORMAT_CATEGORY, FORMAT_FIX, HOUSE_FINDING, HOUSE_RULE_PREFIX } from "./lint-constants";
 
 export interface Finding {
   path: string;
@@ -23,11 +17,7 @@ export function formatFinding(finding: Finding): string {
 
 export function sortFindings(findings: readonly Finding[]): Finding[] {
   return [...findings].sort(
-    (a, b) =>
-      a.path.localeCompare(b.path) ||
-      (a.line ?? 0) - (b.line ?? 0) ||
-      (a.column ?? 0) - (b.column ?? 0) ||
-      a.rule.localeCompare(b.rule),
+    (a, b) => a.path.localeCompare(b.path) || (a.line ?? 0) - (b.line ?? 0) || (a.column ?? 0) - (b.column ?? 0) || a.rule.localeCompare(b.rule),
   );
 }
 
@@ -68,9 +58,7 @@ export function parseBiome(stdout: string): Either.Either<Finding[], string> {
 
 const KnipReport = Schema.parseJson(
   Schema.Struct({
-    issues: Schema.Array(
-      Schema.Struct({ file: Schema.String }, { key: Schema.String, value: Schema.Unknown }),
-    ),
+    issues: Schema.Array(Schema.Struct({ file: Schema.String }, { key: Schema.String, value: Schema.Unknown })),
   }),
 );
 const KnipItem = Schema.Struct({
@@ -100,9 +88,7 @@ function knipFinding(file: string, kind: DeadCodeKind, group: readonly KnipEntry
 function knipKind(file: string, kind: DeadCodeKind, list: unknown): Either.Either<Finding[], string> {
   const items = Schema.decodeUnknownEither(KnipItems)(list);
   if (Either.isLeft(items)) return Either.left(`knip printed a \`${kind}\` list in a shape this parser does not know`);
-  return Either.right(
-    items.right.flatMap((item) => knipFinding(file, kind, "name" in item ? [item] : item) ?? []),
-  );
+  return Either.right(items.right.flatMap((item) => knipFinding(file, kind, "name" in item ? [item] : item) ?? []));
 }
 
 export function parseKnip(stdout: string): Either.Either<Finding[], string> {
@@ -137,4 +123,3 @@ export function parseHouse(output: string): Finding[] {
   }
   return findings;
 }
-

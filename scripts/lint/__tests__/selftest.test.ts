@@ -13,18 +13,22 @@ const everythingExists = () => true;
 const failuresOf = (rules: Rule[], exists: (path: string) => boolean = everythingExists) => selftest(rules, exists).failures;
 
 describe("selftest over the real rules", () => {
-  it("passes with no failures and keeps at least the 41 cases the old 1,007-line checker had, so the port dropped no coverage", async () => {
-    const casesInTheOldChecker = 41;
-    const repo = realRepo();
-    const { rules, problems } = await loadRules();
+  it(
+    "passes with no failures and keeps at least the 41 cases the old 1,007-line checker had, so the port dropped no coverage",
+    async () => {
+      const casesInTheOldChecker = 41;
+      const repo = realRepo();
+      const { rules, problems } = await loadRules();
 
-    const result = selftest(rules, (path) => repo.read(path) !== undefined);
+      const result = selftest(rules, (path) => repo.read(path) !== undefined);
 
-    expect(problems).toEqual([]);
-    expect(result.failures).toEqual([]);
-    expect(result.rules).toBe(rules.length);
-    expect(result.cases).toBeGreaterThanOrEqual(casesInTheOldChecker);
-  }, loadsEveryRuleTimeoutMs);
+      expect(problems).toEqual([]);
+      expect(result.failures).toEqual([]);
+      expect(result.rules).toBe(rules.length);
+      expect(result.cases).toBeGreaterThanOrEqual(casesInTheOldChecker);
+    },
+    loadsEveryRuleTimeoutMs,
+  );
 });
 
 describe("selftest over a rule with a broken shape", () => {

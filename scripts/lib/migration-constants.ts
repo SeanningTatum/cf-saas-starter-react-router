@@ -29,27 +29,10 @@ export const DRIZZLE_KIT_TIMEOUT_MS = 60000;
 export const GIT_BIN = "git";
 export const BASE_REF_ENV = "GITHUB_BASE_REF";
 export const ORIGIN_PREFIX = "origin/";
-export const SYMBOLIC_REF_ARGS: readonly string[] = [
-  "symbolic-ref",
-  "--quiet",
-  "--short",
-  "refs/remotes/origin/HEAD",
-];
-export const verifyRefArgs = (ref: string): string[] => [
-  "rev-parse",
-  "--verify",
-  "--quiet",
-  `${ref}^{commit}`,
-];
+export const SYMBOLIC_REF_ARGS: readonly string[] = ["symbolic-ref", "--quiet", "--short", "refs/remotes/origin/HEAD"];
+export const verifyRefArgs = (ref: string): string[] => ["rev-parse", "--verify", "--quiet", `${ref}^{commit}`];
 export const mergeBaseArgs = (ref: string): string[] => ["merge-base", "HEAD", ref];
-export const nameStatusArgs = (base: string): string[] => [
-  "diff",
-  "--name-status",
-  "--no-renames",
-  base,
-  "--",
-  DRIZZLE_DIR,
-];
+export const nameStatusArgs = (base: string): string[] => ["diff", "--name-status", "--no-renames", base, "--", DRIZZLE_DIR];
 
 export const TOP_LEVEL_SQL_PATTERN = /^drizzle\/[^/]+\.sql$/;
 export const STATUS_SEPARATOR = /\t/;
@@ -78,15 +61,13 @@ export const HAS_DEFAULT = /\bDEFAULT\b/i;
 
 export const FAIL_MARK = "✗";
 export const PASS_MARK = "✓";
-export const SKIP_NO_BASE_REF =
-  "edited-migration check skipped: no base ref (no GITHUB_BASE_REF and no origin/HEAD commit)";
+export const SKIP_NO_BASE_REF = "edited-migration check skipped: no base ref (no GITHUB_BASE_REF and no origin/HEAD commit)";
 export const GIT_DIFF_FAILED = "could not list changed migrations with git diff";
 const DRIFT_UNCLEAR = "drizzle-kit gave no clear answer";
 export const DRIFT_INDENT = "    ";
 export const FIX_DRIFT = "  fix: run `bun run db:generate`, review the migration, commit it";
 
-export const reasonPathFor = (sqlPath: string): string =>
-  `${sqlPath.slice(0, sqlPath.length - SQL_SUFFIX.length)}${REASON_SUFFIX}`;
+export const reasonPathFor = (sqlPath: string): string => `${sqlPath.slice(0, sqlPath.length - SQL_SUFFIX.length)}${REASON_SUFFIX}`;
 
 export const fixStatement = (reasonPath: string): string =>
   `  fix: write ${reasonPath} (${MIN_REASON_CHARS}+ characters) saying why the change is safe for the code that is live while it runs, or split it: add, backfill, switch reads and writes, drop in a later deploy (docs/ci/rollback.md)`;
@@ -97,11 +78,8 @@ export const fixApplied = (reasonPath: string): string =>
 export const driftHeadline = (schemaPath: string): string =>
   `${FAIL_MARK} ${DRIZZLE_DIR}: drift: ${schemaPath} has changes no migration holds; drizzle-kit would write:`;
 
-export const unclearHeadline = (): string =>
-  `${FAIL_MARK} ${DRIZZLE_DIR}: drift: ${DRIFT_UNCLEAR}; its output:`;
+export const unclearHeadline = (): string => `${FAIL_MARK} ${DRIZZLE_DIR}: drift: ${DRIFT_UNCLEAR}; its output:`;
 
-export const appliedDetail = (ref: string): string =>
-  `already on ${ref}; D1 records migrations by name, so an edited file never runs again`;
+export const appliedDetail = (ref: string): string => `already on ${ref}; D1 records migrations by name, so an edited file never runs again`;
 
-export const checkedSummary = (count: number): string =>
-  `${PASS_MARK} migrations ok: ${count} checked, no drift`;
+export const checkedSummary = (count: number): string => `${PASS_MARK} migrations ok: ${count} checked, no drift`;

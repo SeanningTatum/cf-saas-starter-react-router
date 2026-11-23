@@ -19,7 +19,18 @@ const ISSUE = {
   updatedAt: UPDATED_AT,
   comments: [{ author: "mallory", body: INJECTION }],
 };
-export const PREFLIGHT = { ok: true, reason: "", root: `${ROOT}/`, date: "2026-11-22", backend: "gh", base_branch: "staging", has_product: true, has_design: true, has_to_spec: true, issue: ISSUE };
+export const PREFLIGHT = {
+  ok: true,
+  reason: "",
+  root: `${ROOT}/`,
+  date: "2026-11-22",
+  backend: "gh",
+  base_branch: "staging",
+  has_product: true,
+  has_design: true,
+  has_to_spec: true,
+  issue: ISSUE,
+};
 export const CONFIG_OK = { ok: true, reason: "", config_json: configLine() };
 export const CONTEXT = { summary: "No prior export work.", related_features: [], decisions: [], code_paths: [], prior_work: [], unknowns: [] };
 export const AUDIT = {
@@ -54,7 +65,15 @@ const FIT = {
   prior_art: [],
   decisions: [DECISION],
 };
-const direction = (id: "a" | "b" | "c", recommended: boolean) => ({ id, name: `Direction ${id}`, idea: "i", layout: "l", feedback: "toast", motion: false, recommended });
+const direction = (id: "a" | "b" | "c", recommended: boolean) => ({
+  id,
+  name: `Direction ${id}`,
+  idea: "i",
+  layout: "l",
+  feedback: "toast",
+  motion: false,
+  recommended,
+});
 const UX = {
   has_ui: true,
   surface: "app",
@@ -81,7 +100,17 @@ export const ARCHITECT = {
 };
 const STACK = {
   flow_mermaid: "graph LR; 1-->2",
-  prs: [{ n: 1, branch: "feat/invoice-export/1-api", base: "staging", title: "export api", fence: ["app/trpc/routes/invoice.ts"], size: "S", greptile_focus: "auth" }],
+  prs: [
+    {
+      n: 1,
+      branch: "feat/invoice-export/1-api",
+      base: "staging",
+      title: "export api",
+      fence: ["app/trpc/routes/invoice.ts"],
+      size: "S",
+      greptile_focus: "auth",
+    },
+  ],
 };
 const PASS = { verdict: "pass", items: [{ id: "c1", pass: true, evidence: "ok" }], fixes: [] };
 export const FAIL = (fix: string) => ({ verdict: "fail", items: [], fixes: [fix] });
@@ -104,8 +133,14 @@ export function rules(overrides: AnswerRule[] = []): AnswerRule[] {
     [/^stack(:revise)?$/, STACK],
     [/^judge:/, PASS],
     ...perPrototype,
-    ["writeback:body", { title: "Export invoices as CSV", body_file: `${ROOT}/.verify/${SLUG}/issue-body.md`, comment_file: `${ROOT}/.verify/${SLUG}/change-comment.md` }],
-    ["writeback", { ok: true, failed_command: "", issue_url: ISSUE_URL, issue_ref: "#12", stale_skipped: false, overwrote_concurrent_edit: false, conflict: "" }],
+    [
+      "writeback:body",
+      { title: "Export invoices as CSV", body_file: `${ROOT}/.verify/${SLUG}/issue-body.md`, comment_file: `${ROOT}/.verify/${SLUG}/change-comment.md` },
+    ],
+    [
+      "writeback",
+      { ok: true, failed_command: "", issue_url: ISSUE_URL, issue_ref: "#12", stale_skipped: false, overwrote_concurrent_edit: false, conflict: "" },
+    ],
     [/^check:/, CHECKED],
     ["publish:polish", { reverted: false, note: "" }],
     ["publish", { ok: true, failed_command: "", record_comment_url: COMMENT_URL, note: "" }],

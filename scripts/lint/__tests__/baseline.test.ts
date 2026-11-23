@@ -68,10 +68,30 @@ describe("compareWithBase: a baseline cannot be grown by hand", () => {
     });
 
   it.each([
-    ["a count raised by hand", baseline({ ...atBase(), debt: { "no-throw": { "app/a.ts": 3 }, "no-other": {} } }), "is 3, and the branch this merges into has 2"],
-    ["a new debt entry under an existing rule", baseline({ ...atBase(), debt: { "no-throw": { "app/a.ts": 2 }, "no-other": { "app/b.ts": 1 } } }), 'debt["no-other"]["app/b.ts"] is 1, and the branch this merges into has 0'],
-    ["a new boundary", baseline({ ...atBase(), boundaries: { "no-throw": { "app/x.ts": "tRPC contract", "app/y.ts": "because" } } }), 'boundaries["no-throw"]["app/y.ts"] is new'],
-    ["an entry moved from debt to boundaries", baseline({ ...atBase(), boundaries: { "no-throw": { "app/x.ts": "tRPC contract", "app/a.ts": "now a boundary" } }, debt: { "no-throw": {}, "no-other": {} } }), 'boundaries["no-throw"]["app/a.ts"] is new'],
+    [
+      "a count raised by hand",
+      baseline({ ...atBase(), debt: { "no-throw": { "app/a.ts": 3 }, "no-other": {} } }),
+      "is 3, and the branch this merges into has 2",
+    ],
+    [
+      "a new debt entry under an existing rule",
+      baseline({ ...atBase(), debt: { "no-throw": { "app/a.ts": 2 }, "no-other": { "app/b.ts": 1 } } }),
+      'debt["no-other"]["app/b.ts"] is 1, and the branch this merges into has 0',
+    ],
+    [
+      "a new boundary",
+      baseline({ ...atBase(), boundaries: { "no-throw": { "app/x.ts": "tRPC contract", "app/y.ts": "because" } } }),
+      'boundaries["no-throw"]["app/y.ts"] is new',
+    ],
+    [
+      "an entry moved from debt to boundaries",
+      baseline({
+        ...atBase(),
+        boundaries: { "no-throw": { "app/x.ts": "tRPC contract", "app/a.ts": "now a boundary" } },
+        debt: { "no-throw": {}, "no-other": {} },
+      }),
+      'boundaries["no-throw"]["app/a.ts"] is new',
+    ],
     ["a raised suppressions total", baseline({ ...atBase(), suppressions: 2 }), "`suppressions` is 2, and the branch this merges into has 1"],
   ])("flags %s as baseline-grew", (_name, head, message) => {
     const found = compareWithBase(atBase(), head);
@@ -107,7 +127,7 @@ describe("baselineSize", () => {
       baseline({
         boundaries: { "no-throw": { "app/x.ts": "a", "app/y.ts": "b" }, "no-other": { "app/z.ts": "c" } },
         debt: { "no-throw": { "app/a.ts": 2, "app/b.ts": 3 }, "no-other": { "app/c.ts": 1 } },
-      })
+      }),
     );
 
     expect(size).toEqual({ entries: 3, debt: 6, boundaries: 3 });
@@ -130,7 +150,7 @@ describe("lowerBaseline", () => {
         finding("no-bad", "app/over.ts", 2),
         finding("no-bad", "app/new.ts"),
       ],
-      1
+      1,
     );
 
   it("lowers a count to what the code holds, deletes an entry for a clean file and a boundary that excuses nothing, and lowers the suppression total", () => {

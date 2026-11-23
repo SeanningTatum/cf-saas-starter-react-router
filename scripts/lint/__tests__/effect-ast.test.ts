@@ -31,7 +31,7 @@ describe("effectAliases", () => {
         'import { Effect as Eff, Schema as S } from "effect";',
         'import * as Q from "some-queue";',
         'import { Effect as NotIt } from "not-effect";',
-      ].join("\n")
+      ].join("\n"),
     );
 
     expect([...effectAliases(ast)].sort()).toEqual(["E", "Eff", "Effect"]);

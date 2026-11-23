@@ -12,8 +12,7 @@ export interface Registry {
   problems: string[];
 }
 
-const isRule = (value: unknown): value is Rule =>
-  typeof value === "object" && value !== null && "id" in value && "check" in value && "cases" in value;
+const isRule = (value: unknown): value is Rule => typeof value === "object" && value !== null && "id" in value && "check" in value && "cases" in value;
 
 export async function loadRules(): Promise<Registry> {
   const rules: Rule[] = [];
@@ -23,7 +22,7 @@ export async function loadRules(): Promise<Registry> {
     if (!name) continue;
     const loaded: Record<string, unknown> | undefined = await import(pathToFileURL(join(RULES_FOLDER, file)).href).then(
       (module) => module,
-      () => undefined
+      () => undefined,
     );
     const rule = loaded?.rule;
     if (!loaded) problems.push(`${RULES_DIR}/${file}: the file does not load; run \`bun ${RULES_DIR}/${file}\` to see why`);

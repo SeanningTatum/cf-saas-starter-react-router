@@ -2,14 +2,7 @@ import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import {
-  workflowLib,
-  ledgerChecksum,
-  verdictOf,
-  runRecordCommand,
-  runSummaryNote,
-  LEDGER_FIELD_MAX,
-} from "../../../.claude/workflow-src/lib.js";
+import { workflowLib, ledgerChecksum, verdictOf, runRecordCommand, runSummaryNote, LEDGER_FIELD_MAX } from "../../../.claude/workflow-src/lib.js";
 
 const LIB_PATH = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "..", ".claude", "workflow-src", "lib.js");
 
@@ -68,17 +61,31 @@ describe("verdictOf", () => {
 });
 
 describe("runRecordCommand", () => {
-  const call = (over: Record<string, unknown> = {}) => ({ label: "preflight", phase: "Preflight", agent: "runner", model: "", attempt: 1, outcome: "ok", verdict: "pass", ...over });
+  const call = (over: Record<string, unknown> = {}) => ({
+    label: "preflight",
+    phase: "Preflight",
+    agent: "runner",
+    model: "",
+    attempt: 1,
+    outcome: "ok",
+    verdict: "pass",
+    ...over,
+  });
 
   it("writes the heredoc byte for byte for a two-call ledger: the script parses this exact layout and checks its count and sum", () => {
-    expect(runRecordCommand("ship-feature", "demo", [call(), call({ label: "audit", phase: "Audit", agent: "ticket-auditor", attempt: 2, outcome: "empty", verdict: "" })])).toBe(
+    expect(
+      runRecordCommand("ship-feature", "demo", [
+        call(),
+        call({ label: "audit", phase: "Audit", agent: "ticket-auditor", attempt: 2, outcome: "empty", verdict: "" }),
+      ]),
+    ).toBe(
       [
         "bun scripts/run-telemetry.ts record demo ship-feature <<'RUN_EOF'",
         '["preflight","Preflight","runner","",1,"ok","pass"]',
         '["audit","Audit","ticket-auditor","",2,"empty",""]',
         '{"calls":2,"check":"0fc84437"}',
         "RUN_EOF",
-      ].join("\n")
+      ].join("\n"),
     );
   });
 
@@ -99,7 +106,7 @@ describe("runRecordCommand", () => {
   });
 
   it("writes only the footer for an empty ledger, with the empty-string checksum", () => {
-    expect(runRecordCommand("w", "d", [])).toBe("bun scripts/run-telemetry.ts record d w <<'RUN_EOF'\n{\"calls\":0,\"check\":\"811c9dc5\"}\nRUN_EOF");
+    expect(runRecordCommand("w", "d", [])).toBe('bun scripts/run-telemetry.ts record d w <<\'RUN_EOF\'\n{"calls":0,"check":"811c9dc5"}\nRUN_EOF');
   });
 
   it("a label holding RUN_EOF or a newline cannot end the heredoc or add a line: a ticket-derived label must not run a shell command", () => {
@@ -148,7 +155,15 @@ describe("tracked", () => {
     });
     const opts = (label: string) => ({ label, phase: "Audit", agentType: "ticket-auditor", model: "opus" });
     for (const label of ["good", "text", "none", "missing", "bad"]) await lib.tracked("p", opts(label)).catch(() => null);
-    const row = (label: string, outcome: string, verdict = "") => ({ label, phase: "Audit", agent: "ticket-auditor", model: "opus", attempt: 1, outcome, verdict });
+    const row = (label: string, outcome: string, verdict = "") => ({
+      label,
+      phase: "Audit",
+      agent: "ticket-auditor",
+      model: "opus",
+      attempt: 1,
+      outcome,
+      verdict,
+    });
     expect(lib.ledger()).toEqual([row("good", "ok", "ready"), row("text", "ok"), row("none", "empty"), row("missing", "empty"), row("bad", "threw")]);
   });
 
@@ -223,10 +238,13 @@ describe("workflow sources and the ledger", () => {
       .filter((l) => !/^\s*(\/\/|\*|\/\*)/.test(l))
       .join("\n");
 
-  it.each(sources)("%s calls agent( nowhere but the workflowLib hand-off: a call that dodges tracked() is missing from the ledger and the cost report", (name) => {
-    expect(code(name).match(/(^|[^\w.$])agent\(/g)).toBeNull();
-    expect(code(name).match(/workflowLib\(\{ agent, log, name: /g)).toHaveLength(1);
-  });
+  it.each(sources)(
+    "%s calls agent( nowhere but the workflowLib hand-off: a call that dodges tracked() is missing from the ledger and the cost report",
+    (name) => {
+      expect(code(name).match(/(^|[^\w.$])agent\(/g)).toBeNull();
+      expect(code(name).match(/workflowLib\(\{ agent, log, name: /g)).toHaveLength(1);
+    },
+  );
 
   it.each(sources)("%s passes its own meta.name as the lib's name: a copied line would write another workflow's ledger", (name) => {
     const metaName = /^export const meta = \{\s*name: ['"]([^'"]+)['"]/.exec(source(name))?.[1];
@@ -238,16 +256,19 @@ describe("workflow sources and the ledger", () => {
 describe("runSummaryNote", () => {
   it("puts the slug and the workflow in their own slots: swapped arguments would send the main thread to the wrong run", () => {
     expect(runSummaryNote("demo-slug", "ship-feature")).toBe(
-      "The page also shows the run summary: the output of `bun scripts/run-telemetry.ts summary demo-slug`, run from ROOT. Tokens and seconds read n/a until `bun scripts/run-telemetry.ts ingest demo-slug ship-feature <this run's transcript directory>` has run; run it first when you have the directory."
+      "The page also shows the run summary: the output of `bun scripts/run-telemetry.ts summary demo-slug`, run from ROOT. Tokens and seconds read n/a until `bun scripts/run-telemetry.ts ingest demo-slug ship-feature <this run's transcript directory>` has run; run it first when you have the directory.",
     );
   });
 });
 
 describe("remember and a slug that is not kebab-case", () => {
-  it.each(["x; echo steered", "Upper", "a b", "$(id)", "", "../x"])("a slug of %j makes no runner call and logs one line: it would otherwise reach a shell line", async (slug) => {
-    const { lib, calls, logs } = wired(async () => "r");
-    expect(await lib.asker("P").remember(slug, { log: "x" }, "memory:record:demo", "Brief")).toBeNull();
-    expect(calls).toEqual([]);
-    expect(logs).toEqual(["Memory and run ledger: not written, slug is not kebab-case"]);
-  });
+  it.each(["x; echo steered", "Upper", "a b", "$(id)", "", "../x"])(
+    "a slug of %j makes no runner call and logs one line: it would otherwise reach a shell line",
+    async (slug) => {
+      const { lib, calls, logs } = wired(async () => "r");
+      expect(await lib.asker("P").remember(slug, { log: "x" }, "memory:record:demo", "Brief")).toBeNull();
+      expect(calls).toEqual([]);
+      expect(logs).toEqual(["Memory and run ledger: not written, slug is not kebab-case"]);
+    },
+  );
 });
