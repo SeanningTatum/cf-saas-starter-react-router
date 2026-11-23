@@ -11,15 +11,21 @@ export interface SharedCheck {
 
 export const makeSharedCheck = (ttlMs: number): SharedCheck => {
   let startedAt = Number.NEGATIVE_INFINITY;
+  let running = false;
   let last: Promise<boolean> = Promise.resolve(false);
   return {
     get: (nowMs, check) => {
-      if (nowMs >= startedAt && nowMs < startedAt + ttlMs) return last;
+      if (running || (nowMs >= startedAt && nowMs < startedAt + ttlMs)) return last;
       startedAt = nowMs;
-      last = check().then(
-        (up) => up,
-        () => false,
-      );
+      running = true;
+      last = check()
+        .then(
+          (up) => up,
+          () => false,
+        )
+        .finally(() => {
+          running = false;
+        });
       return last;
     },
   };

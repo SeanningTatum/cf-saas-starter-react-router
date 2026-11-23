@@ -30,6 +30,20 @@ describe("makeSharedCheck", () => {
     expect(check).toHaveBeenCalledTimes(1);
   });
 
+  it("keeps sharing a check that is still running after the window ends, so that a slow database never has several checks piled on it", async () => {
+    const shared = makeSharedCheck(TTL);
+    let finish: (up: boolean) => void = () => undefined;
+    const slow = vi.fn(() => new Promise<boolean>((resolve) => (finish = resolve)));
+    const first = shared.get(0, slow);
+    const late = shared.get(TTL * 3, slow);
+    expect(slow).toHaveBeenCalledTimes(1);
+    finish(true);
+    expect(await Promise.all([first, late])).toEqual([true, true]);
+    void shared.get(TTL * 4, slow);
+    expect(slow).toHaveBeenCalledTimes(2);
+    finish(true);
+  });
+
   it("keeps a down answer and a rejected check for the window as down, so that an outage or a broken runtime does not run, and report, once per request", async () => {
     const shared = makeSharedCheck(TTL);
     const check = vi.fn(() => Promise.reject(new Error("runtime did not build")));

@@ -1,7 +1,9 @@
-import { Effect, Exit, type ManagedRuntime } from "effect";
+import { Duration, Effect, Exit, type ManagedRuntime } from "effect";
 import {
   HEALTHZ_ALLOWED_METHODS,
   HEALTHZ_CHECK_TTL_MS,
+  HEALTHZ_DOWN_LOG,
+  HEALTHZ_QUERY_TIMEOUT_MS,
   HEALTHZ_DOWN_STATUS,
   HEALTHZ_HEADERS,
   HEALTHZ_UP_ATTRIBUTE,
@@ -33,8 +35,15 @@ const databaseCheck = makeSharedCheck(HEALTHZ_CHECK_TTL_MS);
 const databaseUp = Effect.gen(function* () {
   const repo = yield* HealthRepository;
   const ping = yield* repo.pingDatabase();
+  if (!ping.ok)
+    yield* Effect.logWarning(HEALTHZ_DOWN_LOG).pipe(Effect.annotateLogs({ error: ping.error }));
   return ping.ok;
 }).pipe(
+  Effect.timeoutTo({
+    duration: Duration.millis(HEALTHZ_QUERY_TIMEOUT_MS),
+    onSuccess: (up) => up,
+    onTimeout: () => false,
+  }),
   Effect.tap((up) => Effect.annotateCurrentSpan(HEALTHZ_UP_ATTRIBUTE, up)),
   Effect.withSpan(HEALTHZ_CHECK_SPAN),
 );

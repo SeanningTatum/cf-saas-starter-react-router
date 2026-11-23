@@ -3,9 +3,9 @@ import { expect, test } from "@playwright/test";
 const HEALTHZ = "/healthz";
 const RELEASE_SHAPE = /^[A-Za-z0-9._+-]{1,64}$/;
 
-test.describe("Health route (issue #94): up or down and the release, nothing more", () => {
+test.describe("Health route (issue #94): up or down and the release, nothing more; API only, so no @golden or @error video", () => {
   test("GET /healthz answers 200 with status up, a release and no-store, so that a deploy's smoke check reads the live build and no cache answers for it", {
-    tag: ["@golden", "@deployed"],
+    tag: "@deployed",
   }, async ({ request }) => {
     const response = await request.get(HEALTHZ);
     expect(response.status()).toBe(200);
@@ -24,7 +24,7 @@ test.describe("Health route (issue #94): up or down and the release, nothing mor
   });
 
   test("a POST to /healthz is refused and its answer holds no health fields or stack, so that the route reads only and a wrong method leaks nothing", {
-    tag: ["@error", "@deployed"],
+    tag: "@deployed",
   }, async ({ request }) => {
     const response = await request.post(HEALTHZ, { data: {} });
     expect(response.status()).toBe(405);

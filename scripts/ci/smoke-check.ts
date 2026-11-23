@@ -9,6 +9,7 @@ import {
   ERROR_BAD_VERSION,
   ERROR_BAD_WORKER,
   ERROR_HALF_PIN,
+  ERROR_PIN_NEEDS_RELEASE,
   EXIT_FAIL,
   EXIT_OK,
   EXIT_USAGE,
@@ -159,6 +160,7 @@ export function parseArgs(argv: readonly string[]): Either.Either<SmokeTarget, s
     const origin = yield* parseOrigin(rawUrl);
     const pin = yield* parsePin(values.get(FLAG_WORKER), values.get(FLAG_VERSION_ID));
     const release = yield* parseRelease(values.get(FLAG_RELEASE));
+    if (pin && release === undefined) return yield* Either.left(ERROR_PIN_NEEDS_RELEASE);
     return { origin, ...(release === undefined ? {} : { release }), ...(pin ? { pin } : {}) };
   });
 }
