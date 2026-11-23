@@ -1,13 +1,12 @@
 import { Either, ParseResult, Schema } from "effect";
+import { WAVE_MAX_REVIEW_ROUNDS, WAVE_MAX_TRACKS } from "./harness-config-constants";
 import {
   BRANCH_PATTERN,
   FIX_KINDS,
   GATE_RESULTS,
   MAX_LIST,
-  MAX_REVIEW_ROUNDS,
   MAX_TEXT,
   MAX_TICKETS,
-  MAX_TRACKS_AT_ONCE,
   SLUG_PATTERN,
   TICKET_KINDS,
   TICKET_STATUSES,
@@ -32,7 +31,6 @@ export const PlanTicketSchema = Schema.Struct({
 
 export const PlanInputSchema = Schema.Struct({
   tickets: Schema.Array(PlanTicketSchema).pipe(Schema.minItems(1), Schema.maxItems(MAX_TICKETS)),
-  changes: Schema.optionalWith(Text, { default: () => "" }),
 });
 
 const TicketSchema = Schema.extend(
@@ -76,11 +74,10 @@ export const WaveStateSchema = Schema.Struct({
   slug: Schema.String.pipe(Schema.pattern(SLUG_PATTERN)),
   wave: Branch,
   into: Branch,
-  tracksAtOnce: Schema.Int.pipe(Schema.between(1, MAX_TRACKS_AT_ONCE)),
-  reviewRounds: Schema.Int.pipe(Schema.between(0, MAX_REVIEW_ROUNDS)),
+  tracksAtOnce: Schema.Int.pipe(Schema.between(1, WAVE_MAX_TRACKS)),
+  reviewRounds: Schema.Int.pipe(Schema.between(0, WAVE_MAX_REVIEW_ROUNDS)),
   paused: Schema.Boolean,
   planApproved: Schema.Boolean,
-  planChanges: Text,
   notes: Texts,
   tracks: Schema.Array(Schema.Struct({ id: Text, tickets: Schema.Array(TicketNumber) })),
   projected: Schema.Array(Schema.Array(TicketNumber)),
@@ -106,7 +103,6 @@ export const EventSchema = Schema.Union(
   }),
 );
 
-export type PlanInput = typeof PlanInputSchema.Type;
 export type PlanTicketInput = typeof PlanTicketSchema.Type;
 export type Ticket = typeof TicketSchema.Type;
 export type Batch = typeof BatchSchema.Type;
@@ -152,6 +148,40 @@ export const newTicket = (t: PlanTicketInput, track: string): Ticket => ({
   why: "",
   ownerSteps: [],
 });
+
+export interface WaveSetup {
+  slug: string;
+  wave: string;
+  into: string;
+  tracksAtOnce: number;
+  reviewRounds: number;
+  plan: { tracks: { id: string; tickets: number[] }[]; batches: number[][]; notes: string[] };
+  tickets: readonly PlanTicketInput[];
+}
+
+export function newWave(s: WaveSetup): WaveState {
+  const trackOf = new Map(s.plan.tracks.flatMap((t) => t.tickets.map((n) => [n, t.id] as const)));
+  return {
+    version: WAVE_STATE_VERSION,
+    slug: s.slug,
+    wave: s.wave,
+    into: s.into,
+    tracksAtOnce: s.tracksAtOnce,
+    reviewRounds: s.reviewRounds,
+    paused: false,
+    planApproved: false,
+    notes: s.plan.notes,
+    tracks: s.plan.tracks,
+    projected: s.plan.batches,
+    tickets: s.tickets.map((t) => newTicket(t, trackOf.get(t.n) ?? "")),
+    batch: null,
+    batchesDone: 0,
+    failures: [],
+    halt: null,
+    rollupPr: null,
+    log: [`planned ${s.tickets.length} tickets in ${s.plan.tracks.length} tracks and ${s.plan.batches.length} batches`],
+  };
+}
 
 export const newBatch = (index: number, tickets: number[]): Batch => ({
   index,

@@ -31,7 +31,6 @@ export function waveOf(tickets: PlanTicketInput[], over: Partial<WaveState> = {}
     reviewRounds: 1,
     paused: false,
     planApproved: true,
-    planChanges: "",
     notes: plan.notes,
     tracks: plan.tracks,
     projected: plan.batches,

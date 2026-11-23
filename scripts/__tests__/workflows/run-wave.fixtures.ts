@@ -64,7 +64,15 @@ export function world() {
       pr.state = "MERGED";
       return ok("");
     }
-    return ok({ state: pr.state, baseRefName: pr.base, headRefOid: pr.head, mergeable: pr.mergeable, statusCheckRollup: pr.checks });
+    return ok({
+      state: pr.state,
+      baseRefName: pr.base,
+      headRefName: `${WAVE}-${Number(n) - 100}-work`,
+      isCrossRepository: false,
+      headRefOid: pr.head,
+      mergeable: pr.mergeable,
+      statusCheckRollup: pr.checks,
+    });
   };
   const deps: Deps = {
     root: ROOT,
@@ -128,7 +136,7 @@ export function answers(w: World, s: Script = {}, over: AnswerRule[] = []): Answ
   return [
     ...over,
     ["config", { ok: true, reason: "", config_json: configLine() }],
-    ["preflight", { ok: true, reason: "", root: ROOT, into: INTO }],
+    ["preflight", { ok: true, reason: "", root: ROOT, default_branch: "staging", into: INTO }],
     ["plan", { tickets: PLANNED }],
     [/^(memory|run:record)/, (c: AnswerInput) => (c.label.startsWith("run:") ? RUN_OK : "memory: recorded")],
     [

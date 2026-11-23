@@ -48,8 +48,17 @@ function world() {
     pr.state = "MERGED";
     return ok("");
   };
-  const onPr = (verb: string, pr: Pr): GhResult | null => {
-    if (verb === "view") return ok({ state: pr.state, baseRefName: pr.base, headRefOid: pr.head, mergeable: pr.mergeable, statusCheckRollup: pr.checks });
+  const onPr = (verb: string, pr: Pr, n: string | undefined): GhResult | null => {
+    if (verb === "view")
+      return ok({
+        state: pr.state,
+        baseRefName: pr.base,
+        headRefName: `w/${Number(n) - 100}`,
+        isCrossRepository: false,
+        headRefOid: pr.head,
+        mergeable: pr.mergeable,
+        statusCheckRollup: pr.checks,
+      });
     return verb === "merge" ? merge(pr) : null;
   };
   const prCall = (args: string[], input: string | undefined): GhResult | null => {
@@ -60,7 +69,7 @@ function world() {
       return ok("https://github.com/acme/saas/pull/900\n");
     }
     const pr = prs.get(Number(n));
-    return pr ? onPr(verb, pr) : no(`no pull request ${n}`);
+    return pr ? onPr(verb, pr, n) : no(`no pull request ${n}`);
   };
   const gh: GhRunner = (args, input) => {
     calls.push(args);
@@ -252,20 +261,21 @@ describe("wave CLI", () => {
     expect(await w.step()).toMatchObject({ kind: "stop", stop: "stuck", tickets: [{ n: 11 }, { n: 13 }] });
   });
 
-  it("a red gate runs again once, then stops the wave with its log; resume lets it run again", async () => {
+  it("a red gate runs again once, then stops the wave with its log; a log outside the wave folder is refused; resume lets it run again", async () => {
     const w = world();
     await w.approved();
     await w.green(11, 13);
     await w.out(["merge", SLUG]);
-    w.files.set("/repo/gate.log", `${Array.from({ length: 20 }, (_, i) => `line ${i}`).join("\n")}\n`);
-    const gate = ["gate", SLUG, "--head", SHA_A, "--code", "1", "--log", "/repo/gate.log"];
+    w.files.set("/repo/.verify/wave-two/gate-1.log", `${Array.from({ length: 20 }, (_, i) => `line ${i}`).join("\n")}\n`);
+    const gate = ["gate", SLUG, "--head", SHA_A, "--code", "1", "--log", "/repo/.verify/wave-two/gate-1.log"];
     const first = await w.out(gate);
     expect(first).toMatchObject({ gate: "fail", failures: 1 });
     expect(first.tail.split("\n")).toHaveLength(15);
     expect(first.tail.endsWith("line 19")).toBe(true);
     expect(await w.step()).toEqual({ kind: "gate", batch: 0 });
+    expect((await w.cli(["gate", SLUG, "--head", SHA_A, "--code", "0", "--log", "/etc/passwd"])).code).toBe(2);
     await w.out(gate);
-    expect(await w.step()).toEqual({ kind: "stop", stop: "gate", batch: 0, log: "/repo/gate.log" });
+    expect(await w.step()).toEqual({ kind: "stop", stop: "gate", batch: 0, log: "/repo/.verify/wave-two/gate-1.log" });
     expect((await w.cli(["resume", SLUG])).stdout).toEqual([`wave: ${SLUG} resumed; start the workflow again with the same args`]);
     expect(await w.step()).toEqual({ kind: "gate", batch: 0 });
   });
@@ -276,6 +286,7 @@ describe("wave CLI", () => {
     await w.open(11);
     expect((await w.cli(["pause", SLUG])).code).toBe(0);
     expect(w.state().paused).toBe(true);
+    expect(JSON.parse((await w.cli(["status", SLUG, "--json"])).stdout[0] ?? "{}")).toMatchObject({ paused: true, slug: SLUG });
     expect(await w.step()).toEqual({ kind: "stop", stop: "paused", pr: null });
     await w.cli(["resume", SLUG]);
     expect(await w.step()).toMatchObject({

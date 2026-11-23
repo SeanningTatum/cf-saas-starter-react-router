@@ -107,6 +107,7 @@ export function applyEvent(state: WaveState, e: WaveEvent): WaveState {
   if (!ticketOf(state, e.n)) return state;
   switch (e.type) {
     case "opened":
+      if (state.tickets.some((t) => t.n !== e.n && t.pr === e.pr)) return stuck(state, e.n, `PR #${e.pr} already belongs to another ticket in this wave`);
       return withLog(
         withTicket(state, e.n, () => ({ status: "open", pr: e.pr, branch: e.branch, head: e.head, ownerSteps: [...e.ownerSteps] })),
         `#${e.n} opened PR #${e.pr}`,

@@ -104,7 +104,9 @@ Workflow({ name: "run-wave", args: { wave: "v3/wave-2", into: "release/v3.0", ti
 | Gate | The full `./scripts/verify.sh` once on the combined wave branch, in `.verify/<slug>/gate`. Red twice stops the run | a script |
 | Finish | `scripts/wave.ts rollup` opens the roll-up PR with every merged ticket and every owner step in its body, and the run stops. It never merges the roll-up | a script |
 
-Checking, merging and the gate run as `runner` steps: the runner only runs the command, and `scripts/wave.ts` decides. No PR reaches the wave branch past the guard, and no step merges the roll-up, changes repo settings or touches secrets or cloud resources.
+Checking, merging and the gate run as `runner` steps: the runner only runs the command, and `scripts/wave.ts` decides. The run merges a PR only through the guard, and only when its base is the wave branch and its head is the ticket's own branch in this repo; no step merges the roll-up, changes repo settings or touches secrets or cloud resources. Preflight refuses a wave branch that is the default branch or the configured base.
+
+The ticket agents' rules ("never merge, never force-push, never touch settings") are words in a prompt, and the agents run with your `gh` and git access. Branch protection on the wave, release and default branches (required checks, no force-push, no direct push) is what enforces them; keep it on while a wave runs.
 
 **The three stops.** The run returns, and you answer:
 

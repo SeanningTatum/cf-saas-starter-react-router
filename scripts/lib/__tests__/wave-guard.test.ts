@@ -83,6 +83,14 @@ describe("guardDecision", () => {
     });
   });
 
+  it("a PR whose head is not the ticket's own branch, or comes from a fork, is closed: a mistaken PR number never merges someone else's PR", () => {
+    const own = { headRefName: "w/11", isCrossRepository: false };
+    expect(guardDecision(view(own), [], WAVE, "w/11").verdict).toBe("green");
+    expect(guardDecision(view({ ...own, headRefName: "w/12" }), [], WAVE, "w/11").verdict).toBe("closed");
+    expect(guardDecision(view({ ...own, isCrossRepository: true }), [], WAVE, "w/11").verdict).toBe("closed");
+    expect(guardDecision(view(), [], WAVE, "w/11").verdict).toBe("closed");
+  });
+
   it("a closed PR is closed and a merged PR is merged, whatever its checks say", () => {
     expect(guardDecision(view({ state: "CLOSED" }), [], WAVE)).toMatchObject({ verdict: "closed", line: "the PR is closed" });
     expect(guardDecision(view({ state: "MERGED", baseRefName: "main" }), [], WAVE).verdict).toBe("merged");
@@ -109,7 +117,7 @@ describe("readGuard", () => {
   it("reads the PR and its threads for the right repo and PR number and decides on them", () => {
     const { gh, calls } = fakeGh({ threads: ok(threadsReply([thread(["bot"])])) });
     expect(readGuard(gh, 101, WAVE)).toEqual(Either.right(expect.objectContaining({ verdict: "threads" })));
-    expect(calls[1]).toEqual(["pr", "view", "101", "--json", "state,baseRefName,headRefOid,mergeable,statusCheckRollup"]);
+    expect(calls[1]).toEqual(["pr", "view", "101", "--json", "state,baseRefName,headRefName,headRefOid,isCrossRepository,mergeable,statusCheckRollup"]);
     expect(calls[2]).toEqual(expect.arrayContaining(["owner=acme", "name=saas", "pr=101"]));
   });
 

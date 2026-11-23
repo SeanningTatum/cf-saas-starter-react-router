@@ -30,6 +30,14 @@ describe("signatureOf", () => {
   });
 });
 
+describe("opened", () => {
+  it("a PR number another ticket already holds makes the ticket stuck instead of tying one PR to two tickets", () => {
+    let s = opened(started([ticket(1), ticket(2)]), 1);
+    s = applyEvent(s, { type: "opened", n: 2, pr: 101, branch: "w/2", head: SHA_A, ownerSteps: [] });
+    expect(tk(s, 2)).toMatchObject({ status: "stuck", why: "PR #101 already belongs to another ticket in this wave" });
+  });
+});
+
 describe("review rounds", () => {
   it("with one round, a clean review goes straight to the guard", () => {
     const s = reviewed(opened(started([ticket(1)]), 1), 1);

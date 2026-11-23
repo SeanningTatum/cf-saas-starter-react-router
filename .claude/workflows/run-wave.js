@@ -420,15 +420,17 @@ const pre = await tracked(
   0. Root. ${rootText} cd there.
   1. \`gh auth status\` must succeed.
   2. \`git fetch -q origin ${shq(WAVE)}\`, then \`git rev-parse --verify -q origin/${WAVE}\` must print a sha, else fail "the wave branch ${WAVE} is not on origin".
-  3. Roll-up base: ${wantedInto ? shq(wantedInto) : "run `bun scripts/default-branch.ts` (it prints the default branch; if it fails, fail with its message)"} -> into. \`git fetch -q origin <into>\`; \`git rev-parse --verify -q origin/<into>\` must print a sha.
-Return ok, reason (one line at the first failure, else ""), root (absolute) and into.`,
-  { label: "preflight", phase: "Preflight", agentType: "runner", effort: "low", schema: obj({ ok: BOOL, reason: STR, root: STR, into: STR }) }
+  3. Default branch: run \`bun scripts/default-branch.ts\` (it prints the repo's default branch; if it fails, fail with its message) -> default_branch.
+  4. Roll-up base: ${wantedInto ? shq(wantedInto) : "the default branch from item 3"} -> into. \`git fetch -q origin <into>\`; \`git rev-parse --verify -q origin/<into>\` must print a sha.
+Return ok, reason (one line at the first failure, else ""), root (absolute), default_branch and into.`,
+  { label: "preflight", phase: "Preflight", agentType: "runner", effort: "low", schema: obj({ ok: BOOL, reason: STR, root: STR, default_branch: STR, into: STR }) }
 );
 const preFault = preflightFault(pre, input.root);
 if (preFault) return { stopped: "Preflight", reason: preFault };
 const ROOT = pre.root.replace(/\/+$/, "");
 const INTO = wantedInto || pre.into;
 if (!BRANCH.test(INTO) || INTO === WAVE) return { stopped: "Preflight", reason: "the roll-up base must be a branch other than the wave branch" };
+if ([pre.default_branch, cfg.baseBranch].includes(WAVE)) return { stopped: "Preflight", reason: "the wave branch must not be the default branch or the configured base: the run merges PRs into it" };
 const { sh, remember } = asker(`ROOT is ${ROOT}. cd there before anything else.`);
 const WT = (n) => `${ROOT}/.verify/${WAVE_SLUG}/wt/${n}`;
 const modelFor = (kind) => (kind === "design" ? MODELS.design : kind === "mechanical" ? MODELS.mechanical : MODELS.build);
@@ -471,7 +473,8 @@ ${input.rules ? `- Read ${shq(input.rules)} first and follow it.\n` : ""}- The t
 const worktreeSetup = (t) => `WT = ${WT(t.n)}. If WT does not exist: \`git -C ${ROOT} fetch -q origin ${shq(t.branch)}\` then \`git -C ${ROOT} worktree add ${WT(t.n)} ${shq(t.branch)}\` (or track origin/${t.branch} if no local branch). Then in WT: \`git pull --ff-only\` and \`bun install --frozen-lockfile\`.`;
 
 const BUILD = obj({ ok: BOOL, pr: NUM, branch: STR, head: STR, owner_steps: STRS, error_line: STR, summary: STR });
-const buildPrompt = (t) => `You build ticket #${t.n} (${JSON.stringify(t.title)}) of the wave on ${WAVE}, alone, start to finish, and open its pull request.
+const buildPrompt = (t) => `You build ticket #${t.n} of the wave on ${WAVE}, alone, start to finish, and open its pull request. Its title, as the planner read it:
+${fence("title", t.title)}
 
 ${RULES}
 
@@ -603,7 +606,7 @@ if (start.out.step.kind === "plan" || (awaitingPlan && changes)) {
   const p = await tracked(planPrompt(changes), { label: "plan", phase: "Plan", agentType: "general-purpose", model: MODELS.plan, schema: PLAN_OUT });
   const got = p ? p.tickets.map((x) => x.n).sort((a, b) => a - b) : [];
   if (JSON.stringify(got) !== JSON.stringify([...TICKETS].sort((a, b) => a - b))) return { stopped: "Plan", reason: "the planner did not return exactly the tickets asked for" };
-  const made = await waveCmd("plan", `--wave ${shq(WAVE)} --into ${shq(INTO)} --tracks ${TRACKS} --review-rounds ${cfg.wave.reviewRounds}`, "wave:plan", "Plan", { tickets: p.tickets, changes });
+  const made = await waveCmd("plan", `--wave ${shq(WAVE)} --into ${shq(INTO)} --tracks ${TRACKS} --review-rounds ${cfg.wave.reviewRounds}`, "wave:plan", "Plan", { tickets: p.tickets });
   if (made.error) return { stopped: "Plan", reason: made.error };
   planned = true;
 }

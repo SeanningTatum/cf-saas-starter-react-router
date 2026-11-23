@@ -34,7 +34,6 @@ describe("run-wave: plan stop", () => {
     const r = await dryRun("run-wave", { args: { ...ARGS, plan: { approved: false, changes: "Put #13 first" } }, answers: answers(w) });
     expect(r.result).toMatchObject({ status: "needs-plan" });
     expect(r.calls.find((c) => c.label === "plan")?.prompt).toContain("----- DATA: changes -----\nPut #13 first");
-    expect(w.state().planChanges).toBe("Put #13 first");
   });
 });
 
@@ -239,6 +238,13 @@ describe("run-wave: args and settings", () => {
     const noTickets = await dryRun("run-wave", { args: { wave: WAVE }, answers: answers(w) });
     expect(noTickets.result).toMatchObject({ error: expect.stringContaining("args.tickets") });
     expect(noWave.calls.length + noTickets.calls.length).toBe(0);
+  });
+
+  it("refuses a wave branch that is the default branch, since the run merges PRs into it", async () => {
+    const w = world();
+    const r = await dryRun("run-wave", { args: { ...ARGS, wave: "staging" }, answers: answers(w) });
+    expect(r.result).toMatchObject({ stopped: "Preflight", reason: expect.stringContaining("default branch") });
+    expect(w.state()).toBeNull();
   });
 
   it("args.tracks can lower the tracks at once for one wave but never raise it past the config", async () => {

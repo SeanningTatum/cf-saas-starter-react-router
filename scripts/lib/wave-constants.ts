@@ -9,7 +9,6 @@ export const EXIT_USAGE = 2;
 export const EXIT_GH = 3;
 
 export const TICKET_KINDS = ["design", "build", "mechanical"] as const;
-export const WORK_KINDS = ["plan", "design", "build", "review", "mechanical"] as const;
 export const TICKET_STATUSES = ["queued", "open", "green", "merged", "stuck", "skipped"] as const;
 export const FIX_KINDS = ["review", "check", "threads", "refresh"] as const;
 export const GATE_RESULTS = ["", "pass", "fail"] as const;
@@ -20,8 +19,6 @@ export const MAX_THREAD_ROUNDS = 3;
 export const MAX_PENDING_ROUNDS = 6;
 export const MAX_GATE_FAILURES = 2;
 export const MAX_MERGE_PASSES = 2;
-export const MAX_TRACKS_AT_ONCE = 8;
-export const MAX_REVIEW_ROUNDS = 3;
 export const MAX_TICKETS = 60;
 export const MAX_TEXT = 500;
 export const MAX_LIST = 50;
@@ -40,7 +37,7 @@ export const OPEN_STATE = "OPEN";
 export const MERGED_STATE = "MERGED";
 export const CONFLICTING = "CONFLICTING";
 
-export const PR_VIEW_FIELDS = "state,baseRefName,headRefOid,mergeable,statusCheckRollup";
+export const PR_VIEW_FIELDS = "state,baseRefName,headRefName,headRefOid,isCrossRepository,mergeable,statusCheckRollup";
 export const REPO_VIEW_ARGS = ["repo", "view", "--json", "owner,name", "-q", '.owner.login + "/" + .name'];
 export const THREADS_QUERY =
   "query($owner:String!,$name:String!,$pr:Int!){repository(owner:$owner,name:$name){pullRequest(number:$pr){reviewThreads(first:100){nodes{isResolved comments(first:100){nodes{author{login} url}}}}}}}";

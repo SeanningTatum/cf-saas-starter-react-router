@@ -1,8 +1,9 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { Either } from "effect";
 import { ghSpawn, type GhRunner } from "./lib/gh";
+import { WAVE_MAX_REVIEW_ROUNDS, WAVE_MAX_TRACKS } from "./lib/harness-config-constants";
 import {
   BRANCH_PATTERN,
   CONFLICTING,
@@ -12,8 +13,6 @@ import {
   EXIT_OK,
   EXIT_USAGE,
   LOG_TAIL_LINES,
-  MAX_REVIEW_ROUNDS,
-  MAX_TRACKS_AT_ONCE,
   MAX_WAIT_SECONDS,
   MESSAGE_PREFIX,
   MS_PER_SECOND,
@@ -36,12 +35,11 @@ import {
   VERB_SKIP,
   VERB_STATUS,
   VERIFY_DIR,
-  WAVE_STATE_VERSION,
 } from "./lib/wave-constants";
 import { mergePr, readGuard, type GuardResult } from "./lib/wave-guard";
 import { planWave } from "./lib/wave-plan";
 import { outLine, rollupBody, statusLines } from "./lib/wave-report";
-import { decodeEvent, decodePlanInput, decodeState, newTicket, ticketOf, type WaveState, withLog, withTicket } from "./lib/wave-state";
+import { decodeEvent, decodePlanInput, decodeState, newWave, ticketOf, type WaveState, withLog, withTicket } from "./lib/wave-state";
 import { type PersonChange, pause, resume, retry, skip } from "./lib/wave-person";
 import { afterMerge, applyEvent, applyGate, applyGuard, nextWaveStep, viewOf } from "./lib/wave-step";
 
@@ -107,8 +105,8 @@ function plan(deps: Deps, slug: string, flags: Map<string, string>): Outcome {
   const into = flags.get("--into") ?? "";
   if (!BRANCH_PATTERN.test(wave) || !BRANCH_PATTERN.test(into)) return usage("--wave and --into must be branch names");
   if (wave === into) return fail("the wave branch and the roll-up base must differ");
-  const tracks = intFlag(flags, "--tracks", 1, MAX_TRACKS_AT_ONCE);
-  const rounds = intFlag(flags, "--review-rounds", 0, MAX_REVIEW_ROUNDS);
+  const tracks = intFlag(flags, "--tracks", 1, WAVE_MAX_TRACKS);
+  const rounds = intFlag(flags, "--review-rounds", 0, WAVE_MAX_REVIEW_ROUNDS);
   if (typeof tracks === "string") return usage(tracks);
   if (typeof rounds === "string") return usage(rounds);
   const before = deps.readFile(statePath(deps, slug)) === null ? null : load(deps, slug);
@@ -118,36 +116,15 @@ function plan(deps: Deps, slug: string, flags: Map<string, string>): Outcome {
   if (Either.isLeft(input)) return fail(`plan input: ${input.left}`);
   const made = planWave(input.right.tickets, tracks);
   if (Either.isLeft(made)) return fail(made.left);
-  const trackOf = new Map(made.right.tracks.flatMap((t) => t.tickets.map((n) => [n, t.id] as const)));
-  const state: WaveState = {
-    version: WAVE_STATE_VERSION,
-    slug,
-    wave,
-    into,
-    tracksAtOnce: tracks,
-    reviewRounds: rounds,
-    paused: false,
-    planApproved: false,
-    planChanges: input.right.changes,
-    notes: made.right.notes,
-    tracks: made.right.tracks,
-    projected: made.right.batches,
-    tickets: input.right.tickets.map((t) => newTicket(t, trackOf.get(t.n) ?? "")),
-    batch: null,
-    batchesDone: 0,
-    failures: [],
-    halt: null,
-    rollupPr: null,
-    log: [`planned ${input.right.tickets.length} tickets in ${made.right.tracks.length} tracks and ${made.right.batches.length} batches`],
-  };
+  const state = newWave({ slug, wave, into, tracksAtOnce: tracks, reviewRounds: rounds, plan: made.right, tickets: input.right.tickets });
   save(deps, state);
   return done(outLine({ tracks: made.right.tracks, batches: made.right.batches, notes: made.right.notes }));
 }
 
-async function waitGuard(deps: Deps, pr: number, wave: string, waitSeconds: number): Promise<Either.Either<GuardResult, string>> {
+async function waitGuard(deps: Deps, pr: number, wave: string, branch: string, waitSeconds: number): Promise<Either.Either<GuardResult, string>> {
   const start = deps.now();
   for (;;) {
-    const read = readGuard(deps.gh, pr, wave);
+    const read = readGuard(deps.gh, pr, wave, branch);
     if (Either.isLeft(read) || read.right.verdict !== "pending") return read;
     if ((deps.now() - start) / MS_PER_SECOND + POLL_SECONDS > waitSeconds) return read;
     await deps.sleep(POLL_SECONDS * MS_PER_SECOND);
@@ -164,7 +141,7 @@ async function guard(deps: Deps, state: WaveState, n: number, flags: Map<string,
   if (!t || t.pr === null) return fail(`#${n} has no PR in this wave`);
   const wait = intFlag(flags, "--wait", 0, MAX_WAIT_SECONDS, DEFAULT_WAIT_SECONDS);
   if (typeof wait === "string") return usage(wait);
-  const read = await waitGuard(deps, t.pr, state.wave, wait);
+  const read = await waitGuard(deps, t.pr, state.wave, t.branch, wait);
   if (Either.isLeft(read)) return fail(read.left, EXIT_GH);
   const next = applyGuard(state, n, read.right);
   save(deps, next);
@@ -179,7 +156,7 @@ function merge(deps: Deps, state: WaveState): Outcome {
   for (const n of state.batch.tickets) {
     const t = ticketOf(next, n);
     if (t?.status !== "green" || t.pr === null) continue;
-    const read = readGuard(deps.gh, t.pr, state.wave);
+    const read = readGuard(deps.gh, t.pr, state.wave, t.branch);
     if (Either.isLeft(read)) return fail(read.left, EXIT_GH);
     if (read.right.verdict !== "green") {
       next = applyGuard(
@@ -208,6 +185,8 @@ function gate(deps: Deps, state: WaveState, flags: Map<string, string>): Outcome
   const code = intFlag(flags, "--code", 0, Number.MAX_SAFE_INTEGER);
   if (typeof code === "string") return usage(code);
   const logPath = flags.get("--log") ?? "";
+  const ownDir = join(deps.root, VERIFY_DIR, state.slug);
+  if (logPath && !resolve(logPath).startsWith(`${ownDir}/`)) return usage(`--log must name a file under ${ownDir}`);
   const tail = logPath ? (deps.readFile(logPath) ?? "").trimEnd().split("\n").slice(-LOG_TAIL_LINES).join("\n") : "";
   const next = applyGate(state, head, code, logPath);
   save(deps, next);

@@ -23,6 +23,8 @@ const CheckSchema = Schema.Struct({
 const PrViewSchema = Schema.Struct({
   state: Schema.String,
   baseRefName: Schema.String,
+  headRefName: Schema.optional(Schema.String),
+  isCrossRepository: Schema.optional(Schema.Boolean),
   headRefOid: Schema.String,
   mergeable: Schema.optional(Schema.String),
   statusCheckRollup: Schema.optionalWith(Schema.NullOr(Schema.Array(CheckSchema)), { default: () => [] }),
@@ -74,11 +76,14 @@ export function unansweredThreads(threads: readonly Thread[]): string[] {
   });
 }
 
-export function guardDecision(view: PrView, threads: readonly Thread[], wave: string): GuardResult {
+export function guardDecision(view: PrView, threads: readonly Thread[], wave: string, branch?: string): GuardResult {
   const base = { head: view.headRefOid, mergeable: view.mergeable ?? "", red: [], pending: [], unanswered: [] };
   if (view.state === MERGED_STATE) return { ...base, verdict: "merged", line: "the PR was merged outside the run" };
   if (view.state !== OPEN_STATE) return { ...base, verdict: "closed", line: `the PR is ${view.state.toLowerCase()}` };
   if (view.baseRefName !== wave) return { ...base, verdict: "closed", line: `the PR's base is ${view.baseRefName}, not the wave branch ${wave}` };
+  if (branch !== undefined && (view.headRefName !== branch || view.isCrossRepository !== false)) {
+    return { ...base, verdict: "closed", line: `the PR's head is not the ticket's own branch ${branch} in this repo` };
+  }
   const { red, pending } = sortChecks(view.statusCheckRollup ?? []);
   const unanswered = unansweredThreads(threads);
   const all = { ...base, red, pending, unanswered };
@@ -90,7 +95,7 @@ export function guardDecision(view: PrView, threads: readonly Thread[], wave: st
 
 const decodeJson = <A, I>(schema: Schema.Schema<A, I>, text: string): Option.Option<A> => Schema.decodeUnknownOption(Schema.parseJson(schema))(text);
 
-export function readGuard(gh: GhRunner, pr: number, wave: string): Either.Either<GuardResult, string> {
+export function readGuard(gh: GhRunner, pr: number, wave: string, branch?: string): Either.Either<GuardResult, string> {
   const repo = gh(REPO_VIEW_ARGS);
   const [owner, name] = repo.stdout.trim().split("/");
   if (repo.code !== 0 || !owner || !name) return Either.left(`gh repo view: ${repo.stderr.trim() || "no repository"}`);
@@ -102,7 +107,7 @@ export function readGuard(gh: GhRunner, pr: number, wave: string): Either.Either
   if (threads.code !== 0) return Either.left(`gh api graphql (review threads of ${pr}): ${threads.stderr.trim()}`);
   const parsedThreads = decodeJson(ThreadsReplySchema, threads.stdout);
   if (Option.isNone(parsedThreads)) return Either.left(`gh api graphql (review threads of ${pr}): unexpected output`);
-  return Either.right(guardDecision(parsedView.value, parsedThreads.value.data.repository.pullRequest.reviewThreads.nodes, wave));
+  return Either.right(guardDecision(parsedView.value, parsedThreads.value.data.repository.pullRequest.reviewThreads.nodes, wave, branch));
 }
 
 export function mergePr(gh: GhRunner, pr: number, head: string): Either.Either<true, string> {

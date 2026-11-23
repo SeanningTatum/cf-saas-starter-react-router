@@ -25,7 +25,15 @@ describe("wave-constants", () => {
   });
 
   it("gh is asked for every field the guard decodes, and the threads query takes the pr as an Int, so no guard read fails on a dropped field", () => {
-    expect(PR_VIEW_FIELDS.split(",").sort()).toEqual(["baseRefName", "headRefOid", "mergeable", "state", "statusCheckRollup"]);
+    expect(PR_VIEW_FIELDS.split(",").sort()).toEqual([
+      "baseRefName",
+      "headRefName",
+      "headRefOid",
+      "isCrossRepository",
+      "mergeable",
+      "state",
+      "statusCheckRollup",
+    ]);
     expect(THREADS_QUERY).toContain("$pr:Int!");
     for (const field of ["isResolved", "login", "url"]) expect(THREADS_QUERY).toContain(field);
   });

@@ -40,9 +40,9 @@ describe("decodeState", () => {
 });
 
 describe("decodePlanInput", () => {
-  it("changes defaults to empty and a ticket keeps its fields", () => {
+  it("a ticket keeps its fields through the plan input", () => {
     const input = decodePlanInput(JSON.stringify({ tickets: [ticket(1)] }));
-    expect(input).toEqual(Either.right({ tickets: [ticket(1)], changes: "" }));
+    expect(input).toEqual(Either.right({ tickets: [ticket(1)] }));
   });
 
   it("an empty list and a list over the ticket cap are refused", () => {
