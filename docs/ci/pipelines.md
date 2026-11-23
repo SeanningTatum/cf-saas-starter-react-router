@@ -167,7 +167,7 @@ bun scripts/ci/smoke-check.ts --url https://app.example.com [--release v3.1.0] [
 
 `deploy-staging.yml`, in order:
 
-1. Readiness (`deploy-gate.ts ready staging`): skips with a notice until `CLOUDFLARE_ACCOUNT_ID` is set, `env.staging` holds a real D1 id and `STAGING_URL` is set. Then the deploy job skips with a notice when no `CLOUDFLARE_API_TOKEN` is readable.
+1. Readiness (`deploy-gate.ts ready staging`): skips with a notice until `CLOUDFLARE_ACCOUNT_ID` is set, `env.staging` holds a real D1 id and `STAGING_URL` is set, and refuses while a repo-level `CLOUDFLARE_STAGING_API_TOKEN` exists (any branch's workflow can read a repo secret). Then the deploy job skips with a notice when the `staging` environment has no `CLOUDFLARE_STAGING_API_TOKEN`.
 2. `wrangler d1 migrations apply DATABASE --env staging --remote`. There is no restore point here: staging data is test data. The [migration rule](rollback.md#the-rule-that-makes-rollback-possible) still holds, and staging is the first place a bad migration shows.
 3. Build with `CLOUDFLARE_ENV=staging`, then `wrangler deploy` with `RELEASE_VERSION` set to the commit sha and `ENVIRONMENT` to `staging`.
 4. The [smoke check](#smoke-check) on `STAGING_URL`, expecting that sha.
@@ -189,7 +189,7 @@ To add a spec to the subset, tag it `@deployed` beside `@golden` or `@error`. A 
    and add `"vars": { "BETTER_AUTH_URL": "https://<name>-staging.<your-subdomain>.workers.dev" }` under `env.staging` in `wrangler.jsonc` (or your staging domain). Until both are set, every request, `/healthz` too, answers 500 and the smoke check fails.
 3. Set the repo variable `STAGING_URL` to the same origin, with no path.
 4. Apply the repo rules (`bun run scripts/repo-rules.ts --apply`): it protects the `staging` GitHub environment so only the default branch deploys from it ([repo rules](repo-rules.md#pending-items)).
-5. Token: the deploy job reads `CLOUDFLARE_API_TOKEN` from the `staging` environment, or from the repo when the environment has none. The stronger setup is a staging-only token as a `staging` environment secret, added after step 4.
+5. Only after step 4: create a staging-only Cloudflare token (Workers edit and D1 edit; in a separate account for the strong setup, [Create the tokens](#create-the-tokens)) and add it as `CLOUDFLARE_STAGING_API_TOKEN` on the `staging` environment (Settings, Environments, staging). Never as a repo secret, and never before the environment is protected: until then any branch's workflow that names the environment can read it. The deploy job reads no other token, so it never holds the production one.
 
 ## Readiness and skips
 
@@ -209,7 +209,8 @@ A run that is set up but fails is a real failure. The usual cause is a token wit
 | `CLOUDFLARE_PREVIEW_ACCOUNT_ID` | repo variable, optional | preview and cleanup; use it for a separate preview account |
 | `CLOUDFLARE_D1_DATABASE_ID` | repo variable, optional | deploy only; patched into the CI checkout's `wrangler.jsonc` |
 | `D1_BACKUP_BUCKET` | repo variable, optional | deploy only; names a private R2 bucket for the pre-migration export ([rollback](rollback.md#owner-steps-to-turn-the-export-on)) |
-| `CLOUDFLARE_API_TOKEN` | `production` environment secret; for staging, a `staging` environment secret or the repo secret | the production deploy job; the staging deploy job |
+| `CLOUDFLARE_API_TOKEN` | `production` environment secret | the production deploy job only |
+| `CLOUDFLARE_STAGING_API_TOKEN` | `staging` environment secret, never a repo secret | the staging deploy job only; a repo-level one makes the staging gate refuse |
 | `STAGING_URL` | repo variable | the staging deploy: smoke check and `@deployed` specs; an `https` origin with no path |
 | `CLOUDFLARE_PREVIEW_API_TOKEN` | repo secret | the preview and cleanup jobs, on the single steps that call Cloudflare |
 | `PREVIEW_SEED_SECRET` | repo secret (and your local `.env`) | the seed step of the preview job; `--print-password` on your machine |

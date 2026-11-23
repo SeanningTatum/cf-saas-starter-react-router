@@ -75,10 +75,12 @@ describe("deploy-staging.yml: the deploy job", () => {
   it("runs in the staging environment and hands the token to steps only, never to a job or the readiness check, so that a token set on the environment stays out of pull-request code", () => {
     expect(text).toMatch(/^ {4}environment: staging$/m);
     const tokenLines = staging.filter((line) => /CLOUDFLARE_API_TOKEN:\s*\$\{\{\s*secrets\./.test(line));
+    for (const line of tokenLines) expect(line).toContain("secrets.CLOUDFLARE_STAGING_API_TOKEN }}");
+    expect(text).not.toMatch(/secrets\.CLOUDFLARE_API_TOKEN\b/);
     expect(tokenLines.length).toBeGreaterThan(0);
     for (const line of tokenLines) expect(line.length - line.trimStart().length).toBeGreaterThanOrEqual(10);
     const readiness = jobsOf(read("deploy-staging.yml")).find((job) => job.id === "readiness");
-    expect(readiness?.body).not.toContain("secrets.");
+    for (const use of readiness?.body.match(/secrets\.[^}]*/g) ?? []) expect(use).toMatch(/^secrets\.\w+ != ''\s*$/);
   });
 
   it("skips with a notice when no token is set, so that a repo without one stays green", () => {

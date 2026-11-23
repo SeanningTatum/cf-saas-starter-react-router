@@ -18,6 +18,7 @@ const ready: Facts = {
   d1Override: "",
   hasStagingUrl: true,
   stagingD1Id: OTHER_ID,
+  stagingTokenAtRepoLevel: false,
 };
 const facts = (over: Partial<Facts>): Facts => ({ ...ready, ...over });
 
@@ -202,6 +203,12 @@ describe("decide staging", () => {
     expect(decide("staging", facts({ stagingD1Id: ZERO_ID })).reason).toContain("env.staging");
     expect(decide("staging", facts({ stagingD1Id: undefined })).reason).toContain("env.staging");
     expect(decide("staging", facts({ hasStagingUrl: false })).reason).toBe("the STAGING_URL variable is not set");
+  });
+
+  it("refuses while a repo-level staging token exists, so that a token any branch can read is never used to deploy", () => {
+    const d = decide("staging", facts({ stagingTokenAtRepoLevel: true }));
+    expect(d.ready).toBe(false);
+    expect(d.reason).toContain("repo-level CLOUDFLARE_STAGING_API_TOKEN");
   });
 
   it("does not let the production override variable stand in for the staging id, so that staging can never be pointed at the production database", () => {

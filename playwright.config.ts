@@ -21,7 +21,8 @@ export default defineConfig({
   reporter: "html",
   use: {
     baseURL: BASE_URL,
-    trace: "on-first-retry",
+    // No trace against a deployed origin: the report is a public artifact.
+    trace: DEPLOYED ? "off" : "on-first-retry",
     screenshot: "only-on-failure",
     video: VIDEO ? { mode: "on", size: { width: 1280, height: 720 } } : "off",
     launchOptions: { slowMo: VIDEO ? 250 : 0 },
