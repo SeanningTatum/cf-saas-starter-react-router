@@ -1,20 +1,14 @@
 import { execFileSync } from "node:child_process";
-import { existsSync, readFileSync } from "node:fs";
 import { type APIRequestContext, type FullConfig, request } from "@playwright/test";
 import { Effect, Schema } from "effect";
 import { DEFAULT_SCENARIO, FIXTURE_ROLES } from "../app/lib/constants/fixtures";
-import {
-  FixtureLoginError,
-  RealAnalyticsProviderError,
-  SeedError,
-} from "../app/models/errors/fixture";
+import { FixtureLoginError, SeedError } from "../app/models/errors/fixture";
+import { refuseRealAnalytics } from "../scripts/lib/analytics-guard";
 import { postSignIn } from "./lib/auth-api";
 import { type FixtureRole, storageStatePath } from "./lib/saved-session";
 import {
-  ANALYTICS_PROVIDER_LINES,
+  BANNED_REPLY,
   CLIENT_IPS,
-  LOCAL_ENV_FILES,
-  REAL_ANALYTICS_PROVIDER,
   RESTORE_SEED_COMMAND,
   SEEDED_LOGINS,
   SEEDED_PASSWORD,
@@ -28,31 +22,6 @@ const SignInReply = Schema.parseJson(
 
 const loginError = (role: FixtureRole, status: number, reason: string) =>
   new FixtureLoginError({ role, status, message: `${role} fixture sign-in: ${reason}` });
-
-const providerSetIn = (text: string): string | undefined =>
-  Array.from(text.matchAll(ANALYTICS_PROVIDER_LINES), (match) => match[1]).at(-1);
-
-const refuseRealAnalytics = Effect.gen(function* () {
-  const file = LOCAL_ENV_FILES.find((name) => existsSync(name));
-  if (file === undefined) return;
-  const text = yield* Effect.try({
-    try: () => readFileSync(file, "utf8"),
-    catch: () =>
-      new RealAnalyticsProviderError({
-        file,
-        provider: "unknown",
-        message: `${file} cannot be read, so the run cannot prove analytics is off`,
-      }),
-  });
-  const provider = providerSetIn(text);
-  if (provider === REAL_ANALYTICS_PROVIDER) {
-    return yield* new RealAnalyticsProviderError({
-      file,
-      provider,
-      message: `${file} sets ANALYTICS_PROVIDER=${provider}; e2e runs would send real events. Unset it or use console`,
-    });
-  }
-});
 
 const restoreSeed = Effect.try({
   try: () => {
@@ -70,9 +39,11 @@ const restoreSeed = Effect.try({
 
 const checkReply = (role: FixtureRole, status: number, ok: boolean, body: string) => {
   if (role === "banned") {
-    return ok
-      ? Effect.fail(loginError(role, status, "got a session, so the seed did not restore the ban"))
-      : Effect.void;
+    if (ok)
+      return Effect.fail(loginError(role, status, "got a session, so the ban was not restored"));
+    return BANNED_REPLY.test(body)
+      ? Effect.void
+      : Effect.fail(loginError(role, status, `refused for another reason: ${body}`));
   }
   if (!ok) return Effect.fail(loginError(role, status, body));
   return Schema.decodeUnknown(SignInReply)(body).pipe(
@@ -134,7 +105,10 @@ const saveEveryRole = (config: FullConfig) =>
 
 const globalSetup = (config: FullConfig) =>
   Effect.runPromise(
-    refuseRealAnalytics.pipe(Effect.zipRight(restoreSeed), Effect.zipRight(saveEveryRole(config))),
+    refuseRealAnalytics(process.cwd()).pipe(
+      Effect.zipRight(restoreSeed),
+      Effect.zipRight(saveEveryRole(config)),
+    ),
   );
 
 export default globalSetup;

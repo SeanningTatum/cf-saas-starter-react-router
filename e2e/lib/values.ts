@@ -8,9 +8,7 @@ export const RESTORE_SEED_COMMAND = ["bun", "run", "db:prepare"] as const;
 
 export const SAVED_SESSION_DIR = "e2e/.auth";
 
-export const LOCAL_ENV_FILES = [".dev.vars", ".env"] as const;
-export const ANALYTICS_PROVIDER_LINES = /^[ \t]*ANALYTICS_PROVIDER[ \t]*=[ \t]*["']?([^"'\s#]*)/gm;
-export const REAL_ANALYTICS_PROVIDER = "posthog";
+export const BANNED_REPLY = /banned/i;
 
 export const PAGE_PATHS = {
   home: "/",
