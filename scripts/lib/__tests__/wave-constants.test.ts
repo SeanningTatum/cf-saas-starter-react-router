@@ -5,7 +5,7 @@ import { BRANCH_PATTERN, PR_VIEW_FIELDS, SHA_PATTERN, SLUG_PATTERN, THREADS_QUER
 describe("wave-constants", () => {
   it("the usage text names every verb, so a new verb cannot ship without telling the person how to call it", () => {
     const verbs = Object.entries(constants).flatMap(([key, value]) => (key.startsWith("VERB_") ? [String(value)] : []));
-    expect(verbs).toHaveLength(13);
+    expect(verbs).toHaveLength(14);
     for (const verb of verbs) expect(USAGE_TEXT).toContain(` ${verb} <slug>`);
   });
 

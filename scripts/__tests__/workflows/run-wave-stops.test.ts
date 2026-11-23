@@ -70,13 +70,43 @@ describe("run-wave: the roll-up and clean-up", () => {
     const clean = r.calls.filter((c) => c.label.startsWith("wave:clean:"));
     expect(clean).toHaveLength(2);
     expect(clean[0]?.prompt).toContain("#11, #12");
-    expect(clean[1]?.prompt).toContain("#13");
+    expect(clean[1]?.prompt).toContain("#11, #12, #13");
     const prompt = clean[0]?.prompt ?? "";
     expect(prompt).toContain(`cp -R WT/.verify/. /work/repo/.verify/${SLUG}/proof/N/`);
     expect(prompt.indexOf("cp -R")).toBeLessThan(prompt.indexOf("worktree remove"));
     expect(prompt).toContain("Never add --force");
     const gateAt = r.calls.findIndex((c) => c.label === `wave:gate:${clean[0]?.label.split(":")[2]}`);
     expect(gateAt).toBeLessThan(clean[0]?.n ?? -1);
+  });
+
+  it("a restart checks the merged worktrees again, since the run may have stopped after the gate and before the clean-up", async () => {
+    const { w } = await go();
+    const again = await dryRun("run-wave", { args: APPROVED, answers: answers(w) });
+    const first = again.calls.find((c) => c.label.startsWith("wave:clean:"));
+    expect(first?.label).toBe("wave:clean:0");
+    expect(first?.prompt).toContain("#11, #12, #13");
+  });
+
+  it("says so when the clean-up returns nothing, and the next run tries again", async () => {
+    const { w } = await planned();
+    const r = await dryRun("run-wave", { args: APPROVED, answers: answers(w, {}, [[/^wave:clean:/, null]]) });
+    expect(r.logs.some((l) => l.includes("Clean-up returned nothing"))).toBe(true);
+  });
+
+  it("a size measurement that fails is never published: the roll-up runs without a size file and the stop says so", async () => {
+    const { w } = await planned();
+    const r = await dryRun("run-wave", { args: APPROVED, answers: answers(w, {}, [["wave:rollup-size", { ok: false, out: "base build failed" }]]) });
+    expect(r.calls.find((c) => c.label === "wave:rollup")?.prompt).not.toContain("--size-file");
+    expect(r.result).toMatchObject({ status: "needs-rollup", next: expect.stringContaining("not measured (base build failed)") });
+    expect(r.logs.some((l) => l.includes("Size table not measured"))).toBe(true);
+  });
+
+  it("the size prompt writes no file on a failed command and removes a stale one first", async () => {
+    const { r } = await go();
+    const prompt = r.calls.find((c) => c.label === "wave:rollup-size")?.prompt ?? "";
+    expect(prompt).toContain("rm -f /work/repo/.verify/");
+    expect(prompt).toContain("write no file and return ok=false");
+    expect(prompt).not.toContain("Not measured:");
   });
 
   it("a gate that fails removes nothing", async () => {

@@ -97,9 +97,32 @@ describe("rollupBody and mergeRollupBody", () => {
     expect(body.startsWith("Hand-written intro.")).toBe(true);
     expect(body).toContain("## Run 2026-11-20 (wave-two)\n\n- #9 Earlier");
     expect(body).toContain("## Notes from me\nkeep this");
-    expect(body).toContain("## Run 2026-11-23 (wave-two)\n\n- #1 Add billing (PR #101)\n- #3 Docs (PR #103)\n\n### Human steps\n- #1: set STRIPE_KEY");
+    expect(body).toContain(
+      "## Run 2026-11-23 (wave-two)\n\n- #1 Add billing (PR #101)\n- #3 Docs (PR #103)\n\n### Skipped\n- #2 Wide rename: skipped by a person\n\n### Human steps\n- #1: set STRIPE_KEY",
+    );
     expect(body).not.toContain("old table");
     expect(body.endsWith("## Size\n\nnew table")).toBe(true);
+  });
+
+  it("keeps the old size section when no new one is given, and swaps it when one is", () => {
+    const existing = "Intro\n\n## Size\n\nold table\n\n## Notes\nkeep";
+    const kept = mergeRollupBody(existing, finished(), "2026-11-23");
+    expect(kept).toContain("## Size\n\nold table");
+    expect(kept).toContain("## Notes\nkeep");
+    expect(mergeRollupBody(existing, finished(), "2026-11-23", "## Size\n\nnew")).not.toContain("old table");
+  });
+
+  it("lists the run's skipped tickets and their reasons in the dated section, and no Skipped heading when none", () => {
+    expect(mergeRollupBody("", finished(), "2026-11-23")).toContain("### Skipped\n- #2 Wide rename: skipped by a person");
+    const clean = withTicket(waveOf([ticket(1)]), 1, () => ({ status: "merged", pr: 101 }));
+    expect(mergeRollupBody("", clean, "2026-11-23")).not.toContain("### Skipped");
+  });
+
+  it("adds the whole-wave note to an older body once, and never twice", () => {
+    const once = mergeRollupBody("Old body", finished(), "2026-11-23");
+    expect(once).toContain("not only the tickets of one run");
+    const twice = mergeRollupBody(once, finished(), "2026-11-24");
+    expect(twice.split("not only the tickets of one run")).toHaveLength(2);
   });
 
   it("run twice on one day, it writes its own section once", () => {

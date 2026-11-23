@@ -24,6 +24,23 @@ describe("wave rollup", () => {
     expect(w.edits[1]?.body).toBe(body);
   });
 
+  it("an update with no size file keeps the old size table, so a passing body does not turn red", async () => {
+    const table = "## Size\n\n| | base | This PR | Change |\n|---|---:|---:|---:|\n| Worker upload, gzip | 1 | 1 | 0 |";
+    const w = world();
+    await w.approved();
+    w.lists.rollup = JSON.stringify([{ number: 77, body: `text\n\n${table}` }]);
+    await w.out(["rollup", SLUG, "--title", "t"]);
+    expect(Either.isRight(checkBody(w.edits[0]?.body ?? "", ["app/a.ts"]))).toBe(true);
+  });
+
+  it("merged lists every merged ticket, for the clean-up on a restart", async () => {
+    const w = world();
+    await w.approved();
+    await w.green(11);
+    await w.out(["merge", SLUG]);
+    expect(await w.out(["merged", SLUG])).toEqual({ merged: [11] });
+  });
+
   it("a roll-up that changes app/ carries the size table in its own body, new PR or old, so the PR body check passes", async () => {
     const table = "## Size\n\n| | base | This PR | Change |\n|---|---:|---:|---:|\n| Worker upload, gzip | 1 | 1 | 0 |";
     const w = world();

@@ -583,7 +583,7 @@ async function stopWith(step, i) {
     gate: `The full checks failed twice on the combined wave branch; the log is in the result. Fix ${WAVE} (a PR into it), then \`bun scripts/wave.ts resume ${WAVE_SLUG}\` and run again with the same args.`,
     "shared-failure": `The same failure hit two tracks, so every track stopped. Fix the cause, then \`bun scripts/wave.ts resume ${WAVE_SLUG}\` and run again with the same args.`,
     paused: `Paused by \`bun scripts/wave.ts pause\`. To go on: \`bun scripts/wave.ts resume ${WAVE_SLUG}\`, then run again with the same args.`,
-    rollup: `The roll-up PR #${step.pr} (${WAVE} -> ${INTO}) is open, with every owner step in its body. The run never merges it: wait for its checks, review it and merge it yourself. Tokens and time per track: \`bun scripts/run-telemetry.ts summary ${WAVE_SLUG}\` after \`ingest\`.`,
+    rollup: `The roll-up PR #${step.pr} (${WAVE} -> ${INTO}) is open, with every owner step in its body. The run never merges it: wait for its checks, review it and merge it yourself. Tokens and time per track: \`bun scripts/run-telemetry.ts summary ${WAVE_SLUG}\` after \`ingest\`.${sizeNote}`,
   };
   const result = { status, reason: step.stop, slug: WAVE_SLUG, wave: WAVE, into: INTO, status_command: statusCmd, next: nexts[step.stop] || "" };
   if (step.stop === "plan") result.review = `.verify/${WAVE_SLUG}/plan.html`;
@@ -596,7 +596,7 @@ async function stopWith(step, i) {
   return result;
 }
 
-const cleanPrompt = (merged) => `A batch gate passed. Clear the worktrees of the merged tickets ${merged.map((n) => `#${n}`).join(", ")}. For each ticket number N, WT = ${ROOT}/.verify/${WAVE_SLUG}/wt/N:
+const cleanPrompt = (merged) => `Clear the worktrees of the merged tickets ${merged.map((n) => `#${n}`).join(", ")}. For each ticket number N, WT = ${ROOT}/.verify/${WAVE_SLUG}/wt/N:
   1. If WT does not exist, skip N.
   2. If WT/.verify exists: \`mkdir -p ${ROOT}/.verify/${WAVE_SLUG}/proof/N\`, then \`cp -R WT/.verify/. ${ROOT}/.verify/${WAVE_SLUG}/proof/N/\`. If the copy fails, leave WT as it is and list N in kept.
   3. \`git -C ${ROOT} worktree remove WT\`. Never add --force and never delete the folder another way: if git refuses (the worktree has changes), leave it and list N in kept with git's first error line.
@@ -606,8 +606,18 @@ const CLEAN = obj({ ok: BOOL, removed: arr(NUM), kept: STRS });
 const sizePrompt = `Measure the roll-up's size table. Change no tracked file.
   1. From ROOT: \`git fetch -q origin ${shq(WAVE)} ${shq(INTO)}\`; HEAD = \`git rev-parse origin/${WAVE}\`.
   2. GATE = ${GATE_DIR}. If it does not exist: \`git worktree add --detach ${GATE_DIR} $HEAD\`; else \`git -C ${GATE_DIR} checkout -q --detach $HEAD\`.
-  3. In GATE: \`bun install --frozen-lockfile\`, then \`bun run size --base origin/${INTO} --pr-body\` with a Bash timeout of 900000 ms (it builds both sides). Write its output to ${ROOT}/.verify/${WAVE_SLUG}/size.md. If a command fails, write instead the two lines \`## Size\`, a blank line and \`Not measured: <its last error line>\` to that file.
-Return ok=true when the file exists, else ok=false, and out: the file's first line.`;
+  3. First \`rm -f ${ROOT}/.verify/${WAVE_SLUG}/size.md\`. In GATE: \`bun install --frozen-lockfile\`, then \`bun run size --base origin/${INTO} --pr-body\` with a Bash timeout of 900000 ms (it builds both sides). Write its output to ${ROOT}/.verify/${WAVE_SLUG}/size.md only when every command exits 0.
+Return ok=true when the file was written. If any command fails, write no file and return ok=false and out: the last error line.`;
+let sizeNote = "";
+
+async function cleanMerged(i, phaseName) {
+  const m = await waveCmd("merged", "", `wave:merged:${i}`, phaseName);
+  if (m.error) return log(`Clean-up skipped: ${m.error}`);
+  if (!m.out.merged.length) return;
+  const c = await sh(cleanPrompt(m.out.merged), { label: `wave:clean:${i}`, phase: phaseName, schema: CLEAN });
+  if (!c || !c.ok) return log("Clean-up returned nothing; the next run checks the merged worktrees again");
+  if (c.kept.length) log(`Worktrees kept: ${c.kept.join("; ")}`);
+}
 
 const gatePrompt = (i) => `Run the full checks once on the combined wave branch. Change nothing else.
   1. From ROOT: \`git fetch -q origin ${shq(WAVE)}\`; HEAD = \`git rev-parse origin/${WAVE}\`.
@@ -637,6 +647,7 @@ if (awaitingPlan) {
 }
 
 for (let i = 1; i <= MAX_WAVE_STEPS; i++) {
+  if (i === 1) await cleanMerged(0, "Build");
   const r = await waveCmd("next", "", `wave:next:${i}`, "Build");
   if (r.error) return { stopped: "Build", reason: r.error };
   const step = r.out.step;
@@ -659,17 +670,18 @@ for (let i = 1; i <= MAX_WAVE_STEPS; i++) {
     const read = g && g.ok ? readOut(g.out) : { error: g ? String(g.out).slice(0, 300) : "the runner returned nothing" };
     if (read.error) return { stopped: "Gate", reason: read.error };
     log(`Gate on ${WAVE}: ${read.out.gate}`);
-    if (read.out.gate === "pass" && read.out.merged.length) {
-      const c = await sh(cleanPrompt(read.out.merged), { label: `wave:clean:${i}`, phase: "Gate", schema: CLEAN });
-      if (c && c.kept.length) log(`Worktrees kept: ${c.kept.join("; ")}`);
-    }
+    if (read.out.gate === "pass") await cleanMerged(i, "Gate");
   } else if (step.kind === "rollup") {
     phase("Roll-up");
     const title = input.rollupTitle || `feat: roll up ${WAVE} into ${INTO}`;
     const sizeFile = `${ROOT}/.verify/${WAVE_SLUG}/size.md`;
     const z = await sh(sizePrompt, { label: "wave:rollup-size", phase: "Roll-up", schema: OUT });
-    if (!z || !z.ok) return { stopped: "Roll-up", reason: z ? `the size table was not measured: ${String(z.out).slice(0, 300)}` : "the size agent returned nothing" };
-    const u = await waveCmd("rollup", `--title ${shq(title)} --size-file ${shq(sizeFile)}`, "wave:rollup", "Roll-up");
+    const measured = Boolean(z && z.ok);
+    if (!measured) {
+      sizeNote = ` The size table was not measured (${z ? String(z.out).slice(0, 200) : "the size agent returned nothing"}): an open roll-up keeps its old table, and a new one has none, so the PR body check fails until you run \`bun run size --base ${INTO} --pr-body\` and paste the table in.`;
+      log(`Size table not measured:${sizeNote}`);
+    }
+    const u = await waveCmd("rollup", `--title ${shq(title)}${measured ? ` --size-file ${shq(sizeFile)}` : ""}`, "wave:rollup", "Roll-up");
     if (u.error) return { stopped: "Roll-up", reason: u.error };
     const g = await sh(`Remove the gate checkout: \`git -C ${ROOT} worktree remove ${GATE_DIR}\`. Never add --force. If git refuses, leave it and say why. Return ok=true and out: "removed" or git's first error line.`, { label: "wave:clean-gate", phase: "Roll-up", schema: OUT });
     if (g && g.out !== "removed") log(`Gate checkout kept: ${String(g.out).slice(0, 200)}`);

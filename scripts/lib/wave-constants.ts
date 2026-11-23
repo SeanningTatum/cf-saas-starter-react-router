@@ -65,6 +65,7 @@ export const VERB_NEXT = "next";
 export const VERB_EVENT = "event";
 export const VERB_GUARD = "guard";
 export const VERB_MERGE = "merge";
+export const VERB_MERGED = "merged";
 export const VERB_GATE = "gate";
 export const VERB_ROLLUP = "rollup";
 export const VERB_STATUS = "status";
@@ -73,4 +74,4 @@ export const VERB_RESUME = "resume";
 export const VERB_RETRY = "retry";
 export const VERB_SKIP = "skip";
 export const USAGE_TEXT =
-  "usage: bun scripts/wave.ts plan <slug> --wave <branch> --into <branch> --tracks <n> --review-rounds <n> (tickets JSON on stdin) | approve <slug> | next <slug> | event <slug> (event JSON on stdin) | guard <slug> <ticket> [--wait <seconds>] | merge <slug> | gate <slug> --head <sha> --code <n> [--log <path>] | rollup <slug> --title <text> [--size-file <path>] | status <slug> [--json] | pause <slug> | resume <slug> | retry <slug> <ticket> | skip <slug> <ticket>";
+  "usage: bun scripts/wave.ts plan <slug> --wave <branch> --into <branch> --tracks <n> --review-rounds <n> (tickets JSON on stdin) | approve <slug> | next <slug> | event <slug> (event JSON on stdin) | guard <slug> <ticket> [--wait <seconds>] | merge <slug> | merged <slug> | gate <slug> --head <sha> --code <n> [--log <path>] | rollup <slug> --title <text> [--size-file <path>] | status <slug> [--json] | pause <slug> | resume <slug> | retry <slug> <ticket> | skip <slug> <ticket>";
