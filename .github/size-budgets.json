@@ -1,0 +1,41 @@
+{
+  "worker": {
+    "budget": 1225032,
+    "target": 921600
+  },
+  "pages": {
+    "/": {
+      "budget": 221242,
+      "target": 180000
+    },
+    "/login": {
+      "budget": 297582,
+      "target": 220000
+    },
+    "/sign-up": {
+      "budget": 297587
+    },
+    "/:lng": {
+      "budget": 221242
+    },
+    "/:lng/login": {
+      "budget": 297582
+    },
+    "/:lng/sign-up": {
+      "budget": 297587
+    },
+    "/dashboard": {
+      "budget": 219969
+    },
+    "/admin": {
+      "budget": 372397,
+      "target": 300000
+    },
+    "/admin/users": {
+      "budget": 269674
+    },
+    "/admin/kitchen-sink": {
+      "budget": 389678
+    }
+  }
+}

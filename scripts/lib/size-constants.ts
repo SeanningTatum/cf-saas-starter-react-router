@@ -44,4 +44,7 @@ export const DRY_RUN_ARGS = ["x", "wrangler", "deploy", "--dry-run"];
 
 export const USAGE =
   "usage: bun run size [--base <ref | saved.json>] [--json <file>] [--markdown <file>] [--pr-body]\n" +
-  '  --pr-body  print the PR body section: the table and the load-time line, or "No shipped code changed." (needs --base)';
+  '  --pr-body  print the PR body section: the table and the load-time line, or "No shipped code changed." (needs --base)\n' +
+  "  --budgets  check this build against .github/size-budgets.json; exit 1 over a budget (needs a build, or --built)\n" +
+  "  --built    with --budgets: measure the build already in build/ instead of building again\n" +
+  "  --ratchet <ref>  fail when .github/size-budgets.json raises or drops a budget that <ref> holds; needs no build";

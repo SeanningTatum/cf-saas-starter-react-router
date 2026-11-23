@@ -91,6 +91,8 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           persist-credentials: false
+          # The budget file on the base branch is read with git, so git needs it.
+          fetch-depth: 0
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
@@ -104,6 +106,18 @@ jobs:
       # from what scripts/verify.sh declares.
       - name: Build
         run: ./scripts/verify.sh --only build
+
+      # After the build, on the build it made: no second build. Fails a route or the Worker over its
+      # budget in .github/size-budgets.json and prints the table (docs/ci/pipelines.md#bundle-budgets).
+      - name: Bundle budgets
+        run: ./scripts/verify.sh --only size-budgets
+
+      # A PR only lowers a budget: compared with the base branch's file, no build needed.
+      - name: Budgets only shrink
+        if: github.event_name == 'pull_request'
+        run: bun run size --ratchet "origin/$BASE_REF"
+        env:
+          BASE_REF: ${{ github.base_ref }}
 
   # Thin, stable smoke specs (auth + critical paths) — the automated regression net.
   # Feature-level proof is the feature-verifier sub-agent → .verify/<slug>/verdict.md in the PR (not run in CI).
