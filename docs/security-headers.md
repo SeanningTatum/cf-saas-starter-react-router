@@ -11,6 +11,8 @@ Dev differs in three ways: `connect-src` adds `ws:` for Vite's reload socket, th
 
 `workers/app.ts` makes a fresh nonce for each request and puts it in `script-src`. An inline `<script>` runs only if it carries that nonce: take it from `useNonce()` (`app/lib/csp-nonce.ts`), as `app/root.tsx` does. Styles need no nonce, and must not get one: a nonce in `style-src` would switch `'unsafe-inline'` off. In the browser `useNonce()` returns `undefined`: the browser hides nonce attributes once it has parsed them, and the context has no made-up default (`app/lib/__tests__/csp-nonce.test.ts`).
 
+`app/root.tsx` renders `<Links nonce={STYLESHEETS_TAKE_NO_NONCE} />`, an empty nonce, on purpose. Since React Router 7.18.0 (checked on 7.18.6), `<Links>` falls back to the nonce given to `<ServerRouter>` when it gets none of its own. The browser's `<HydratedRouter>` has no nonce, so without the empty one the server puts the nonce on the stylesheet and preconnect `<link>` tags, the browser does not, and React logs a hydration warning on every page. `<Scripts>` does not have the problem: React Router marks its tags to skip that check. An empty nonce stops the fallback and renders the same on both sides; `style-src` takes no nonce, so the links lose nothing. `e2e/hydration.spec.ts` fails on any hydration warning on `/`, `/login`, `/sign-up`, `/dashboard` and `/admin`. React prints that warning in dev builds only, so the spec catches it under `bun run dev`, the way the e2e job runs.
+
 ## Hosts outside the app's own origin
 
 | Host | Directives | Why |
