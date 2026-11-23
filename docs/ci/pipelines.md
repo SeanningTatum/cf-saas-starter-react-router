@@ -24,7 +24,7 @@ A stacked PR is one whose base is neither the default branch nor `production`: a
 |-------|------------|----------------------------|----------------------|----------------|
 | Lean (stacked PR, typecheck + lint + unit) | yes | — | — | — |
 | Baseline (typecheck + test + harness-check) | — | yes, required | yes, required | yes |
-| Build (Cloudflare Workers) | — | yes, required | yes, required | yes |
+| Build (Cloudflare Workers), with the bundle budgets | — | yes, required | yes, required | yes |
 | E2E smoke (Playwright) | — | yes, required | yes, required | yes |
 | Effect diagnostics (`bun run lint:effect`) | — | yes | yes | — |
 | CodeQL | — | yes | yes | yes (and Mondays) |
@@ -65,6 +65,15 @@ The line under the table turns the largest first-load change into time: the extr
 `PR body (size table)` fails a PR that changes shipped code with no filled comparison table (the header row and a Worker row with numbers; a table inside a code fence does not count), and one whose body claims "No shipped code changed." when it does. It reads the body and the list of changed files, so it re-runs in seconds when you edit the body.
 
 On a PR into `staging` or `production`, CI measures the size itself against the base branch and runs Lighthouse (`bun run lighthouse --base <ref>`): each ref is built in its own worktree with a seeded local D1 and a `.dev.vars` holding `BETTER_AUTH_URL=http://localhost:4173` and a throwaway secret, served with `vite preview`, and measured with mobile settings on `/`, `/login`, `/sign-up` and `/dashboard` (signed in as the seeded user), three runs each, the median of each number. One comment on the PR holds both tables and is edited on each push. The limits in `.github/lighthouse-limits.json` only warn for now. The HTML and JSON reports are in the run's `lighthouse` artifact for 14 days; nothing is uploaded anywhere else.
+
+## Bundle budgets
+
+`.github/size-budgets.json` holds a gzip byte budget for the Worker upload and for the first-load JS of each page, and the ticket's target next to the ones that have one. The `size-budgets` gate (`bun run size --budgets --built`) runs right after the build gate, on the build it made, and prints a table: measured, budget, bytes left, target, how far the budget still sits above the target, and a status. It exits 1 when:
+
+- a page or the Worker is more than 1,024 bytes over its budget (a margin for the Worker size Wrangler rounds to 0.01 KiB). The message names the page, the overshoot and what to do;
+- a page has no budget yet. Add the line the message prints.
+
+A budget only shrinks. On a pull request, the `Budgets only shrink` step runs `bun run size --ratchet origin/<base>` and fails a budget that went up or was removed against the base branch's file. A row marked `lower the budget` has more than 4 KiB to spare: edit the file down to the measured number. Raising a budget is the owner's call, with numbers, in its own pull request. A target is a goal the budget walks down to; it fails nothing. Lighthouse limits stay warn-only.
 
 ## How a change reaches production
 

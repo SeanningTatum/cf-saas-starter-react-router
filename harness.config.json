@@ -56,6 +56,12 @@
       "limitSeconds": 600
     },
     { "name": "build", "run": "bun run build", "tier": "full", "limitSeconds": 900 },
+    {
+      "name": "size-budgets",
+      "run": "bun run size --budgets --built",
+      "tier": "full",
+      "limitSeconds": 300
+    },
     { "name": "e2e", "run": "CI=1 bun run test:e2e", "tier": "full", "limitSeconds": 900 }
   ],
   "tracker": { "readyLabel": "ready-for-agent" },
