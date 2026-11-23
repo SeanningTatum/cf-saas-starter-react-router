@@ -11,7 +11,7 @@
 // `ready` reads facts from env. The workflow sets each one to "true" or
 // "false" from `vars` and `secrets`, so no secret value ever reaches this
 // script:
-//   production HAS_ACCOUNT_ID, D1_DATABASE_ID (optional); staging HAS_ACCOUNT_ID, HAS_STAGING_URL
+//   production HAS_ACCOUNT_ID, D1_DATABASE_ID (optional); staging also STAGING_TOKEN_AT_REPO_LEVEL
 //   preview          HAS_ACCOUNT_ID, HAS_TOKEN, HAS_SEED_SECRET
 //   preview-cleanup  HAS_ACCOUNT_ID, HAS_TOKEN
 //   any target       PROD_TOKEN_AT_REPO_LEVEL (adds a warning)
@@ -40,6 +40,8 @@ const WORKFLOW_NAMES: Record<Target, string> = {
 const DOC = "docs/ci/pipelines.md";
 const REPO_TOKEN_WARNING =
   "a repo-level CLOUDFLARE_API_TOKEN secret is readable by pull-request jobs; move it to the production environment and delete the repo-level one";
+const STAGING_REPO_TOKEN =
+  "a repo-level CLOUDFLARE_STAGING_API_TOKEN secret is readable by every branch's workflows; delete it and set it on the protected staging environment only";
 const PATCH_HEADER = "// Patched by scripts/ci/deploy-gate.ts — production D1 id (CI checkout only, never committed).";
 
 export interface Facts {
@@ -53,6 +55,7 @@ export interface Facts {
   d1Override: string;
   hasStagingUrl: boolean;
   stagingD1Id: string | undefined;
+  stagingTokenAtRepoLevel: boolean;
 }
 
 export interface Decision {
@@ -94,6 +97,7 @@ function firstMissing(target: Target, facts: Facts): string | undefined {
 }
 
 function stagingMissing(facts: Facts): string | undefined {
+  if (facts.stagingTokenAtRepoLevel) return STAGING_REPO_TOKEN;
   if (!isRealD1Id(facts.stagingD1Id)) return 'wrangler.jsonc has no real staging D1 id under env.staging; run "bun run setup"';
   return facts.hasStagingUrl ? undefined : "the STAGING_URL variable is not set";
 }
@@ -191,6 +195,7 @@ export function factsFromEnv(env: Deps["env"], committedD1Id: string | undefined
     committedD1Id,
     d1Override: (env.D1_DATABASE_ID ?? "").trim(),
     hasStagingUrl: isTrue(env.HAS_STAGING_URL),
+    stagingTokenAtRepoLevel: isTrue(env.STAGING_TOKEN_AT_REPO_LEVEL),
     stagingD1Id,
   };
 }
