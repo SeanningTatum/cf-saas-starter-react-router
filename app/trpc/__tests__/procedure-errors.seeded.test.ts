@@ -171,13 +171,21 @@ const NO_PROCEDURE_RAISES_IT: Readonly<Record<string, string>> = {
   CreationError: "no procedure inserts a row; sign-up runs through Better Auth",
   ConfigurationError: "raised only by services that read bindings, none of them under a procedure",
   ExternalServiceError: "no procedure calls an outside service",
-  BucketBindingError: "no router exposes the bucket; BucketRepository has no procedure",
-  BucketUploadError: "no router exposes the bucket; BucketRepository has no procedure",
-  BucketGetError: "no router exposes the bucket; BucketRepository has no procedure",
-  BucketNotFoundError: "no router exposes the bucket; BucketRepository has no procedure",
-  BucketDeleteError: "no router exposes the bucket; BucketRepository has no procedure",
-  BucketListError: "no router exposes the bucket; BucketRepository has no procedure",
-  BucketValidationError: "no router exposes the bucket; BucketRepository has no procedure",
+  BucketBindingError:
+    "only the upload routes and the delete purge reach the bucket; no test makes R2 fail",
+  BucketUploadError:
+    "only the upload routes and the delete purge reach the bucket; no test makes R2 fail",
+  BucketGetError:
+    "only the upload routes and the delete purge reach the bucket; no test makes R2 fail",
+  BucketNotFoundError:
+    "only the upload routes and the delete purge reach the bucket; no test makes R2 fail",
+  BucketDeleteError:
+    "only the upload routes and the delete purge reach the bucket; no test makes R2 fail",
+  BucketListError:
+    "only the upload routes and the delete purge reach the bucket; no test makes R2 fail",
+  BucketValidationError:
+    "only the upload routes and the delete purge reach the bucket; no test makes R2 fail",
+  UploadQuotaError: "raised by the upload route, which answers 413; no procedure stores a file",
   AnalyticsDeliveryError: "Analytics.capture cannot fail; a delivery failure is logged at dispose",
   RateLimitError: "limits sit on Better Auth routes, covered by rate-limit.test.ts",
   FixtureValidationError: "raised by the seed scripts, never under a request",

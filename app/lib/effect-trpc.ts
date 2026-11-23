@@ -115,6 +115,11 @@ const appErrorToTRPC = (e: AppError): TRPCError => {
         code: "BAD_REQUEST",
         message: e.message,
       });
+    case "UploadQuotaError":
+      return new TRPCError({
+        code: "PAYLOAD_TOO_LARGE",
+        message: e.message,
+      });
     case "AnalyticsDeliveryError":
       return new TRPCError({
         code: "INTERNAL_SERVER_ERROR",

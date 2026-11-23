@@ -4,10 +4,30 @@ export const MAX_UPLOAD_SIZE_BYTES = MAX_UPLOAD_SIZE_MEGABYTES * BYTES_PER_MEGAB
 
 export const R2_MAX_KEY_LENGTH = 1024;
 
+const MAX_UPLOAD_QUOTA_MEGABYTES = 100;
+export const UPLOAD_QUOTA_BYTES = MAX_UPLOAD_QUOTA_MEGABYTES * BYTES_PER_MEGABYTE;
+export const UPLOAD_QUOTA_MESSAGE = `Your uploads would pass the ${MAX_UPLOAD_QUOTA_MEGABYTES}MB limit. Delete a file and try again`;
+export const UPLOAD_NOT_FOUND_MESSAGE = "Upload not found";
+export const UPLOAD_KEY_ROOT = "uploads";
+export const R2_DELETE_BATCH_SIZE = 1000;
+
+export const uploadPrefixFor = (userId: string): string => `${UPLOAD_KEY_ROOT}/${userId}/`;
+export const uploadKeyFor = (userId: string, id: string): string =>
+  `${uploadPrefixFor(userId)}${id}`;
+
+export const DOWNLOAD_HEADERS = {
+  "content-disposition": 'attachment; filename="download"',
+  "x-content-type-options": "nosniff",
+  "cache-control": "private, no-store",
+} as const;
+export const CONTENT_TYPE_HEADER = "content-type";
+export const HTTP_NOT_FOUND = 404;
+
 const MULTIPART_ENVELOPE_ALLOWANCE_BYTES = 64 * 1024;
 export const MAX_UPLOAD_REQUEST_BYTES = MAX_UPLOAD_SIZE_BYTES + MULTIPART_ENVELOPE_ALLOWANCE_BYTES;
 export const CONTENT_LENGTH_HEADER = "content-length";
 const DECIMAL_DIGITS = /^\d+$/;
+export const HTTP_METHOD_DELETE = "DELETE";
 
 export const HTTP_BAD_REQUEST = 400;
 export const HTTP_UNAUTHORIZED = 401;
@@ -84,4 +104,10 @@ export const declaresOversizedUpload = (headers: Headers): boolean => {
     DECIMAL_DIGITS.test(declared) &&
     Number(declared) > MAX_UPLOAD_REQUEST_BYTES
   );
+};
+
+export const declaredPayloadBytes = (headers: Headers): number => {
+  const declared = headers.get(CONTENT_LENGTH_HEADER)?.trim();
+  if (declared === undefined || !DECIMAL_DIGITS.test(declared)) return 0;
+  return Math.max(0, Number(declared) - MULTIPART_ENVELOPE_ALLOWANCE_BYTES);
 };

@@ -6,6 +6,7 @@ export default [
   route("/api/trpc/*", "routes/api/trpc.$.ts"),
   route("/api/auth/*", "routes/api/auth.$.ts"),
   route("/api/upload-file", "routes/api/upload-file.ts"),
+  route("/api/uploads/:id", "routes/api/upload-object.ts"),
   route("/api/set-locale", "routes/api/set-locale.ts"),
   route(BROWSER_REPORT_PATH, "routes/api/browser-report.ts"),
   route(HEALTHZ_PATH, "routes/api/healthz.ts"),

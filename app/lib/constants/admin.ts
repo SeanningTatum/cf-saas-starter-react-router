@@ -2,6 +2,8 @@ export const ADMIN_ROLE = "admin";
 export const ROLE_LIST_SEPARATOR = ",";
 
 export const PROTECTED_USER_MESSAGE = "Cannot modify admin users or yourself";
+export const ADMIN_SELF_DELETE_MESSAGE =
+  "An admin cannot delete their own account. Hand the role to another admin first";
 
 export const ADMIN_UPDATE_USER_PATH = "/admin/update-user";
 

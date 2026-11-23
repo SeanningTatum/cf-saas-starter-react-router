@@ -16,6 +16,7 @@ export const APP_ERROR_TAGS: ReadonlySet<AppError["_tag"]> = new Set<AppError["_
   "BucketDeleteError",
   "BucketListError",
   "BucketValidationError",
+  "UploadQuotaError",
   "AnalyticsDeliveryError",
   "RateLimitError",
   "FixtureValidationError",

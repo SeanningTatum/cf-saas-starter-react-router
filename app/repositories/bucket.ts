@@ -9,11 +9,12 @@ import {
   BucketListError,
 } from "@/models/errors/bucket";
 import type { UploadOptions, ListR2Input } from "@/lib/schemas/bucket";
+import { UPLOAD_KEY_ROOT } from "@/lib/constants/upload";
 import { R2_DELETE_SPAN, R2_GET_SPAN, R2_LIST_SPAN, R2_PUT_SPAN } from "@/lib/constants/spans";
 
 const r2Span = (name: string) => Effect.withSpan(name, { kind: "client" });
 
-const generateKey = () => `uploads/${Date.now()}-${crypto.randomUUID()}`;
+const generateKey = () => `${UPLOAD_KEY_ROOT}/${Date.now()}-${crypto.randomUUID()}`;
 
 export class BucketRepository extends Effect.Service<BucketRepository>()("app/BucketRepository", {
   effect: Effect.gen(function* () {
@@ -50,9 +51,9 @@ export class BucketRepository extends Effect.Service<BucketRepository>()("app/Bu
         return yield* requireFoundOrFail(object, () => new BucketNotFoundError({ key }));
       });
 
-    const remove = (key: string) =>
+    const remove = (key: string | ReadonlyArray<string>) =>
       Effect.tryPromise({
-        try: () => bucket.delete(key),
+        try: () => bucket.delete(typeof key === "string" ? key : [...key]),
         catch: (cause) => new BucketDeleteError({ cause }),
       }).pipe(r2Span(R2_DELETE_SPAN));
 

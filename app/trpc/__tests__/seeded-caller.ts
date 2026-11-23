@@ -5,7 +5,10 @@ import type { AnalyticsEvent } from "@/lib/analytics/events";
 import type { ScenarioName } from "@/lib/fixtures/schema";
 import { AnalyticsRepository } from "@/repositories/analytics";
 import { HealthRepository } from "@/repositories/health";
+import { AccountRepository } from "@/repositories/account";
+import { UploadRepository } from "@/repositories/upload";
 import { UserRepository } from "@/repositories/user";
+import { makeFakeBucket } from "@/services/__tests__/fake-bucket";
 import type { AppRuntime } from "@/runtime";
 import { Analytics } from "@/services/analytics";
 import { Database } from "@/services/database";
@@ -32,11 +35,18 @@ export const startSeededApp = (router: AppRouter, scenario: ScenarioName) => {
       }),
     identify: () => Effect.void,
   });
+  const bucket = makeFakeBucket();
   const layer = Layer.mergeAll(
     UserRepository.Default,
     AnalyticsRepository.Default,
     HealthRepository.Default,
-  ).pipe(Layer.provideMerge(makeSeededDatabase(scenario)), Layer.provideMerge(analytics));
+    UploadRepository.Default,
+    AccountRepository.Default,
+  ).pipe(
+    Layer.provideMerge(bucket.layer),
+    Layer.provideMerge(makeSeededDatabase(scenario)),
+    Layer.provideMerge(analytics),
+  );
   const runtime = ManagedRuntime.make(layer);
   disposers.push(() => runtime.dispose());
 
@@ -64,7 +74,7 @@ export const startSeededApp = (router: AppRouter, scenario: ScenarioName) => {
       }),
     );
 
-  return { callerAs, events, exec, rows };
+  return { callerAs, events, exec, rows, bucket };
 };
 
 export type SeededApp = ReturnType<typeof startSeededApp>;

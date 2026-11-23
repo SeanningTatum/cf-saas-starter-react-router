@@ -6,6 +6,8 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   SEED_DELETE_ACCOUNTS_SQL,
   SEED_DELETE_SESSIONS_SQL,
+  SEED_DELETE_UPLOADS_SQL,
+  SEED_INSERT_UPLOAD_SQL,
   SEED_DELETE_USERS_SQL,
   SEED_ID_LIKE,
   SEED_INSERT_ACCOUNT_SQL,
@@ -15,7 +17,9 @@ import { getScenario } from "../scenarios";
 import { buildScenarioStatements, renderSqlFile, type SqlStatement } from "../sql";
 
 const HASH = "scrypt:o'hash";
-const MIGRATION = resolve(__dirname, "../../../../drizzle/0000_init.sql");
+const MIGRATIONS = ["0000_init.sql", "0001_tired_la_nuit.sql"].map((file) =>
+  resolve(__dirname, "../../../../drizzle", file),
+);
 const STATEMENT_BREAKPOINT = "--> statement-breakpoint";
 
 const statementsFor = (name: "base" | "many-users") =>
@@ -26,15 +30,17 @@ const placeholders = (sql: string): number => sql.split("?").length - 1;
 describe("buildScenarioStatements", () => {
   it("deletes seed sessions, accounts and users first, then inserts every user before any account, so the account foreign key holds", () => {
     const statements = statementsFor("many-users");
-    expect(statements.slice(0, 3)).toEqual([
+    expect(statements.slice(0, 4)).toEqual([
+      { sql: SEED_DELETE_UPLOADS_SQL, args: [SEED_ID_LIKE] },
       { sql: SEED_DELETE_SESSIONS_SQL, args: [SEED_ID_LIKE] },
       { sql: SEED_DELETE_ACCOUNTS_SQL, args: [SEED_ID_LIKE] },
       { sql: SEED_DELETE_USERS_SQL, args: [SEED_ID_LIKE] },
     ]);
-    const kinds = statements.slice(3).map((s) => s.sql);
+    const kinds = statements.slice(4).map((s) => s.sql);
     expect(kinds).toEqual([
       ...Array(50).fill(SEED_INSERT_USER_SQL),
       ...Array(50).fill(SEED_INSERT_ACCOUNT_SQL),
+      ...Array(3).fill(SEED_INSERT_UPLOAD_SQL),
     ]);
   });
 
@@ -69,7 +75,7 @@ describe("renderSqlFile", () => {
   it("has no BEGIN or COMMIT, which D1 rejects in a --file: one file runs as one D1 batch", () => {
     const text = renderSqlFile(statementsFor("many-users"));
     expect(text).not.toMatch(/\b(BEGIN|COMMIT|ROLLBACK|TRANSACTION)\b/i);
-    expect(text.trimEnd().split("\n")).toHaveLength(103);
+    expect(text.trimEnd().split("\n")).toHaveLength(107);
     expect(
       text
         .trimEnd()
@@ -96,8 +102,10 @@ describe("rendered SQL against SQLite", () => {
   beforeEach(async () => {
     client = createClient({ url: ":memory:" });
     await client.execute("PRAGMA foreign_keys = ON");
-    for (const sql of readFileSync(MIGRATION, "utf8").split(STATEMENT_BREAKPOINT)) {
-      if (sql.trim() !== "") await client.execute(sql);
+    for (const file of MIGRATIONS) {
+      for (const sql of readFileSync(file, "utf8").split(STATEMENT_BREAKPOINT)) {
+        if (sql.trim() !== "") await client.execute(sql);
+      }
     }
     await client.executeMultiple(
       [
@@ -139,6 +147,11 @@ describe("rendered SQL against SQLite", () => {
       ["seed-user-account", "seed-user", HASH],
     ]);
     expect(await rows("SELECT id FROM session WHERE user_id LIKE 'seed-%'")).toEqual([]);
+    expect(await rows("SELECT id, user_id FROM upload ORDER BY id")).toEqual([
+      ["seed-admin-upload", "seed-admin"],
+      ["seed-banned-upload", "seed-banned"],
+      ["seed-user-upload", "seed-user"],
+    ]);
     expect(
       await rows(
         "SELECT email, role, email_verified, banned, ban_reason FROM user WHERE id = 'seed-banned'",
