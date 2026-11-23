@@ -3,7 +3,8 @@ import { E2E_DIR, E2E_SPEC, MIN_TEST_FILE_CHARS, SANDBOX_DIR, SANDBOX_ISSUE, SOU
 import { isLiteralConstant } from "../literals";
 import { isSourcePath, isTestPath, lineOf, walkNodes } from "../source";
 import type { Repo, Source } from "../types";
-import { importedModules, importsFile, usesFile } from "./imports";
+import { importedModules, importsFile } from "./imports";
+import { usesFile } from "./uses";
 import type { MapEntry } from "./map";
 
 export interface Problem {

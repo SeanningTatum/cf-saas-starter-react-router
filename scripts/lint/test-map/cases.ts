@@ -149,6 +149,16 @@ export const testMapCases: Case[] = [
     expect: "finding",
   },
   {
+    name: "unit: a test that only checks the export exists does not count",
+    files: unit('import { expect, it } from "vitest";\nimport { helper } from "../helper";\nit("x", () => { expect(helper).toBeDefined(); });\n'),
+    expect: "finding",
+  },
+  {
+    name: "unit: a test that mocks the file away calls the mock, not the file, so it does not count",
+    files: unit('import { expect, it, vi } from "vitest";\nvi.mock("../helper");\nimport { helper } from "../helper";\nit("x", () => { expect(helper(1)).toBeUndefined(); });\n'),
+    expect: "finding",
+  },
+  {
     name: "unit: a namespace import that is called counts",
     files: unit('import { expect, it } from "vitest";\nimport * as subject from "../helper";\nit("adds", () => { expect(subject.helper(1)).toBe(2); });\n'),
     expect: "clean",

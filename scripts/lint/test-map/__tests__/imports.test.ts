@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { sourceOf } from "../../__tests__/fixtures";
-import { importedModules, importsFile, usesFile, withoutExtension } from "../imports";
+import { importedModules, importsFile, withoutExtension } from "../imports";
 
 const TEST_FILE = "app/trpc/__tests__/index.test.ts";
 
@@ -82,33 +82,5 @@ describe("importsFile", () => {
 
   it("matches a .tsx target imported with no extension", () => {
     expect(importsFile(sourceOf('import { Button } from "../button";', "app/components/__tests__/button.test.tsx"), "app/components/button.tsx")).toBe(true);
-  });
-});
-
-describe("usesFile", () => {
-  const SUBJECT = "app/lib/helper.ts";
-  const uses = (text: string): boolean => usesFile(sourceOf(text, "app/lib/__tests__/helper.test.ts"), SUBJECT);
-
-  it.each([
-    ['import { helper } from "../helper";\nhelper(1);', "a call"],
-    ['import { helper } from "../helper";\n[1].map(helper);', "a value passed by reference"],
-    ['import { helper } from "../helper";\nconst o = { helper };', "a shorthand property, which reads the binding"],
-    ['import * as subject from "../helper";\nsubject.helper(1);', "a namespace import read through a property"],
-    ['import def from "../helper";\ndef();', "a default import"],
-    ['import { helper as h } from "../helper";\nh(1);', "a renamed import read by its local name"],
-    ['const m = await import("../helper");', "a dynamic import"],
-  ])("%s counts as using the file: %s", (text) => {
-    expect(uses(text)).toBe(true);
-  });
-
-  it.each([
-    ['import { helper } from "../helper";', "an import never read"],
-    ['import "../helper";', "a side-effect import"],
-    ['import { helper } from "../helper";\ntype R = ReturnType<typeof helper>;', "a read inside a type"],
-    ['import { helper } from "../helper";\nconst o = { helper: 1 };\no.helper;', "a property that shares the name"],
-    ['import { type helper } from "../helper";\nconst x: helper = 1;', "a type-only specifier"],
-    ['import { helper } from "@/other/helper";\nhelper(1);', "a call to a same-named export of another file"],
-  ])("%s does not count: %s", (text) => {
-    expect(uses(text)).toBe(false);
   });
 });
