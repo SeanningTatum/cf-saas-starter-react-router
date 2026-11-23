@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { failure, redact, spawnRunner, succeeded, wrangler } from "../setup-run";
+import { childEnv, failure, redact, spawnRunner, succeeded, wrangler } from "../setup-run";
 
 describe("spawnRunner", () => {
   it("passes input on standard input and argv as separate words, with no shell", () => {
@@ -10,6 +10,17 @@ describe("spawnRunner", () => {
   it("adds the given variables to the environment", () => {
     const result = spawnRunner("sh", ["-c", 'printf %s "$SETUP_TEST_VALUE"'], { env: { SETUP_TEST_VALUE: "visible" } });
     expect(result.stdout).toBe("visible");
+  });
+
+  it("keeps SETUP_ variables of the parent out of the child environment", () => {
+    process.env.SETUP_PRODUCTION_TOKEN_160 = "parent-secret";
+    try {
+      const result = spawnRunner("sh", ["-c", 'printf %s "$SETUP_PRODUCTION_TOKEN_160"']);
+      expect(result.stdout).toBe("");
+      expect(childEnv().SETUP_PRODUCTION_TOKEN_160).toBeUndefined();
+    } finally {
+      delete process.env.SETUP_PRODUCTION_TOKEN_160;
+    }
   });
 
   it("reports a command it cannot start as code 127 rather than throwing", () => {

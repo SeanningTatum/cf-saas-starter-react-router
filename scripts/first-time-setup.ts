@@ -8,7 +8,7 @@ import { allResolved, parseSetupArgs, type SetupRequest } from "./lib/setup-args
 import { GENERATED_SECRET_LENGTH } from "./lib/setup-constants";
 import type { Ask } from "./lib/setup-plan";
 import { runCheck, runPass, type ReadinessDeps } from "./lib/setup-readiness-run";
-import { spawnRunner } from "./lib/setup-run";
+import { childEnv, spawnRunner } from "./lib/setup-run";
 import { isProvisioned, preserveVars, type WranglerConfig } from "./lib/setup-wrangler-vars";
 import { buildWranglerConfig, readWranglerJsonc, REMOTE_MIGRATION_TARGETS, resourceNames, writeWranglerJsonc } from "./lib/wrangler-config";
 import { run as runRepoRules } from "./repo-rules";
@@ -28,7 +28,7 @@ function executeCommand(command: string, silent = false, env?: Record<string, st
     return execSync(command, {
       encoding: "utf-8",
       stdio: silent ? "pipe" : "inherit",
-      env: env ? { ...process.env, ...env } : undefined,
+      env: childEnv(env),
     });
   } catch (error) {
     return { error: true, message: (error as { stdout?: string }).stdout || (error as { stderr?: string }).stderr || "" };

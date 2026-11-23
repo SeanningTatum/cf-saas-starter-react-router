@@ -1,6 +1,6 @@
 import { spawnSync } from "node:child_process";
 import { GH_MAX_BUFFER_BYTES } from "./gh";
-import { REDACTED } from "./setup-constants";
+import { REDACTED, SETUP_ENV_PREFIX } from "./setup-constants";
 
 export interface RunResult {
   readonly code: number;
@@ -15,12 +15,17 @@ export interface RunOptions {
 
 export type Runner = (file: string, args: ReadonlyArray<string>, options?: RunOptions) => RunResult;
 
+export const childEnv = (extra?: Readonly<Record<string, string>>): Record<string, string | undefined> => ({
+  ...Object.fromEntries(Object.entries(process.env).filter(([name]) => !name.startsWith(SETUP_ENV_PREFIX))),
+  ...extra,
+});
+
 export const spawnRunner: Runner = (file, args, options) => {
   const result = spawnSync(file, [...args], {
     input: options?.input,
     encoding: "utf8",
     maxBuffer: GH_MAX_BUFFER_BYTES,
-    env: options?.env ? { ...process.env, ...options.env } : process.env,
+    env: childEnv(options?.env),
   });
   if (result.error) return { code: 127, stdout: "", stderr: `cannot run ${file}: ${result.error.message}` };
   return { code: result.status ?? 1, stdout: result.stdout ?? "", stderr: result.stderr ?? "" };
