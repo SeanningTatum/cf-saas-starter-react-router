@@ -14,15 +14,19 @@ import {
   DEFAULT_READY_LABEL,
   DEFAULT_REVIEW_BOT,
   DEFAULT_SCRATCH_DIRS,
+  DEFAULT_WAVE,
   GATE_FORBIDDEN_CHARACTERS,
   GATE_TIERS,
   KEY_SEPARATOR,
   LEADING_CURRENT_DIRECTORY,
   MESSAGE_PREFIX,
+  MODEL_NAME_PATTERN,
   NOT_FOUND_CODE,
   REPEATED_SLASHES,
   SAFE_BRANCH_PATTERN,
   TRAILING_SLASHES,
+  WAVE_MAX_REVIEW_ROUNDS,
+  WAVE_MAX_TRACKS,
 } from "./harness-config-constants";
 import { ledgerChecksum } from "./run-telemetry";
 
@@ -121,6 +125,22 @@ const BrandInitSchema = Schema.Struct({
   homeLane: LaneSchema,
 });
 
+const ModelName = Schema.String.pipe(Schema.pattern(MODEL_NAME_PATTERN));
+
+const WaveModelsSchema = Schema.Struct({ plan: ModelName, design: ModelName, build: ModelName, review: ModelName, mechanical: ModelName });
+
+const WaveSchema = Schema.Struct({
+  tracksAtOnce: Schema.Int.pipe(Schema.between(1, WAVE_MAX_TRACKS)),
+  reviewRounds: Schema.Int.pipe(Schema.between(0, WAVE_MAX_REVIEW_ROUNDS)),
+  models: WaveModelsSchema,
+});
+
+const WaveFileSchema = Schema.Struct({
+  tracksAtOnce: Schema.optional(WaveSchema.fields.tracksAtOnce),
+  reviewRounds: Schema.optional(WaveSchema.fields.reviewRounds),
+  models: Schema.optional(Schema.partial(WaveModelsSchema)),
+});
+
 const ConfigFileSchema = Schema.Struct({
   version: Schema.optional(Schema.Literal(CONFIG_VERSION)),
   baseBranch: Schema.optional(Schema.NullOr(Schema.String.pipe(Schema.pattern(SAFE_BRANCH_PATTERN)))),
@@ -135,6 +155,7 @@ const ConfigFileSchema = Schema.Struct({
   paths: Schema.optional(Schema.partial(PathsSchema)),
   ship: Schema.optional(Schema.partial(ShipSchema)),
   brandInit: Schema.optional(Schema.partial(BrandInitSchema)),
+  wave: Schema.optional(WaveFileSchema),
 });
 
 type Gate = typeof GateSchema.Type;
@@ -157,6 +178,7 @@ export interface HarnessConfig {
   paths: Paths;
   ship: Partial<typeof ShipSchema.Type>;
   brandInit: Partial<typeof BrandInitSchema.Type>;
+  wave: typeof WaveSchema.Type;
 }
 
 export const CONFIG_KEYS = Object.keys(ConfigFileSchema.fields);
@@ -173,6 +195,8 @@ export const NESTED_KEYS = {
   lane: Object.keys(LaneSchema.fields),
   sharedLane: Object.keys(SharedLaneSchema.fields),
   gates: Object.keys(GateSchema.fields),
+  wave: Object.keys(WaveSchema.fields),
+  waveModels: Object.keys(WaveModelsSchema.fields),
 };
 
 export const HARNESS_DEFAULTS: HarnessConfig = {
@@ -189,6 +213,7 @@ export const HARNESS_DEFAULTS: HarnessConfig = {
   paths: {},
   ship: {},
   brandInit: {},
+  wave: { ...DEFAULT_WAVE, models: { ...DEFAULT_WAVE.models } },
 };
 
 export interface LoadDeps {
@@ -236,6 +261,11 @@ function fillDefaults(file: typeof ConfigFileSchema.Type): HarnessConfig {
     paths: { ...file.paths },
     ship: { ...file.ship },
     brandInit: { ...file.brandInit },
+    wave: {
+      tracksAtOnce: file.wave?.tracksAtOnce ?? HARNESS_DEFAULTS.wave.tracksAtOnce,
+      reviewRounds: file.wave?.reviewRounds ?? HARNESS_DEFAULTS.wave.reviewRounds,
+      models: { ...HARNESS_DEFAULTS.wave.models, ...file.wave?.models },
+    },
   };
 }
 

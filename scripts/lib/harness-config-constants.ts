@@ -44,6 +44,15 @@ export const DEFAULT_LOGIN_FORM = {
   submitTestId: "login-submit",
 } as const;
 
+export const DEFAULT_WAVE = {
+  tracksAtOnce: 2,
+  reviewRounds: 1,
+  models: { plan: "opus", design: "opus", build: "sonnet", review: "sonnet", mechanical: "haiku" },
+} as const;
+export const WAVE_MAX_TRACKS = 8;
+export const WAVE_MAX_REVIEW_ROUNDS = 3;
+export const MODEL_NAME_PATTERN = /^[a-z0-9][a-z0-9.-]*$/;
+
 export const MISSING_GATES_LINE = "set gates in harness.config.json";
 export const BAD_JSON_LINE = `${CONFIG_FILE_NAME} is not valid JSON`;
 export const BAD_GATE_FIELD_LINE = "must not hold a | or a line break";
