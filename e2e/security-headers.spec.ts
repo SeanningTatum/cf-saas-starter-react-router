@@ -1,6 +1,6 @@
 import { test, expect, type APIResponse, type Locator, type Page } from "@playwright/test";
 import { securityHeaders } from "../workers/security-headers";
-import { useAdminSessionSignedInOncePerFile } from "./lib/admin-session";
+import { useSavedSession } from "./lib/saved-session";
 import { loadHydrated } from "./lib/hydration";
 import { expectTurnstileState } from "./lib/auth-form";
 import { useClientIpPerFile } from "./lib/client-ip";
@@ -142,7 +142,7 @@ test.describe("Security headers, signed out (nonce CSP, issue #72; see docs/feat
 });
 
 test.describe("Security headers, signed in as admin", () => {
-  useAdminSessionSignedInOncePerFile("security-headers");
+  useSavedSession("admin", "security-headers");
 
   const sidebarToggle = (p: Page) => p.getByRole("button", { name: "Toggle Sidebar" }).first();
 

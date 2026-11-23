@@ -6,6 +6,12 @@ export const SEEDED_LOGINS = FIXTURE_ROLE_EMAILS;
 
 export const RESTORE_SEED_COMMAND = ["bun", "run", "db:prepare"] as const;
 
+export const SAVED_SESSION_DIR = "e2e/.auth";
+
+export const LOCAL_ENV_FILES = [".dev.vars", ".env"] as const;
+export const ANALYTICS_PROVIDER_LINES = /^[ \t]*ANALYTICS_PROVIDER[ \t]*=[ \t]*["']?([^"'\s#]*)/gm;
+export const REAL_ANALYTICS_PROVIDER = "posthog";
+
 export const PAGE_PATHS = {
   home: "/",
   login: "/login",
@@ -32,6 +38,7 @@ export const CLIENT_IPS = {
   "admin-user-toasts": "203.0.113.14",
   hydration: "203.0.113.15",
   "seeded-logins": "203.0.113.16",
+  "global-setup": "203.0.113.17",
 } as const;
 
 export type SpecFile = keyof typeof CLIENT_IPS;

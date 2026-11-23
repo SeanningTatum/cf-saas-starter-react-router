@@ -86,7 +86,7 @@
       "match": "e2e/global-setup.ts",
       "kind": "covered-by",
       "test": "e2e/seeded-logins.spec.ts",
-      "reason": "Playwright's global setup: it restores the seeded database once per run. The spec signs in as each fixture role and fails when the restore did not run."
+      "reason": "Playwright's global setup: it restores the seeded database once per run and saves one signed-in state per fixture role. The spec opens each saved state and fails when a role is missing, has the wrong role, or the banned state holds a session."
     },
     { "match": "e2e/lib/**", "kind": "spec-helper" }
   ]

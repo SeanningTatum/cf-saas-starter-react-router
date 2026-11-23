@@ -3,7 +3,7 @@ import { test as base, expect, type Page } from "@playwright/test";
 import { Schema } from "effect";
 import adminText from "@/locales/en/admin.json" with { type: "json" };
 import commonText from "@/locales/en/common.json" with { type: "json" };
-import { useAdminSessionSignedInOncePerFile } from "./lib/admin-session";
+import { useSavedSession } from "./lib/saved-session";
 import { postAppApi, postSignUp } from "./lib/auth-api";
 import { appOrigin } from "./lib/client-ip";
 import { API_PATHS, CLIENT_IPS } from "./lib/values";
@@ -83,7 +83,7 @@ const bannedBadge = (page: Page, member: Member) =>
   memberRow(page, member).getByText(text.statuses.banned, { exact: true });
 
 test.describe("Admin users table toasts", () => {
-  useAdminSessionSignedInOncePerFile("admin-user-toasts");
+  useSavedSession("admin", "admin-user-toasts");
 
   test("ban and unban each announce their success toast with the name as plain text in the polite live region, which stays silent when no Toaster is mounted", {
     tag: "@golden",
