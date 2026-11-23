@@ -1,5 +1,5 @@
 import { Effect } from "effect";
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { upload } from "@/db/schema";
 import { Database } from "@/services/database";
 import { BucketRepository } from "@/repositories/bucket";
@@ -7,6 +7,7 @@ import { tryCreate, tryDelete, tryQuery, requireFound } from "@/lib/effect-utils
 import { UploadQuotaError } from "@/models/errors/bucket";
 import {
   R2_DELETE_BATCH_SIZE,
+  R2_LIST_PAGE_SIZE,
   UPLOAD_QUOTA_BYTES,
   UPLOAD_QUOTA_MESSAGE,
   uploadKeyFor,
@@ -59,12 +60,25 @@ export class UploadRepository extends Effect.Service<UploadRepository>()("app/Up
     const reserve = (row: typeof upload.$inferInsert) =>
       Effect.gen(function* () {
         yield* tryCreate("upload", () => db.insert(upload).values(row));
-        const used = yield* usedBytes(row.userId);
-        if (used > UPLOAD_QUOTA_BYTES) {
-          yield* release(row.id);
-          return yield* Effect.fail(quotaError());
-        }
+        yield* Effect.gen(function* () {
+          const used = yield* usedBytes(row.userId);
+          if (used > UPLOAD_QUOTA_BYTES) {
+            return yield* Effect.fail(quotaError());
+          }
+        }).pipe(Effect.tapError(() => Effect.ignore(release(row.id))));
       }).pipe(Effect.withSpan(UPLOAD_RESERVE_SPAN));
+
+    const findOwned = (userId: string, id: string) =>
+      Effect.gen(function* () {
+        const rows = yield* tryQuery("upload", () =>
+          db
+            .select()
+            .from(upload)
+            .where(and(eq(upload.id, id), eq(upload.userId, userId)))
+            .limit(1),
+        );
+        return yield* requireFound("upload", id, rows[0]);
+      });
 
     const store = (input: StoreUploadInput) =>
       Effect.gen(function* () {
@@ -80,19 +94,10 @@ export class UploadRepository extends Effect.Service<UploadRepository>()("app/Up
         yield* bucket
           .upload(input.file, { key, contentType: input.contentType })
           .pipe(Effect.tapError(() => Effect.ignore(release(id))));
-        return { id, key } as const;
-      });
-
-    const findOwned = (userId: string, id: string) =>
-      Effect.gen(function* () {
-        const rows = yield* tryQuery("upload", () =>
-          db
-            .select()
-            .from(upload)
-            .where(and(eq(upload.id, id), eq(upload.userId, userId)))
-            .limit(1),
+        yield* findOwned(input.userId, id).pipe(
+          Effect.tapError(() => Effect.ignore(Effect.all([bucket.remove(key), release(id)]))),
         );
-        return yield* requireFound("upload", id, rows[0]);
+        return { id, key } as const;
       });
 
     const readOwned = (userId: string, id: string) =>
@@ -113,29 +118,33 @@ export class UploadRepository extends Effect.Service<UploadRepository>()("app/Up
     const listFor = (userId: string) =>
       tryQuery("upload", () => db.select().from(upload).where(eq(upload.userId, userId)));
 
+    const sweepKeys = (prefix: string) =>
+      Effect.gen(function* () {
+        const keys: string[] = [];
+        let cursor: string | undefined;
+        do {
+          const page = yield* bucket.list({ prefix, limit: R2_LIST_PAGE_SIZE, cursor });
+          keys.push(...page.objects.map((o) => o.key));
+          cursor = page.truncated ? page.cursor : undefined;
+        } while (cursor !== undefined);
+        return keys;
+      });
+
     const purgeOne = (userId: string) =>
       Effect.gen(function* () {
         const rows = yield* tryQuery("upload", () =>
           db.select({ key: upload.key }).from(upload).where(eq(upload.userId, userId)),
         );
-        const swept = yield* bucket.list({
-          prefix: uploadPrefixFor(userId),
-          limit: 1000,
-        });
-        const keys = [...new Set([...rows.map((r) => r.key), ...swept.objects.map((o) => o.key)])];
+        yield* tryDelete("upload", () => db.delete(upload).where(eq(upload.userId, userId)));
+        const swept = yield* sweepKeys(uploadPrefixFor(userId));
+        const keys = [...new Set([...rows.map((r) => r.key), ...swept])];
         yield* Effect.forEach(chunk(keys, R2_DELETE_BATCH_SIZE), (batch) => bucket.remove(batch), {
           discard: true,
         });
       });
 
     const purgeForUsers = (userIds: ReadonlyArray<string>) =>
-      Effect.gen(function* () {
-        if (userIds.length === 0) return;
-        yield* Effect.forEach(userIds, purgeOne, { discard: true });
-        yield* tryDelete("upload", () =>
-          db.delete(upload).where(inArray(upload.userId, [...userIds])),
-        );
-      }).pipe(Effect.withSpan(UPLOAD_PURGE_SPAN));
+      Effect.forEach(userIds, purgeOne, { discard: true }).pipe(Effect.withSpan(UPLOAD_PURGE_SPAN));
 
     return {
       usedBytes,

@@ -197,6 +197,70 @@ describe("UploadRepository, ownership", () => {
   });
 });
 
+describe("UploadRepository.store racing a purge", () => {
+  it.effect(
+    "removes the object it wrote when the reservation is gone, so no file outlives its owner",
+    () => {
+      const { bucket, layer } = setup();
+      return Effect.gen(function* () {
+        const repo = yield* UploadRepository;
+        const { db } = yield* Database;
+        bucket.onPut(() => db.delete(upload).where(eq(upload.userId, OWNER)));
+        const exit = yield* Effect.exit(
+          repo.store({ userId: OWNER, file: png(), contentType: "image/png" }),
+        );
+        expect(Exit.isFailure(exit)).toBe(true);
+        expect(bucket.keys()).toEqual([]);
+      }).pipe(Effect.provide(layer));
+    },
+  );
+
+  it.effect(
+    "releases the reservation when the quota query fails, so a retry is not charged twice",
+    () => {
+      const bucket = makeFakeBucket();
+      let armed = false;
+      const flaky = Layer.effect(
+        Database,
+        Effect.gen(function* () {
+          const { db } = yield* Database;
+          const wrapped = new Proxy(db, {
+            get: (target, prop) => {
+              if (prop === "insert") {
+                return (...args: Parameters<typeof target.insert>) => {
+                  armed = true;
+                  return target.insert(...args);
+                };
+              }
+              if (prop === "select" && armed) {
+                return () => {
+                  throw new Error("quota query failed");
+                };
+              }
+              const value = Reflect.get(target, prop);
+              return typeof value === "function" ? value.bind(target) : value;
+            },
+          });
+          return { db: wrapped };
+        }),
+      ).pipe(Layer.provide(makeSeededDatabase("base")));
+      const layer = UploadRepository.Default.pipe(
+        Layer.provideMerge(bucket.layer),
+        Layer.provideMerge(flaky),
+      );
+      return Effect.gen(function* () {
+        const repo = yield* UploadRepository;
+        const exit = yield* Effect.exit(
+          repo.store({ userId: OWNER, file: png(), contentType: "image/png" }),
+        );
+        armed = false;
+        expect(Exit.isFailure(exit)).toBe(true);
+        expect((yield* rowsFor(OWNER)).map((row) => row.id)).toEqual(["seed-user-upload"]);
+      }).pipe(Effect.provide(layer));
+    },
+  );
+});
+
 describe("UploadRepository.purgeForUsers", () => {
   it.effect(
     "removes the users' objects, including one with no row, and their rows, and leaves other users alone",
@@ -224,6 +288,21 @@ describe("UploadRepository.purgeForUsers", () => {
         expect(bucket.keys()).not.toContain(orphan);
         expect(yield* rowsFor(OWNER)).toEqual([]);
         expect((yield* rowsFor(OTHER)).some((row) => row.id === theirs.id)).toBe(true);
+      }).pipe(Effect.provide(layer));
+    },
+  );
+
+  it.effect(
+    "sweeps every page of the prefix, so an object with no row past the first page goes too",
+    () => {
+      const { bucket, layer } = setup();
+      return Effect.gen(function* () {
+        const repo = yield* UploadRepository;
+        bucket.pageSize(2);
+        const orphans = ["a", "b", "c", "d", "e"].map((id) => uploadKeyFor(OWNER, id));
+        for (const key of orphans) bucket.seed(key);
+        yield* repo.purgeForUsers([OWNER]);
+        expect(bucket.keys()).toEqual([]);
       }).pipe(Effect.provide(layer));
     },
   );

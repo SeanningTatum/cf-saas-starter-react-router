@@ -16,6 +16,7 @@ import { TURNSTILE_PROTECTED_ENDPOINTS, TURNSTILE_PROVIDER } from "@/lib/constan
 import type { AuthConfig, TurnstileKeys } from "./config";
 import { adminGuard } from "./admin-guard";
 import { clearExpiryOnOpenBan, endSessionsOnBan } from "./ban-hooks";
+import { purgeUploadsOnDelete, type PurgeUploads } from "./upload-hooks";
 
 const authOptions = {
   emailAndPassword: {
@@ -43,7 +44,7 @@ const turnstilePlugins = (keys: TurnstileKeys | null) =>
         }),
       ];
 
-export function createAuth(database: D1Database, config: AuthConfig) {
+export function createAuth(database: D1Database, config: AuthConfig, purgeUploads?: PurgeUploads) {
   const db = getDb(database);
 
   return betterAuth({
@@ -72,6 +73,9 @@ export function createAuth(database: D1Database, config: AuthConfig) {
         update: {
           before: clearExpiryOnOpenBan,
           after: endSessionsOnBan(db),
+        },
+        delete: {
+          before: purgeUploadsOnDelete(purgeUploads),
         },
       },
     },

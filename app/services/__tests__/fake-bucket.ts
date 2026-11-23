@@ -10,6 +10,8 @@ export interface FakeBucket {
   readonly layer: Layer.Layer<Bucket>;
   readonly keys: () => string[];
   readonly failPut: (on: boolean) => void;
+  readonly onPut: (hook: () => PromiseLike<unknown>) => void;
+  readonly pageSize: (size: number) => void;
   readonly seed: (key: string) => void;
   readonly drop: (key: string) => void;
 }
@@ -19,6 +21,8 @@ const asList = (keys: string | string[]): string[] => (typeof keys === "string" 
 export const makeFakeBucket = (): FakeBucket => {
   const objects = new Map<string, StoredObject>();
   let failingPut = false;
+  let afterPut: (() => PromiseLike<unknown>) | undefined;
+  let maxPage = Number.POSITIVE_INFINITY;
   const bucket = {
     put: async (
       key: string,
@@ -32,6 +36,7 @@ export const makeFakeBucket = (): FakeBucket => {
         body,
         contentType: options?.httpMetadata?.contentType,
       });
+      await afterPut?.();
     },
     get: async (key: string) => {
       const found = objects.get(key);
@@ -40,16 +45,37 @@ export const makeFakeBucket = (): FakeBucket => {
     delete: async (keys: string | string[]) => {
       for (const key of asList(keys)) objects.delete(key);
     },
-    list: async ({ prefix, limit }: { prefix?: string; limit?: number }) => ({
-      objects: [...objects.keys()]
-        .filter((key) => prefix === undefined || key.startsWith(prefix))
-        .slice(0, limit)
-        .map((key) => ({ key })),
-    }),
+    list: async ({
+      prefix,
+      limit,
+      cursor,
+    }: {
+      prefix?: string;
+      limit?: number;
+      cursor?: string;
+    }) => {
+      const matching = [...objects.keys()]
+        .sort()
+        .filter((key) => prefix === undefined || key.startsWith(prefix));
+      const start = cursor === undefined ? 0 : Number(cursor);
+      const end = start + Math.min(limit ?? matching.length, maxPage);
+      const truncated = end < matching.length;
+      return {
+        objects: matching.slice(start, end).map((key) => ({ key })),
+        truncated,
+        cursor: truncated ? String(end) : undefined,
+      };
+    },
   };
   return {
     layer: Layer.succeed(Bucket, { bucket: bucket as unknown as R2Bucket }),
     keys: () => [...objects.keys()].sort(),
+    onPut: (hook) => {
+      afterPut = hook;
+    },
+    pageSize: (size) => {
+      maxPage = size;
+    },
     failPut: (on) => {
       failingPut = on;
     },

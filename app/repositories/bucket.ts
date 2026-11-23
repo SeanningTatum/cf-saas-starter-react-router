@@ -59,7 +59,7 @@ export class BucketRepository extends Effect.Service<BucketRepository>()("app/Bu
 
     const list = (input: ListR2Input = { limit: 1000 }) =>
       Effect.tryPromise({
-        try: () => bucket.list({ prefix: input.prefix, limit: input.limit }),
+        try: () => bucket.list({ prefix: input.prefix, limit: input.limit, cursor: input.cursor }),
         catch: (cause) => new BucketListError({ cause }),
       }).pipe(r2Span(R2_LIST_SPAN));
 

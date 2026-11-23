@@ -10,6 +10,7 @@ export const UPLOAD_QUOTA_MESSAGE = `Your uploads would pass the ${MAX_UPLOAD_QU
 export const UPLOAD_NOT_FOUND_MESSAGE = "Upload not found";
 export const UPLOAD_KEY_ROOT = "uploads";
 export const R2_DELETE_BATCH_SIZE = 1000;
+export const R2_LIST_PAGE_SIZE = 1000;
 
 export const uploadPrefixFor = (userId: string): string => `${UPLOAD_KEY_ROOT}/${userId}/`;
 export const uploadKeyFor = (userId: string, id: string): string =>
