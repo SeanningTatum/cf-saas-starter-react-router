@@ -109,6 +109,13 @@ describe("loadSandboxPage", () => {
     });
   });
 
+  it("blames the unknown case, not the valid scenario beside it, so a case typo points at the case", async () => {
+    expect((await page("?module=file-upload&case=busy&scenario=base")).body).toMatchObject({
+      message: "file-upload has no case named busy",
+      validCases: ["idle"],
+    });
+  });
+
   it("answers 500 kind broken-fixture when a fixture fails to decode", async () => {
     broken.on = true;
     expect(await page("?module=file-upload")).toEqual({

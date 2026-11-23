@@ -54,7 +54,7 @@ const invalidMessage = (error: SandboxSelectionError): string => {
     case "SandboxUnknownScenarioError":
       return `No scenario named ${error.scenario}`;
     case "SandboxCaseNotDeclaredError":
-      return error.scenario === undefined
+      return error.caseId !== undefined && !error.validCases.includes(error.caseId)
         ? `${error.moduleId} has no case named ${error.caseId}`
         : `${error.moduleId} does not declare scenario ${error.scenario}. It fits: ${error.validScenarios.join(", ")}`;
   }
