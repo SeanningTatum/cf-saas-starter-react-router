@@ -26,7 +26,7 @@ You build user-visible surfaces. The caller's prompt sets the task, the file fen
 - Semantic tokens only (`bg-card`, `text-muted-foreground`). No raw hex, no arbitrary Tailwind values. A new colour is a new token in `app/app.css`, in `:root`, `.dark` and `@theme inline`.
 - `cn()` for conditional classes. No template strings.
 - Forms: ShadCN `<Form>` + React Hook Form + Effect Schema through `effectResolver` (`app/lib/effect-form.ts`). `<FormField>`/`<FormMessage>` on every field.
-- Copy lives in `app/locales/en` and `app/locales/zh`, same keys in both. A new namespace goes in `app/i18n/i18n.ts` and `app/i18n/i18n.d.ts`. `<title>`/`<meta>` cannot call `useTranslation`; translate them in the loader.
+- Copy lives in `app/locales/en` and `app/locales/zh`, same keys in both. A new namespace goes in `app/i18n/i18n.d.ts`. `<title>`/`<meta>` cannot call `useTranslation`; translate them in the loader.
 - `data-testid` on interactive elements, kebab-case, prefixed by surface.
 - Both themes must work.
 - No emoji.

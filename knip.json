@@ -15,7 +15,6 @@
   "ignore": [
     "app/components/ui/**"
   ],
-  "ignoreExportsUsedInFile": false,
   "ignoreDependencies": [
     "tailwindcss",
     "tw-animate-css"

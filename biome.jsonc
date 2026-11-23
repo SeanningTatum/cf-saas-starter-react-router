@@ -196,6 +196,8 @@
                 "paths": {
                   "zod": "Use Effect Schema: import { Schema } from \"effect\".",
                   "@tabler/icons-react": "One icon set: import the icon from lucide-react.",
+                  "posthog-js": "A provider SDK stays inside its adapter: app/lib/analytics/adapters/.",
+                  "posthog-node": "A provider SDK stays inside its adapter: app/lib/analytics/adapters/.",
                   "drizzle-orm": "A primitive takes data as props; it never reads the data layer."
                 },
                 "patterns": [

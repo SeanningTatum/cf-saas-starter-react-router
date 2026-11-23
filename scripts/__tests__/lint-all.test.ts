@@ -209,6 +209,19 @@ describe("lint with file arguments", () => {
     expect(f.err).toEqual([]);
   });
 
+  it("matches legacy findings for a file given as ./path, so a leading ./ never hides a finding", () => {
+    const f = fake({ packageJson: WITHOUT_HOUSE_SCRIPT, house: failed(LEGACY_FINDINGS, "") });
+    expect(lint(["./app/lib/a.ts"], f.deps)).toBe(EXIT.findings);
+    expect(f.out).toContain("app/lib/a.ts:12 house/1-effect-ts: `throw` statement");
+  });
+
+  it("puts -- before the file arguments, so a file name that starts with a dash is never read as a Biome option", () => {
+    const f = fake();
+    lint(["-odd.ts", "app/a.ts"], f.deps);
+    const args = argsOf(f, BIOME_BIN) ?? [];
+    expect(args.slice(args.indexOf("--") + 1)).toEqual(["-odd.ts", "app/a.ts"]);
+  });
+
   it("does not start the legacy checker for a file outside app/ and workers/, which it never reads", () => {
     const f = fake({ packageJson: WITHOUT_HOUSE_SCRIPT });
     expect(lint(["scripts/roster.ts"], f.deps)).toBe(EXIT.clean);
