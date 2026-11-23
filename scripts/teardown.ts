@@ -69,6 +69,7 @@ interface WranglerConfig extends WranglerEnvConfig {
   name: string;
   env?: {
     preview?: WranglerEnvConfig;
+    staging?: WranglerEnvConfig;
   };
 }
 
@@ -127,19 +128,19 @@ async function main() {
 
   const projectName = config.name;
   const previewWorkerName = `${projectName}-preview`;
+  const stagingWorkerName = `${projectName}-staging`;
+  const blocks = [config, config.env?.preview, config.env?.staging];
 
-  // Collect top-level + preview-env resources, deduped by name/id.
-  const databases = [...(config.d1_databases ?? []), ...(config.env?.preview?.d1_databases ?? [])].filter(
-    (db, index, arr) => arr.findIndex((d) => d.database_name === db.database_name) === index,
-  );
+  // Collect top-level, preview-env and staging-env resources, deduped by name/id.
+  const databases = blocks
+    .flatMap((block) => block?.d1_databases ?? [])
+    .filter((db, index, arr) => arr.findIndex((d) => d.database_name === db.database_name) === index);
 
-  const buckets = [...(config.r2_buckets ?? []), ...(config.env?.preview?.r2_buckets ?? [])].filter(
-    (bucket, index, arr) => arr.findIndex((b) => b.bucket_name === bucket.bucket_name) === index,
-  );
+  const buckets = blocks
+    .flatMap((block) => block?.r2_buckets ?? [])
+    .filter((bucket, index, arr) => arr.findIndex((b) => b.bucket_name === bucket.bucket_name) === index);
 
-  const kvNamespaces = [...(config.kv_namespaces ?? []), ...(config.env?.preview?.kv_namespaces ?? [])].filter(
-    (kv, index, arr) => arr.findIndex((k) => k.id === kv.id) === index,
-  );
+  const kvNamespaces = blocks.flatMap((block) => block?.kv_namespaces ?? []).filter((kv, index, arr) => arr.findIndex((k) => k.id === kv.id) === index);
 
   // Sweep for orphaned per-PR preview databases BEFORE the confirm prompt,
   // so the summary below is accurate.
@@ -148,6 +149,7 @@ async function main() {
   console.log("\n\x1b[31mThe following resources will be DELETED:\x1b[0m\n");
   console.log(`  • Worker:   ${projectName}`);
   console.log(`  • Worker:   ${previewWorkerName}`);
+  console.log(`  • Worker:   ${stagingWorkerName}`);
   for (const db of databases) {
     console.log(`  • D1 DB:    ${db.database_name} (${db.database_id})`);
   }
@@ -209,9 +211,9 @@ async function main() {
 
   const env = accountId ? { CLOUDFLARE_ACCOUNT_ID: accountId } : undefined;
 
-  // Step 1: Delete the Workers (production + preview)
+  // Step 1: Delete the Workers (production, preview, staging)
   console.log("\n\x1b[36m🗑️  Step 1: Deleting Workers\x1b[0m");
-  for (const workerName of [projectName, previewWorkerName]) {
+  for (const workerName of [projectName, previewWorkerName, stagingWorkerName]) {
     const workerSpinner = spinner();
     workerSpinner.start(`Deleting worker: ${workerName}...`);
     const workerResult = executeCommand(`wrangler delete --name ${workerName} --force`, true, env);

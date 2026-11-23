@@ -31,9 +31,14 @@ The repo ships a two-branch flow. `staging` is the default branch and takes feat
 - A required reviewer: `@owner`, the account that owns the repo. The deploy job in [`deploy.yml`](../../.github/workflows/deploy.yml) waits for that person's approval, and cannot read the environment's secrets until it is given.
 - Deploys only from the default branch, even though the deploy ships `production`. The reason is in [Why the environment says "default branch"](pipelines.md#why-the-environment-says-default-branch).
 
+**The `staging` environment** (pending, below):
+
+- No reviewer: a merge into `staging` deploys to staging without a wait.
+- Deploys only from the default branch, so pull-request code cannot read a token set on it. The staging deploy job in [`deploy-staging.yml`](../../.github/workflows/deploy-staging.yml) runs in it ([staging](pipelines.md#staging)).
+
 ## Pending items
 
-A required check or the `repository` section may carry `"pending": "<reason>"`: declared, not live yet. Without the mark, `--check` would turn the gate red for every branch until the owner acts. Here the check `PR title (Conventional Commits)` cannot be required until v3.0 is on the default branch: pull requests into it do not carry `pr-title.yml` before then, so the check would never report and every pull request would hang.
+A required check, an environment or the `repository` section may carry `"pending": "<reason>"`: declared, not live yet. Without the mark, `--check` would turn the gate red for every branch until the owner acts. Here the check `PR title (Conventional Commits)` cannot be required until v3.0 is on the default branch: pull requests into it do not carry `pr-title.yml` before then, so the check would never report and every pull request would hang.
 
 - `--check`, item missing live: one `notice:` naming the item and the reason, exit code unchanged. Item already live: `ok:` plus a `notice:` that the mark can go.
 - Everything unmarked is compared as always: a ruleset whose only difference is its pending checks is `ok:`, any other difference is `drift:`.
@@ -46,14 +51,17 @@ A required check or the `repository` section may carry `"pending": "<reason>"`: 
 |--------------|----------|------------|
 | Required check `PR title (Conventional Commits)` on `default-branch` | required | not required |
 | `repository.squash_merge_commit_title` | `PR_TITLE` | `COMMIT_OR_PR_TITLE` |
+| Environment `staging` | deploys from the default branch only | missing, or the unprotected one GitHub creates on the first staging run |
+
+A pending environment that is missing or bare is a `notice:`; once it matches, a `notice:` says the mark can go; any other difference in it is `drift:` as usual. The `staging` mark goes in the same follow-up pull request as the others, after the apply.
 
 Limit: while a check is marked, the gate cannot tell "not applied yet" from "applied, then removed by an admin". Delete the marks in a follow-up pull request right after the apply; from then on a removed check is drift again.
 
 The owner step, in order:
 
 1. When the v3.0 release pull request into the default branch is open and green, run `bun run scripts/repo-rules.ts --apply`.
-2. Run `bun run scripts/repo-rules.ts --check`. Expect `ok:` for both rulesets and the environment.
-3. Delete the two `pending` marks in a follow-up pull request.
+2. Run `bun run scripts/repo-rules.ts --check`. Expect `ok:` for both rulesets and both environments.
+3. Delete the three `pending` marks in a follow-up pull request.
 
 Other pull requests open against the default branch at step 1 need the new workflow before the check can report: merge the default branch into them.
 
